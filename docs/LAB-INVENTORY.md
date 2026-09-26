@@ -36,8 +36,19 @@ queries; it was inspected but not run. That device path was absent during this
 follow-up check. The Mac's running m1n1 build identity and the compatibility
 of host and target revisions remain unverified. The owner reports the Mac is
 running its normal Asahi/ALARM installation, with m1n1 proxy mode reportedly
-on and a USB cable connected to the ThinkPad. Cable type,
-physical ports, and live USB identity have not yet been recorded.
+on and a USB cable connected to the ThinkPad. The owner subsequently identified
+the connector path as ThinkPad USB-A to Mac USB-C; exact physical port positions
+and any adapters remain unrecorded.
+
+At 12:20 UTC on 2026-09-26, the inventory collector ran with `--include-usb`
+outside the execution sandbox so host device-node permissions were visible.
+It read sysfs and file metadata only, with no device opening or serial-number
+collection. Six devices were enumerated: two Linux root hubs, `8087:0a2b`,
+`04f2:b604` (integrated camera), `06cb:009a`, and `0bda:0316` (USB card reader).
+No Apple/m1n1 device was observed, and the host had no `ttyACM*`, `ttyUSB*`, or
+`/dev/m1n1` node. This does not establish cable data capability or what will
+enumerate during the Mac's next boot. The live lab pause and usage hold remain
+intact; no reboot or proxy command was performed.
 
 An isolated `m1lab diagnostics` run on the T480 on 2026-09-26 observed AC power,
 12% battery, 62 °C maximum temperature, and 7.7 GiB free disk space. A second
@@ -117,8 +128,8 @@ and mode qualification require owner-observed entries below.
 |---|---|---|
 | ThinkPad T480 identity, CPU, RAM, firmware | Observed above on 2026-09-26 | Recheck after relevant host updates |
 | ThinkPad OS, kernel, installed toolchain | Observed above; AArch64 and several build tools missing | Install only tools required by the qualified build path |
-| Cable, adapters, port mapping | Unknown | Owner identifies the actual cable and both physical ports; inspect connection on the T480 |
-| USB permissions and device identity | Unknown | With the Mac connected, opt in to enumeration and permission capture on the T480 |
+| Cable, adapters, port mapping | Owner reports ThinkPad USB-A to Mac USB-C; exact positions and adapters unknown | Record physical port positions and cable/adapter details |
+| USB permissions and device identity | Host enumeration completed at 12:20 UTC; no Apple/m1n1 device or serial interface observed | Identify the target interface and its permissions when present during an attended setup check |
 | Host/target m1n1 commits | Host checkout `06a4601a351ebfd1abb6abba9a44c34e40d94776` found; target build unknown | Verify the target build and compatibility before proxy qualification |
 | Owner attendance | Required for physical connect, reset, recovery, and mode transitions | Owner must be present for each such operation |
 
