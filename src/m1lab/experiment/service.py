@@ -294,6 +294,8 @@ class ExperimentService:
             "step_index": index,
             "typed_operation": operation.kind,
             "source": "replay_adapter",
+            "evidence_scope": "host_only",
+            "physical_m1_claims": "not_supported",
         }
         ids: list[str] = []
         payload_id: str | None = None
@@ -315,6 +317,7 @@ class ExperimentService:
             "message": result.message,
             "payload_sha256": result.payload_sha256,
             "payload_artifact_id": payload_id,
+            "qualification": "host replay only; cannot establish physical M1 behavior",
         }
         record = self._core.publish_artifact(
             _canonical_json(manifest),
@@ -359,6 +362,8 @@ class ExperimentService:
                 "step_index": index,
                 "role": "dispatch_diagnostic",
                 "source": "experiment_service",
+                "evidence_scope": "host_only",
+                "physical_m1_claims": "not_supported",
             },
         )
         return record.id

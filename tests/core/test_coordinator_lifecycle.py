@@ -232,8 +232,10 @@ def test_dispatch_outcome_and_unknown_reconciliation_advance_phase_and_revision(
     )
     assert authorization.eligibility.eligible
     assert authorization.envelope is not None
+    assert core.list_records(session.id, "operations")[0].state is OperationState.INTENT
 
     core.mark_dispatched(authorization.envelope)
+    assert core.list_records(session.id, "operations")[0].state is OperationState.DISPATCHED
     assert (core.session(session.id).phase, core.session(session.id).revision) == (
         SessionPhase.EXECUTING,
         5,
@@ -242,6 +244,7 @@ def test_dispatch_outcome_and_unknown_reconciliation_advance_phase_and_revision(
         authorization.envelope.operation_id,
         OperationOutcome(state=OperationState.UNKNOWN_EFFECT),
     )
+    assert core.list_records(session.id, "operations")[0].state is OperationState.UNKNOWN_EFFECT
     assert (core.session(session.id).phase, core.session(session.id).revision) == (
         SessionPhase.RECOVERING,
         6,
@@ -370,6 +373,40 @@ def test_restart_moves_dispatched_operation_to_recovery_with_a_new_revision(core
     assert (recovered.phase, recovered.revision) == (SessionPhase.RECOVERING, 6)
     operation = core.list_records(session.id, "operations")[0]
     assert operation.state is OperationState.UNKNOWN_EFFECT
+
+
+def test_restart_resolves_undispatched_intent_as_no_effect(core, clock):
+    session = create_session(core)
+    command(core, session.id, CommandKind.START)
+    target = core.record_target(
+        TargetSnapshot(
+            session_id=session.id,
+            identity="m1",
+            boot_epoch="boot-1",
+            mode=TargetMode.REPLAY,
+            configuration_digest="config-1",
+            capabilities={"inspect_register"},
+        )
+    )
+    record = core.register_procedure(procedure(session.id, mutates=False))
+    complete_review(core, record)
+    authorization = core.authorize_operation(
+        DispatchRequest(
+            session_id=session.id,
+            procedure_id=record.procedure_id,
+            procedure_revision=record.revision,
+            target_snapshot_id=target.id,
+            adapter_mode=TargetMode.REPLAY,
+        )
+    )
+    assert authorization.envelope is not None
+    assert core.list_records(session.id, "operations")[0].state is OperationState.INTENT
+
+    report = core.reconcile()
+
+    assert report.no_effect_operation_ids == [authorization.envelope.operation_id]
+    assert core.list_records(session.id, "operations")[0].state is OperationState.NO_EFFECT
+    assert core.session(session.id).phase is SessionPhase.INTERPRETING
 
 
 def test_restart_closes_wait_clock_after_final_live_job_becomes_unknown(core, clock):

@@ -413,7 +413,7 @@ class CoordinatorFacade:
 
     def _experiments(self) -> list[dict[str, Any]]:
         rows = self.core.journal.all(
-            "SELECT p.record_json, o.state, o.result_json FROM procedures p "
+            "SELECT p.procedure_id, p.record_json, o.id AS operation_id, o.state, o.result_json FROM procedures p "
             "LEFT JOIN operations o ON o.procedure_id=p.procedure_id AND o.procedure_revision=p.revision "
             "WHERE p.session_id=? ORDER BY p.created_at DESC LIMIT 30",
             (self.session_id,),
@@ -424,6 +424,8 @@ class CoordinatorFacade:
             outcome = row["state"] or "planned"
             result.append(
                 {
+                    "procedure_id": row["procedure_id"],
+                    "operation_id": row["operation_id"],
                     "title": procedure.get("title", "Untitled procedure"),
                     "status": outcome,
                     "revision": procedure.get("revision"),

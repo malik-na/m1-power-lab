@@ -33,9 +33,10 @@ export M1LAB_DATA_DIR="$HOME/.local/share/m1-power-lab"
 .venv/bin/m1lab serve
 ```
 
-Open `http://127.0.0.1:8765`. The replay demonstration exercises observation,
-review, authorization, typed dispatch, immutable evidence, and interpretation
-without accessing a physical device.
+Open `http://127.0.0.1:8765`. The replay demonstration exercises a read-only
+observation and an exactly approved simulated boot, then publishes immutable
+host-only scientific evidence for matching CLI and web readback. It does not
+access a physical device or establish M1 behavior.
 
 Useful recovery commands:
 

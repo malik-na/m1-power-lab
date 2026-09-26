@@ -5,7 +5,7 @@ This file distinguishes implemented behavior from physical qualification.
 | Area | State | Evidence or next gate |
 |---|---|---|
 | Durable coordinator | Host implemented | SQLite journal, revisions, budgets, exact approvals, reconciliation |
-| Replay experiment cycle | Host demonstrated | `m1lab replay-demo` records target, review, dispatch and immutable results |
+| Replay experiment cycle | Host demonstrated | `m1lab replay-demo` records read-only and approved mutating paths, immutable scientific evidence and matching operator readback |
 | Scientific records | Host implemented | Versioned immutable records and frozen paired 10% / 95% decision rule |
 | Codex runtime | Implemented, opt in | Read only app-server adapter and budgeted job supervisor; authenticated live call still needs host qualification |
 | Owner CLI | Host implemented | Lifecycle, budgets, approvals, events, artifacts, jobs, operation and usage recovery, export, backup, replay and diagnostics |

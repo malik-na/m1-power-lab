@@ -35,6 +35,7 @@ from m1lab.adapters import (
     InspectRegister,
     ReplayHardwareAdapter,
     ReplayStep,
+    SimulateBoot,
     WaitForReplay,
 )
 from m1lab.core import (
@@ -57,10 +58,12 @@ from m1lab.experiment import ExperimentService
 from m1lab.investigator import EvidenceExcerpt, InvestigationOrchestrator, InvestigationRequest
 from m1lab.science import (
     Exclusion,
+    HypothesisRecord,
     ProtocolAdherence,
     RegressionCheck,
     ScientificRecord,
     ScientificRecordStore,
+    StudyMode,
 )
 from m1lab.web import WebSettings, create_app
 
@@ -521,10 +524,12 @@ def _replay_demo(core: CoreApp, session_id: str) -> dict[str, Any]:
 
     read = InspectRegister(address=0x1000, width_bytes=4)
     wait = WaitForReplay(duration_ms=5)
+    reboot = SimulateBoot(next_boot_epoch="replay-demo-2")
     adapter = ReplayHardwareAdapter(
         [
             ReplayStep(read, values={"address": "0x1000", "value": 0xA1B2C3D4}),
             ReplayStep(wait, values={"elapsed_ms": 5}),
+            ReplayStep(reboot, values={"boot_epoch": reboot.next_boot_epoch}),
         ],
         target_id="replay-m1",
         boot_epoch="replay-demo-1",
@@ -606,6 +611,108 @@ def _replay_demo(core: CoreApp, session_id: str) -> dict[str, Any]:
             estimated_active_seconds=10,
         )
     )
+    mutating = core.register_procedure(
+        ProcedureDraft(
+            session_id=session_id,
+            title="Replay boot transition",
+            operations=[
+                TypedOperation(
+                    kind="simulate_boot",
+                    parameters={"next_boot_epoch": reboot.next_boot_epoch},
+                    mutates_target=True,
+                    timeout_seconds=10,
+                )
+            ],
+            prerequisites={"simulate_boot"},
+            limits={"steps": 1, "mode": "replay"},
+            abort_conditions=["target identity or boot epoch changes before dispatch"],
+            recovery={"summary": "Replay state can be recreated from the trace."},
+            expected_benefit="Exercise exact approval and mutating dispatch without physical hardware.",
+            failure_severity="low",
+        )
+    )
+    review_time = utc_now()
+    mutating_reviewer = core.create_job(
+        JobCreate(
+            session_id=session_id,
+            kind="review",
+            evidence_manifest={
+                "procedure_id": mutating.procedure_id,
+                "procedure_revision": mutating.revision,
+                "procedure_digest": mutating.digest,
+                "mode": "deterministic-host-review",
+            },
+            lease_expires_at=review_time + timedelta(minutes=1),
+            deadline_at=review_time + timedelta(minutes=2),
+        )
+    )
+    core.update_job(mutating_reviewer.id, state="running", runtime_id="host-review")
+    core.update_job(
+        mutating_reviewer.id,
+        state="completed",
+        runtime_id="host-review",
+        result={"disposition": "accepted", "scope": "replay-only mutation review"},
+    )
+    mutating_review = core.record_review(
+        ReviewRecord(
+            session_id=session_id,
+            procedure_id=mutating.procedure_id,
+            procedure_revision=mutating.revision,
+            procedure_digest=mutating.digest,
+            reviewer_job_id=mutating_reviewer.id,
+            disposition=ReviewDisposition.ACCEPTED,
+            concerns=["The simulated boot is host replay and cannot establish M1 behavior."],
+        )
+    )
+    approval_target = core.snapshot(session_id).latest_target
+    if approval_target is None:
+        raise ValueError("replay target disappeared before approval")
+    approval = _submit(
+        core,
+        core.session(session_id),
+        CommandKind.APPROVE,
+        {
+            "procedure_id": mutating.procedure_id,
+            "procedure_revision": mutating.revision,
+            "procedure_digest": mutating.digest,
+            "scope": {
+                "target_identity": approval_target.identity,
+                "boot_epoch": approval_target.boot_epoch,
+                "configuration_digest": approval_target.configuration_digest,
+                "repeat_limit": 1,
+                "expires_at": (utc_now() + timedelta(minutes=15)).isoformat(),
+                "physical_attendance_confirmed": False,
+            },
+        },
+        None,
+    )
+    if approval["status"] != "applied":
+        raise ValueError(f"replay approval failed: {approval['outcome']}")
+    mutating_report = experiments.authorize_and_run(
+        DispatchRequest(
+            session_id=session_id,
+            procedure_id=mutating.procedure_id,
+            procedure_revision=mutating.revision,
+            target_snapshot_id=approval_target.id,
+            adapter_mode=TargetMode.REPLAY,
+            estimated_active_seconds=10,
+        )
+    )
+    scientific = ScientificRecordStore(core).publish(
+        HypothesisRecord(
+            session_id=session_id,
+            mode=StudyMode.EXPLORATION,
+            statement=(
+                "Host replay only: the workflow preserves exact review, approval, execution, "
+                "and evidence lineage but cannot establish physical M1 behavior."
+            ),
+            proposed_mechanism="Deterministic typed replay exercises coordinator boundaries without a physical target.",
+            predicted_effect="Both replay procedures finish with durable evidence and consistent operator readback.",
+            primary_metric="workflow completion",
+            falsifiers=("Any result is represented as evidence about physical M1 power behavior.",),
+        )
+    )
+    final_phase = core.session(session_id).phase
     return {
         "session_id": session_id,
         "target_snapshot_id": target.id,
@@ -613,7 +720,25 @@ def _replay_demo(core: CoreApp, session_id: str) -> dict[str, Any]:
         "procedure_revision": procedure.revision,
         "review_id": review.id,
         "execution": report.model_dump(mode="json"),
-        "qualification": "host replay only; no claim about live M1 hardware",
+        "read_only": {
+            "procedure_id": procedure.procedure_id,
+            "review_id": review.id,
+            "operation_id": report.operation_id,
+            "state": report.state,
+        },
+        "mutating": {
+            "procedure_id": mutating.procedure_id,
+            "review_id": mutating_review.id,
+            "operation_id": mutating_report.operation_id,
+            "state": mutating_report.state,
+        },
+        "scientific_evidence": {
+            "record_id": scientific.record.id,
+            "artifact_id": scientific.artifact_id,
+            "limitation": "Replay evidence validates the host workflow only and cannot establish M1 behavior.",
+        },
+        "final_phase": final_phase,
+        "qualification": "host replay only; cannot establish behavior on a physical M1 target",
     }
 
 
