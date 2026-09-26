@@ -53,6 +53,16 @@
   invented, no retry launched, and the earlier unknown job remains in history.
   This demonstrates cancellation and conservative accounting behavior, not
   complete interrupted-turn usage reconciliation or recovery.
+- Read-only follow-up inspected this job's five captured event summaries and
+  two runtime artifacts: no `thread/tokenUsage/updated` event or numeric usage
+  was present. The matching Codex rollout contained one `token_count` entry
+  with `info=null`, followed by an aborted turn. This supports missing upstream
+  usage rather than a demonstrated lost-count defect in the adapter.
+  The pinned runtime records usage on response completion and may cancel before
+  that point ([stream handling](https://github.com/openai/codex/blob/rust-v0.156.0/codex-rs/core/src/session/turn.rs#L2724)); app-server emits usage only when token information exists
+  ([event handling](https://github.com/openai/codex/blob/rust-v0.156.0/codex-rs/app-server/src/bespoke_event_handling.rs#L1546)).
+  Elapsed time and absent output do not establish a zero or bounded token count;
+  the usage hold remains in place.
 - On 2026-09-26 the T480 passed three synthetic scientific-cycle integration
   cases, eight maintenance regression cases, and the full suite of 49 tests
   in 2.85 seconds. Science cases cover decision lineage, evidence and brief
@@ -64,6 +74,17 @@
   preserve historical unknown jobs, permit maintenance after usage resolution,
   and retain guards for active jobs, operations, reservations, and active time;
   mocked service/account commands do not qualify live process cleanup.
+- A follow-up synthetic regression reproduced a separate accounting defect:
+  an earlier response count could be accepted as final after interruption of a
+  later response. Interrupted counts now remain nonterminal and uncertain while
+  retaining the known token total. Both missing-count and earlier-count cases
+  verify blocked admission, released reservations, and persisted state after
+  reopening. The science suite also demonstrates a scripted A-supporting →
+  A-below-target closure decision → B-supporting sequence, with changed brief
+  and immutable decision history. Closure is a recorded conclusion, not an
+  enforced hypothesis state. The latest T480 run passed 20 focused cases and
+  all 52 tests in 3.19 seconds. These changes are published source; the service
+  remains on `f560929` until its usage hold is reconciled for maintenance.
 - Opt-in lab mode on release `3c49b9e` acquired a logind block inhibitor for
   `sleep:idle:handle-lid-switch` as `m1lab` while the service was active and
   `/overview` returned HTTP 200. The inhibitor disappeared after service stop;

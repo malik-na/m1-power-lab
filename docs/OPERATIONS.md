@@ -284,7 +284,11 @@ Codex work. After granting tokens or extending/resetting time, explicitly resume
 the session.
 
 An accepted response proves the interruption request reached the runtime. The
-terminal job event and final usage record determine whether it completed. If
+terminal job event and final usage record determine whether it completed.
+An interrupted job retains a usage hold even if earlier response counts exist:
+those counts remain recorded, but cannot prove coverage of the interrupted
+response. Reconcile the missing usage with evidence or an explicit owner
+allowance decision before further model work or maintenance. If
 the coordinator cannot confirm either, usage remains uncertain and new model
 work stays closed.
 

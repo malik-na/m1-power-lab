@@ -419,6 +419,10 @@ class InvestigationOrchestrator:
             return {"reported": True, "tokens": 0, "uncertain": False}
 
         normalized, uncertainty = _normalize_terminal_usage(usage)
+        if handle.status is JobStatus.INTERRUPTED and normalized is not None:
+            # Counts may cover an earlier completed response; cancellation can
+            # leave the last response unreported even after a usage notification.
+            uncertainty = "interrupted response usage coverage was not confirmed"
         if usage_error:
             uncertainty = f"runtime usage lookup failed: {usage_error}"
         if normalized is not None:
@@ -431,7 +435,7 @@ class InvestigationOrchestrator:
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
                     cumulative=cumulative,
-                    terminal=True,
+                    terminal=handle.status is not JobStatus.INTERRUPTED,
                 )
             )
         if uncertainty is not None:

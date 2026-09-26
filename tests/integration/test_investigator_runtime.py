@@ -21,6 +21,7 @@ from m1lab.adapters.runtime import (
     _permission_profile,
 )
 from m1lab.core.errors import ConflictError
+from m1lab.core.coordinator import CoreApp
 from m1lab.core.models import CommandKind, OwnerCommand, SessionCreate
 from m1lab.investigator.models import InvestigationRequest
 from m1lab.investigator.service import InvestigationOrchestrator, _event_document
@@ -411,3 +412,139 @@ def test_ambiguous_runtime_start_is_durable_unknown_and_closes_admission(core, t
     with pytest.raises(ConflictError, match="budget admission is closed"):
         asyncio.run(orchestrator.start(request))
     assert len(core.list_records(session.id, "jobs")) == 1
+
+
+@pytest.mark.parametrize("provider_usage", [False, True], ids=["absent", "earlier-response-only"])
+def test_interrupted_turn_preserves_provider_usage_or_uncertainty(
+    core, tmp_path, monkeypatch, provider_usage
+):
+    session = core.create_session(
+        SessionCreate(
+            objective="Account for an interrupted response",
+            owner="owner",
+            host_identity="host",
+            token_limit=1_000_000,
+        )
+    )
+    core.submit(
+        OwnerCommand(
+            session_id=session.id,
+            owner=session.owner,
+            kind=CommandKind.START,
+            expected_revision=session.revision,
+            payload={},
+        )
+    )
+    adapter = AppServerCodexAdapter(expected_sha256="0" * 64)
+    requests = []
+
+    async def ready():
+        pass
+
+    async def rpc(method, params):
+        requests.append((method, params))
+        if method == "thread/start":
+            return {
+                "thread": {"id": "thread-interrupted"},
+                "activePermissionProfile": {"id": "m1lab-read-only"},
+            }
+        if method == "turn/start":
+            return {"turn": {"id": "turn-interrupted"}}
+        assert method == "turn/interrupt"
+        assert params == {"threadId": "thread-interrupted", "turnId": "turn-interrupted"}
+        # Codex can report interruption without a completed response's token count.
+        await adapter._route_message(
+            {
+                "method": "turn/completed",
+                "params": {
+                    "threadId": "thread-interrupted",
+                    "turn": {"id": "turn-interrupted", "status": "interrupted"},
+                },
+            }
+        )
+        return {}
+
+    monkeypatch.setattr(adapter, "_ensure_started", ready)
+    monkeypatch.setattr(adapter, "_rpc", rpc)
+    workspace = tmp_path / "workspace"
+    orchestrator = InvestigationOrchestrator(core, adapter, workspace=workspace)
+    request = InvestigationRequest(
+        session_id=session.id,
+        instruction="Inspect selected evidence",
+        cwd=workspace,
+        model="test-model",
+        estimated_tokens=10_000,
+    )
+
+    async def interrupt_and_account():
+        try:
+            launch = await orchestrator.start(request)
+            if provider_usage:
+                await adapter._route_message(
+                    {
+                        "method": "thread/tokenUsage/updated",
+                        "params": {
+                            "threadId": "thread-interrupted",
+                            "turnId": "turn-interrupted",
+                            "tokenUsage": {
+                                "total": {"inputTokens": 100, "outputTokens": 20, "totalTokens": 120},
+                            },
+                        },
+                    }
+                )
+                # The count covers the previous completed response. A later
+                # response can consume tokens before interruption without a count.
+                await adapter._route_message(
+                    {
+                        "method": "item/started",
+                        "params": {
+                            "threadId": "thread-interrupted",
+                            "turnId": "turn-interrupted",
+                            "item": {"id": "next-response-reasoning", "type": "reasoning"},
+                        },
+                    }
+                )
+            await orchestrator.interrupt(launch.job_id)
+            job = await orchestrator.wait(launch.job_id)
+            assert job.state == "interrupted"
+            assert job.result["thread_id"] == "thread-interrupted"
+            assert job.result["turn_id"] == "turn-interrupted"
+            usage = job.result["usage"]
+            assert usage["reported"] is provider_usage
+            assert usage["uncertain"] is True
+            assert usage["tokens"] == (120 if provider_usage else None)
+            assert core.session(session.id).usage_uncertain is True
+            assert core.session(session.id).lifetime_tokens == (120 if provider_usage else 0)
+            if provider_usage:
+                source = core.journal.one(
+                    "SELECT accounted_tokens, terminal FROM usage_sources "
+                    "WHERE session_id=? AND source_id=?",
+                    (session.id, "thread-interrupted"),
+                )
+                assert source["accounted_tokens"] == 120
+                assert source["terminal"] == 0
+            reservation = core.journal.one(
+                "SELECT released_at FROM reservations WHERE id=?",
+                (job.result["reservation_id"],),
+            )
+            assert reservation["released_at"] is not None
+            if not provider_usage:
+                assert usage["reason"] == "terminal provider usage was absent"
+            with pytest.raises(ConflictError, match="budget admission is closed"):
+                await orchestrator.start(request)
+            assert len(core.list_records(session.id, "jobs")) == 1
+            reopened = CoreApp.open(core.journal.paths)
+            try:
+                assert reopened.job(job.id).state == "interrupted"
+                assert reopened.session(session.id).usage_uncertain is True
+                assert reopened.session(session.id).lifetime_tokens == (120 if provider_usage else 0)
+                assert reopened.snapshot(session.id).budget.admission_open is False
+            finally:
+                reopened.close()
+            assert [method for method, _ in requests] == [
+                "thread/start", "turn/start", "turn/interrupt"
+            ]
+        finally:
+            await orchestrator.close()
+
+    asyncio.run(interrupt_and_account())

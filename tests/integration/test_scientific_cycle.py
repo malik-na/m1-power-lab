@@ -40,6 +40,7 @@ from m1lab.science import (
     ScientificRecordStore,
     StudyMode,
     derive_power_result,
+    render_scientific_report,
 )
 
 
@@ -232,6 +233,122 @@ def test_observations_change_the_decision_and_survive_reopening_the_brief(tmp_pa
         assert after.limitations == decision.unresolved_uncertainties
         assert after.resource_limits
         assert after.hypothesis == selected.statement
+    finally:
+        reopened.close()
+
+
+def test_contradicting_evidence_changes_leading_hypothesis_and_preserves_decisions(tmp_path):
+    """Scripted interpretation exercises records, not autonomous model judgment.
+
+    Closure is an explicit decision conclusion: the current hypothesis API has
+    no closed state or admission rule that prevents later experiments on it.
+    """
+    paths = AppPaths(tmp_path / "changed-explanation")
+    core = CoreApp.open(paths)
+    try:
+        session = core.create_session(SessionCreate(
+            objective="Synthetic evidence changes the leading explanation",
+            owner="owner", host_identity="host",
+        ))
+        store = ScientificRecordStore(core)
+        first = _hypothesis(session.id, "Synthetic intervention A reduces paired power by at least 10%.")
+        alternative = _hypothesis(
+            session.id, "Synthetic intervention B reduces paired power by at least 10%.",
+        )
+        store.publish(first)
+        store.publish(alternative)
+
+        def record_decision(hypothesis, *, changed, conclusion, delta, next_action, prior_refs=()):
+            protocol = _protocol(hypothesis)
+            store.publish(protocol)
+            result = _publish_result(core, store, hypothesis, protocol, changed=changed)
+            supports = result.outcome is OutcomeCategory.POSITIVE
+            claim = ClaimEvidence(
+                session_id=session.id, hypothesis_id=hypothesis.id, mode=hypothesis.mode,
+                claim=conclusion,
+                direction=EvidenceDirection.SUPPORTS if supports else EvidenceDirection.COUNTERS,
+                strength="strong",
+                rationale=f"Synthetic baseline 10 W; changed values {changed} W.",
+                record_refs=(result.id, *prior_refs),
+                limitations=("Scripted host fixture; no physical or model judgment evidence.",),
+            )
+            store.publish(claim)
+            decision = DecisionRecord(
+                session_id=session.id, hypothesis_id=hypothesis.id,
+                protocol_id=protocol.id, derived_result_id=result.id, mode=hypothesis.mode,
+                outcome=result.outcome, conclusion=conclusion, decision_delta=delta,
+                next_action=next_action,
+                evidence=(claim,) if supports else (),
+                counterevidence=() if supports else (claim,),
+                unresolved_uncertainties=("The synthetic interventions do not establish M1 behavior.",),
+            )
+            store.publish(decision)
+            return result, decision
+
+        supporting, initial = record_decision(
+            first, changed=(8.0, 8.0),
+            conclusion="A is the provisional leading explanation in the synthetic fixture.",
+            delta="Initial paired replay supports A.",
+            next_action="Challenge A with another synthetic paired replay.",
+        )
+        initial_brief = store.brief(store.list(session.id))
+        assert supporting.outcome is OutcomeCategory.POSITIVE
+        assert initial_brief.hypothesis == first.statement
+
+        contradicting, closure = record_decision(
+            first, changed=(10.0, 10.0),
+            conclusion="Close A for this synthetic investigation: its predicted reduction is contradicted.",
+            delta="A's follow-up shows no reduction, contradicting its earlier supporting replay.",
+            next_action="Evaluate intervention B while preserving A's supporting and contradicting evidence.",
+            prior_refs=(supporting.id, initial.id),
+        )
+        # The frozen rule classifies a confidently insufficient reduction as BELOW_TARGET.
+        assert contradicting.outcome is OutcomeCategory.BELOW_TARGET
+        closure_brief = store.brief(store.list(session.id))
+        assert closure_brief.outcome is OutcomeCategory.BELOW_TARGET
+        assert closure_brief.finding == closure.conclusion
+        assert not closure_brief.redesign_checkpoint_required
+
+        replacement, revised = record_decision(
+            alternative, changed=(8.0, 8.0),
+            conclusion="B replaces A as the leading explanation in the synthetic fixture.",
+            delta="A is contradicted; B's separate intervention supports its predicted reduction.",
+            next_action="Keep A's closure decision and investigate B's remaining uncertainty.",
+            prior_refs=(contradicting.id, closure.id),
+        )
+        assert replacement.outcome is OutcomeCategory.POSITIVE
+        published = store.list(session.id)
+        revised_brief = store.brief(published)
+        assert revised_brief.hypothesis == alternative.statement
+        assert revised_brief.hypothesis != initial_brief.hypothesis
+        assert revised_brief.finding == revised.conclusion
+        assert revised_brief.decision_delta == revised.decision_delta
+        assert any(contradicting.id in item for item in revised_brief.strongest_counterevidence)
+        identities = {item.record.id: (item.artifact_id, item.sha256) for item in published}
+    finally:
+        core.close()
+
+    reopened = CoreApp.open(paths)
+    try:
+        store = ScientificRecordStore(reopened)
+        restored = store.list(session.id)
+        assert {item.record.id: (item.artifact_id, item.sha256) for item in restored} == identities
+        assert store.brief(restored) == revised_brief
+        decisions = sorted(
+            (item.record for item in restored if isinstance(item.record, DecisionRecord)),
+            key=lambda item: item.decided_at,
+        )
+        assert [item.id for item in decisions] == [initial.id, closure.id, revised.id]
+        assert [item.outcome for item in decisions] == [
+            OutcomeCategory.POSITIVE, OutcomeCategory.BELOW_TARGET, OutcomeCategory.POSITIVE,
+        ]
+        report = render_scientific_report(session.id, restored)
+        for decision in decisions:
+            assert decision.conclusion in report
+            assert decision.derived_result_id in report
+        assert report.index(initial.conclusion) < report.index(closure.conclusion) < report.index(revised.conclusion)
+        assert "does not independently verify" in report
+        assert reopened.list_records(session.id, "operations") == []
     finally:
         reopened.close()
 
