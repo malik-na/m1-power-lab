@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Evidence · M1 Power Lab{% endblock %}
+{% block heading %}Evidence & experiments{% endblock %}
+{% block content %}
+<section class="composer-card">
+  <label for="steering">Steer at the next safe checkpoint</label>
+  <form class="command-form" data-command-kind="session.steer">
+    <textarea id="steering" name="message" rows="3" maxlength="2000" placeholder="Ask for a comparison, challenge an assumption, or change priority…" required></textarea>
+    <button class="primary" type="submit">Send steering</button>
+  </form>
+</section>
+
+<section class="section-heading">
+  <div><p class="eyebrow">ACTIVE WORK</p><h2>Experiments</h2></div>
+</section>
+<div class="stack">
+{% for experiment in data.experiments|default([]) %}
+  <details class="detail-card" {% if loop.first %}open{% endif %}>
+    <summary>
+      <span><b>{{ experiment.title }}</b><small>{{ experiment.status|default('unknown') }} · rev {{ experiment.revision|default(revision) }}</small></span>
+      <span class="outcome outcome-{{ experiment.outcome|default('pending') }}">{{ experiment.outcome|default('pending') }}</span>
+    </summary>
+    <div class="detail-body">
+      <p>{{ experiment.question|default('No question recorded.') }}</p>
+      <dl class="key-values">
+        <div><dt>Prediction</dt><dd>{{ experiment.prediction|default('—') }}</dd></div>
+        <div><dt>Control</dt><dd>{{ experiment.control|default('—') }}</dd></div>
+        <div><dt>Cost</dt><dd>{{ experiment.cost|default('—') }}</dd></div>
+        <div><dt>Procedure</dt><dd>{{ experiment.procedure|default('—') }}</dd></div>
+      </dl>
+      {% if experiment.interpretation %}<p class="callout">{{ experiment.interpretation }}</p>{% endif %}
+    </div>
+  </details>
+{% else %}
+  <article class="empty-state"><h3>No experiments yet</h3><p>Planned and completed experiments will appear with their predictions and outcomes.</p></article>
+{% endfor %}
+</div>
+
+<section class="section-heading">
+  <div><p class="eyebrow">JOURNAL</p><h2>Recent evidence</h2></div>
+  <a class="inline-link" href="/api/export" download="m1-power-lab-export.json">Export</a>
+</section>
+<div class="timeline">
+{% for item in data.evidence|default([]) %}
+  <article class="timeline-item">
+    <span class="timeline-mark kind-{{ item.kind|default('record') }}"></span>
+    <div>
+      <div class="card-heading"><h3>{{ item.title }}</h3><time>{{ item.recorded_at|default('') }}</time></div>
+      <p>{{ item.summary|default('') }}</p>
+      <p class="metadata">{{ item.kind|default('record') }} · {{ item.id|default('—') }} · rev {{ item.revision|default('—') }}</p>
+      {% if item.artifact_url %}<a class="inline-link" href="{{ item.artifact_url }}">Inspect artifact</a>{% endif %}
+    </div>
+  </article>
+{% else %}
+  <article class="empty-state"><h3>No evidence recorded</h3><p>The coordinator’s immutable observations and derived results will appear here.</p></article>
+{% endfor %}
+</div>
+{% endblock %}

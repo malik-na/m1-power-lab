@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a1220">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="M1 Lab">
+  <meta name="m1lab-revision" content="{{ revision }}">
+  <title>{% block title %}M1 Power Lab{% endblock %}</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body data-view="{{ active_view }}" data-session-id="{{ data.session.id|default('none') }}">
+  <a class="skip-link" href="#content">Skip to content</a>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">M1 POWER LAB</p>
+      <h1>{% block heading %}Operator{% endblock %}</h1>
+    </div>
+    <div class="connection-pill is-connecting" id="connection-state" role="status" aria-live="polite">
+      <span class="status-dot"></span><span>Connecting</span>
+    </div>
+  </header>
+
+  <div class="update-strip" id="update-strip" hidden>
+    <span id="update-message">New coordinator state is available.</span>
+    <button class="text-button" id="refresh-state" type="button">Refresh</button>
+  </div>
+
+  <main id="content">
+    {% for alert in data.alerts|default([]) %}
+      <article class="alert alert-{{ alert.level|default('info') }}">
+        <strong>{{ alert.title }}</strong>
+        {% if alert.detail %}<p>{{ alert.detail }}</p>{% endif %}
+      </article>
+    {% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <nav class="bottom-nav" aria-label="Primary">
+    <a href="/overview" {% if active_view == 'overview' %}aria-current="page"{% endif %}>
+      <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z"/></svg>
+      <span>Overview</span>
+    </a>
+    <a href="/evidence" {% if active_view == 'evidence' %}aria-current="page"{% endif %}>
+      <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 3h14v18H5V3Zm3 4v2h8V7H8Zm0 4v2h8v-2H8Zm0 4v2h5v-2H8Z"/></svg>
+      <span>Evidence</span>
+    </a>
+    <a href="/approvals" {% if active_view == 'approvals' %}aria-current="page"{% endif %}>
+      <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m12 2 8 4v6c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10V6l8-4Zm-1 13.2 5.2-5.2-1.4-1.4-3.8 3.8-1.8-1.8L7.8 12l3.2 3.2Z"/></svg>
+      <span>Approval</span>
+      {% if data.pending_approval_count|default(0) %}<b class="nav-badge">{{ data.pending_approval_count }}</b>{% endif %}
+    </a>
+    <a href="/conversation" {% if active_view == 'conversation' %}aria-current="page"{% endif %}>
+      <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h16v13H8l-4 4V4Zm4 4v2h8V8H8Zm0 4v2h5v-2H8Z"/></svg>
+      <span>Discuss</span>
+    </a>
+  </nav>
+
+  <div class="toast" id="command-toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

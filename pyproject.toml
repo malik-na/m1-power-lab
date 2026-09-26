@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "m1-power-lab"
+version = "0.1.0"
+description = "Host-controlled workbench for evidence-driven M1 power-management investigation"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "jinja2>=3.1,<4",
+  "pydantic>=2.10,<3",
+  "uvicorn>=0.34,<1",
+]
+
+[project.scripts]
+m1lab = "m1lab.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/m1lab"]
+
+[tool.hatch.build]
+include = [
+  "src/m1lab/**/*.py",
+  "src/m1lab/web/templates/**/*.html",
+  "src/m1lab/web/static/**/*",
+]
+

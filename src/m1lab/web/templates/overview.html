@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Overview · M1 Power Lab{% endblock %}
+{% block heading %}Session overview{% endblock %}
+{% block content %}
+{% set session = data.session|default({}) %}
+{% set target = data.target|default({}) %}
+{% set budgets = data.budgets|default({}) %}
+
+<section class="hero-card">
+  <div class="hero-row">
+    <span class="state-chip state-{{ session.state|default('unknown') }}">{{ session.state|default('unknown') }}</span>
+    <span class="revision">rev {{ revision }}</span>
+  </div>
+  <h2>{{ session.objective|default('No active investigation') }}</h2>
+  <p class="muted">Session {{ session.id|default('—') }} · Updated {{ session.updated_at|default('not yet') }}</p>
+  <div class="control-row" aria-label="Session controls">
+    {% if session.state == 'paused' %}
+      <form class="command-form" data-command-kind="session.resume"><input type="hidden" name="reason" value="owner control"><button class="primary" type="submit">Resume</button></form>
+    {% elif session.state == 'ready' %}
+      <form class="command-form" data-command-kind="session.start"><button class="primary" type="submit">Start session</button></form>
+    {% elif session.state in ['running', 'waiting', 'stopping'] %}
+      <form class="command-form" data-command-kind="session.pause"><input type="hidden" name="reason" value="owner control"><button type="submit">Pause</button></form>
+    {% endif %}
+    {% if session.state not in ['completed', 'stopped'] %}<form class="command-form" data-command-kind="session.stop" data-confirm="Stop new work and request interruption of active jobs?"><button class="danger-quiet" type="submit">Stop</button></form>{% endif %}
+  </div>
+</section>
+
+<section class="section-heading">
+  <div><p class="eyebrow">CURRENT STATE</p><h2>Target and host</h2></div>
+</section>
+<div class="card-grid two-up">
+  <article class="metric-card">
+    <div class="card-heading"><h3>{{ target.name|default('M1 target') }}</h3><span class="freshness freshness-{{ target.freshness|default('unknown') }}">{{ target.freshness|default('unknown') }}</span></div>
+    <dl class="key-values">
+      <div><dt>Mode</dt><dd>{{ target.mode|default('unknown') }}</dd></div>
+      <div><dt>Boot epoch</dt><dd>{{ target.boot_epoch|default('—') }}</dd></div>
+      <div><dt>Recovery</dt><dd>{{ target.recovery|default('unqualified') }}</dd></div>
+      <div><dt>Last contact</dt><dd>{{ target.last_contact|default('—') }}</dd></div>
+    </dl>
+  </article>
+  <article class="metric-card">
+    <div class="card-heading"><h3>Lab host</h3><span class="freshness freshness-{{ data.host.state|default('unknown') }}">{{ data.host.state|default('unknown') }}</span></div>
+    <dl class="key-values">
+      <div><dt>Power</dt><dd>{{ data.host.power|default('unknown') }}</dd></div>
+      <div><dt>Thermal</dt><dd>{{ data.host.thermal|default('unknown') }}</dd></div>
+      <div><dt>Lab mode</dt><dd>{{ data.host.lab_mode|default('off') }}</dd></div>
+      <div><dt>Disk</dt><dd>{{ data.host.disk|default('—') }}</dd></div>
+    </dl>
+  </article>
+</div>
+
+<section class="section-heading"><div><p class="eyebrow">ALLOWANCES</p><h2>Budget</h2></div><a href="/conversation">Manage</a></section>
+<article class="budget-card">
+  <div class="budget-line"><span>Codex tokens</span><strong>{{ budgets.tokens_used|compact_number }} / {{ budgets.tokens_limit|compact_number }}</strong></div>
+  <div class="progress"><i style="--progress: {{ budgets.tokens_used|percent(budgets.tokens_limit) }}%"></i></div>
+  <div class="budget-line"><span>Active time</span><strong>{{ budgets.active_seconds|duration }} / {{ budgets.active_seconds_limit|duration }}</strong></div>
+  <div class="progress"><i style="--progress: {{ budgets.active_seconds|percent(budgets.active_seconds_limit) }}%"></i></div>
+  {% if budgets.usage_state and budgets.usage_state != 'known' %}<p class="warning-text">Usage state: {{ budgets.usage_state }}</p>{% endif %}
+</article>
+
+{% if data.current_step %}
+<section class="section-heading"><div><p class="eyebrow">NEXT CHECKPOINT</p><h2>Investigation</h2></div></section>
+<article class="detail-card">
+  <p class="status-line"><span class="status-dot"></span>{{ data.current_step.status|default('planned') }}</p>
+  <h3>{{ data.current_step.title }}</h3>
+  <p>{{ data.current_step.detail|default('') }}</p>
+  {% if data.current_step.decision %}<p class="callout">Decision: {{ data.current_step.decision }}</p>{% endif %}
+</article>
+{% endif %}
+
+<section class="small-actions">
+  <button type="button" disabled>Push alerts pending phone qualification</button>
+  <p>Pending approvals and recovery needs remain authoritative in this interface.</p>
+</section>
+{% endblock %}

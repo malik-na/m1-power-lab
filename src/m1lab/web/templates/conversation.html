@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Conversation · M1 Power Lab{% endblock %}
+{% block heading %}Conversation & budgets{% endblock %}
+{% block content %}
+{% set budgets = data.budgets|default({}) %}
+<section class="budget-card budget-detail">
+  <div class="budget-line"><span>Codex tokens</span><strong>{{ budgets.tokens_used|compact_number }} / {{ budgets.tokens_limit|compact_number }}</strong></div>
+  <div class="progress"><i style="--progress: {{ budgets.tokens_used|percent(budgets.tokens_limit) }}%"></i></div>
+  <div class="budget-line"><span>Active time</span><strong>{{ budgets.active_seconds|duration }} / {{ budgets.active_seconds_limit|duration }}</strong></div>
+  <div class="progress"><i style="--progress: {{ budgets.active_seconds|percent(budgets.active_seconds_limit) }}%"></i></div>
+  <p class="metadata">Epoch {{ budgets.epoch|default('—') }} · Lifetime {{ budgets.lifetime_tokens|compact_number }} tokens · Usage {{ budgets.usage_state|default('unknown') }}</p>
+  <div class="budget-actions">
+    <form class="command-form inline-fields" data-command-kind="budget.add_tokens"><label>Add tokens<input name="amount" type="number" inputmode="numeric" min="1" step="1000" required></label><button type="submit">Add</button></form>
+    <form class="command-form inline-fields" data-command-kind="budget.extend_time"><label>Add minutes<input name="minutes" type="number" inputmode="numeric" min="1" required></label><button type="submit">Extend</button></form>
+    <form class="command-form inline-fields" data-command-kind="budget.reset_time" data-confirm="Start a new active-time allowance epoch while preserving lifetime history?"><label>Reset minutes<input name="minutes" type="number" inputmode="numeric" min="1" value="180" required></label><button class="danger-quiet" type="submit">Reset time</button></form>
+  </div>
+</section>
+
+<section class="section-heading"><div><p class="eyebrow">JOBS</p><h2>Codex activity</h2></div></section>
+<div class="job-strip">
+{% for job in data.jobs|default([]) %}
+  <article><span class="status-dot job-{{ job.status|default('unknown') }}"></span><div><b>{{ job.title }}</b><small>{{ job.status|default('unknown') }} · {{ job.usage|default('usage pending') }}</small></div></article>
+{% else %}
+  <p class="muted">No model jobs are active.</p>
+{% endfor %}
+</div>
+
+<section class="section-heading"><div><p class="eyebrow">OWNER CHAT</p><h2>Investigator</h2></div></section>
+<div class="conversation" aria-live="polite">
+{% for message in data.messages|default([]) %}
+  <article class="message message-{{ message.role|default('assistant') }}">
+    <header><b>{{ 'You' if message.role == 'owner' else 'Investigator' }}</b><time>{{ message.created_at|default('') }}</time></header>
+    <div>{{ message.text }}</div>
+    {% if message.status %}<small>{{ message.status }}</small>{% endif %}
+  </article>
+{% else %}
+  <article class="empty-state"><h3>No conversation yet</h3><p>Ask about current evidence or propose a direction. Chat uses the same recorded budget as other Codex jobs.</p></article>
+{% endfor %}
+</div>
+<form class="command-form chat-composer" data-command-kind="conversation.send">
+  <label class="sr-only" for="chat-message">Message</label>
+  <textarea id="chat-message" name="message" rows="2" maxlength="4000" placeholder="Ask about the investigation…" required></textarea>
+  <button class="primary" type="submit" aria-label="Send message">Send</button>
+</form>
+{% endblock %}

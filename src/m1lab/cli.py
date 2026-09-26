@@ -1,0 +1,755 @@
+"""Local operator CLI and application entry point."""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+from contextlib import contextmanager
+from datetime import timedelta
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import platform
+import shutil
+import socket
+import sqlite3
+import subprocess
+import sys
+import tempfile
+from typing import Any, Iterator
+from http.cookiejar import CookieJar
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
+from urllib.request import HTTPCookieProcessor, Request, build_opener
+import zipfile
+
+import uvicorn
+from pydantic import TypeAdapter
+
+from m1lab.application import CoordinatorFacade, latest_session_id
+from m1lab.config import Settings
+from m1lab.adapters import (
+    AppServerCodexAdapter,
+    InspectRegister,
+    ReplayHardwareAdapter,
+    ReplayStep,
+    WaitForReplay,
+)
+from m1lab.core import (
+    CommandKind,
+    CoreApp,
+    DispatchRequest,
+    JobCreate,
+    OwnerCommand,
+    ProcedureDraft,
+    ReviewDisposition,
+    ReviewRecord,
+    SessionCreate,
+    SessionPhase,
+    TargetMode,
+    TypedOperation,
+)
+from m1lab.core.errors import CoreError
+from m1lab.core.models import new_id, utc_now
+from m1lab.experiment import ExperimentService
+from m1lab.investigator import EvidenceExcerpt, InvestigationOrchestrator, InvestigationRequest
+from m1lab.science import (
+    Exclusion,
+    ProtocolAdherence,
+    RegressionCheck,
+    ScientificRecord,
+    ScientificRecordStore,
+)
+from m1lab.web import WebSettings, create_app
+
+
+def parser() -> argparse.ArgumentParser:
+    root = argparse.ArgumentParser(prog="m1lab", description="M1 Power Lab coordinator")
+    root.add_argument("--json", action="store_true", help="print machine-readable JSON")
+    root.add_argument("--session", help="session id; defaults to the newest session")
+    commands = root.add_subparsers(dest="action", required=True)
+
+    init = commands.add_parser("init", help="create a local investigation session")
+    init.add_argument("--objective", default="Investigate and improve Apple M1 power management")
+    init.add_argument("--owner")
+    init.add_argument("--host-identity", default=socket.gethostname())
+    init.add_argument("--target-identity")
+    init.add_argument("--hours", type=float, default=3.0)
+    init.add_argument("--tokens", type=int, default=100_000_000)
+
+    commands.add_parser("sessions", help="list sessions")
+    commands.add_parser("status", help="show authoritative session state")
+
+    serve = commands.add_parser("serve", help="run the owner web interface")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8765)
+
+    control = commands.add_parser("control", help="change session lifecycle")
+    control.add_argument("command", choices=("start", "pause", "resume", "stop", "complete"))
+    control.add_argument("--expected-revision", type=int)
+
+    steer = commands.add_parser("steer", help="record owner steering")
+    steer.add_argument("message")
+    steer.add_argument("--expected-revision", type=int)
+
+    budget = commands.add_parser("budget", help="change a session allowance")
+    budget.add_argument("command", choices=("add-tokens", "extend-time", "reset-time"))
+    budget.add_argument("amount", type=int, help="tokens, or minutes for a time command")
+    budget.add_argument("--expected-revision", type=int)
+
+    approve = commands.add_parser("approve", help="approve an exact procedure revision")
+    approve.add_argument("procedure_id")
+    approve.add_argument("procedure_revision", type=int)
+    approve.add_argument("--minutes", type=int, default=15)
+    approve.add_argument("--repeat", type=int, default=1)
+    approve.add_argument("--physical-attendance", action="store_true")
+    approve.add_argument("--expected-revision", type=int)
+
+    deny = commands.add_parser("deny", help="deny a pending procedure")
+    deny.add_argument("procedure_id")
+    deny.add_argument("procedure_revision", type=int)
+    deny.add_argument("--expected-revision", type=int)
+
+    revoke = commands.add_parser("revoke", help="revoke an active approval")
+    revoke.add_argument("approval_id")
+    revoke.add_argument("--expected-revision", type=int)
+
+    events = commands.add_parser("events", help="show durable events")
+    events.add_argument("--after", type=int, default=0)
+    events.add_argument("--limit", type=int, default=200)
+
+    artifacts = commands.add_parser("artifacts", help="list immutable artifacts linked to the session")
+    artifacts.add_argument("--record-type", help="only show this provenance record type")
+
+    artifact_read = commands.add_parser("artifact-read", help="read one verified session artifact")
+    artifact_read.add_argument("artifact_id")
+    artifact_read.add_argument("--output", type=Path, help="write bytes to this path")
+    artifact_read.add_argument("--max-bytes", type=int, default=4_000_000)
+
+    jobs = commands.add_parser("jobs", help="list durable Codex jobs")
+    jobs.add_argument("--state", choices=("admitted", "running", "interrupted", "completed", "failed", "unknown"))
+
+    job_interrupt = commands.add_parser("job-interrupt", help="request interruption from the live coordinator")
+    job_interrupt.add_argument("job_id")
+    job_interrupt.add_argument(
+        "--coordinator-url",
+        default="http://127.0.0.1:8765",
+        help="loopback or private Tailscale HTTPS coordinator URL",
+    )
+
+    operation_reconcile = commands.add_parser(
+        "operation-reconcile", help="resolve an unknown-effect operation from evidence"
+    )
+    operation_reconcile.add_argument("operation_id")
+    operation_reconcile.add_argument(
+        "resolved_state", choices=("succeeded", "failed", "no_effect")
+    )
+    operation_reconcile.add_argument("--evidence", action="append", required=True, dest="evidence_ids")
+    operation_reconcile.add_argument("--note", required=True)
+
+    usage_resolve = commands.add_parser(
+        "usage-resolve", help="close uncertain Codex usage with a conservative token charge"
+    )
+    usage_resolve.add_argument("upper_bound_tokens", type=int)
+    usage_resolve.add_argument("--evidence", required=True)
+    usage_resolve.add_argument(
+        "--owner-decision",
+        action="store_true",
+        help="record that the bound is an explicit owner decision",
+    )
+
+    export = commands.add_parser("export", help="write a JSON evidence export")
+    export.add_argument("path", type=Path)
+
+    backup = commands.add_parser("backup", help="write a consistent SQLite backup")
+    backup.add_argument("path", type=Path)
+
+    bundle = commands.add_parser("backup-bundle", help="write a verified database and artifact archive")
+    bundle.add_argument("path", type=Path)
+
+    commands.add_parser("reconcile", help="reconcile incomplete durable state")
+    commands.add_parser("diagnostics", help="show host and adapter readiness")
+    commands.add_parser("replay-demo", help="run a complete deterministic replay cycle")
+
+    science = commands.add_parser("science", help="publish and inspect validated scientific records")
+    science_commands = science.add_subparsers(dest="science_action", required=True)
+    science_publish = science_commands.add_parser("publish", help="validate and publish one record JSON file")
+    science_publish.add_argument("path", type=Path)
+    science_commands.add_parser("list", help="list validated scientific records")
+    science_commands.add_parser("brief", help="build a compact evidence brief")
+    science_derive = science_commands.add_parser(
+        "derive", help="derive and publish a power result from published observations"
+    )
+    science_derive.add_argument("path", type=Path, help="JSON derivation specification")
+
+    investigate = commands.add_parser("investigate", help="run one bounded Codex evidence turn")
+    investigate.add_argument("instruction")
+    investigate.add_argument("--evidence", action="append", type=Path, default=[])
+    investigate.add_argument("--kind", choices=("investigate", "analyze", "review", "conclude"), default="investigate")
+    investigate.add_argument("--estimated-tokens", type=int, default=100_000)
+    investigate.add_argument("--estimated-minutes", type=int, default=15)
+    investigate.add_argument("--deadline-minutes", type=int, default=15)
+    return root
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = parser().parse_args(argv)
+    settings = Settings.from_env()
+    core = CoreApp.open(settings.paths)
+    try:
+        result = _dispatch(args, settings, core)
+        if result is not None:
+            _print(result, args.json)
+    except (CoreError, ValueError, OSError) as exc:
+        print(f"m1lab: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+    finally:
+        core.close()
+
+
+def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> Any:
+    if args.action == "init":
+        if args.hours <= 0 or args.tokens <= 0:
+            raise ValueError("hours and tokens must be positive")
+        record = core.create_session(
+            SessionCreate(
+                objective=args.objective,
+                owner=args.owner or settings.owner_login or "local-dev",
+                host_identity=args.host_identity,
+                target_identity=args.target_identity,
+                active_seconds=round(args.hours * 3600),
+                token_limit=args.tokens,
+                policy={"hardware_adapter": settings.hardware_adapter, "model": settings.model},
+            )
+        )
+        return record.model_dump(mode="json")
+    if args.action == "sessions":
+        return [item.model_dump(mode="json") for item in core.list_sessions()]
+
+    session_id = args.session or latest_session_id(core)
+    if session_id is None:
+        raise ValueError("no session exists; run 'm1lab init' first")
+    session = core.session(session_id)
+
+    if args.action == "status":
+        return core.snapshot(session_id).model_dump(mode="json")
+    if args.action == "serve":
+        if args.host not in {"127.0.0.1", "::1", "localhost"}:
+            raise ValueError("serve must bind to loopback; use Tailscale Serve for remote access")
+        investigator = None
+        if settings.codex_runtime == "app-server":
+            _prepare_workspace(settings.workspace)
+            investigator = InvestigationOrchestrator(core, _codex_adapter(settings))
+        elif settings.codex_runtime != "disabled":
+            raise ValueError("M1LAB_CODEX_RUNTIME must be 'disabled' or 'app-server'")
+        facade = CoordinatorFacade(
+            core,
+            session_id,
+            investigator=investigator,
+            model=settings.model,
+            workspace=settings.workspace,
+        )
+        web_settings = WebSettings(
+            trust_tailscale_headers=settings.trust_tailscale_headers,
+            owner_login=settings.owner_login,
+            csrf_secret=settings.csrf_secret,
+        )
+        with _coordinator_lease(settings.paths.root / "coordinator.lock"):
+            core.reconcile()
+            uvicorn.run(create_app(facade, web_settings), host=args.host, port=args.port)
+        return None
+    if args.action == "control":
+        return _submit(core, session, CommandKind(args.command), {}, args.expected_revision)
+    if args.action == "steer":
+        return _submit(core, session, CommandKind.STEER, {"message": args.message}, args.expected_revision)
+    if args.action == "budget":
+        if args.amount <= 0:
+            raise ValueError("amount must be positive")
+        if args.command == "add-tokens":
+            kind, payload = CommandKind.GRANT_TOKENS, {"tokens": args.amount}
+        elif args.command == "extend-time":
+            kind, payload = CommandKind.EXTEND_TIME, {"seconds": args.amount * 60}
+        else:
+            kind, payload = CommandKind.RESET_TIME, {"seconds": args.amount * 60}
+        return _submit(core, session, kind, payload, args.expected_revision)
+    if args.action == "approve":
+        procedure = _procedure(core, session_id, args.procedure_id, args.procedure_revision)
+        target = core.snapshot(session_id).latest_target
+        if target is None:
+            raise ValueError("approval requires a current target snapshot")
+        from datetime import timedelta
+        from m1lab.core.models import utc_now
+
+        payload = {
+            "procedure_id": procedure["procedure_id"],
+            "procedure_revision": procedure["revision"],
+            "scope": {
+                "target_identity": target.identity,
+                "boot_epoch": target.boot_epoch,
+                "configuration_digest": target.configuration_digest,
+                "repeat_limit": args.repeat,
+                "expires_at": (utc_now() + timedelta(minutes=args.minutes)).isoformat(),
+                "physical_attendance_confirmed": args.physical_attendance,
+            },
+        }
+        return _submit(core, session, CommandKind.APPROVE, payload, args.expected_revision)
+    if args.action == "deny":
+        procedure = _procedure(core, session_id, args.procedure_id, args.procedure_revision)
+        return _submit(
+            core,
+            session,
+            CommandKind.DENY,
+            {
+                "procedure_id": procedure["procedure_id"],
+                "procedure_revision": procedure["revision"],
+                "procedure_digest": procedure["digest"],
+            },
+            args.expected_revision,
+        )
+    if args.action == "revoke":
+        return _submit(core, session, CommandKind.REVOKE, {"approval_id": args.approval_id}, args.expected_revision)
+    if args.action == "events":
+        return [item.model_dump(mode="json") for item in core.events(session_id, after=args.after, limit=args.limit)]
+    if args.action == "artifacts":
+        return [
+            item.model_dump(mode="json")
+            for item in core.artifacts(session_id, record_type=args.record_type)
+        ]
+    if args.action == "artifact-read":
+        linked = {item.id: item for item in core.artifacts(session_id)}
+        record = linked.get(args.artifact_id)
+        if record is None:
+            raise ValueError("artifact is not linked to the selected session")
+        content = core.read_artifact(args.artifact_id, max_bytes=args.max_bytes)
+        if args.output is not None:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_bytes(content)
+            return {
+                "path": str(args.output),
+                "artifact_id": record.id,
+                "sha256": record.sha256,
+                "size_bytes": len(content),
+            }
+        if not record.media_type.startswith(("text/", "application/json", "application/vnd.m1lab.")):
+            raise ValueError("binary artifact requires --output PATH")
+        try:
+            text_content = content.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError("artifact is not UTF-8 text; use --output PATH") from exc
+        return {"artifact": record.model_dump(mode="json"), "text": text_content}
+    if args.action == "jobs":
+        records = core.list_records(session_id, "jobs")
+        if args.state:
+            records = [item for item in records if item.state == args.state]
+        return [item.model_dump(mode="json") for item in records]
+    if args.action == "job-interrupt":
+        job = core.job(args.job_id)
+        if job.session_id != session_id:
+            raise ValueError("job does not belong to the selected session")
+        return _request_job_interrupt(args.coordinator_url, args.job_id)
+    if args.action == "operation-reconcile":
+        operation = next(
+            (item for item in core.list_records(session_id, "operations") if item.id == args.operation_id),
+            None,
+        )
+        if operation is None:
+            raise ValueError("operation does not belong to the selected session")
+        linked_ids = {item.id for item in core.artifacts(session_id)}
+        missing = sorted(set(args.evidence_ids) - linked_ids)
+        if missing:
+            raise ValueError("evidence artifacts are not linked to the session: " + ", ".join(missing))
+        from m1lab.core import OperationState
+
+        core.reconcile_operation(
+            args.operation_id,
+            resolved_state=OperationState(args.resolved_state),
+            evidence_artifact_ids=args.evidence_ids,
+            note=args.note,
+        )
+        return next(
+            item.model_dump(mode="json")
+            for item in core.list_records(session_id, "operations")
+            if item.id == args.operation_id
+        )
+    if args.action == "usage-resolve":
+        if args.upper_bound_tokens < 0:
+            raise ValueError("upper_bound_tokens must be nonnegative")
+        if not core.session(session_id).usage_uncertain:
+            raise ValueError("session usage is not uncertain")
+        core.resolve_usage_uncertainty(
+            session_id,
+            upper_bound_tokens=args.upper_bound_tokens,
+            evidence=args.evidence,
+            owner_decision=args.owner_decision,
+        )
+        return core.snapshot(session_id).model_dump(mode="json")
+    if args.action == "export":
+        payload = CoordinatorFacade(core, session_id).export()
+        args.path.parent.mkdir(parents=True, exist_ok=True)
+        args.path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+        return {"path": str(args.path), "events": len(payload["events"])}
+    if args.action == "backup":
+        core.journal.backup_database(args.path)
+        return {"path": str(args.path)}
+    if args.action == "backup-bundle":
+        return _backup_bundle(core, args.path)
+    if args.action == "reconcile":
+        return core.reconcile().model_dump(mode="json")
+    if args.action == "diagnostics":
+        return {
+            "app_version": "0.1.0",
+            "python": platform.python_version(),
+            "platform": platform.platform(),
+            "data_root": str(settings.paths.root),
+            "database": str(settings.paths.database),
+            "session_id": session_id,
+            "configured_hardware": settings.hardware_adapter,
+            "live_hardware_qualified": False,
+            "codex_model": settings.model,
+            "codex_runtime": settings.codex_runtime,
+            "codex_cli": _tool_version(settings.codex_executable),
+            "codex_executable": settings.codex_executable,
+            "workspace": str(settings.workspace),
+            "tailscale_cli": _tool_version("tailscale"),
+            "tailscale_headers": settings.trust_tailscale_headers,
+            "owner_login": settings.owner_login,
+        }
+    if args.action == "replay-demo":
+        return _replay_demo(core, session_id)
+    if args.action == "science":
+        store = ScientificRecordStore(core)
+        if args.science_action == "list":
+            return [item.model_dump(mode="json") for item in store.list(session_id)]
+        if args.science_action == "brief":
+            published = store.list(session_id)
+            if not published:
+                raise ValueError("no scientific records are published for this session")
+            return store.brief(published[:64]).model_dump(mode="json")
+        document = json.loads(args.path.read_text(encoding="utf-8"))
+        if args.science_action == "publish":
+            payload = document.get("record", document) if isinstance(document, dict) else document
+            record = TypeAdapter(ScientificRecord).validate_python(payload)
+            if record.session_id != session_id:
+                raise ValueError("scientific record belongs to a different session")
+            return store.publish(record).model_dump(mode="json")
+        if args.science_action == "derive":
+            return _derive_scientific_result(store, session_id, document)
+        raise AssertionError(args.science_action)
+    if args.action == "investigate":
+        if settings.codex_runtime != "app-server":
+            raise ValueError("set M1LAB_CODEX_RUNTIME=app-server to admit Codex jobs")
+        _prepare_workspace(settings.workspace)
+        evidence = []
+        for path in args.evidence:
+            content = path.read_text(encoding="utf-8")
+            evidence.append(EvidenceExcerpt(label=path.name, content=content))
+        request = InvestigationRequest(
+            session_id=session_id,
+            instruction=args.instruction,
+            cwd=settings.workspace,
+            model=settings.model,
+            kind=args.kind,
+            estimated_tokens=args.estimated_tokens,
+            estimated_active_seconds=args.estimated_minutes * 60,
+            deadline_seconds=args.deadline_minutes * 60,
+            evidence=evidence,
+        )
+        return asyncio.run(_run_investigation(core, request, settings))
+    raise AssertionError(args.action)
+
+
+def _derive_scientific_result(
+    store: ScientificRecordStore, session_id: str, document: Any
+) -> dict[str, Any]:
+    if not isinstance(document, dict):
+        raise ValueError("derivation specification must be a JSON object")
+    pairs = document.get("observation_pairs")
+    if not isinstance(pairs, list) or not pairs:
+        raise ValueError("derivation requires a non-empty observation_pairs array")
+    normalized_pairs: list[tuple[str, str]] = []
+    for pair in pairs:
+        if not isinstance(pair, list) or len(pair) != 2 or not all(isinstance(item, str) for item in pair):
+            raise ValueError("each observation pair must be [baseline_id, changed_id]")
+        normalized_pairs.append((pair[0], pair[1]))
+    published = store.derive_and_publish(
+        session_id=session_id,
+        hypothesis_id=str(document.get("hypothesis_id", "")),
+        protocol_id=str(document.get("protocol_id", "")),
+        observation_pairs=normalized_pairs,
+        adherence=ProtocolAdherence.model_validate(document.get("adherence", {})),
+        regressions=tuple(
+            RegressionCheck.model_validate(item) for item in document.get("regressions", [])
+        ),
+        exclusions=tuple(Exclusion.model_validate(item) for item in document.get("exclusions", [])),
+        analysis_code_refs=tuple(document.get("analysis_code_refs", [])),
+    )
+    return published.model_dump(mode="json")
+
+
+def _submit(core: CoreApp, session: Any, kind: CommandKind, payload: dict[str, Any], revision: int | None) -> dict[str, Any]:
+    result = core.submit(
+        OwnerCommand(
+            id=new_id("cmd"),
+            session_id=session.id,
+            owner=session.owner,
+            kind=kind,
+            expected_revision=revision if revision is not None else core.session(session.id).revision,
+            payload=payload,
+        )
+    )
+    return result.model_dump(mode="json")
+
+
+def _procedure(core: CoreApp, session_id: str, procedure_id: str, revision: int) -> dict[str, Any]:
+    rows = core.list_records(session_id, "procedures")
+    for record in rows:
+        if record.procedure_id == procedure_id and record.revision == revision:
+            return record.model_dump(mode="json")
+    raise ValueError(f"procedure {procedure_id} revision {revision} does not exist")
+
+
+def _replay_demo(core: CoreApp, session_id: str) -> dict[str, Any]:
+    """Exercise observe, review, authorization, execution and evidence storage."""
+
+    session = core.session(session_id)
+    if session.phase is SessionPhase.PREPARING:
+        _submit(core, session, CommandKind.START, {}, session.revision)
+    elif session.phase not in {SessionPhase.INVESTIGATING, SessionPhase.INTERPRETING}:
+        raise ValueError(f"replay demo requires an active session, not {session.phase.value}")
+
+    read = InspectRegister(address=0x1000, width_bytes=4)
+    wait = WaitForReplay(duration_ms=5)
+    adapter = ReplayHardwareAdapter(
+        [
+            ReplayStep(read, values={"address": "0x1000", "value": 0xA1B2C3D4}),
+            ReplayStep(wait, values={"elapsed_ms": 5}),
+        ],
+        target_id="replay-m1",
+        boot_epoch="replay-demo-1",
+    )
+    experiments = ExperimentService(core, adapter)
+    target = experiments.inspect_and_record(session_id, fresh_for_seconds=300)
+
+    procedure = core.register_procedure(
+        ProcedureDraft(
+            session_id=session_id,
+            title="Replay register observation",
+            operations=[
+                TypedOperation(
+                    kind="inspect_register",
+                    parameters={"address": read.address, "width_bytes": read.width_bytes},
+                    mutates_target=False,
+                    timeout_seconds=5,
+                ),
+                TypedOperation(
+                    kind="wait",
+                    parameters={"duration_ms": wait.duration_ms},
+                    mutates_target=False,
+                    timeout_seconds=5,
+                ),
+            ],
+            prerequisites={"inspect_register", "wait"},
+            limits={"steps": 2, "mode": "replay"},
+            abort_conditions=["target identity or boot epoch changes"],
+            recovery={"summary": "No physical target is involved."},
+            expected_benefit="Prove the durable replay evidence cycle without claiming M1 behavior.",
+            failure_severity="low",
+        )
+    )
+    now = utc_now()
+    reviewer = core.create_job(
+        JobCreate(
+            session_id=session_id,
+            kind="review",
+            evidence_manifest={
+                "procedure_id": procedure.procedure_id,
+                "procedure_revision": procedure.revision,
+                "procedure_digest": procedure.digest,
+                "mode": "deterministic-host-review",
+            },
+            lease_expires_at=now + timedelta(minutes=1),
+            deadline_at=now + timedelta(minutes=2),
+        )
+    )
+    core.update_job(
+        reviewer.id,
+        state="running",
+        runtime_id="host-review",
+        result={"scope": "replay-only structural review"},
+    )
+    core.update_job(
+        reviewer.id,
+        state="completed",
+        runtime_id="host-review",
+        result={"disposition": "accepted", "scope": "replay-only structural review"},
+    )
+    review = core.record_review(
+        ReviewRecord(
+            session_id=session_id,
+            procedure_id=procedure.procedure_id,
+            procedure_revision=procedure.revision,
+            procedure_digest=procedure.digest,
+            reviewer_job_id=reviewer.id,
+            disposition=ReviewDisposition.ACCEPTED,
+            concerns=["Replay results cannot establish physical power behavior."],
+        )
+    )
+    report = experiments.authorize_and_run(
+        DispatchRequest(
+            session_id=session_id,
+            procedure_id=procedure.procedure_id,
+            procedure_revision=procedure.revision,
+            target_snapshot_id=target.id,
+            adapter_mode=TargetMode.REPLAY,
+            estimated_active_seconds=10,
+        )
+    )
+    return {
+        "session_id": session_id,
+        "target_snapshot_id": target.id,
+        "procedure_id": procedure.procedure_id,
+        "procedure_revision": procedure.revision,
+        "review_id": review.id,
+        "execution": report.model_dump(mode="json"),
+        "qualification": "host replay only; no claim about live M1 hardware",
+    }
+
+
+async def _run_investigation(
+    core: CoreApp, request: InvestigationRequest, settings: Settings
+) -> dict[str, Any]:
+    orchestrator = InvestigationOrchestrator(core, _codex_adapter(settings))
+    try:
+        launch = await orchestrator.start(request)
+        record = await orchestrator.wait(launch.job_id)
+        return record.model_dump(mode="json")
+    finally:
+        await orchestrator.close()
+
+
+def _codex_adapter(settings: Settings) -> AppServerCodexAdapter:
+    return AppServerCodexAdapter(executable=settings.codex_executable)
+
+
+def _prepare_workspace(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    if not path.is_dir():
+        raise ValueError(f"Codex workspace is not a directory: {path}")
+
+
+def _request_job_interrupt(base_url: str, job_id: str) -> dict[str, Any]:
+    parsed = urlsplit(base_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.query or parsed.fragment:
+        raise ValueError("coordinator URL must be an http(s) origin without query or fragment")
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    cookies = CookieJar()
+    opener = build_opener(HTTPCookieProcessor(cookies))
+    try:
+        with opener.open(origin + "/overview", timeout=5) as response:
+            response.read(1)
+        csrf = next((cookie.value for cookie in cookies if cookie.name == "m1lab_csrf"), None)
+        if csrf is None:
+            raise ValueError("coordinator did not issue a CSRF token")
+        request = Request(
+            origin + f"/api/jobs/{job_id}/interrupt",
+            data=b"",
+            method="POST",
+            headers={"Origin": origin, "X-CSRF-Token": csrf},
+        )
+        with opener.open(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")[:1000]
+        raise ValueError(f"coordinator rejected interruption ({exc.code}): {detail}") from exc
+    except URLError as exc:
+        raise ValueError(f"could not reach live coordinator: {exc.reason}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("coordinator returned an invalid interruption response")
+    return payload
+
+
+def _backup_bundle(core: CoreApp, destination: Path) -> dict[str, Any]:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    handle, partial_name = tempfile.mkstemp(prefix=".m1lab-backup-", suffix=".partial", dir=destination.parent)
+    os.close(handle)
+    partial = Path(partial_name)
+    try:
+        with tempfile.TemporaryDirectory(prefix="m1lab-backup-") as temporary:
+            database = Path(temporary) / "m1lab.sqlite3"
+            core.journal.backup_database(database)
+            connection = sqlite3.connect(database)
+            connection.row_factory = sqlite3.Row
+            try:
+                artifacts = connection.execute(
+                    "SELECT id, sha256, size_bytes, relative_path FROM artifacts WHERE available=1 ORDER BY id"
+                ).fetchall()
+            finally:
+                connection.close()
+            manifest = {"format": "m1lab-backup-v1", "artifacts": []}
+            with zipfile.ZipFile(partial, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                archive.write(database, "m1lab.sqlite3")
+                for row in artifacts:
+                    source = core.journal.paths.artifacts / row["relative_path"]
+                    content = source.read_bytes()
+                    digest = hashlib.sha256(content).hexdigest()
+                    if len(content) != row["size_bytes"] or digest != row["sha256"]:
+                        raise ValueError(f"artifact {row['id']} failed backup integrity validation")
+                    archive.writestr(f"artifacts/{row['relative_path']}", content)
+                    manifest["artifacts"].append(
+                        {
+                            "id": row["id"],
+                            "sha256": digest,
+                            "size_bytes": len(content),
+                            "relative_path": row["relative_path"],
+                        }
+                    )
+                archive.writestr("manifest.json", json.dumps(manifest, indent=2, sort_keys=True))
+        os.replace(partial, destination)
+    finally:
+        partial.unlink(missing_ok=True)
+    return {"path": str(destination), "artifacts": len(manifest["artifacts"])}
+
+
+def _tool_version(command: str) -> dict[str, Any]:
+    executable = shutil.which(command)
+    if executable is None:
+        return {"available": False}
+    try:
+        completed = subprocess.run(
+            [executable, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {"available": True, "path": executable, "error": str(exc)}
+    output = (completed.stdout or completed.stderr).strip().splitlines()
+    return {
+        "available": completed.returncode == 0,
+        "path": executable,
+        "version": output[0][:300] if output else "unknown",
+    }
+
+
+@contextmanager
+def _coordinator_lease(path: Path) -> Iterator[None]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+", encoding="utf-8") as stream:
+        try:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise ValueError("another coordinator process owns this data directory") from exc
+        try:
+            yield
+        finally:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+
+
+def _print(value: Any, json_mode: bool) -> None:
+    if json_mode or isinstance(value, (dict, list)):
+        print(json.dumps(value, indent=2, sort_keys=True, default=str))
+    else:
+        print(value)

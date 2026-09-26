@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Approvals · M1 Power Lab{% endblock %}
+{% block heading %}Approvals & recovery{% endblock %}
+{% block content %}
+<section class="section-heading"><div><p class="eyebrow">OWNER DECISION</p><h2>Pending approval</h2></div></section>
+<div class="stack">
+{% for approval in data.approvals|default([]) %}
+  <article class="approval-card risk-{{ approval.risk_level|default('unknown') }}">
+    <div class="card-heading">
+      <span class="risk-label">{{ approval.risk_level|default('unrated') }} risk</span>
+      <span class="revision">procedure rev {{ approval.procedure_revision }} · {{ approval.digest }}</span>
+    </div>
+    <h3>{{ approval.title }}</h3>
+    <p>{{ approval.summary|default('') }}</p>
+    <dl class="key-values">
+      <div><dt>Operations</dt><dd>{{ approval.operations|default('—') }}</dd></div>
+      <div><dt>Expected benefit</dt><dd>{{ approval.benefit|default('—') }}</dd></div>
+      <div><dt>Failure severity</dt><dd>{{ approval.failure_severity|default('—') }}</dd></div>
+      <div><dt>Attendance</dt><dd>{{ approval.attendance|default('—') }}</dd></div>
+      <div><dt>Recovery</dt><dd>{{ approval.recovery|default('—') }}</dd></div>
+      <div><dt>Expires</dt><dd>{{ approval.expires_at|default('—') }}</dd></div>
+    </dl>
+    {% if approval.review_findings %}
+      <details><summary>Review findings</summary><p>{{ approval.review_findings }}</p></details>
+    {% endif %}
+    <div class="approval-actions">
+      <form class="command-form approval-scope" data-command-kind="approval.approve" data-target-id="{{ approval.id }}" data-expected-revision="{{ approval.session_revision }}" data-confirm="Approve this exact revision and scope?">
+        <label>Minutes<input name="minutes" type="number" min="1" max="1440" value="15" required></label>
+        <label>Uses<input name="repeat" type="number" min="1" max="100" value="1" required></label>
+        {% if approval.attendance == 'required' %}<label><input name="physical_attendance" type="checkbox" required> I am physically present</label>{% endif %}
+        <button class="primary" type="submit">Approve exact revision</button>
+      </form>
+      <form class="command-form" data-command-kind="approval.deny" data-target-id="{{ approval.id }}" data-expected-revision="{{ approval.session_revision }}"><button type="submit">Deny</button></form>
+    </div>
+  </article>
+{% else %}
+  <article class="empty-state"><h3>No pending approvals</h3><p>New state-changing procedures will wait here for an exact owner decision.</p></article>
+{% endfor %}
+</div>
+
+{% if data.active_approvals %}
+<section class="section-heading"><div><p class="eyebrow">ACTIVE AUTHORITY</p><h2>Granted approvals</h2></div></section>
+<div class="stack">
+{% for approval in data.active_approvals %}
+  <article class="detail-card compact-card">
+    <div><h3>{{ approval.title }}</h3><p>{{ approval.scope|default('') }}</p><small>rev {{ approval.revision }} · {{ approval.remaining|default('scope active') }}</small></div>
+    <form class="command-form compact-form" data-command-kind="approval.revoke" data-target-id="{{ approval.id }}" data-expected-revision="{{ approval.revision }}" data-confirm="Revoke this approval now?"><button class="danger-quiet" type="submit">Revoke</button></form>
+  </article>
+{% endfor %}
+</div>
+{% endif %}
+
+<section class="section-heading"><div><p class="eyebrow">TARGET CONDITION</p><h2>Recovery readiness</h2></div></section>
+<article class="recovery-card">
+  <div class="recovery-level"><span>{{ data.recovery.level|default('Unknown') }}</span><small>{{ data.recovery.status|default('not qualified') }}</small></div>
+  <p>{{ data.recovery.detail|default('No current recovery assessment is available.') }}</p>
+  {% if data.recovery.owner_instruction %}<div class="owner-instruction"><b>Owner action</b><p>{{ data.recovery.owner_instruction }}</p></div>{% endif %}
+</article>
+<div class="stack">
+{% for action in data.recovery_actions|default([]) %}
+  <article class="detail-card compact-card">
+    <div><h3>{{ action.title }}</h3><p>{{ action.detail|default('') }}</p><small>{{ action.availability|default('unknown') }}</small></div>
+    {% if action.enabled %}<form class="command-form compact-form" data-command-kind="recovery.request" data-target-id="{{ action.id }}" data-confirm="Request this qualified recovery action?"><button type="submit">Request</button></form>{% endif %}
+  </article>
+{% endfor %}
+</div>
+{% endblock %}

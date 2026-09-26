@@ -1,0 +1,31 @@
+[Unit]
+Description=M1 Power Lab coordinator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=m1lab
+Group=m1lab
+Environment=HOME=/var/lib/m1-power-lab
+Environment=CODEX_HOME=/var/lib/m1-power-lab/codex
+Environment=M1LAB_DATA_DIR=/var/lib/m1-power-lab
+Environment=M1LAB_WORKSPACE=/var/lib/m1-power-lab/workspace
+Environment=M1LAB_CODEX_EXECUTABLE=/usr/local/bin/codex
+EnvironmentFile=-/etc/m1-power-lab.env
+WorkingDirectory=/var/lib/m1-power-lab
+StateDirectory=m1-power-lab
+ExecStart=/opt/m1-power-lab/current/.venv/bin/m1lab serve --host 127.0.0.1 --port 8765
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/m1-power-lab
+LockPersonality=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target
