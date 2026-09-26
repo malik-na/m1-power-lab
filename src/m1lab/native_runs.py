@@ -38,6 +38,7 @@ CAPTURE_MEDIA_TYPE = "application/vnd.m1lab.native-capture+json;version=1"
 MAX_CAPTURE_STREAM_BYTES = 32 * 1024 * 1024
 MAX_CAPTURE_SAMPLES = 4094
 MAX_SAMPLE_PERIOD_MS = 60_000
+MIN_LAUNCH_HEADROOM_MS = 1000
 MAX_PROPERTY_BYTES = 256
 SUPPLY_PROPERTIES = frozenset(
     {
@@ -98,15 +99,10 @@ def prepare_native_launch(
         raise NativeHarnessError("selected payload is not declared by the image manifest")
     if type(deadline_seconds) is not int or not 1 <= deadline_seconds <= 3600:
         raise NativeHarnessError("native launch deadline must be 1..3600 seconds")
-    if (
-        type(sample_count) is not int
-        or not 1 <= sample_count <= MAX_CAPTURE_SAMPLES
-        or type(sample_period_ms) is not int
-        or not 100 <= sample_period_ms <= MAX_SAMPLE_PERIOD_MS
-    ):
-        raise NativeHarnessError("native collector sample parameters are outside their bounds")
-    if sample_count * sample_period_ms > 3_600_000 or sample_count * sample_period_ms > deadline_seconds * 1000:
-        raise NativeHarnessError("native collector samples do not fit the launch time bound")
+    parameters = {"sample_count": sample_count, "sample_period_ms": sample_period_ms}
+    _collector_parameters(parameters)
+    if sample_count * sample_period_ms > deadline_seconds * 1000 - MIN_LAUNCH_HEADROOM_MS:
+        raise NativeHarnessError("native collector samples require at least one second of launch headroom")
     if (
         type(output_limit_bytes) is not int
         or not 4096 <= output_limit_bytes <= min(MAX_NATIVE_OUTPUT_BYTES, image.maximum_output_bytes)
@@ -119,10 +115,7 @@ def prepare_native_launch(
         target_identity=target_identity,
         boot_epoch=boot_epoch,
         configuration_sha256=image.configuration_sha256,
-        parameters={
-            "sample_count": sample_count,
-            "sample_period_ms": sample_period_ms,
-        },
+        parameters=parameters,
         deadline=utc_now() + timedelta(seconds=deadline_seconds),
         output_limit_bytes=output_limit_bytes,
         recovery_expectation=recovery_expectation,
@@ -178,7 +171,8 @@ def import_native_capture(
         raise NativeHarnessError("published launch manifest digest does not match its bytes")
     if hashlib.sha256(image_bytes).hexdigest() != image_artifact.sha256:
         raise NativeHarnessError("published image manifest digest does not match its bytes")
-    launch = decode_native_launch_manifest(launch_bytes)
+    launch = decode_native_launch_manifest(launch_bytes, require_current_deadline=False)
+    expected_sample_count, _ = _collector_parameters(launch.parameters)
     image = decode_native_image_manifest(image_bytes)
     if launch_artifact.provenance.get("image_manifest_artifact_id") != image_artifact.id:
         raise NativeHarnessError("launch artifact references a different image manifest")
@@ -248,7 +242,7 @@ def import_native_capture(
 
     screened_payload, screening = _screen_capture_payload(
         capture.payload,
-        expected_sample_count=launch.parameters["sample_count"],
+        expected_sample_count=expected_sample_count,
         protocol_status=capture.status,
     )
     accepted_status = capture.status
@@ -298,6 +292,21 @@ def import_native_capture(
     return safe_capture, raw_artifact, normalized_artifact
 
 
+def _collector_parameters(parameters: dict[str, object]) -> tuple[int, int]:
+    """Validate the fixed collector schema, including saved launch artifacts."""
+
+    if set(parameters) != {"sample_count", "sample_period_ms"}:
+        raise NativeHarnessError("native collector parameters must contain sample_count and sample_period_ms only")
+    count, period = parameters["sample_count"], parameters["sample_period_ms"]
+    if (
+        type(count) is not int or not 1 <= count <= MAX_CAPTURE_SAMPLES
+        or type(period) is not int or not 100 <= period <= MAX_SAMPLE_PERIOD_MS
+        or count * period > 3_600_000
+    ):
+        raise NativeHarnessError("native collector sample parameters are outside their bounds")
+    return count, period
+
+
 def _screen_capture_payload(
     payload: bytes,
     *,
@@ -305,6 +314,8 @@ def _screen_capture_payload(
     protocol_status: str,
 ) -> tuple[bytes, str]:
     """Return only scrubbed records matching the launch's bounded sample count."""
+
+    from m1lab.investigator.prompts import scrub_text
 
     if not payload:
         if protocol_status == "complete" and expected_sample_count > 0:

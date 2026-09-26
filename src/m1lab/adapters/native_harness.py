@@ -15,6 +15,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    ValidationInfo,
     computed_field,
     field_serializer,
     field_validator,
@@ -159,7 +160,11 @@ class NativeLaunchManifest(NativeModel):
 
     @field_validator("deadline")
     @classmethod
-    def deadline_is_future_and_bounded(cls, value: datetime) -> datetime:
+    def deadline_is_future_and_bounded(cls, value: datetime, info: ValidationInfo) -> datetime:
+        # Offline evidence can arrive after execution eligibility has expired.
+        # Parsing it still validates the timestamp and every other field.
+        if info.context and info.context.get("offline_capture_import") is True:
+            return value
         now = datetime.now(timezone.utc)
         if value <= now:
             raise ValueError("launch deadline must be in the future")
@@ -412,8 +417,15 @@ def decode_native_image_manifest(payload: bytes) -> NativeImageManifest:
     return _decode_native_manifest(payload, NativeImageManifest)
 
 
-def decode_native_launch_manifest(payload: bytes) -> NativeLaunchManifest:
-    return _decode_native_manifest(payload, NativeLaunchManifest)
+def decode_native_launch_manifest(
+    payload: bytes, *, require_current_deadline: bool = True
+) -> NativeLaunchManifest:
+    """Parse a launch; only offline import may waive current time eligibility."""
+
+    return _decode_native_manifest(
+        payload, NativeLaunchManifest,
+        context={"offline_capture_import": not require_current_deadline},
+    )
 
 
 def make_native_result_frame(
@@ -510,7 +522,7 @@ def _is_sha256(value: str) -> bool:
 
 
 def _decode_native_manifest(
-    payload: bytes, model: type[_NativeModelT]
+    payload: bytes, model: type[_NativeModelT], *, context: dict[str, bool] | None = None
 ) -> _NativeModelT:
     if not isinstance(payload, bytes) or not payload or len(payload) > MAX_NATIVE_MANIFEST_BYTES:
         raise NativeHarnessError("native manifest is empty or exceeds its size bound")
@@ -522,7 +534,7 @@ def _decode_native_manifest(
         )
         if not isinstance(document, dict):
             raise NativeHarnessError("native manifest must be a JSON object")
-        return model.model_validate(document)
+        return model.model_validate(document, context=context)
     except (UnicodeError, json.JSONDecodeError, RecursionError, TypeError, ValueError) as exc:
         if isinstance(exc, NativeHarnessError):
             raise

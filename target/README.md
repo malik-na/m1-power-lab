@@ -22,6 +22,18 @@ stalled or incomplete frame remains unknown to the host. A stuck kernel driver
 read cannot be interrupted by this process, so the host timeout and target
 recovery path still require qualification.
 
+Launch preparation reserves at least one second beyond the requested sampling
+duration for startup. This is a minimum scheduling margin, not a promise that
+an unqualified physical launch will finish in that time; the collector still
+refuses a launch whose remaining deadline cannot contain the requested work.
+The terminal-frame reserve fits within the final sample interval so increasing
+the sample count does not systematically omit the last samples.
+
+`output_limit_bytes` bounds decoded sample payload bytes. Base64, JSON, and
+length prefixes add channel bytes; frame size and count have separate bounds,
+and offline import caps the whole saved stream at 32 MiB. These are protocol
+limits, not a measured channel-throughput or observer-effect qualification.
+
 Each data frame contains one newline-terminated
 `m1lab.raw-sysfs-sample.v1` JSON record. It samples a fixed allowlist under
 `/sys/class/power_supply` and `/sys/class/thermal`, plus the device-tree model.
@@ -43,3 +55,9 @@ target operation. The collector source is now available, but no M1-specific
 recipe, image, result transport, or return path is qualified. Do not use its
 output as power evidence until the sensor provenance, observer effect,
 physical channel, and recovery gates are qualified on the actual setup.
+
+Host integration tests run this collector in a separate Python process with
+synthetic sysfs snapshots, transport its real framed output through a pipe,
+and import it into isolated coordinator artifact storage. Offline import can
+accept an expired saved launch while live decoding retains its deadline gate.
+These tests establish software behavior only; they do not run on the Mac.

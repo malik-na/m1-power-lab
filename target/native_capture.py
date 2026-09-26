@@ -248,7 +248,8 @@ def _emit(fd: int, launch: dict[str, Any]) -> tuple[int, int]:
         fcntl.fcntl(fd, fcntl.F_SETFL, descriptor_flags)
         raise CaptureError("launch deadline elapsed before capture started")
     hard_deadline = started + min(count * period, remaining_to_launch_deadline)
-    terminal_reserve = min(0.25, count * period * 0.1)
+    # Leave room for the final sample's scheduled slot as the count grows.
+    terminal_reserve = min(0.25, period * 0.1)
     data_deadline = hard_deadline - terminal_reserve
     sequence = 0
     total_payload = 0
