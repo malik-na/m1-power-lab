@@ -2,6 +2,21 @@
 
 ## Host-only gate
 
+- Latest host regression run on the T480: **70 passed in 4.30 seconds**, with
+  no pytest warnings. Eighteen new cases cover seven injected host-readiness
+  faults, seven notification contracts with delivery stubbed, and four HTTP
+  owner-interface contracts through a real temporary loopback server.
+  Sampler failure first reproduced a broken owner view (17 passed, one failed);
+  the view now reports unavailable readiness and remains accessible while work
+  admission stays blocked. Fault tests verify pause, interruption requests,
+  reservation release, and no automatic restart when readings recover.
+  Push cases verify generic payloads, deduplication, revocation, expiry, and
+  unchanged pending approvals after delivery failure. HTTP cases verify exact
+  owner identity, CSRF/origin checks, uncached views, and idempotent/stale command
+  handling. They do not qualify physical sensors, process termination, real
+  push delivery, Tailscale policy, or the actual iPhone workflow. Published
+  source includes these fixes; the deployed service remains `f560929` pending
+  reconciliation of its usage hold.
 - On 2026-09-26 the T480 ran 36 host tests and the replay demo. The installed
   `e6fc7ba` and `f58395f` loopback releases each served `/overview` as `m1lab`
   with HTTP 200 and zero restarts during their observed windows. The update,

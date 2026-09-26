@@ -167,7 +167,21 @@ class CoordinatorFacade:
             raise PermissionError("selected session belongs to a different owner")
         budget = snapshot.budget
         target = snapshot.latest_target
-        host_snapshot = self.host_monitor.sample()
+        try:
+            host_snapshot = self.host_monitor.sample()
+            host_view = host_snapshot.as_view()
+            host_blockers = HostAdmissionPolicy().blockers(host_snapshot)
+        except Exception:
+            _LOG.exception("host readiness view sample failed")
+            host_view = {
+                "state": "unavailable",
+                "power": "unknown",
+                "thermal": "unknown",
+                "disk": "unknown",
+                "lab_mode": "unavailable",
+                "observed_at": "unavailable",
+            }
+            host_blockers = ["host readiness could not be sampled"]
         alerts: list[dict[str, str]] = []
         if budget.blockers:
             alerts.append(
@@ -193,7 +207,6 @@ class CoordinatorFacade:
                     "detail": "Results exercise the workflow and do not establish M1 hardware behavior.",
                 }
             )
-        host_blockers = HostAdmissionPolicy().blockers(host_snapshot)
         if host_blockers:
             alerts.append(
                 {
@@ -214,7 +227,7 @@ class CoordinatorFacade:
                 "updated_at": session.updated_at.isoformat(),
             },
             "target": _target_view(target),
-            "host": host_snapshot.as_view(),
+            "host": host_view,
             "budgets": {
                 "tokens_used": budget.tokens_used,
                 "tokens_limit": budget.token_limit,
