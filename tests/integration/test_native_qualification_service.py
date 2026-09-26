@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import timedelta
 import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import pytest
 
@@ -24,6 +26,7 @@ from m1lab.experiment.native_qualification import NativeQualificationError, Nati
 from m1lab.paths import AppPaths
 
 from test_native_capture import _capture, _frames
+from test_native_helper_dispatch import _helper
 
 
 class CandidateAdapter:
@@ -194,6 +197,17 @@ def test_complete_native_attempt_requires_causal_capture_and_new_proxy_epoch(
 
 def request_digests(core, session_id):
     return core.list_records(session_id, "operations")[0].envelope.artifact_digests
+
+
+def test_reviewed_native_capture_flows_through_real_helper_ipc(enabled_core, tmp_path):
+    session_id, _, backend, request, stream = _reviewed_attempt(enabled_core, tmp_path)
+    with TemporaryDirectory(prefix="m1-native-e2e-") as directory:
+        with _helper(Path(directory), backend) as (adapter, errors):
+            report = NativeQualificationService(enabled_core, adapter).authorize_and_run(request)
+            assert report.state is OperationState.SUCCEEDED, report.message
+            assert errors == []
+    assert len(backend.calls) == 1
+    assert enabled_core.read_session_artifact(session_id, report.artifact_ids[0]) == stream
 
 
 @pytest.mark.parametrize("mode", ["wrong_return", "postflight_unavailable"])

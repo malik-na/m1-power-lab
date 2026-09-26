@@ -15,12 +15,18 @@
   ThinkPad using `gpt-6-sol` medium with host socket/process permissions. The
   initial run exposed one test fixture expecting IPC refusal where typed
   construction already refused; that assertion was corrected before this
-  passing run. Subsequent focused checks cover the added imported-client
-  tree pin. The actual `3f75558` published payload also passed bundle staging.
+  passing run. The final focused service/backend/launcher run passed **29 tests in
+  2.16 seconds**, including the imported-client tree pin and a complete
+  synthetic service round trip through the real helper IPC. The actual `3f75558` published payload also passed bundle staging.
   No physical native boot has occurred, and no live service was deployed or
   resumed. The candidate's sample window now permits longer approval
   headroom without extending its finite sample duration; this target change
-  requires a rebuilt image before physical use.
+  is now built from `8b9ae1d` as `build_a790a2c29c0a4151b62b45862fd5a908`.
+  Payload SHA-256 is
+  `21f0fdbbea097af66b2b3310c85c80400329fb32880fe9e382277bb23194d686`.
+  Independent exact-image review verified packaged source/configuration and
+  boot-file digests with no blocking finding; this does not replace exact
+  procedure review or physical approval. See [dispatch evidence](evidence/2026-09-26-native-dispatch.json).
 - The identity-enabled candidate at `3f75558` was rebuilt and session-linked.
   Its packaged configuration SHA matched the image manifest. The actual
   packaged ARM64 Python/collector ran under qemu-user with synthetic sysfs and

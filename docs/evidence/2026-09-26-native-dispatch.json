@@ -1,0 +1,96 @@
+{
+  "date": "2026-09-26",
+  "host": "ThinkPad T480",
+  "model": "gpt-6-sol",
+  "reasoning_effort": "medium",
+  "source_commit": "8b9ae1dec11405a6500b44a8c1f710b896062d1c",
+  "build_id": "build_a790a2c29c0a4151b62b45862fd5a908",
+  "build_role": "candidate",
+  "build_session_id": "session_6902dfa372b548b99c00004745cf3a5c",
+  "manifest_sha256": "4e07706e9593f5bbbf5c1a57a24742e47c21d2e3808aea4007095b97e772e9a9",
+  "configuration_sha256": "81402fbe0add4e72191ec5b9acde90172f3ea0f313feb5e491ed4c53c57a9408",
+  "outputs": [
+    {
+      "name": "Image.gz",
+      "role": "kernel",
+      "sha256": "a6df2b981733d0ed784c9eef2a91b6577accf35c185f40494995ce5385cb20f7",
+      "size_bytes": 13295503
+    },
+    {
+      "name": "j313.dtb",
+      "role": "dtb",
+      "sha256": "596420449c9b8d30a29392a344398026b5977877caebeecce1c54ac869ba7848",
+      "size_bytes": 65432
+    },
+    {
+      "name": "initramfs.cpio.gz",
+      "role": "initramfs",
+      "sha256": "1029d127aeb82228c9f7cdfb4d7da883da7e679731eb9324341a12626e34224e",
+      "size_bytes": 130461459
+    },
+    {
+      "name": "collector.py",
+      "role": "collector",
+      "sha256": "7f17b2739f8096e99f61e923600ed90f3c498c6b08143450674881c0b9d5e9f7",
+      "size_bytes": 14904
+    },
+    {
+      "name": "payload.tar",
+      "role": "payload",
+      "sha256": "21f0fdbbea097af66b2b3310c85c80400329fb32880fe9e382277bb23194d686",
+      "size_bytes": 179701760
+    },
+    {
+      "name": "rootfs.cpio.gz",
+      "role": "rootfs",
+      "sha256": "1029d127aeb82228c9f7cdfb4d7da883da7e679731eb9324341a12626e34224e",
+      "size_bytes": 130461459
+    },
+    {
+      "name": "bundle-metadata.json",
+      "role": "bundle_metadata",
+      "sha256": "b3036fe7e712114edd47530dfc4a86bd47af5356de5501dc1855c006925c3c24",
+      "size_bytes": 7262
+    }
+  ],
+  "tests": [
+    {
+      "command": ".venv/bin/python -m pytest -q",
+      "passed": 313,
+      "seconds": 38.6,
+      "scope": "Full host suite before final imported-client tree pin; physical target not accessed"
+    },
+    {
+      "command": ".venv/bin/python -m pytest -q tests/integration/test_native_qualification_service.py tests/integration/test_native_candidate_backend.py tests/integration/test_native_helper_launcher.py",
+      "passed": 29,
+      "seconds": 2.16,
+      "scope": "Final pin and real Unix-socket end-to-end service path with synthetic target data"
+    }
+  ],
+  "artifact_review": {
+    "reviewer": "independent gpt-6-sol medium development agent",
+    "disposition": "no blocking finding for candidate image",
+    "verified": [
+      "published manifest and payload hashes",
+      "three staged boot-file sizes and hashes",
+      "packaged init and native source equal committed source",
+      "packaged image configuration equals manifest"
+    ],
+    "limits": "Not an exact-procedure review or owner attendance approval; physical USB and reboot remain unqualified"
+  },
+  "physical_state": {
+    "native_boot_performed": false,
+    "current_helper_inspection": "available proxy, qualified false",
+    "installed_service": "f560929",
+    "service_state": "active/running; NRestarts=0",
+    "live_session_phase": "paused",
+    "live_session_usage_uncertain": true,
+    "usage_note": "Observed lifetime_tokens=0 does not resolve missing provider usage"
+  },
+  "remaining": [
+    "Exact-procedure review and attended single-use owner approval",
+    "Actual native capture and same-target proxy return",
+    "Recovery qualification and known-good promotion",
+    "Measurement qualification; scientific investigation remains stopped"
+  ]
+}
