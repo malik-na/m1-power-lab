@@ -7,7 +7,10 @@
   with HTTP 200 and zero restarts during their observed windows. The update,
   rollback, and return to `f58395f` passed the stopped-service maintenance
   check. The original session survived the update with its budget unchanged.
-  This does not qualify the live Codex runtime.
+  The pre-update bundle restored into isolated `/tmp` state on the T480 and
+  its CLI reported the same session with the full 3-hour / 100-million-token
+  budget. Replacing the live data root and running the authenticated Codex
+  runtime remain unqualified.
 - The configured Codex executable SHA-256 is verified before app-server startup.
 - Live app-server startup, authenticated job lifecycle, cancellation and usage remain unqualified until a bounded turn completes on the deployment host.
 - Replay operations preserve intent, completion and unknown-effect outcomes.
