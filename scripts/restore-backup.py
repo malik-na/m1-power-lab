@@ -15,6 +15,8 @@ import tempfile
 from datetime import datetime, timezone
 import zipfile
 
+JOURNAL_DISK_RESERVE_BYTES = 512 * 1024 * 1024
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -45,10 +47,38 @@ def restore(bundle: Path, root: Path) -> None:
                 manifest = json.loads(archive.read("manifest.json"))
                 if manifest.get("format") != "m1lab-backup-v1":
                     raise SystemExit("unsupported backup format")
+                manifest_artifacts = manifest.get("artifacts")
+                if not isinstance(manifest_artifacts, list):
+                    raise SystemExit("backup artifact manifest is invalid")
+                _validate_manifest_artifacts(manifest_artifacts)
+                expected_names = {
+                    "manifest.json",
+                    "m1lab.sqlite3",
+                    *(f"artifacts/{item['relative_path']}" for item in manifest_artifacts),
+                }
+                if set(names) != expected_names:
+                    raise SystemExit("backup archive members do not match its manifest")
+                required_bytes = sum(
+                    archive.getinfo(name).file_size
+                    for name in expected_names
+                    if name != "manifest.json"
+                )
+                free_bytes = shutil.disk_usage(root.parent).free
+                if free_bytes - required_bytes < JOURNAL_DISK_RESERVE_BYTES:
+                    raise SystemExit(
+                        "restore stopped to preserve the disk reserve "
+                        f"({free_bytes} bytes free; "
+                        f"{required_bytes + JOURNAL_DISK_RESERVE_BYTES} bytes required)"
+                    )
                 _extract_member(archive, "m1lab.sqlite3", database)
-                for item in manifest.get("artifacts", []):
+                for item in manifest_artifacts:
                     digest = _digest(item.get("sha256"))
-                    relative = item.get("relative_path") or f"{digest[:2]}/{digest[2:4]}/{digest}"
+                    relative = item["relative_path"]
+                    archive_info = archive.getinfo(f"artifacts/{relative}")
+                    if archive_info.file_size != item["size_bytes"]:
+                        raise SystemExit(
+                            f"artifact {item.get('id')} has the wrong archive size"
+                        )
                     relative_path = PurePosixPath(relative)
                     if relative_path.is_absolute() or ".." in relative_path.parts:
                         raise SystemExit("backup contains an unsafe artifact path")
@@ -59,7 +89,7 @@ def restore(bundle: Path, root: Path) -> None:
                     if _file_digest(destination) != digest:
                         raise SystemExit(f"artifact {item.get('id')} failed digest validation")
 
-            _validate_database(database, artifact_root)
+            _validate_database(database, artifact_root, manifest_artifacts)
             stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             previous = root / f"restore-previous-{stamp}"
             previous.mkdir()
@@ -99,7 +129,9 @@ def _extract_member(archive: zipfile.ZipFile, name: str, destination: Path) -> N
         shutil.copyfileobj(source, target, length=1024 * 1024)
 
 
-def _validate_database(database: Path, artifacts: Path) -> None:
+def _validate_database(
+    database: Path, artifacts: Path, manifest_artifacts: list[dict[str, object]]
+) -> None:
     connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row
     try:
@@ -107,9 +139,28 @@ def _validate_database(database: Path, artifacts: Path) -> None:
         if result != "ok":
             raise SystemExit(f"SQLite quick_check failed: {result}")
         rows = connection.execute(
-            "SELECT id, sha256, size_bytes, relative_path FROM artifacts WHERE available=1"
+            "SELECT id, sha256, size_bytes, relative_path, available FROM artifacts"
         ).fetchall()
+        manifest_by_id = {str(item["id"]): item for item in manifest_artifacts}
+        if len(manifest_by_id) != len(manifest_artifacts):
+            raise SystemExit("backup manifest contains duplicate artifact IDs")
+        if len(rows) != len(manifest_artifacts):
+            raise SystemExit("backup manifest does not cover every database artifact")
+        dangling = connection.execute(
+            "SELECT COUNT(*) FROM artifact_links l LEFT JOIN artifacts a "
+            "ON a.id=l.artifact_id WHERE a.id IS NULL"
+        ).fetchone()[0]
+        if dangling:
+            raise SystemExit("database contains artifact links without artifact metadata")
         for row in rows:
+            manifest = manifest_by_id.get(row["id"])
+            if not row["available"]:
+                raise SystemExit(f"database artifact {row['id']} was unavailable at backup")
+            if manifest is None or any(
+                manifest[field] != row[field]
+                for field in ("sha256", "size_bytes", "relative_path")
+            ):
+                raise SystemExit(f"backup manifest disagrees with artifact {row['id']}")
             path = artifacts / row["relative_path"]
             if not path.is_file() or path.stat().st_size != row["size_bytes"]:
                 raise SystemExit(f"database artifact {row['id']} is absent or has the wrong size")
@@ -117,6 +168,28 @@ def _validate_database(database: Path, artifacts: Path) -> None:
                 raise SystemExit(f"database artifact {row['id']} failed digest validation")
     finally:
         connection.close()
+
+
+def _validate_manifest_artifacts(items: list[object]) -> None:
+    seen_paths: set[str] = set()
+    seen_ids: set[str] = set()
+    for value in items:
+        if not isinstance(value, dict):
+            raise SystemExit("backup artifact manifest entry is invalid")
+        digest = _digest(value.get("sha256"))
+        expected_id = f"artifact_{digest}"
+        expected_path = f"{digest[:2]}/{digest[2:4]}/{digest}"
+        if (
+            value.get("id") != expected_id
+            or value.get("relative_path") != expected_path
+            or not isinstance(value.get("size_bytes"), int)
+            or value["size_bytes"] < 0
+        ):
+            raise SystemExit("backup artifact metadata is inconsistent")
+        if expected_id in seen_ids or expected_path in seen_paths:
+            raise SystemExit("backup manifest contains duplicate artifacts")
+        seen_ids.add(expected_id)
+        seen_paths.add(expected_path)
 
 
 def _digest(value: object) -> str:

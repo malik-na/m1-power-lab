@@ -304,38 +304,27 @@ class CoreApp:
     def artifact(self, artifact_id: str) -> ArtifactRecord:
         return self.journal.artifact(artifact_id)
 
-    def artifact_path(self, artifact_id: str):
-        return self.journal.artifact_path(artifact_id)
-
     def session_artifact(self, session_id: str, artifact_id: str) -> ArtifactRecord:
         self.session(session_id)
         return self.journal.artifact_for_session(session_id, artifact_id)
 
-    def session_artifact_path(self, session_id: str, artifact_id: str):
-        self.session(session_id)
-        return self.journal.artifact_path_for_session(session_id, artifact_id)
-
-    def read_artifact(self, artifact_id: str, *, max_bytes: int = 4_000_000) -> bytes:
-        if not 1 <= max_bytes <= 64_000_000:
-            raise ValidationError("artifact read bound must be 1..64,000,000 bytes")
-        record = self.journal.artifact(artifact_id)
-        if record.size_bytes > max_bytes:
-            raise ValidationError(
-                f"artifact {artifact_id} exceeds the {max_bytes}-byte read bound"
-            )
-        return self.journal.artifact_path(artifact_id).read_bytes()
+    def read_artifact(
+        self, session_id: str, artifact_id: str, *, max_bytes: int = 4_000_000
+    ) -> bytes:
+        """Read verified content only through a publication in the given session."""
+        return self.read_session_artifact(
+            session_id, artifact_id, max_bytes=max_bytes
+        )
 
     def read_session_artifact(
         self, session_id: str, artifact_id: str, *, max_bytes: int = 4_000_000
     ) -> bytes:
         if not 1 <= max_bytes <= 64_000_000:
             raise ValidationError("artifact read bound must be 1..64,000,000 bytes")
-        record = self.session_artifact(session_id, artifact_id)
-        if record.size_bytes > max_bytes:
-            raise ValidationError(
-                f"artifact {artifact_id} exceeds the {max_bytes}-byte read bound"
-            )
-        return self.session_artifact_path(session_id, artifact_id).read_bytes()
+        self.session(session_id)
+        return self.journal.read_artifact_for_session(
+            session_id, artifact_id, max_bytes=max_bytes
+        )
 
     def artifacts(self, session_id: str, *, record_type: str | None = None) -> list[ArtifactRecord]:
         records = self.list_records(session_id, "artifacts")
@@ -452,6 +441,15 @@ class CoreApp:
             reasons.extend(
                 self._procedure_artifact_blockers(tx, procedure, session.id)
             )
+            estimated_artifact_bytes = sum(
+                max(0, int(operation.parameters.get("length", 0)))
+                for operation in procedure.operations
+                if operation.kind == "capture_memory"
+            ) + len(procedure.operations) * 64 * 1024
+            try:
+                self.journal.ensure_artifact_capacity(estimated_artifact_bytes)
+            except ValidationError as exc:
+                reasons.append(str(exc))
             budget = self.budgets.snapshot(session.id)
             if not budget.admission_open:
                 reasons.extend(budget.blockers)
@@ -520,6 +518,12 @@ class CoreApp:
             procedure = self._procedure_in_tx(
                 tx, row["procedure_id"], row["procedure_revision"]
             )
+            estimated_artifact_bytes = sum(
+                max(0, int(operation.parameters.get("length", 0)))
+                for operation in procedure.operations
+                if operation.kind == "capture_memory"
+            ) + len(procedure.operations) * 64 * 1024
+            self.journal.ensure_artifact_capacity(estimated_artifact_bytes)
             artifact_blockers = self._procedure_artifact_blockers(
                 tx, procedure, row["session_id"]
             )
@@ -768,6 +772,7 @@ class CoreApp:
             )
             if not phase_admits or not self.budgets.snapshot(session.id).admission_open:
                 raise ConflictError("session state or budget does not admit a new job")
+            self.journal.ensure_artifact_capacity()
             tx.execute("INSERT INTO jobs VALUES (?,?,?,?,?,?,?,?,?,?,?)", (record.id, record.session_id, record.kind, None, record.state, iso(record.lease_expires_at), iso(record.deadline_at), json_dump(record.evidence_manifest), "{}", iso(now), iso(now)))
             self.budgets._sync_activity(tx, session.id, session.phase)
             self.journal.append_event(tx, kind="job.admitted", session_id=record.session_id, subject_id=record.id, data={"kind": record.kind, "deadline_at": iso(record.deadline_at)})

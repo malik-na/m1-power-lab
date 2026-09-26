@@ -138,10 +138,21 @@ sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab \
   backup-bundle /var/lib/m1-power-lab/pre-update.zip
 ```
 
+Artifact publication and new Codex or target work stop when less than 512 MiB
+would remain for the SQLite journal and cleanup. A capture estimated at 1 MiB
+or larger must leave 1 GiB free after its result evidence. The check runs at
+job admission, operation authorization, immediately before dispatch, and again
+while publishing an artifact. A backup or restore also stops if its temporary
+files would consume the 512 MiB reserve. Backup creation fails when any
+referenced artifact is unavailable or fails its size or SHA-256 check; it does
+not create a partial bundle that silently omits that evidence.
+
 Restore only with the coordinator stopped. The restore tool takes the
-coordinator lock, checks every artifact digest, runs SQLite `quick_check`, and
-moves the prior database and artifact tree into a timestamped
-`restore-previous-*` directory.
+coordinator lock, checks that its manifest covers exactly the database's
+artifact rows and publication links, verifies every artifact size and digest,
+runs SQLite `quick_check`, and moves the prior database and artifact tree into
+a timestamped `restore-previous-*` directory. Validation finishes before the
+current data root is replaced.
 
 ```bash
 sudo systemctl stop m1-power-lab

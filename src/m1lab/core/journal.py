@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import shutil
 import threading
 from typing import Any, Iterator, Mapping, Sequence
 from uuid import uuid4
@@ -18,6 +19,9 @@ from .models import ArtifactRecord, EventRecord, new_id, utc_now
 
 
 SCHEMA_VERSION = 2
+JOURNAL_DISK_RESERVE_BYTES = 512 * 1024 * 1024
+LARGE_ARTIFACT_THRESHOLD_BYTES = 1 * 1024 * 1024
+LARGE_ARTIFACT_DISK_RESERVE_BYTES = 1024 * 1024 * 1024
 
 
 SCHEMA = """
@@ -353,6 +357,8 @@ class Journal:
                 raise ValidationError(f"artifact {artifact_id} metadata exists but its file is missing or invalid")
             return self._link_existing_artifact(existing, provenance or {}, now)
 
+        self.ensure_artifact_capacity(len(content))
+
         staging = self.paths.staging / f"{uuid4().hex}.partial"
         destination.parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -360,6 +366,7 @@ class Journal:
                 stream.write(content)
                 stream.flush()
                 os.fsync(stream.fileno())
+            self.ensure_artifact_capacity(staged_bytes=len(content))
             os.replace(staging, destination)
             directory_fd = os.open(destination.parent, os.O_RDONLY)
             try:
@@ -391,6 +398,25 @@ class Journal:
         row = self.one("SELECT * FROM artifacts WHERE id = ?", (artifact_id,))
         assert row is not None
         return self._link_existing_artifact(row, provenance or {}, now, emit_event=False)
+
+    def ensure_artifact_capacity(
+        self, additional_bytes: int = 0, *, staged_bytes: int = 0
+    ) -> None:
+        """Keep database and cleanup space available before admitting writes."""
+        if additional_bytes < 0 or staged_bytes < 0:
+            raise ValueError("artifact byte counts cannot be negative")
+        reserve = (
+            LARGE_ARTIFACT_DISK_RESERVE_BYTES
+            if max(additional_bytes, staged_bytes) >= LARGE_ARTIFACT_THRESHOLD_BYTES
+            else JOURNAL_DISK_RESERVE_BYTES
+        )
+        free_bytes = shutil.disk_usage(self.paths.root).free
+        if free_bytes + staged_bytes - additional_bytes < reserve:
+            required = reserve + additional_bytes - staged_bytes
+            raise ValidationError(
+                "artifact admission stopped to preserve the disk reserve "
+                f"({free_bytes} bytes free; {required} bytes required)"
+            )
 
     def _link_existing_artifact(
         self,
@@ -463,29 +489,36 @@ class Journal:
             )
         return self._artifact_from_row(row)
 
-    def artifact_path(self, artifact_id: str) -> Path:
-        record = self.artifact(artifact_id)
+    def read_artifact_for_session(
+        self, session_id: str, artifact_id: str, *, max_bytes: int
+    ) -> bytes:
+        record = self.artifact_for_session(session_id, artifact_id)
         if not record.available:
             raise ValidationError(f"artifact {artifact_id} is unavailable")
+        if record.size_bytes > max_bytes:
+            raise ValidationError(
+                f"artifact {artifact_id} exceeds the {max_bytes}-byte read bound"
+            )
         path = self.paths.artifacts / record.relative_path
+        try:
+            with path.open("rb") as stream:
+                content = stream.read(max_bytes + 1)
+        except OSError as exc:
+            raise ValidationError(f"artifact {artifact_id} is unavailable") from exc
         if (
-            not path.is_file()
-            or path.stat().st_size != record.size_bytes
-            or _file_sha256(path) != record.sha256
+            len(content) != record.size_bytes
+            or len(content) > max_bytes
+            or hashlib.sha256(content).hexdigest() != record.sha256
         ):
             raise ValidationError(f"artifact {artifact_id} is unavailable")
-        return path
+        return content
 
     def artifact_path_for_session(self, session_id: str, artifact_id: str) -> Path:
         record = self.artifact_for_session(session_id, artifact_id)
         if not record.available:
             raise ValidationError(f"artifact {artifact_id} is unavailable")
         path = self.paths.artifacts / record.relative_path
-        if (
-            not path.is_file()
-            or path.stat().st_size != record.size_bytes
-            or _file_sha256(path) != record.sha256
-        ):
+        if not _artifact_file_matches(path, record.size_bytes, record.sha256):
             raise ValidationError(f"artifact {artifact_id} is unavailable")
         return path
 
@@ -522,3 +555,14 @@ def _file_sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _artifact_file_matches(path: Path, size_bytes: int, sha256: str) -> bool:
+    try:
+        return (
+            path.is_file()
+            and path.stat().st_size == size_bytes
+            and _file_sha256(path) == sha256
+        )
+    except OSError:
+        return False

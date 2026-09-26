@@ -317,7 +317,7 @@ def create_app(
         )
 
     @app.get("/api/artifacts/{artifact_id}")
-    async def artifact(artifact_id: str, owner: OwnerDependency) -> FileResponse:
+    async def artifact(artifact_id: str, owner: OwnerDependency) -> Response:
         try:
             await facade.get_view("overview", owner)
         except PermissionError as exc:
@@ -326,10 +326,14 @@ def create_app(
         if reader is None:
             raise HTTPException(status_code=501, detail="Artifact inspection is unavailable.")
         try:
-            path, media_type = reader(artifact_id)
+            content, media_type = reader(artifact_id)
         except (CoreError, ValueError, OSError) as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        return FileResponse(path, media_type=media_type, filename=artifact_id)
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{artifact_id}"'},
+        )
 
     @app.post("/api/jobs/{job_id}/interrupt")
     async def interrupt_job(job_id: str, owner: OwnerDependency) -> JSONResponse:

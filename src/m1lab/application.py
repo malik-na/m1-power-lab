@@ -340,11 +340,12 @@ class CoordinatorFacade:
             "records": records,
         }
 
-    def artifact(self, artifact_id: str) -> tuple[str, str]:
-        record = self.core.artifact(artifact_id)
-        if not any(item.id == artifact_id for item in self.core.artifacts(self.session_id)):
-            raise ValueError("artifact does not belong to the selected session")
-        return str(self.core.artifact_path(artifact_id)), record.media_type
+    def artifact(self, artifact_id: str) -> tuple[bytes, str]:
+        record = self.core.session_artifact(self.session_id, artifact_id)
+        content = self.core.read_artifact(
+            self.session_id, artifact_id, max_bytes=64_000_000
+        )
+        return content, record.media_type
 
     def scientific_records(self) -> tuple[PublishedScientificRecord, ...]:
         return ScientificRecordStore(self.core).list(self.session_id)

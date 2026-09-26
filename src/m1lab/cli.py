@@ -54,6 +54,7 @@ from m1lab.core import (
     TypedOperation,
 )
 from m1lab.core.errors import CoreError
+from m1lab.core.journal import JOURNAL_DISK_RESERVE_BYTES
 from m1lab.core.models import new_id, utc_now
 from m1lab.experiment import ExperimentService
 from m1lab.investigator import EvidenceExcerpt, InvestigationOrchestrator, InvestigationRequest
@@ -326,7 +327,9 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
         record = linked.get(args.artifact_id)
         if record is None:
             raise ValueError("artifact is not linked to the selected session")
-        content = core.read_artifact(args.artifact_id, max_bytes=args.max_bytes)
+        content = core.read_session_artifact(
+            session_id, args.artifact_id, max_bytes=args.max_bytes
+        )
         if args.output is not None:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_bytes(content)
@@ -786,44 +789,106 @@ def _request_job_interrupt(base_url: str, job_id: str) -> dict[str, Any]:
 
 def _backup_bundle(core: CoreApp, destination: Path) -> dict[str, Any]:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    handle, partial_name = tempfile.mkstemp(prefix=".m1lab-backup-", suffix=".partial", dir=destination.parent)
-    os.close(handle)
-    partial = Path(partial_name)
     try:
-        with tempfile.TemporaryDirectory(prefix="m1lab-backup-") as temporary:
+        with tempfile.TemporaryDirectory(
+            prefix="m1lab-backup-", dir=destination.parent
+        ) as temporary:
             database = Path(temporary) / "m1lab.sqlite3"
             core.journal.backup_database(database)
             connection = sqlite3.connect(database)
             connection.row_factory = sqlite3.Row
             try:
                 artifacts = connection.execute(
-                    "SELECT id, sha256, size_bytes, relative_path FROM artifacts WHERE available=1 ORDER BY id"
+                    "SELECT id, sha256, size_bytes, relative_path, available FROM artifacts ORDER BY id"
                 ).fetchall()
+                dangling = connection.execute(
+                    "SELECT COUNT(*) FROM artifact_links l LEFT JOIN artifacts a "
+                    "ON a.id=l.artifact_id WHERE a.id IS NULL"
+                ).fetchone()[0]
             finally:
                 connection.close()
+            if dangling:
+                raise ValueError("backup database has artifact links without artifact metadata")
+            unavailable = [row["id"] for row in artifacts if not row["available"]]
+            if unavailable:
+                raise ValueError(
+                    "backup cannot omit unavailable referenced artifacts: "
+                    + ", ".join(unavailable[:8])
+                )
+            required_bytes = 2 * database.stat().st_size + sum(
+                int(row["size_bytes"]) for row in artifacts
+            ) + 1024 * 1024
+            free_bytes = shutil.disk_usage(destination.parent).free
+            if free_bytes - required_bytes < JOURNAL_DISK_RESERVE_BYTES:
+                raise ValueError(
+                    "backup admission stopped to preserve the disk reserve "
+                    f"({free_bytes} bytes free; "
+                    f"{required_bytes + JOURNAL_DISK_RESERVE_BYTES} bytes required)"
+                )
+            handle, partial_name = tempfile.mkstemp(
+                prefix=".m1lab-backup-", suffix=".partial", dir=destination.parent
+            )
+            os.close(handle)
+            partial = Path(partial_name)
             manifest = {"format": "m1lab-backup-v1", "artifacts": []}
-            with zipfile.ZipFile(partial, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                archive.write(database, "m1lab.sqlite3")
-                for row in artifacts:
-                    source = core.journal.paths.artifacts / row["relative_path"]
-                    content = source.read_bytes()
-                    digest = hashlib.sha256(content).hexdigest()
-                    if len(content) != row["size_bytes"] or digest != row["sha256"]:
-                        raise ValueError(f"artifact {row['id']} failed backup integrity validation")
-                    archive.writestr(f"artifacts/{row['relative_path']}", content)
-                    manifest["artifacts"].append(
-                        {
-                            "id": row["id"],
-                            "sha256": digest,
-                            "size_bytes": len(content),
-                            "relative_path": row["relative_path"],
-                        }
+            try:
+                with zipfile.ZipFile(partial, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                    archive.write(database, "m1lab.sqlite3")
+                    for row in artifacts:
+                        source = core.journal.paths.artifacts / row["relative_path"]
+                        if (
+                            not source.is_file()
+                            or source.stat().st_size != row["size_bytes"]
+                            or _file_sha256_path(source) != row["sha256"]
+                        ):
+                            raise ValueError(
+                                f"artifact {row['id']} failed backup integrity validation"
+                            )
+                        archive.write(source, f"artifacts/{row['relative_path']}")
+                        manifest["artifacts"].append(
+                            {
+                                "id": row["id"],
+                                "sha256": row["sha256"],
+                                "size_bytes": row["size_bytes"],
+                                "relative_path": row["relative_path"],
+                            }
+                        )
+                    archive.writestr(
+                        "manifest.json", json.dumps(manifest, indent=2, sort_keys=True)
                     )
-                archive.writestr("manifest.json", json.dumps(manifest, indent=2, sort_keys=True))
-        os.replace(partial, destination)
-    finally:
-        partial.unlink(missing_ok=True)
+                    for row in artifacts:
+                        member = f"artifacts/{row['relative_path']}"
+                        with archive.open(member) as stream:
+                            digest = hashlib.sha256()
+                            size = 0
+                            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                                digest.update(block)
+                                size += len(block)
+                        if size != row["size_bytes"] or digest.hexdigest() != row["sha256"]:
+                            raise ValueError(
+                                f"artifact {row['id']} changed while the backup was written"
+                            )
+                with partial.open("rb") as stream:
+                    os.fsync(stream.fileno())
+                os.replace(partial, destination)
+                directory_fd = os.open(destination.parent, os.O_RDONLY)
+                try:
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
+            finally:
+                partial.unlink(missing_ok=True)
+    except OSError as exc:
+        raise ValueError(f"backup could not be completed safely: {exc}") from exc
     return {"path": str(destination), "artifacts": len(manifest["artifacts"])}
+
+
+def _file_sha256_path(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def _tool_version(command: str) -> dict[str, Any]:

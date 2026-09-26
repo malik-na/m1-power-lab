@@ -174,7 +174,9 @@ def build_manifest(
         "events": [bounded(event) for event in events],
         "artifacts": [bounded(artifacts_by_id[item]) for item in sorted(selected)],
         "artifact_excerpts": _artifact_excerpts(
-            core, [artifacts_by_id[item] for item in sorted(selected)]
+            core,
+            request.session_id,
+            [artifacts_by_id[item] for item in sorted(selected)],
         ),
         "bounds": {
             "events": MAX_EVENT_COUNT,
@@ -214,14 +216,20 @@ def build_manifest(
     return manifest
 
 
-def _artifact_excerpts(core: CoreApp, artifacts: Sequence[ArtifactRecord]) -> list[dict[str, Any]]:
+def _artifact_excerpts(
+    core: CoreApp, session_id: str, artifacts: Sequence[ArtifactRecord]
+) -> list[dict[str, Any]]:
     remaining = MAX_AUTOMATIC_EXCERPT_CHARS
     excerpts: list[dict[str, Any]] = []
     for artifact in artifacts:
         if remaining <= 0:
             break
         try:
-            raw = core.read_artifact(artifact.id, max_bytes=min(1_000_000, max(1, artifact.size_bytes)))
+            raw = core.read_artifact(
+                session_id,
+                artifact.id,
+                max_bytes=min(1_000_000, max(1, artifact.size_bytes)),
+            )
             content = scrub_text(raw.decode("utf-8"))
         except (OSError, UnicodeDecodeError, ValueError):
             continue

@@ -46,7 +46,11 @@ class ScientificCore(Protocol):
 
     def artifact(self, artifact_id: str) -> ArtifactRecord: ...
 
-    def read_artifact(self, artifact_id: str, *, max_bytes: int = 4_000_000) -> bytes: ...
+    def read_artifact(
+        self, session_id: str, artifact_id: str, *, max_bytes: int = 4_000_000
+    ) -> bytes: ...
+
+    def session_artifact(self, session_id: str, artifact_id: str) -> ArtifactRecord: ...
 
     def artifacts(
         self, session_id: str, *, record_type: str | None = None
@@ -263,12 +267,14 @@ class ScientificRecordStore:
         )
         return self.publish(result)
 
-    def load(self, artifact_id: str) -> PublishedScientificRecord:
-        artifact = self._core.artifact(artifact_id)
+    def load(self, session_id: str, artifact_id: str) -> PublishedScientificRecord:
+        artifact = self._core.session_artifact(session_id, artifact_id)
         if not artifact.media_type.startswith("application/vnd.m1lab.scientific-record+json"):
             raise ValueError(f"artifact {artifact_id} is not a scientific record")
         try:
-            document = json.loads(self._core.read_artifact(artifact_id).decode("utf-8"))
+            document = json.loads(
+                self._core.read_artifact(session_id, artifact_id).decode("utf-8")
+            )
             envelope = ScientificArtifactEnvelope.model_validate(document)
             record = TypeAdapter(ScientificRecord).validate_python(envelope.record)
         except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
@@ -291,7 +297,7 @@ class ScientificRecordStore:
     def list(self, session_id: str) -> tuple[PublishedScientificRecord, ...]:
         self._core.session(session_id)
         return tuple(
-            self.load(artifact.id)
+            self.load(session_id, artifact.id)
             for artifact in self._core.artifacts(session_id)
             if artifact.provenance.get("record_type")
             and artifact.media_type.startswith("application/vnd.m1lab.scientific-record+json")
@@ -360,7 +366,11 @@ class ScientificRecordStore:
                 if not artifact.available or artifact.sha256 != digest:
                     raise ValueError(f"raw artifact {artifact_id} is unavailable or has a different digest")
                 try:
-                    self._core.read_artifact(artifact_id, max_bytes=max(1, artifact.size_bytes))
+                    self._core.read_artifact(
+                        record.session_id,
+                        artifact_id,
+                        max_bytes=max(1, artifact.size_bytes),
+                    )
                 except (OSError, ValueError) as exc:
                     raise ValueError(f"raw artifact {artifact_id} failed integrity verification") from exc
             _validate_refs(
