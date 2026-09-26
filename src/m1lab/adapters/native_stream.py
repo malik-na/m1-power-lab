@@ -40,7 +40,8 @@ class NativeStreamReceipt:
 
 
 def receive_native_result_stream(
-    fd: int, launch: NativeLaunchManifest, image: NativeImageManifest
+    fd: int, launch: NativeLaunchManifest, image: NativeImageManifest,
+    *, deadline_monotonic: float | None = None,
 ) -> NativeStreamReceipt:
     """Receive one finite stream without changing or closing its descriptor.
 
@@ -61,6 +62,10 @@ def receive_native_result_stream(
     started = time.monotonic()
     remaining = (launch.deadline - datetime.now(timezone.utc)).total_seconds()
     deadline = started + remaining
+    if deadline_monotonic is not None:
+        if not 0 < deadline_monotonic < float("inf"):
+            raise ValueError("native receive deadline must be finite and positive")
+        deadline = min(deadline, deadline_monotonic)
     assembler = NativeResultAssembler(launch, image)
     raw = bytearray()
     offset = 0

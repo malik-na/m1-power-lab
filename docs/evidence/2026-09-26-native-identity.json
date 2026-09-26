@@ -1,0 +1,85 @@
+{
+  "source_commit": "3f7555849f363ef05bc576823748c0e9be2bcade",
+  "build_id": "build_7a44c36f3fe543fe9a1a26ab083a740d",
+  "session_id": "session_f584378009744e279c6aa9cffecf9318",
+  "manifest_artifact_id": "artifact_ce03dbc881bc15095d59f6220c38a5a47ba237243931df2facde1a96377a598d",
+  "manifest_sha256": "ce03dbc881bc15095d59f6220c38a5a47ba237243931df2facde1a96377a598d",
+  "payload_sha256": "a416aaf618b13ab41efcaf5da9aacde3b2ed2974eabc586178aa6ea9355dc1c9",
+  "outputs": [
+    {
+      "name": "Image.gz",
+      "role": "kernel",
+      "sha256": "a6df2b981733d0ed784c9eef2a91b6577accf35c185f40494995ce5385cb20f7",
+      "size_bytes": 13295503
+    },
+    {
+      "name": "j313.dtb",
+      "role": "dtb",
+      "sha256": "596420449c9b8d30a29392a344398026b5977877caebeecce1c54ac869ba7848",
+      "size_bytes": 65432
+    },
+    {
+      "name": "initramfs.cpio.gz",
+      "role": "initramfs",
+      "sha256": "3467b70c7c6dfef05835561a2ce2497cf6a85d935894cd517148bb92eaef55cf",
+      "size_bytes": 130461759
+    },
+    {
+      "name": "collector.py",
+      "role": "collector",
+      "sha256": "7f17b2739f8096e99f61e923600ed90f3c498c6b08143450674881c0b9d5e9f7",
+      "size_bytes": 14904
+    },
+    {
+      "name": "payload.tar",
+      "role": "payload",
+      "sha256": "a416aaf618b13ab41efcaf5da9aacde3b2ed2974eabc586178aa6ea9355dc1c9",
+      "size_bytes": 179701760
+    },
+    {
+      "name": "rootfs.cpio.gz",
+      "role": "rootfs",
+      "sha256": "3467b70c7c6dfef05835561a2ce2497cf6a85d935894cd517148bb92eaef55cf",
+      "size_bytes": 130461759
+    },
+    {
+      "name": "bundle-metadata.json",
+      "role": "bundle_metadata",
+      "sha256": "391c1b336252640ba2de0de066cee1cd684a4a6a8621561522f260257a5a1485",
+      "size_bytes": 7262
+    }
+  ],
+  "launch_artifact_id": "artifact_7f353cdef19ed0cd2a45ca55c0bcbed60340caccfbc82b939fb7500c2e2f4674",
+  "raw_artifact_id": "artifact_5e0571d48f991646a3c8dd3d2723741e90d08e695a6ac4c2593abca614f2404b",
+  "capture_artifact_id": "artifact_48f31a8678a1ef8cdd7de61c8780c45fb95058ec6c217d2340fe321b9ac3cb40",
+  "capture_status": "complete",
+  "configuration_matches_packaged_file": true,
+  "observed_linux": {
+    "boot_id": "12345678-1234-4abc-8def-123456789abc",
+    "kernel_release": "7.2.5-3-omarchy",
+    "configuration_sha256": "81402fbe0add4e72191ec5b9acde90172f3ea0f313feb5e491ed4c53c57a9408"
+  },
+  "stream_acquisition": {
+    "mode": "descriptor",
+    "stop_reason": "terminal",
+    "target_stop_verified": false,
+    "terminal_received_before_deadline": true
+  },
+  "identity_verified": false,
+  "physical_source_verified": false,
+  "mode": "actual packaged ARM64 userspace under qemu-user, synthetic boot UUID and sysfs; host kernel release",
+  "target_executed": false,
+  "host_validation": {
+    "command": ".venv/bin/python -m pytest -q tests/integration/test_native_boot.py tests/integration/test_native_cli.py tests/integration/test_native_identity.py tests/integration/test_native_capture.py tests/integration/test_native_stream.py tests/integration/test_native_usb.py",
+    "result": "54 passed in 17.43s",
+    "scope": "Synthetic host pipes/PTYS, image binding, legacy codec compatibility and publication; no real USB or target boot",
+    "native_usb": "Fixed candidate labels/topology, exclusive tty ownership, one launch attempt, shared send/receive monotonic deadline, retained unknown receipt, cleanup"
+  },
+  "qualification": {
+    "physical_native_channel": false,
+    "target_boot_identity_independently_verified": false,
+    "return_or_recovery": false,
+    "known_good_image": false,
+    "scientific_investigation_started": false
+  }
+}

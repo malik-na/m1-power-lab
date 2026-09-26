@@ -142,7 +142,7 @@ import importlib.util
 import os
 from pathlib import Path
 import sys
-source, launch_path, boot_id = sys.argv[1:]
+source, launch_path, boot_id, release = sys.argv[1:]
 spec = importlib.util.spec_from_file_location('native_capture_observed', source)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
@@ -152,7 +152,7 @@ module._sysfs_snapshot = lambda: {
 }
 launch = module.load_launch(Path(launch_path))
 module._emit(sys.stdout.fileno(), launch, observed_linux={
-    'boot_id': boot_id, 'kernel_release': '7.1.13-3-2-ARCH',
+    'boot_id': boot_id, 'kernel_release': release,
     'configuration_sha256': launch['configuration_sha256'],
 })
 """
@@ -162,7 +162,7 @@ def test_collector_child_emits_observed_identity_and_import_stays_unverified(cor
     session_id, _image, _manifest, _launch, _artifact, _stream, root = captured
     process = subprocess.run(
         [sys.executable, "-c", _CHILD_WITH_OBSERVATION,
-         str(_COLLECTOR), str(root / "launch.json"), BOOT_ID],
+         str(_COLLECTOR), str(root / "launch.json"), BOOT_ID, "7.1.13-3-2-ARCH"],
         capture_output=True, timeout=8,
     )
     assert process.returncode == 0, process.stderr.decode(errors="replace")
@@ -176,3 +176,23 @@ def test_collector_child_emits_observed_identity_and_import_stays_unverified(cor
     assert document["identity_verified"] is False
     assert document["physical_source_verified"] is False
     assert document["capture_timing_verified"] is False
+
+
+def test_sensitive_kernel_release_is_omitted_from_screened_capture(core, captured):
+    session_id, _image, _manifest, _launch, _artifact, _stream, root = captured
+    release = "7.1.13-ghp_" + "a" * 30
+    process = subprocess.run(
+        [sys.executable, "-c", _CHILD_WITH_OBSERVATION,
+         str(_COLLECTOR), str(root / "launch.json"), BOOT_ID, release],
+        capture_output=True, timeout=8,
+    )
+    assert process.returncode == 0, process.stderr.decode(errors="replace")
+    assert decode_native_result_frame(_frames(process.stdout)[0]).observed_linux.kernel_release == release
+    capture, raw, artifact = _import(core, captured, process.stdout)
+    assert core.read_session_artifact(session_id, raw.id) == process.stdout
+    assert capture.observed_linux is None
+    document = json.loads(core.read_session_artifact(session_id, artifact.id))
+    assert document["observed_linux"] is None
+    assert document["observed_linux_screening"] == "omitted_sensitive_observation"
+    assert document["identity_verified"] is False
+    assert document["physical_source_verified"] is False

@@ -2,6 +2,21 @@
 
 ## Host-only gate
 
+- The identity-enabled candidate at `3f75558` was rebuilt and session-linked.
+  Its packaged configuration SHA matched the image manifest. The actual
+  packaged ARM64 Python/collector ran under qemu-user with synthetic sysfs and
+  boot UUID, streamed a complete capture through the host receiver and
+  published both raw and screened artifacts. Linux kernel release in this
+  emulation is the host's, not a Mac observation. The capture retains the
+  Linux self-report while physical verification flags remain false.
+  The native ACM transport now owns one configured tty, sends exactly one
+  bounded launch, and applies one monotonic deadline to send plus receipt.
+  Six synthetic PTY cases cover binding, cleanup, complete receipt, truncated
+  receipt and ambiguous send without retry. The combined native test command
+  recorded in [identity evidence](evidence/2026-09-26-native-identity.json)
+  passed **54 tests in 17.43 seconds**. No physical native boot or live dispatch
+  was enabled; reviewed coordinator/helper launch wiring and physical
+  identity/channel/return qualification remain open.
 - At source `520d05b`, the actual J313 RAM-only candidate was built and
   published into the separate `build/harness-state` journal with all package
   inputs and seven output artifacts. A second independent assembly matched

@@ -327,6 +327,14 @@ def _publish_capture(
     accepted_status = capture.status
     if screening.startswith("omitted_"):
         accepted_status = "unknown"
+    observed_linux = capture.observed_linux
+    observation_screening = "absent"
+    if observed_linux is not None:
+        if any(scrub_text(value) != value for value in observed_linux.model_dump().values()):
+            observed_linux = None
+            observation_screening = "omitted_sensitive_observation"
+        else:
+            observation_screening = "screened_observation"
     safe_capture = NativeCapture(
         status=accepted_status,
         identity_verified=False,
@@ -337,7 +345,7 @@ def _publish_capture(
             "collector payload did not match the recognized schema or requested sample count"
             if accepted_status == "unknown" and capture.status != "unknown" else ""
         ))[:1024],
-        observed_linux=capture.observed_linux,
+        observed_linux=observed_linux,
     )
     capture_document = safe_capture.model_dump(mode="json")
     capture_document["protocol_status"] = capture.status
@@ -345,6 +353,7 @@ def _publish_capture(
     capture_document["capture_timing_verified"] = False
     capture_document["stream_acquisition"] = acquisition
     capture_document["payload_screening"] = screening
+    capture_document["observed_linux_screening"] = observation_screening
     capture_document["raw_stream_artifact_id"] = raw_artifact.id
     normalized_artifact = core.publish_artifact(
         json.dumps(

@@ -73,6 +73,15 @@ It does not authenticate physical origin. No shell commands are accepted.
 Use the matching updated host decoder: legacy frames still decode, but older
 strict hosts cannot accept the new identity object.
 
+`m1lab.adapters.native_usb.NativeUsbTransport` provides the corresponding
+host ACM exchange for a caller holding the helper owner lock. It checks the
+fixed USB labels and configured physical port before/after exclusive tty
+open, sends the launch once, and shares one monotonic deadline across send
+and receipt. Partial send is ambiguous; receive failures retain raw bytes.
+The transport never retries or changes devices. It is not yet enabled through
+a live coordinator/helper dispatch command. Synthetic PTY coverage does not
+qualify the actual USB channel.
+
 The launch must fit both its own deadline and the remaining 150-second
 native window. Use a short setup capture with enough time for enumeration;
 a Linux clock mismatch fails launch validation instead of inventing timing.
