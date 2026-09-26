@@ -18,6 +18,15 @@ inspection identified no concrete packaging defect. The next useful evidence is
 a recording of the existing target diagnostics during a separately approved run.
 See [fourth-attempt evidence](evidence/2026-09-26-native-fourth-attempt.json).
 
+The owner requested the ThinkPad webcam for the next diagnostic observation.
+Its preview now contains the full console. The same candidate has a freshly
+accepted exact proposal `d16b1906…e21ccef`: host camera frames must be captured
+before dispatch, recording is bounded to 510 seconds/1 GiB, and explicit host
+cleanup stops/reaps it. Two rejected preparation reviews remain recorded;
+the corrected script bytes and procedure now match. Fresh owner approval and
+attendance are pending; no fifth boot has run. See
+[webcam preparation](evidence/2026-09-26-native-webcam-preparation.json).
+
 The next candidate adds diagnostics for the demonstrated missing-evidence gap:
 private boot logs survive helper death, and target startup emits fixed stage
 markers with a five-second failure-only hold before its existing reboot request.

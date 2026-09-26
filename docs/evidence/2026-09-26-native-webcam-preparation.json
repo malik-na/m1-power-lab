@@ -1,0 +1,59 @@
+{
+  "date_utc": "2026-09-26",
+  "candidate_source": "350819d20b19187951ab27ac0f7e4e0936e6c6b7",
+  "build_id": "build_7307a7fbd37d412681afe9a3a4259fbb",
+  "purpose": "Read the target startup failure stage using owner-requested ThinkPad webcam, after fourth failure had unreadable visible M1Lab errors. No candidate or application source changes.",
+  "camera_setup": {
+    "device": "/dev/video0",
+    "format": "1280x720 MJPEG30fps",
+    "preview": "Full console in frame after owner repositioning; fine text remains soft. Actual failure-frame legibility pending.",
+    "controls": "Original automatic exposure/backlight restored after manual exposure preview was too dark.",
+    "capture_seconds": 510,
+    "capture_bytes": 1073741824,
+    "arm_timeout_seconds": 10,
+    "private_recording": true
+  },
+  "host_scripts": {
+    "run-webcam-native-attempt.py": "f61b5ceebe5871779593e64e7f7029b970096610918dd0a3a2f2533bfeec7688",
+    "run-approved-native-attempt.py": "eb4c4e9ded28f34f701e466888478e02f05f2d2561ad371baba04a0b5e004522"
+  },
+  "review_history": [
+    {
+      "procedure_digest": "29824621b7b1f1a33b046dbce3bf513c14d61deb58113d13a6b1304a5bf510d9",
+      "disposition": "changes_required",
+      "reported_tokens": 93530,
+      "reason": "Camera limits/arm refusal/cleanup were narrative only."
+    },
+    {
+      "procedure_digest": "3d608fbfbcc87bcc4d43b2f089cfef40afb57de083d659de651c6ef52d5060a5",
+      "disposition": "changes_required",
+      "reported_tokens": 95025,
+      "reason": "Wrapper changed after registration; attempted revision was refused during awaiting_review. No target action.",
+      "clock_note": "Review also called18:44:22Z expired at actual18:33Z completion; raw review preserved. Final preflight explicitly binds UTC time and positive lifetime."
+    },
+    {
+      "procedure_digest": "d16b1906bb7dfd27447d18f59f52a8405ad5b13f42be237dae7d5a737e21ccef",
+      "disposition": "accepted",
+      "reported_tokens": 97999,
+      "reviewer_job_id": "job_7965c3e12cca4e9c9ed85aba9861f262",
+      "review_id": "review_a3638815111142baada115b2004e1b60"
+    }
+  ],
+  "model": "gpt-6-sol",
+  "reasoning_effort": "medium",
+  "harness_lifetime_tokens": 544549,
+  "usage_uncertain": false,
+  "procedure_id": "procedure_406a506d735c4a4e9c77def7dee8d2eb",
+  "procedure_revision": 1,
+  "launch_deadline_utc": "2026-09-26T18:49:38.253211Z",
+  "native_limits": {
+    "samples": 3,
+    "sample_period_ms": 1000,
+    "overall_seconds": 480
+  },
+  "guard": "Pinned wrapper checks both script digests, captures fresh frames before invoking single native-run, enforces camera byte/time limits and stops/reaps camera in finally. Explicit host cleanup is bound in procedure; no fictitious target webcam capability.",
+  "owner_approval": "pending",
+  "physical_attendance": "pending",
+  "fifth_native_dispatch": false,
+  "live_lab": "Installed f560929 investigation remains paused with unresolved usage hold; science remains stopped."
+}

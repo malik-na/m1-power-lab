@@ -27,6 +27,18 @@ failure markers under a new exact review and attended approval. This approval
 is consumed; no fifth dispatch is authorized. See
 [fourth-attempt evidence](evidence/2026-09-26-native-fourth-attempt.json).
 
+For the next observation the owner requested the ThinkPad webcam. A 720p preview
+contains the complete console, though fine text is soft. Exact review accepted
+`d16b1906…e21ccef` after camera limits, refusal conditions, cleanup and both host
+script digests were bound into the procedure. The wrapper checks fresh captured
+frames before any native dispatch, imposes a 510-second/1-GiB recording bound
+and stops/reaps the camera on normal/error paths. The two preceding rejected
+reviews remain in history. Final review reported 97,999 tokens; isolated harness
+lifetime is 544,549 with no usage uncertainty. The launch expires at
+2026-09-26 18:49:38 UTC. Fresh attended approval remains pending; camera footage
+can diagnose startup but cannot substitute for native result frames. See
+[preparation evidence](evidence/2026-09-26-native-webcam-preparation.json).
+
 ## Native failure diagnostics
 
 The third attempt lost its unnamed boot log when the helper was stopped.
