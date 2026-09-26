@@ -7,6 +7,21 @@ Owner-selected coordination uses the installed Agents Orchestrator on
 `gpt-6-sol` with medium reasoning. One integration owner controls commits and
 physical dispatch; the orchestrator assigns bounded tasks against the existing plan.
 
+The sixth separately approved attended attempt booted Linux and returned to
+proxy; the watcher caught it and the owner confirmed no manual reboot. No native
+samples were captured. Its 23,960-byte boot log and 30.937-second private webcam
+video are retained. The video shows diagnostic lines, but the exact failure stage
+and type remain too blurred to transcribe reliably. The original unknown result
+is retained and reconciled as failed. The spent helper correctly withdrew launch
+capability after this attempt while retaining proxy observation. All six test
+approvals are consumed. See [sixth-attempt evidence](evidence/2026-09-26-native-sixth-attempt.json).
+
+The exact candidate kernel includes `TER16x32`. Fixed boot arguments now select
+that font to address the unreadable console evidence; 30 backend/launcher checks
+passed. The target image is unchanged. Prior font selection and actual readability
+remain unverified; the changed helper configuration needs fresh exact review and
+attended approval. See [font evidence](evidence/2026-09-26-native-console-font.json).
+
 The fifth approved attended attempt stopped at the host helper before any boot
 log was created. The helper from the fourth attempt had spent its one launch,
 but still advertised the launch capability; its refusal surfaced as a transport
@@ -21,6 +36,11 @@ proxy available for observation. The one-launch guard is unchanged. A regression
 reproduced the defect before the fix; 35 focused host checks passed afterward,
 including refusal before adapter execution or approval consumption. The next
 test requires a fresh helper and newly reviewed attended approval.
+
+Before the sixth attempt, the spent helper stopped normally and a fresh proxy was acquired.
+Exact review accepted `6b077c88…c9a9d4d` for the unchanged target candidate and
+webcam scripts. The owner then approved the sixth test and confirmed attendance;
+its outcome is above. See [review evidence](evidence/2026-09-26-native-fresh-helper-review.json).
 
 The fourth attended test failed to capture native samples, but the continuous
 watcher caught and held the returning proxy at 18:05:39 UTC. The owner confirmed

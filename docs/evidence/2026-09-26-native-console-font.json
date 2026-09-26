@@ -1,0 +1,42 @@
+{
+  "scope": "Read-only host inventory for console font selection; no target execution",
+  "build_id": "build_7307a7fbd37d412681afe9a3a4259fbb",
+  "source_commit": "350819d20b19187951ab27ac0f7e4e0936e6c6b7",
+  "manifest_sha256": "17aa5b0466580f6086e54de04b80c61854426b1cf3706b27b9c7553b24f9cdc5",
+  "image_gz_sha256": "a6df2b981733d0ed784c9eef2a91b6577accf35c185f40494995ce5385cb20f7",
+  "initramfs_cpio_gz_sha256": "1788dda1690c13c7612569405026dcbd7bd94bf415cdb8a37937e28773e756ba",
+  "kernel_config_extraction": "SHA-256-check published Image.gz, gzip-decompress to the AArch64 Image, find embedded IKCFG_ST and following IKCFG_ED markers, gzip-decompress the bytes between them as the kernel's embedded configuration; inspect only relevant lines.",
+  "kernel_config_lines": [
+    "CONFIG_VT=y",
+    "CONFIG_VT_CONSOLE=y",
+    "CONFIG_DRM_FBDEV_EMULATION=y",
+    "CONFIG_DRM_SIMPLEDRM=y",
+    "CONFIG_FRAMEBUFFER_CONSOLE=y",
+    "CONFIG_FONT_SUPPORT=y",
+    "CONFIG_FONTS=y",
+    "CONFIG_FONT_8x16=y",
+    "CONFIG_FONT_TER16x32=y"
+  ],
+  "initramfs_inventory_method": "SHA-256-check published initramfs.cpio.gz, gzip-stream newc headers and member names without extraction; inspect setfont executable names and standard console font directories.",
+  "initramfs_findings": {
+    "setfont_or_showconsolefont_executables": 0,
+    "console_font_files_in_usr_share_kbd_consolefonts_or_usr_share_consolefonts_or_usr_share_fonts": 0
+  },
+  "official_documentation": "https://docs.kernel.org/fb/fbcon.html#c-boot-options",
+  "supported_fixed_boot_argument": "fbcon=font:TER16x32",
+  "limitations": [
+    "The current selected console font was not observed or established by this host inventory.",
+    "The argument selects a compiled-in font when fbcon uses the supported kernel option; driver acceptance and actual target font selection are unqualified.",
+    "A larger glyph may improve camera legibility, but 720p webcam readability, focus, exposure, and exact failure-marker capture remain unqualified.",
+    "Changing fixed boot arguments changes the reviewed launch configuration and requires the normal fresh review and approval path before any physical use."
+  ],
+  "host_change": "Append fbcon=font:TER16x32 to fixed bootargs; existing console, init, panic and all operation bounds unchanged. Bootargs are included in helper configuration digest.",
+  "verification": {
+    "command": ".venv/bin/pytest -q tests/integration/test_native_candidate_backend.py tests/integration/test_native_helper_launcher.py",
+    "result": "30 passed in 1.06s",
+    "model": "gpt-6-sol",
+    "reasoning_effort": "medium",
+    "review": "Root accepted one production-line change and two existing argv/digest fixture updates.",
+    "physical_readability": "unverified"
+  }
+}

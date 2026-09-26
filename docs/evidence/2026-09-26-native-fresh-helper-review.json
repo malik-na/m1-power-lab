@@ -1,0 +1,43 @@
+{
+  "date_utc": "2026-09-26",
+  "host_source": "aa11a38",
+  "candidate_source": "350819d20b19187951ab27ac0f7e4e0936e6c6b7",
+  "build_id": "build_7307a7fbd37d412681afe9a3a4259fbb",
+  "procedure_id": "procedure_42088292ecff4cfdb18a8cbc7449ae37",
+  "procedure_digest": "6b077c887f394fc42c3926ab86c10698e71f22d837eb59f07ab4719f8c9a9d4d",
+  "review_id": "review_b6c3cadc583a411a8bdc8d0d2425289c",
+  "reviewer_job_id": "job_addc6b7c886749a5bcb1a3bf407b2918",
+  "disposition": "accepted",
+  "review_tokens": 96924,
+  "harness_lifetime_tokens": 641473,
+  "usage_uncertain": false,
+  "model": "gpt-6-sol",
+  "reasoning_effort": "medium",
+  "fresh_helper": "Previous spent helper stopped normally; new explicitly owned helper started and fixed proxy inspection succeeded without target launch. Denial journal retained.",
+  "launch_deadline_utc": "2026-09-26T19:11:10.454540+00:00",
+  "native_limits": {
+    "samples": 3,
+    "sample_period_ms": 1000,
+    "overall_seconds": 480
+  },
+  "webcam_limits": {
+    "seconds": 510,
+    "bytes": 1073741824,
+    "arm_seconds": 10
+  },
+  "script_checks": {
+    "run-webcam-native-attempt.py": {
+      "sha256": "f61b5ceebe5871779593e64e7f7029b970096610918dd0a3a2f2533bfeec7688",
+      "bound": true
+    },
+    "run-approved-native-attempt.py": {
+      "sha256": "eb4c4e9ded28f34f701e466888478e02f05f2d2561ad371baba04a0b5e004522",
+      "bound": true
+    }
+  },
+  "previous_approvals_consumed": 5,
+  "owner_approval": "pending",
+  "physical_attendance": "pending",
+  "native_dispatch": false,
+  "live_lab": "Installed f560929 investigation remains paused with unresolved usage hold; science remains stopped."
+}

@@ -39,7 +39,7 @@ from .native_usb import NativeUsbTransport
 _TOPOLOGY = re.compile(r"[0-9]+-[0-9]+(?:\.[0-9]+)*\Z")
 _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 _TTY = re.compile(r"ttyACM[0-9]+\Z")
-_BOOTARGS = "console=tty0 earlycon rdinit=/init panic=10"
+_BOOTARGS = "console=tty0 earlycon rdinit=/init panic=10 fbcon=font:TER16x32"
 _DEVICE_ENV_KEY = "M1N1DEVICE"
 _CONSOLE_CONTROL = "pty-stdin-miniterm-ctrl-]"
 _RETURN_WATCH = "same-topology-proxy-generation-v1"

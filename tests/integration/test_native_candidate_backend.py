@@ -179,7 +179,7 @@ def _synthetic_environment(monkeypatch, backend, events, *, raw=b"fixed frame by
     def popen(argv, **kwargs):
         events.append("launch")
         assert argv[:4] == [str(backend.python_path), str(backend.boot_script_path),
-                            "-b", "console=tty0 earlycon rdinit=/init panic=10"]
+                            "-b", "console=tty0 earlycon rdinit=/init panic=10 fbcon=font:TER16x32"]
         assert argv[4:] == [str(backend.artifact_root / "Image.gz"),
                             str(backend.artifact_root / "j313.dtb"),
                             str(backend.artifact_root / "initramfs.cpio.gz")]
@@ -233,7 +233,7 @@ def test_device_environment_key_changes_configuration_digest(tmp_path):
         "boot_script_path": str(backend.boot_script_path),
         "proxyclient_path": str(backend.proxyclient_path),
         "proxyclient_sha256": backend.proxyclient_sha256,
-        "bootargs": "console=tty0 earlycon rdinit=/init panic=10",
+        "bootargs": "console=tty0 earlycon rdinit=/init panic=10 fbcon=font:TER16x32",
     }
     old_digest = hashlib.sha256(json.dumps(
         old_configuration, sort_keys=True, separators=(",", ":"),

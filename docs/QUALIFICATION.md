@@ -1,5 +1,35 @@
 # Qualification gates
 
+## Sixth attended attempt: recorded Linux startup, failure text unreadable
+
+Fresh exact review, explicit owner approval/current attendance, armed webcam
+and fixed proxy recheck preceded one dispatch of `6b077c88…c9a9d4d`. Operation
+`operation_6fb8df5daf9f45e19e692cd7fa6fd94a` ran from 19:00:56.543277 to
+19:01:21.028494 UTC. Boot client exited zero and the continuous watcher caught
+a new same-identity proxy connection. The owner confirms automatic return with
+no manual reboot. No native result payload or samples were received.
+
+The complete 23,960-byte boot log and 30.937-second private webcam recording are
+retained. Visible Linux output and diagnostic lines establish screen activity,
+but neither the original frame nor a lossless enlarged crop reliably identifies
+the exact failure stage/type. Tentative readings are explicitly unverified and
+do not justify a target code fix. The camera stopped cleanly. Follow-up fixed
+inspection at 19:04:55 UTC confirmed proxy with no launch capability, validating
+the spent-helper reporting fix on this path. The original unknown is retained;
+the failed attempt is reconciled from private evidence. All six approvals are
+consumed. Readability must improve before another diagnostic test. See
+[sixth-attempt evidence](evidence/2026-09-26-native-sixth-attempt.json).
+
+The exact published kernel's embedded configuration includes `CONFIG_FONT_TER16x32=y`
+and framebuffer console support. The fixed launcher now appends
+`fbcon=font:TER16x32`, a [documented kernel option](https://docs.kernel.org/fb/fbcon.html#c-boot-options).
+All existing boot arguments and time/output bounds remain; the configuration
+digest changes with this option. Existing backend/launcher tests passed **30 in
+1.06 seconds**, including fixed command and digest assertions. No target rebuild
+is needed. The previous selected font is unknown and improved camera readability
+is not yet proven. Fresh helper, exact review and attended approval precede use.
+See [font inventory and host evidence](evidence/2026-09-26-native-console-font.json).
+
 ## Fifth attended attempt: spent helper refused before launch
 
 The owner approved exact procedure `d16b1906…e21ccef` and confirmed attendance.
@@ -30,6 +60,14 @@ passed **35 tests in 2.95 seconds** on the ThinkPad. The public service regressi
 confirms that a stale stored snapshot followed by a fresh spent snapshot records
 `no_effect` before adapter execution or approval consumption. Root reviewed the
 patch; no broader test run or physical retry was needed to verify this fix.
+
+After normal shutdown of the spent helper, a fresh helper acquired proxy without
+booting the target and retained the denial journal. Exact review accepted new
+procedure `6b077c88…c9a9d4d`, expiring at 19:11:10 UTC, for the unchanged target
+image and camera scripts. The completed sol/medium review reported 96,924 tokens;
+isolated harness lifetime is 641,473 with no usage uncertainty. Subsequent owner
+approval and attendance were consumed by the sixth attempt above. See
+[fresh-helper review evidence](evidence/2026-09-26-native-fresh-helper-review.json).
 
 ## Fourth attended attempt: proxy return caught, capture absent
 
