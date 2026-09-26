@@ -61,4 +61,6 @@ qualify as physical measurements.
 On startup, undispatched intents become `no_effect`; dispatched operations
 without a conclusive result become `unknown_effect`; incomplete Codex jobs make
 usage uncertain. New model work remains closed until uncertain usage is
-reconciled. Artifacts missing from disk are marked unavailable.
+reconciled. A state-changing app-server request with no trustworthy response is
+also persisted as `unknown`, and its app-server process group is stopped so the
+turn cannot continue invisibly. Artifacts missing from disk are marked unavailable.

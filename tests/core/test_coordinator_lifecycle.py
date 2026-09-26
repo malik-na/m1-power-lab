@@ -5,7 +5,7 @@ from datetime import timedelta
 
 import pytest
 
-from m1lab.core.errors import ConflictError
+from m1lab.core.errors import ConflictError, ValidationError
 from m1lab.core.models import (
     CommandKind,
     CommandStatus,
@@ -249,6 +249,24 @@ def test_dispatch_outcome_and_unknown_reconciliation_advance_phase_and_revision(
         SessionPhase.RECOVERING,
         6,
     )
+    retry = core.authorize_operation(
+        DispatchRequest(
+            session_id=session.id,
+            procedure_id=record.procedure_id,
+            procedure_revision=record.revision,
+            target_snapshot_id=target.id,
+            adapter_mode=TargetMode.REPLAY,
+        )
+    )
+    assert not retry.eligibility.eligible
+    assert any("is unresolved (unknown_effect)" in reason for reason in retry.eligibility.reasons)
+    with pytest.raises(ValidationError, match="reconciliation requires evidence artifacts"):
+        core.reconcile_operation(
+            authorization.envelope.operation_id,
+            resolved_state=OperationState.NO_EFFECT,
+            evidence_artifact_ids=[],
+            note="",
+        )
     evidence = core.publish_artifact(
         b"target rebooted and register state verified",
         media_type="text/plain",

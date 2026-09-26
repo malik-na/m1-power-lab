@@ -27,9 +27,12 @@ from uuid import uuid4
 MAX_PROMPT_CHARS = 2_000_000
 MAX_EVENT_LINE_BYTES = 8 * 1_048_576
 MAX_STDERR_CHARS = 64_000
+PROCESS_SHUTDOWN_GRACE_SECONDS = 3.0
 _OUTGOING_METHODS = frozenset(
     {"initialize", "thread/start", "thread/resume", "turn/start", "turn/interrupt"}
 )
+_STATE_CHANGING_METHODS = frozenset({"thread/start", "thread/resume", "turn/start"})
+_NON_EXECUTING_RPC_ERROR_CODES = frozenset({-32600, -32601, -32602})
 _CHILD_ENVIRONMENT_KEYS = frozenset(
     {
         "CODEX_HOME",
@@ -56,8 +59,20 @@ class RuntimeUnavailable(RuntimeErrorBase):
     """The configured runtime is disabled or could not be started."""
 
 
+class RuntimeRequestNotSent(RuntimeUnavailable):
+    """The runtime was unavailable before an RPC could be written."""
+
+
 class RuntimeProtocolError(RuntimeErrorBase):
     """The app-server stream violated the expected JSON-RPC contract."""
+
+
+class RuntimeRequestRejected(RuntimeProtocolError):
+    """The app-server explicitly rejected an RPC before performing its action."""
+
+
+class RuntimeOutcomeUnknown(RuntimeErrorBase):
+    """A state-changing app-server request may have been accepted without confirmation."""
 
 
 class SandboxMode(StrEnum):
@@ -252,7 +267,8 @@ class AppServerCodexAdapter:
         response = await self._rpc("thread/start", thread_params)
         thread_id = _nested_string(response, "thread", "id")
         if thread_id is None:
-            raise RuntimeProtocolError("thread/start response omitted thread.id")
+            await self.close()
+            raise RuntimeOutcomeUnknown("thread/start succeeded without a thread identity")
         return await self._start_turn(thread_id, request, resumed=False)
 
     async def resume_job(self, thread_id: str, request: JobRequest) -> JobHandle:
@@ -271,7 +287,8 @@ class AppServerCodexAdapter:
         )
         resumed_id = _nested_string(response, "thread", "id")
         if resumed_id != thread_id:
-            raise RuntimeProtocolError("thread/resume returned a different thread id")
+            await self.close()
+            raise RuntimeOutcomeUnknown("thread/resume succeeded with an untrusted thread identity")
         return await self._start_turn(thread_id, request, resumed=True)
 
     async def interrupt(self, job_id: str) -> None:
@@ -309,12 +326,7 @@ class AppServerCodexAdapter:
                 state.deadline_task.cancel()
         process = self._process
         if process is not None and process.returncode is None:
-            self._signal_process_group(process, signal.SIGTERM)
-            try:
-                await asyncio.wait_for(process.wait(), timeout=3.0)
-            except TimeoutError:
-                self._signal_process_group(process, signal.SIGKILL)
-                await process.wait()
+            await self._terminate_process_group(process)
         for task in (self._reader_task, self._stderr_task):
             if task is not None and not task.done():
                 task.cancel()
@@ -436,12 +448,14 @@ class AppServerCodexAdapter:
             response = await self._rpc("turn/start", params)
             turn_id = _nested_string(response, "turn", "id")
             if turn_id is None:
-                raise RuntimeProtocolError("turn/start response omitted turn.id")
+                await self.close()
+                raise RuntimeOutcomeUnknown("turn/start succeeded without a turn identity")
             self._turn_to_job[turn_id] = job_id
             if state.handle.turn_id is None:
                 state.handle = JobHandle(job_id, thread_id, turn_id, JobStatus.RUNNING, resumed)
             elif state.handle.turn_id != turn_id:
-                raise RuntimeProtocolError("turn/start response conflicted with streamed turn id")
+                await self.close()
+                raise RuntimeOutcomeUnknown("turn/start returned conflicting turn identities")
             if state.handle.status.terminal:
                 return state.handle
             state.deadline_task = asyncio.create_task(
@@ -449,6 +463,9 @@ class AppServerCodexAdapter:
                 name=f"m1lab-codex-deadline-{job_id}",
             )
             return state.handle
+        except RuntimeOutcomeUnknown as exc:
+            self._finish_job(state, JobStatus.UNKNOWN, str(exc))
+            raise
         except BaseException as exc:
             self._finish_job(state, JobStatus.FAILED, str(exc))
             raise
@@ -464,7 +481,7 @@ class AppServerCodexAdapter:
                     self._finish_job(state, JobStatus.UNKNOWN, f"deadline interrupt failed: {exc}")
                     process = self._process
                     if process is not None and process.returncode is None:
-                        self._signal_process_group(process, signal.SIGTERM)
+                        await self._terminate_process_group(process)
                     return
                 for _ in range(20):
                     await asyncio.sleep(0.25)
@@ -477,7 +494,7 @@ class AppServerCodexAdapter:
                 )
                 process = self._process
                 if process is not None and process.returncode is None:
-                    self._signal_process_group(process, signal.SIGTERM)
+                    await self._terminate_process_group(process)
         except asyncio.CancelledError:
             return
 
@@ -504,7 +521,28 @@ class AppServerCodexAdapter:
             await self._write_json(message)
             return await asyncio.wait_for(future, timeout=self._request_timeout)
         except TimeoutError as exc:
+            if method in _STATE_CHANGING_METHODS:
+                await self.close()
+                raise RuntimeOutcomeUnknown(
+                    f"{method} may have been accepted; its response was not received"
+                ) from exc
             raise RuntimeProtocolError(f"timed out waiting for {method}") from exc
+        except RuntimeErrorBase as exc:
+            if method in _STATE_CHANGING_METHODS and not isinstance(
+                exc, (RuntimeRequestRejected, RuntimeRequestNotSent)
+            ):
+                await self.close()
+                raise RuntimeOutcomeUnknown(
+                    f"{method} may have been accepted before the runtime connection failed: {exc}"
+                ) from exc
+            raise
+        except asyncio.CancelledError as exc:
+            if method in _STATE_CHANGING_METHODS:
+                await asyncio.shield(self.close())
+                raise RuntimeOutcomeUnknown(
+                    f"{method} may have been accepted before the request was cancelled"
+                ) from exc
+            raise
         finally:
             self._pending.pop(request_id, None)
 
@@ -516,11 +554,11 @@ class AppServerCodexAdapter:
     async def _write_json(self, message: Mapping[str, Any]) -> None:
         process = self._process
         if process is None or process.stdin is None or process.returncode is not None:
-            raise RuntimeUnavailable("Codex app-server transport is unavailable")
+            raise RuntimeRequestNotSent("Codex app-server transport is unavailable")
         encoded = json.dumps(message, separators=(",", ":"), ensure_ascii=False).encode() + b"\n"
         async with self._write_lock:
-            process.stdin.write(encoded)
             try:
+                process.stdin.write(encoded)
                 await process.stdin.drain()
             except (BrokenPipeError, ConnectionResetError) as exc:
                 raise RuntimeUnavailable("Codex app-server pipe closed") from exc
@@ -580,7 +618,13 @@ class AppServerCodexAdapter:
                 return
             error = message.get("error")
             if error is not None:
-                future.set_exception(RuntimeProtocolError(f"app-server RPC error: {error}"))
+                code = error.get("code") if isinstance(error, dict) else None
+                error_type = (
+                    RuntimeRequestRejected
+                    if code in _NON_EXECUTING_RPC_ERROR_CODES
+                    else RuntimeProtocolError
+                )
+                future.set_exception(error_type(f"app-server RPC error: {error}"))
                 return
             result = message.get("result", {})
             if not isinstance(result, dict):
@@ -718,6 +762,33 @@ class AppServerCodexAdapter:
                 process.terminate()
             else:
                 process.kill()
+
+    async def _terminate_process_group(
+        self,
+        process: asyncio.subprocess.Process,
+        *,
+        grace_seconds: float | None = None,
+    ) -> None:
+        grace = PROCESS_SHUTDOWN_GRACE_SECONDS if grace_seconds is None else grace_seconds
+        self._signal_process_group(process, signal.SIGTERM)
+        try:
+            await asyncio.wait_for(process.wait(), timeout=grace)
+        except TimeoutError:
+            pass
+        if self._process_group_exists(process.pid):
+            self._signal_process_group(process, signal.SIGKILL)
+        if process.returncode is None:
+            await process.wait()
+
+    @staticmethod
+    def _process_group_exists(process_group_id: int) -> bool:
+        try:
+            os.killpg(process_group_id, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
 
 
 class NoopCodexAdapter:

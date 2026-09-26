@@ -808,6 +808,56 @@ class CoreApp:
             updated = tx.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         return self._job_from_row(updated)
 
+    def mark_job_unknown(
+        self,
+        job_id: str,
+        *,
+        reason: str,
+        result: dict[str, Any],
+        runtime_id: str | None = None,
+    ) -> JobRecord:
+        """Atomically persist an ambiguous runtime outcome and close usage admission."""
+
+        with self.journal.transaction() as tx:
+            row = tx.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if row is None:
+                raise NotFoundError(f"job {job_id} does not exist")
+            if row["state"] not in {"admitted", "running", "unknown"}:
+                raise ConflictError(f"job {job_id} cannot become unknown from {row['state']}")
+            tx.execute(
+                "UPDATE jobs SET state='unknown', runtime_id=COALESCE(?,runtime_id), "
+                "result_json=?, updated_at=? WHERE id=?",
+                (runtime_id, json_dump(result), iso(), job_id),
+            )
+            tx.execute(
+                "UPDATE sessions SET usage_uncertain=1, updated_at=? WHERE id=?",
+                (iso(), row["session_id"]),
+            )
+            session_row = tx.execute(
+                "SELECT phase FROM sessions WHERE id=?", (row["session_id"],)
+            ).fetchone()
+            if session_row is None:
+                raise NotFoundError(f"session {row['session_id']} does not exist")
+            self.budgets._sync_activity(
+                tx, row["session_id"], SessionPhase(session_row["phase"])
+            )
+            self.journal.append_event(
+                tx,
+                kind="job.usage_uncertain",
+                session_id=row["session_id"],
+                subject_id=job_id,
+                data={"reason": reason},
+            )
+            self.journal.append_event(
+                tx,
+                kind="job.unknown",
+                session_id=row["session_id"],
+                subject_id=job_id,
+                data=result,
+            )
+            updated = tx.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        return self._job_from_row(updated)
+
     def job(self, job_id: str) -> JobRecord:
         row = self.journal.one("SELECT * FROM jobs WHERE id=?", (job_id,))
         if row is None:

@@ -124,6 +124,11 @@ m1lab job-interrupt JOB_ID \
   --coordinator-url https://thinkpad-name.tailnet-name.ts.net
 ```
 
+If a `thread/start`, `thread/resume`, or `turn/start` response is lost or
+ambiguous, the job is recorded as `unknown`, its Codex process group is stopped,
+and new Codex work is blocked until `usage-resolve` records a conservative
+upper bound.
+
 An accepted response proves the interruption request reached the runtime. The
 terminal job event and final usage record determine whether it completed. If
 the coordinator cannot confirm either, usage remains uncertain and new model

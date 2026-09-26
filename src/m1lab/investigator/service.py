@@ -12,7 +12,16 @@ import json
 from pathlib import Path
 from typing import Any
 
-from m1lab.adapters import CodexRuntime, JobHandle, JobRequest, JobStatus, RuntimeEvent, SandboxMode, TokenUsage
+from m1lab.adapters import (
+    CodexRuntime,
+    JobHandle,
+    JobRequest,
+    JobStatus,
+    RuntimeEvent,
+    RuntimeOutcomeUnknown,
+    SandboxMode,
+    TokenUsage,
+)
 from m1lab.core import CoreApp, JobCreate, JobRecord, ReservationRequest, UsageUpdate
 from m1lab.core.models import utc_now
 
@@ -63,13 +72,28 @@ class InvestigationOrchestrator:
         return self._core.job(job_id)
 
     async def close(self) -> None:
-        await self._runtime.close()
+        active_runtime_ids = [
+            self._runtime_ids[job_id]
+            for job_id, task in self._tasks.items()
+            if not task.done() and job_id in self._runtime_ids
+        ]
+        try:
+            if active_runtime_ids:
+                await asyncio.wait_for(
+                    asyncio.gather(
+                        *(self._runtime.interrupt(runtime_id) for runtime_id in active_runtime_ids),
+                        return_exceptions=True,
+                    ),
+                    timeout=5.0,
+                )
+        except TimeoutError:
+            pass
+        finally:
+            await self._runtime.close()
         active = [task for task in self._tasks.values() if not task.done()]
         if active:
             try:
-                await asyncio.wait_for(
-                    asyncio.gather(*active, return_exceptions=True), timeout=10.0
-                )
+                await asyncio.wait_for(asyncio.gather(*active, return_exceptions=True), timeout=10.0)
             except TimeoutError:
                 for task in active:
                     if not task.done():
@@ -118,6 +142,7 @@ class InvestigationOrchestrator:
             manifest["resume"] = {"thread_id": thread_id}
 
         durable: JobRecord | None = None
+        handle: JobHandle | None = None
         try:
             durable = self._core.create_job(
                 JobCreate(
@@ -150,11 +175,29 @@ class InvestigationOrchestrator:
             )
         except BaseException as exc:
             if durable is not None:
-                self._core.update_job(
-                    durable.id,
-                    state="failed",
-                    result={"error": _safe_error(exc), "reservation_id": reservation.id},
+                outcome_unknown = isinstance(exc, RuntimeOutcomeUnknown) or (
+                    handle is not None and handle.status is not JobStatus.UNAVAILABLE
                 )
+                result = {
+                    "error": _safe_error(exc),
+                    "reservation_id": reservation.id,
+                    "outcome_uncertain": outcome_unknown,
+                    "thread_id": handle.thread_id if handle is not None else thread_id,
+                    "turn_id": handle.turn_id if handle is not None else None,
+                }
+                if outcome_unknown:
+                    self._core.mark_job_unknown(
+                        durable.id,
+                        reason=_safe_error(exc),
+                        result=result,
+                        runtime_id=handle.job_id if handle is not None else None,
+                    )
+                else:
+                    self._core.update_job(
+                        durable.id,
+                        state="failed",
+                        result=result,
+                    )
             self._release_once(durable.id if durable else None, reservation.id)
             raise
 
