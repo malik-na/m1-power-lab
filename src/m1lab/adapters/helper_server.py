@@ -34,10 +34,15 @@ from .helper_protocol import (
     MAX_HELPER_REQUEST_BYTES,
     MAX_HELPER_RESPONSE_BYTES,
     HelperProtocolError,
+    MAX_HELPER_SNAPSHOT_BYTES,
+    decode_snapshot,
     decode_request,
     decode_result,
+    encode_inspect_request,
     encode_request,
     encode_result,
+    encode_snapshot,
+    is_inspect_request,
     read_helper_frame_until,
     write_helper_frame_until,
 )
@@ -101,17 +106,36 @@ class HelperHardwareAdapter:
             raise ValueError("helper peer UID must be a non-negative integer")
 
     def inspect(self) -> TargetSnapshot:
-        return TargetSnapshot(
-            adapter="m1n1-helper-unavailable",
-            available=False,
-            qualified=False,
-            mode="disconnected",
-            target_id=None,
-            boot_epoch=None,
-            capabilities=(),
-            observed_at=datetime.now(timezone.utc),
-            message="The helper has no qualified, read-only identity query yet.",
-        )
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            client.settimeout(MAX_HELPER_HANDSHAKE_SECONDS)
+            client.connect(str(self.socket_path))
+            _verify_peer_uid(client, self.expected_uid)
+            client.setblocking(False)
+            deadline = time.monotonic() + MAX_HELPER_HANDSHAKE_SECONDS
+            write_helper_frame_until(
+                client.fileno(), encode_inspect_request(),
+                maximum=MAX_HELPER_REQUEST_BYTES, deadline_monotonic=deadline,
+            )
+            frame = read_helper_frame_until(
+                client.fileno(), maximum=MAX_HELPER_SNAPSHOT_BYTES,
+                deadline_monotonic=deadline,
+            )
+            return decode_snapshot(frame[4:])
+        except (OSError, TimeoutError, HelperOwnerError, HelperProtocolError) as exc:
+            return TargetSnapshot(
+                adapter="m1n1-helper-unavailable",
+                available=False,
+                qualified=False,
+                mode="disconnected",
+                target_id=None,
+                boot_epoch=None,
+                capabilities=(),
+                observed_at=datetime.now(timezone.utc),
+                message=f"Helper inspection unavailable: {exc}",
+            )
+        finally:
+            client.close()
 
     def execute(self, dispatch: HardwareDispatch) -> HardwareResult:
         remaining = (dispatch.deadline - datetime.now(timezone.utc)).total_seconds()
@@ -202,6 +226,14 @@ class HelperServer:
                 maximum=MAX_HELPER_REQUEST_BYTES,
                 deadline_monotonic=handshake_deadline,
             )
+            if is_inspect_request(request_frame[4:]):
+                snapshot = self.adapter.inspect()
+                write_helper_frame_until(
+                    connection.fileno(), encode_snapshot(snapshot),
+                    maximum=MAX_HELPER_SNAPSHOT_BYTES,
+                    deadline_monotonic=handshake_deadline,
+                )
+                return
             dispatch = decode_request(request_frame[4:])
             remaining = (dispatch.deadline - datetime.now(timezone.utc)).total_seconds()
             if remaining <= 0:

@@ -127,7 +127,9 @@ class ExperimentService:
         evidence: list[StepEvidence] = []
         try:
             mapped = self._validate_and_map(envelope)
-            self._verify_target(envelope.target_identity, envelope.boot_epoch)
+            self._verify_target(
+                envelope.target_identity, envelope.boot_epoch, envelope.configuration_digest,
+            )
         except Exception as exc:
             message = f"pre-dispatch validation failed: {exc}"
             outcome = OperationOutcome(
@@ -152,7 +154,9 @@ class ExperimentService:
         for index, (typed, hardware_operation) in enumerate(mapped):
             dispatch_id = f"{envelope.operation_id}:{index}"
             try:
-                self._verify_target(envelope.target_identity, expected_boot)
+                self._verify_target(
+                    envelope.target_identity, expected_boot, envelope.configuration_digest,
+                )
                 deadline = min(
                     envelope.deadline_at,
                     utc_now() + timedelta(seconds=typed.timeout_seconds),
@@ -212,7 +216,9 @@ class ExperimentService:
                         envelope, evidence, artifacts, result.message or "adapter reported unknown effect"
                     )
                 if result.status is HardwareResultStatus.FAILED:
-                    self._verify_target(envelope.target_identity, expected_boot)
+                    self._verify_target(
+                        envelope.target_identity, expected_boot, envelope.configuration_digest,
+                    )
                     return self._finish(
                         envelope,
                         OperationState.FAILED,
@@ -226,7 +232,9 @@ class ExperimentService:
                     if isinstance(hardware_operation, SimulateBoot)
                     else expected_boot
                 )
-                post = self._verify_target(envelope.target_identity, expected_after)
+                post = self._verify_target(
+                    envelope.target_identity, expected_after, envelope.configuration_digest,
+                )
                 if result.boot_epoch != expected_after or post.boot_epoch != expected_after:
                     return self._unknown(
                         envelope,
@@ -296,7 +304,7 @@ class ExperimentService:
                 raise EnvelopeRejected("simulate_boot must be the final operation in a procedure")
         return mapped
 
-    def _verify_target(self, target_identity: str, boot_epoch: str):
+    def _verify_target(self, target_identity: str, boot_epoch: str, configuration_digest: str):
         observed = self._adapter.inspect()
         if not observed.available or observed.adapter != "replay" or observed.mode != "replay":
             raise TargetChanged("replay adapter is unavailable")
@@ -308,6 +316,8 @@ class ExperimentService:
             raise TargetChanged(
                 f"boot epoch changed from {boot_epoch!r} to {observed.boot_epoch!r}"
             )
+        if _configuration_digest(observed) != configuration_digest:
+            raise TargetChanged("target configuration changed from the authorized snapshot")
         return observed
 
     def _publish_result(
@@ -500,6 +510,8 @@ def _require_int(parameters: dict[str, Any], name: str) -> int:
 
 
 def _configuration_digest(snapshot: Any) -> str:
+    if snapshot.configuration_digest is not None:
+        return snapshot.configuration_digest
     capabilities = [
         {
             "name": item.name,

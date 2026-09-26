@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import json
+import os
 from pathlib import Path
 import socket
 import struct
@@ -23,7 +24,13 @@ from m1lab.adapters.hardware import (
     InspectRegister,
     TargetSnapshot,
 )
-from m1lab.adapters.helper_protocol import MAX_HELPER_REQUEST_BYTES, encode_request
+from m1lab.adapters.helper_protocol import (
+    MAX_HELPER_REQUEST_BYTES,
+    MAX_HELPER_SNAPSHOT_BYTES,
+    encode_inspect_request,
+    encode_request,
+    encode_snapshot,
+)
 from m1lab.adapters.helper_server import (
     HelperHardwareAdapter,
     HelperOwnerError,
@@ -140,9 +147,107 @@ def test_typed_register_operation_crosses_real_socket_with_exact_lineage(helper)
     assert result.payload == b"\x2a\x00\x00\x00"
     assert backend.calls == [dispatch]
     assert errors == []
-    # No identity-query or physical qualification claim is inferred from IPC success.
-    assert client.inspect().available is False
-    assert client.inspect().qualified is False
+    assert client.inspect() == backend.snapshot
+
+
+@pytest.mark.parametrize(
+    ("changes", "available", "qualified"),
+    [
+        ({}, True, True),
+        ({"qualified": False}, True, False),
+        ({"available": False, "qualified": False, "target_id": None, "boot_epoch": None,
+          "configuration_digest": None, "capabilities": ()}, False, False),
+    ],
+    ids=["synthetic-available", "unqualified", "unavailable"],
+)
+def test_inspection_returns_exact_backend_snapshot_without_executing(helper, changes, available, qualified):
+    _, backend, client, errors, _ = helper
+    backend.snapshot = replace(backend.snapshot, **changes)
+
+    snapshot = client.inspect()
+
+    assert snapshot == backend.snapshot
+    assert snapshot.available is available
+    assert snapshot.qualified is qualified
+    assert backend.calls == []
+    assert errors == []
+
+
+@pytest.mark.parametrize(
+    ("fault", "expected"),
+    [
+        ("version", "unsupported helper protocol version"),
+        ("extra-field", "unknown or missing fields"),
+        ("operation", "unknown or missing fields"),
+    ],
+)
+def test_invalid_inspect_request_is_rejected_without_backend_entry(helper, fault, expected):
+    root, backend, _, errors, failed = helper
+    document = json.loads(encode_inspect_request())
+    if fault == "version":
+        document["protocol_version"] = 2
+    elif fault == "extra-field":
+        document["inspect"]["command"] = "unused"
+    else:
+        document["request"] = json.loads(encode_request(_dispatch()))["request"]
+    payload = json.dumps(document).encode()
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+        connection.settimeout(2)
+        connection.connect(str(root / "helper.sock"))
+        connection.sendall(struct.pack("!I", len(payload)) + payload)
+        assert connection.recv(1) == b""
+
+    assert failed.wait(timeout=1)
+    assert expected in str(errors[0])
+    assert backend.calls == []
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda document: document.update(protocol_version=2),
+        lambda document: document["snapshot"].update(qualified=1),
+        lambda document: document["snapshot"].update(capabilities=[{"name": "shell", "version": 1, "mutating": "false", "max_result_bytes": 4}]),
+        lambda document: document["snapshot"].update(configuration_digest="not-a-digest"),
+        lambda document: document["snapshot"].update(unexpected=True),
+        lambda document: document["snapshot"].update(message="x" * MAX_HELPER_SNAPSHOT_BYTES),
+    ],
+    ids=["version", "boolean", "capability", "digest", "extra-field", "frame-bound"],
+)
+def test_malformed_inspection_response_fails_closed_over_real_socket(mutate):
+    with TemporaryDirectory(prefix="m1-inspect-", dir="/tmp") as directory:
+        path = Path(directory) / "helper.sock"
+        backend = SyntheticBackend()
+        document = json.loads(encode_snapshot(backend.snapshot))
+        mutate(document)
+        payload = json.dumps(document).encode()
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+            listener.bind(str(path))
+            listener.listen(1)
+
+            def respond():
+                connection, _ = listener.accept()
+                with connection:
+                    connection.recv(4096)
+                    connection.sendall(struct.pack("!I", len(payload)) + payload)
+
+            thread = Thread(target=respond, daemon=True)
+            thread.start()
+            snapshot = HelperHardwareAdapter(path).inspect()
+            thread.join(timeout=2)
+        assert not thread.is_alive()
+        assert snapshot.available is False
+        assert snapshot.qualified is False
+        assert snapshot.mode == "disconnected"
+
+
+def test_inspection_transport_and_peer_fail_closed(helper):
+    root, backend, _, _, _ = helper
+    missing = HelperHardwareAdapter(root / "missing.sock").inspect()
+    wrong_peer = HelperHardwareAdapter(root / "helper.sock", expected_uid=os.getuid() + 1).inspect()
+    assert not missing.available and not missing.qualified
+    assert not wrong_peer.available and not wrong_peer.qualified
+    assert backend.calls == []
 
 
 @pytest.mark.parametrize(

@@ -24,11 +24,13 @@ from .hardware import (
     MAX_REPLAY_WAIT_MS,
     CaptureMemory,
     HardwareDispatch,
+    HardwareCapability,
     HardwareOperation,
     HardwareResult,
     HardwareResultStatus,
     InspectRegister,
     SimulateBoot,
+    TargetSnapshot,
     WaitForReplay,
 )
 
@@ -36,6 +38,7 @@ from .hardware import (
 HELPER_PROTOCOL_VERSION = 1
 MAX_HELPER_REQUEST_BYTES = 64 * 1024
 MAX_HELPER_RESPONSE_BYTES = 1_500_000
+MAX_HELPER_SNAPSHOT_BYTES = 16 * 1024
 HELPER_FRAME_HEADER_BYTES = 4
 
 _REQUEST_FIELDS = frozenset(
@@ -259,6 +262,112 @@ def read_result(stream: BinaryIO, *, expected_operation_id: str) -> HardwareResu
         read_helper_frame(stream, maximum=MAX_HELPER_RESPONSE_BYTES),
         expected_operation_id=expected_operation_id,
     )
+
+
+def encode_inspect_request() -> bytes:
+    """Request only the backend's current read-only target snapshot."""
+
+    return b'{"protocol_version":1,"inspect":{}}'
+
+
+def is_inspect_request(payload: bytes) -> bool:
+    """Recognize inspection without broadening the dispatch request schema."""
+
+    document = _decode_json(payload, MAX_HELPER_REQUEST_BYTES, "request")
+    if not isinstance(document, dict) or "inspect" not in document:
+        return False
+    if set(document) != {"protocol_version", "inspect"} or document["inspect"] != {}:
+        raise HelperProtocolError("helper inspect request has unknown or missing fields")
+    if type(document["protocol_version"]) is not int or document["protocol_version"] != HELPER_PROTOCOL_VERSION:
+        raise HelperProtocolError("unsupported helper protocol version")
+    return True
+
+
+def encode_snapshot(snapshot: TargetSnapshot) -> bytes:
+    """Encode a bounded snapshot, retaining the backend's qualification claim."""
+
+    document = {
+        "protocol_version": HELPER_PROTOCOL_VERSION,
+        "snapshot": {
+            "adapter": snapshot.adapter,
+            "available": snapshot.available,
+            "qualified": snapshot.qualified,
+            "mode": snapshot.mode,
+            "target_id": snapshot.target_id,
+            "boot_epoch": snapshot.boot_epoch,
+            "configuration_digest": snapshot.configuration_digest,
+            "capabilities": [
+                {
+                    "name": capability.name,
+                    "version": capability.version,
+                    "mutating": capability.mutating,
+                    "max_result_bytes": capability.max_result_bytes,
+                }
+                for capability in snapshot.capabilities
+            ],
+            "observed_at": snapshot.observed_at.isoformat(),
+            "message": snapshot.message,
+        },
+    }
+    try:
+        encoded = json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise HelperProtocolError("invalid helper snapshot") from exc
+    decode_snapshot(encoded)
+    return encoded
+
+
+def decode_snapshot(payload: bytes) -> TargetSnapshot:
+    """Reject malformed, oversized, or expanded inspection responses."""
+
+    document = _decode_json(payload, MAX_HELPER_SNAPSHOT_BYTES, "snapshot")
+    if not isinstance(document, dict) or set(document) != {"protocol_version", "snapshot"}:
+        raise HelperProtocolError("helper snapshot envelope has unknown or missing fields")
+    if type(document["protocol_version"]) is not int or document["protocol_version"] != HELPER_PROTOCOL_VERSION:
+        raise HelperProtocolError("unsupported helper protocol version")
+    value = document["snapshot"]
+    fields = {"adapter", "available", "qualified", "mode", "target_id", "boot_epoch", "configuration_digest", "capabilities", "observed_at", "message"}
+    if not isinstance(value, dict) or set(value) != fields:
+        raise HelperProtocolError("helper snapshot has unknown or missing fields")
+    for name, bound in (("adapter", 160), ("mode", 160), ("message", 4096)):
+        item = _expect_string(value[name], name)
+        if len(item) > bound or (name != "message" and not item):
+            raise HelperProtocolError(f"helper snapshot {name} exceeds its bound")
+    for name, bound in (("target_id", 160), ("boot_epoch", 128)):
+        item = value[name]
+        if item is not None and (not isinstance(item, str) or not item or len(item) > bound):
+            raise HelperProtocolError(f"helper snapshot {name} is invalid")
+    for name in ("available", "qualified"):
+        if type(value[name]) is not bool:
+            raise HelperProtocolError(f"helper snapshot {name} must be a boolean")
+    if value["qualified"] and not value["available"]:
+        raise HelperProtocolError("helper snapshot cannot qualify an unavailable target")
+    raw_capabilities = value["capabilities"]
+    if not isinstance(raw_capabilities, list) or len(raw_capabilities) > 64:
+        raise HelperProtocolError("helper snapshot capabilities exceed their bound")
+    capabilities = []
+    for item in raw_capabilities:
+        if not isinstance(item, dict) or set(item) != {"name", "version", "mutating", "max_result_bytes"}:
+            raise HelperProtocolError("helper snapshot capability has unknown or missing fields")
+        name = _expect_string(item["name"], "capability name")
+        if not name or len(name) > 160 or type(item["version"]) is not int or type(item["mutating"]) is not bool or type(item["max_result_bytes"]) is not int:
+            raise HelperProtocolError("helper snapshot capability fields are invalid")
+        try:
+            capabilities.append(HardwareCapability(name, item["version"], item["mutating"], item["max_result_bytes"]))
+        except ValueError as exc:
+            raise HelperProtocolError(f"invalid helper snapshot capability: {exc}") from exc
+    try:
+        observed_at = datetime.fromisoformat(_expect_string(value["observed_at"], "observed_at"))
+        if observed_at.tzinfo is None or observed_at.utcoffset() is None:
+            raise ValueError("observed_at must have a timezone offset")
+        return TargetSnapshot(
+            adapter=value["adapter"], available=value["available"], qualified=value["qualified"],
+            mode=value["mode"], target_id=value["target_id"], boot_epoch=value["boot_epoch"],
+            configuration_digest=value["configuration_digest"], capabilities=tuple(capabilities),
+            observed_at=observed_at, message=value["message"],
+        )
+    except (TypeError, ValueError) as exc:
+        raise HelperProtocolError(f"invalid helper snapshot: {exc}") from exc
 
 
 def encode_request(dispatch: HardwareDispatch) -> bytes:
