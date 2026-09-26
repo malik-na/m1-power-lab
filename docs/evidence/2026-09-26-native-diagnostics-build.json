@@ -1,0 +1,47 @@
+{
+  "date": "2026-09-26",
+  "source_commit": "350819d20b19187951ab27ac0f7e4e0936e6c6b7",
+  "build_id": "build_7307a7fbd37d412681afe9a3a4259fbb",
+  "build_role": "candidate",
+  "manifest_sha256": "17aa5b0466580f6086e54de04b80c61854426b1cf3706b27b9c7553b24f9cdc5",
+  "payload_sha256": "cf69035ee8f71491210a1d590d1b992ddf060ba2945012e911d51ea04a355936",
+  "payload_size_bytes": 179701760,
+  "command": "M1LAB_DATA_DIR=/home/naeem/Work/m1-power-lab/build/harness-state M1LAB_CODEX_RUNTIME=disabled .venv/bin/m1lab --json --session session_41cb4dc4c29f4936ad31671ceebe77fe build --source-repo /home/naeem/Work/m1-power-lab --recipe target/native-image.recipe.json --workspace /home/naeem/Work/m1-power-lab/build/native-worktrees --role candidate",
+  "build_result": "completed; Pydantic created_at string serializer warnings emitted",
+  "admission": "Initial attempt refused before build because isolated active-time allowance was exhausted. Added60minutes and90000tokens explicitly in isolated harness journal, then build succeeded. Live lab allowance unchanged.",
+  "package_review": {
+    "model": "gpt-6-sol",
+    "reasoning_effort": "medium",
+    "status": "PASS",
+    "checks_passed": 36,
+    "mismatches": [],
+    "scope": "Stored hashes, payload boot files, exact embedded init/boot/collector/config bytes and bounds."
+  },
+  "installed_live_observation": {
+    "release": "f560929",
+    "service_active": true,
+    "restarts": 0,
+    "session_phase": "paused",
+    "lifetime_tokens": 0,
+    "usage_uncertain": true
+  },
+  "limitations": [
+    "Host byte verification only; no native execution, result channel, console visibility, automatic return, or physical recovery qualification.",
+    "Prior FDT framebuffer handoff report makes display plausible but does not establish visibility.",
+    "Build metadata emitted Pydantic created_at string serializer warnings; this review does not alter metadata.",
+    "No fourth physical dispatch; exact review accepted but fresh attended owner approval is required.",
+    "Live investigation pause and unresolved usage hold remain intact; science stays stopped."
+  ],
+  "exact_procedure_review": {
+    "procedure_id": "procedure_a1e26243f6374311ac9be416753f2572",
+    "procedure_digest": "056724afe01a226b79e1b774d24a2901fdb2d4a610f60438b346c524900f3546",
+    "reviewer_job_id": "job_631778093fad4bfdba31584cfe70f2a2",
+    "disposition": "accepted",
+    "reported_tokens": 90606,
+    "harness_lifetime_tokens": 257995,
+    "usage_uncertain": false,
+    "owner_approval": "pending",
+    "physical_attendance": "pending",
+    "launch_deadline": "2026-09-26T18:12:32.817309Z"
+  }
+}

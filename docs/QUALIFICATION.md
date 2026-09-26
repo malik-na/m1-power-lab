@@ -18,8 +18,23 @@ Both independent crossreviews found no blocker. These checks use synthetic
 devices, not the Mac. Host boot logs stop at the USB handoff; the new target
 markers need an available console, whose actual visibility remains unqualified.
 This change does not establish why native USB failed or qualify a round trip.
-A new immutable candidate, exact review and fresh attended approval are required.
+Rebuilding, exact review and fresh attended approval precede physical use.
 See [diagnostic evidence](evidence/2026-09-26-native-diagnostics.json).
+
+Clean source `350819d` produced `build_7307a7fbd37d412681afe9a3a4259fbb`.
+The 179,701,760-byte payload SHA-256 is
+`cf69035ee8f71491210a1d590d1b992ddf060ba2945012e911d51ea04a355936`.
+Independent `gpt-6-sol` medium review passed **36 byte/content checks** with
+zero mismatches: stored manifest/payload, boot files, exact packaged source,
+embedded configuration and diagnostic bounds. The build emitted `created_at`
+serializer warnings; stored artifact hashes and contents verified correctly.
+This is a candidate, with physical native execution and return still pending.
+Fresh exact review accepted procedure `056724af…0f3546`; its completed
+`gpt-6-sol` medium job reported 90,606 tokens with no usage uncertainty.
+Fresh owner approval and current physical attendance remain pending. All prior
+single-use test approvals are consumed. The reviewed launch expires at
+2026-09-26 18:12:32 UTC; expiry requires a newly bound reviewed proposal.
+See [candidate evidence](evidence/2026-09-26-native-diagnostics-build.json).
 
 ## Third attended attempt: missed proxy window
 

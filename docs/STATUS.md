@@ -12,8 +12,13 @@ private boot logs survive helper death, and target startup emits fixed stage
 markers with a five-second failure-only hold before its existing reboot request.
 Thirty host backend/launcher checks and 31 target boot/capture/identity checks
 passed; both independent crossreviews are clear. Console visibility on the Mac
-is still unverified. Rebuild, exact review and fresh attended approval precede
-another physical attempt. See [diagnostic evidence](evidence/2026-09-26-native-diagnostics.json).
+is still unverified. Clean source `350819d` produced diagnostic candidate
+`build_7307a7fbd37d412681afe9a3a4259fbb`; independent package review passed all
+36 checks. Fresh exact review accepted procedure `056724af…0f3546` with 90,606
+reported tokens in the isolated harness session, without usage uncertainty.
+Fresh attended owner approval remains pending before another physical attempt.
+See [diagnostic evidence](evidence/2026-09-26-native-diagnostics.json)
+and [candidate evidence](evidence/2026-09-26-native-diagnostics-build.json).
 
 The third attended native attempt exposed a return-watching gap: proxy USB
 appeared for about five seconds while the helper was still waiting for the
