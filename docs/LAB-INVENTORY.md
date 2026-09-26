@@ -46,6 +46,11 @@ the Codex app-server enabled; a host-only turn completed as `m1lab` with
 provider-reported usage of 19,816 tokens. The service uses pinned Codex
 0.156 and `gpt-6-sol` at medium reasoning effort. This establishes neither
 Tailscale Serve access nor long-term host availability or a physical M1 result.
+Release `3c49b9e` added the service-account logind inhibitor permission. With
+opt-in lab mode enabled, logind listed the `m1lab` service holding
+`sleep:idle:handle-lid-switch` in block mode while `/overview` returned HTTP
+200. The lock was absent after stopping the service and returning to the
+original environment. Physical lid closure was not tested.
 
 ## Observed execution machine
 

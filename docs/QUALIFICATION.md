@@ -22,6 +22,13 @@
 - Live app-server startup, authenticated completion, and terminal usage are
   demonstrated on the T480. Cancellation, sandbox escape checks, and recovery
   from interrupted live turns remain unqualified.
+- Opt-in lab mode on release `3c49b9e` acquired a logind block inhibitor for
+  `sleep:idle:handle-lid-switch` as `m1lab` while the service was active and
+  `/overview` returned HTTP 200. The inhibitor disappeared after service stop;
+  restoring the original environment and restarting left the service active,
+  `/overview` at HTTP 200, and no M1 Power Lab inhibitor. The initial attempt
+  without the service-account Polkit rule failed with an interactive
+  authorization error. Actual T480 lid behavior remains untested.
 - Replay operations preserve intent, completion and unknown-effect outcomes.
 - Stale revisions, revoked approvals and exhausted budgets fail closed.
 - Coordinator restart reconciles incomplete jobs, operations and artifacts.
