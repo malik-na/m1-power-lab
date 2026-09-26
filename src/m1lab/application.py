@@ -437,7 +437,7 @@ class CoordinatorFacade:
         records = self.scientific_records()
         if not records:
             raise ValueError("no scientific records are published for this session")
-        return ScientificRecordStore(self.core).brief(records[:64])
+        return ScientificRecordStore(self.core).brief(records)
 
     def publish_scientific_record(self, record: ScientificRecord) -> PublishedScientificRecord:
         if record.session_id != self.session_id:

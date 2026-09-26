@@ -582,7 +582,7 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
             published = store.list(session_id)
             if not published:
                 raise ValueError("no scientific records are published for this session")
-            return store.brief(published[:64]).model_dump(mode="json")
+            return store.brief(published).model_dump(mode="json")
         document = (
             _completed_codex_output(
                 core,

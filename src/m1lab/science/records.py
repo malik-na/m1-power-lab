@@ -607,20 +607,23 @@ class ScientificRecordStore:
         )
 
     def brief(self, published: Iterable[PublishedScientificRecord]) -> EvidenceBrief:
-        records = tuple(sorted(published, key=lambda item: item.created_at))
+        history = tuple(sorted(published, key=lambda item: item.created_at))
+        records = history[-64:]
         manifest = self.manifest(records)
         resource_limits = self._core.snapshot(manifest.session_id).budget.model_dump(mode="json")
-        hypotheses = [item.record for item in records if isinstance(item.record, HypothesisRecord)]
-        protocols = [item.record for item in records if isinstance(item.record, ExperimentProtocol)]
-        results = [item.record for item in records if isinstance(item.record, DerivedResultRecord)]
+        hypotheses = [item.record for item in history if isinstance(item.record, HypothesisRecord)]
+        protocols = [item.record for item in history if isinstance(item.record, ExperimentProtocol)]
+        results = [item.record for item in history if isinstance(item.record, DerivedResultRecord)]
         checkpoints = [
-            item.record for item in records if isinstance(item.record, RedesignCheckpointRecord)
+            item.record for item in history if isinstance(item.record, RedesignCheckpointRecord)
         ]
-        decisions = [item.record for item in records if isinstance(item.record, DecisionRecord)]
-        claim_records = [item.record for item in records if isinstance(item.record, ClaimEvidence)]
-        decision = decisions[-1] if decisions else None
-        result = results[-1] if results else None
-        hypothesis = hypotheses[-1] if hypotheses else None
+        decision = next(
+            (item.record for item in reversed(history) if isinstance(item.record, DecisionRecord)),
+            None,
+        )
+        claim_records = [item.record for item in history if isinstance(item.record, ClaimEvidence)]
+        result = next(reversed(results), None)
+        hypothesis = next(reversed(hypotheses), None)
         counter = (
             tuple(_compact(evidence.rationale) for evidence in decision.counterevidence[:12])
             if decision
@@ -632,7 +635,7 @@ class ScientificRecordStore:
             else _result_limitations(result)
         )
         claims_by_id = {item.id: item for item in claim_records}
-        for item in decisions:
+        for item in (decision,) if decision is not None else ():
             claims_by_id.update(
                 (evidence.id, evidence)
                 for evidence in (*item.evidence, *item.counterevidence)

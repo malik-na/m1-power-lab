@@ -408,7 +408,7 @@ def build_manifest(
     scientific = ScientificRecordStore(core).list(request.session_id)
     records["scientific"] = [bounded(item) for item in scientific[:MAX_RECORDS_PER_KIND]]
     scientific_brief = (
-        bounded(ScientificRecordStore(core).brief(scientific[:64])) if scientific else None
+        bounded(ScientificRecordStore(core).brief(scientific)) if scientific else None
     )
 
     after = max(0, snapshot.last_event_cursor - MAX_EVENT_COUNT)
