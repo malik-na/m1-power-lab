@@ -180,8 +180,10 @@ def test_review_and_approval_waits_have_durable_phases_and_account_only_live_wor
 
     phase_events = [event for event in core.events(session.id) if event.kind == "session.phase_changed"]
     assert [event.data["phase"] for event in phase_events] == [
+        "investigating",
         "awaiting_review",
         "awaiting_approval",
+        "investigating",
     ]
 
 
@@ -332,3 +334,58 @@ def test_operator_view_exposes_exact_wait_and_only_current_approval_controls(cor
     after_denial = asyncio.run(facade.get_view("approvals", owner))
     assert after_denial["session"]["state"] == "investigating"
     assert after_denial["approvals"] == []
+
+
+def test_restart_moves_dispatched_operation_to_recovery_with_a_new_revision(core, clock):
+    session = create_session(core)
+    command(core, session.id, CommandKind.START)
+    target = core.record_target(
+        TargetSnapshot(
+            session_id=session.id,
+            identity="m1",
+            boot_epoch="boot-1",
+            mode=TargetMode.REPLAY,
+            configuration_digest="config-1",
+            capabilities={"inspect_register"},
+        )
+    )
+    record = core.register_procedure(procedure(session.id, mutates=False))
+    complete_review(core, record)
+    authorization = core.authorize_operation(
+        DispatchRequest(
+            session_id=session.id,
+            procedure_id=record.procedure_id,
+            procedure_revision=record.revision,
+            target_snapshot_id=target.id,
+            adapter_mode=TargetMode.REPLAY,
+        )
+    )
+    assert authorization.envelope is not None
+    core.mark_dispatched(authorization.envelope)
+
+    report = core.reconcile()
+
+    assert report.unknown_operation_ids == [authorization.envelope.operation_id]
+    recovered = core.session(session.id)
+    assert (recovered.phase, recovered.revision) == (SessionPhase.RECOVERING, 6)
+    operation = core.list_records(session.id, "operations")[0]
+    assert operation.state is OperationState.UNKNOWN_EFFECT
+
+
+def test_restart_closes_wait_clock_after_final_live_job_becomes_unknown(core, clock):
+    session = create_session(core)
+    command(core, session.id, CommandKind.START)
+    clock.set(10)
+    core.register_procedure(procedure(session.id, mutates=False))
+    clock.set(20)
+    reviewer = core.create_job(job_request(session.id, "review"))
+    clock.set(25)
+
+    core.reconcile()
+
+    snapshot = core.snapshot(session.id)
+    assert snapshot.session.phase is SessionPhase.AWAITING_REVIEW
+    assert snapshot.budget.active_seconds_used == pytest.approx(15)
+    assert core.job(reviewer.id).state == "unknown"
+    clock.set(100)
+    assert core.snapshot(session.id).budget.active_seconds_used == pytest.approx(15)

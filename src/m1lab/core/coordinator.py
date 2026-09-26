@@ -170,8 +170,9 @@ class CoreApp:
             session.updated_at = utc_now()
             self._update_session(tx, session)
             if old_phase != session.phase:
-                self.budgets._sync_activity(tx, session.id, session.phase)
-                session = self._session_from_row(tx.execute("SELECT * FROM sessions WHERE id=?", (session.id,)).fetchone())
+                session = self._record_phase_change_in_tx(
+                    tx, session, old_phase, f"owner command {command.kind.value}"
+                )
             self._history(tx, session, f"owner_command:{command.kind}")
             result = self._store_command(tx, command, CommandStatus.APPLIED, session.revision, outcome)
             self.journal.append_event(
@@ -673,13 +674,38 @@ class CoreApp:
                 if row["state"] == OperationState.INTENT:
                     tx.execute("UPDATE operations SET state=?, completed_at=? WHERE id=?", (OperationState.NO_EFFECT, iso(), row["id"]))
                     report.no_effect_operation_ids.append(row["id"])
+                    next_phase = SessionPhase.INTERPRETING
+                    reason = "undispatched operation reconciled as no effect"
                 else:
                     tx.execute("UPDATE operations SET state=?, reconciliation_json=? WHERE id=?", (OperationState.UNKNOWN_EFFECT, json_dump({"reason": "coordinator restarted without a conclusive outcome"}), row["id"]))
                     report.unknown_operation_ids.append(row["id"])
+                    next_phase = SessionPhase.RECOVERING
+                    reason = "dispatched operation has unknown effect after restart"
+                phase_row = tx.execute(
+                    "SELECT phase FROM sessions WHERE id=?", (row["session_id"],)
+                ).fetchone()
+                if phase_row is not None and SessionPhase(phase_row["phase"]) not in {
+                    SessionPhase.PAUSED,
+                    SessionPhase.COMPLETED,
+                    SessionPhase.STOPPED,
+                }:
+                    self._transition_phase_in_tx(
+                        tx, row["session_id"], next_phase, reason
+                    )
+            job_sessions: set[str] = set()
             for row in tx.execute("SELECT * FROM jobs WHERE state IN ('admitted','running')").fetchall():
                 tx.execute("UPDATE jobs SET state='unknown', updated_at=? WHERE id=?", (iso(), row["id"]))
                 tx.execute("UPDATE sessions SET usage_uncertain=1, updated_at=? WHERE id=?", (iso(), row["session_id"]))
                 self.journal.append_event(tx, kind="job.usage_uncertain", session_id=row["session_id"], subject_id=row["id"], data={"reason": "coordinator restarted before terminal usage reconciliation"})
+                job_sessions.add(row["session_id"])
+            for session_id in job_sessions:
+                phase_row = tx.execute(
+                    "SELECT phase FROM sessions WHERE id=?", (session_id,)
+                ).fetchone()
+                if phase_row is not None:
+                    self.budgets._sync_activity(
+                        tx, session_id, SessionPhase(phase_row["phase"])
+                    )
             for row in tx.execute("SELECT * FROM artifacts").fetchall():
                 path = self.journal.paths.artifacts / row["relative_path"]
                 try:
@@ -902,11 +928,23 @@ class CoreApp:
         session.revision += 1
         session.updated_at = utc_now()
         self._update_session(tx, session)
+        refreshed = self._record_phase_change_in_tx(
+            tx, session, previous, reason
+        )
+        self._history(tx, refreshed, reason)
+        return refreshed
+
+    def _record_phase_change_in_tx(
+        self,
+        tx: sqlite3.Connection,
+        session: SessionRecord,
+        previous: SessionPhase,
+        reason: str,
+    ) -> SessionRecord:
         self.budgets._sync_activity(tx, session.id, session.phase)
         refreshed = self._session_from_row(
             tx.execute("SELECT * FROM sessions WHERE id=?", (session.id,)).fetchone()
         )
-        self._history(tx, refreshed, reason)
         self.journal.append_event(
             tx,
             kind="session.phase_changed",
@@ -914,7 +952,7 @@ class CoreApp:
             subject_id=session.id,
             data={
                 "from_phase": previous.value,
-                "phase": phase.value,
+                "phase": refreshed.phase.value,
                 "revision": refreshed.revision,
                 "reason": reason,
             },
