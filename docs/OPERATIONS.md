@@ -39,7 +39,9 @@ pinned requirements, creates the service account and private state paths,
 preserves an existing environment file, installs the systemd unit, and selects
 the release atomically. The service remains stopped so you can configure it
 before first startup. Release directories are immutable and must have unique
-IDs.
+IDs. If installation stops after a release is built, rerun the command with
+the same ID and same source commit to resume the systemd setup and selection;
+the installer verifies the release completion marker before continuing.
 
 ```bash
 RELEASE_ID=$(git rev-parse --short HEAD)
@@ -47,10 +49,11 @@ sudo scripts/release.sh install "$RELEASE_ID"
 ```
 
 The script refuses to switch while the service is active and refuses to
-overwrite an existing release. Before an update, pause or stop the session,
-resolve unknown work, make and verify a backup, then stop the service. Run the
-installer from the new committed checkout using a new release ID. The previous
-release and state remain available. Review the configuration and run
+overwrite or resume a release built from a different commit. Before an update,
+pause or stop the session, resolve unknown work, make and verify a backup, then
+stop the service. Run the installer from the new committed checkout using a
+new release ID. The previous release and state remain available. Review the
+configuration and run
 `m1lab diagnostics` against the selected release before starting the unit.
 The installer takes the same coordinator lock as the service and reads the
 journal read-only. For install and rollback it also checks that the journal

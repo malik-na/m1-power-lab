@@ -239,14 +239,10 @@ if [[ $action == switch ]]; then
   exit 0
 fi
 
-[[ ! -e "$release_path" && ! -L "$release_path" ]] || {
-  echo "release already exists; release directories are immutable: $release_path" >&2
-  exit 1
-}
 git_repo() {
   git -c "safe.directory=$source_root" -C "$source_root" "$@"
 }
-git_repo rev-parse --verify HEAD >/dev/null || {
+source_commit=$(git_repo rev-parse --verify HEAD) || {
   echo "release source is not a Git checkout" >&2
   exit 1
 }
@@ -255,23 +251,43 @@ git_repo diff --quiet && git_repo diff --cached --quiet || {
   exit 1
 }
 mkdir -p "$APP_ROOT/releases"
-staging=$(mktemp -d "$APP_ROOT/releases/.staging.XXXXXX")
-cleanup() {
-  if [[ -n ${staging:-} && -d $staging ]]; then rm -rf -- "$staging"; fi
-}
-trap cleanup EXIT
-git_repo archive --format=tar HEAD | tar -xf - -C "$staging"
+if [[ -e "$release_path" || -L "$release_path" ]]; then
+  [[ -d $release_path && ! -L $release_path ]] || {
+    echo "release path exists and is not a real directory: $release_path" >&2
+    exit 1
+  }
+  recorded_commit=$(<"$release_path/.m1lab-release-commit") || {
+    echo "release exists without a completion marker; inspect it and choose a new release ID: $release_path" >&2
+    exit 1
+  }
+  [[ $recorded_commit == "$source_commit" && -x "$release_path/.venv/bin/m1lab" ]] || {
+    echo "release ID belongs to a different or incomplete commit: $release_path" >&2
+    exit 1
+  }
+  echo "resuming installation of completed release $release_id ($source_commit)"
+else
+  staging=$(mktemp -d "$APP_ROOT/releases/.staging.XXXXXX")
+  cleanup() {
+    if [[ -n ${staging:-} && -d $staging ]]; then rm -rf -- "$staging"; fi
+  }
+  trap cleanup EXIT
+  git_repo archive --format=tar HEAD | tar -xf - -C "$staging"
+
+  install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 \
+    "$STATE_ROOT" "$STATE_ROOT/workspace" "$STATE_ROOT/codex"
+  install -d -o root -g root -m 0755 "$APP_ROOT/releases"
+  python3 -m venv "$staging/.venv"
+  "$staging/.venv/bin/python" -m pip install --requirement "$staging/requirements.lock"
+  "$staging/.venv/bin/python" -m pip install --no-deps "$staging"
+  printf '%s\n' "$source_commit" > "$staging/.m1lab-release-commit"
+  chown -R root:root "$staging"
+  chmod -R go-w "$staging"
+  mv -- "$staging" "$release_path"
+  staging=
+fi
 
 install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 \
   "$STATE_ROOT" "$STATE_ROOT/workspace" "$STATE_ROOT/codex"
-install -d -o root -g root -m 0755 "$APP_ROOT/releases"
-python3 -m venv "$staging/.venv"
-"$staging/.venv/bin/python" -m pip install --requirement "$staging/requirements.lock"
-"$staging/.venv/bin/python" -m pip install --no-deps "$staging"
-chown -R root:root "$staging"
-chmod -R go-w "$staging"
-mv -- "$staging" "$release_path"
-staging=
 
 install -m 0644 "$release_path/systemd/m1-power-lab.service" "$UNIT_FILE"
 if [[ ! -e $ENV_FILE ]]; then
