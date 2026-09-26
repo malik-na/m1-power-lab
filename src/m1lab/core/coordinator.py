@@ -430,7 +430,10 @@ class CoreApp:
             ).fetchone()
             if session_row is None:
                 raise NotFoundError(f"session {review.session_id} does not exist")
-            if SessionPhase(session_row["phase"]) is not SessionPhase.AWAITING_REVIEW:
+            phase = SessionPhase(session_row["phase"])
+            if (phase is not SessionPhase.AWAITING_REVIEW
+                    and not (phase is SessionPhase.BUDGET_EXHAUSTED
+                             and self.budgets.snapshot(review.session_id).admission_open)):
                 raise ConflictError("review recording requires a session awaiting review")
             procedure = self._procedure_in_tx(tx, review.procedure_id, review.procedure_revision)
             if procedure.session_id != review.session_id or procedure.digest != review.procedure_digest:
