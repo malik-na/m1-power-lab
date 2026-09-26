@@ -1,0 +1,347 @@
+{
+  "schema_version": "m1lab.build-recipe.v1",
+  "recipe_id": "j313-alarm-7.1.13-3-2-candidate-v1",
+  "architecture": "aarch64",
+  "commands": [
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "target/build_native_image.py",
+        "--lock",
+        "target/native-image.lock.json",
+        "--packages",
+        "__M1LAB_USER_HOME__/Work/m1-power-lab/build/native-inputs/userspace-packages",
+        "--kernel-package",
+        "__M1LAB_USER_HOME__/Work/m1-power-lab/build/native-inputs/linux-asahi-7.1.13.asahi3-2-aarch64.pkg.tar.xz",
+        "--output",
+        "build/native-image"
+      ],
+      "timeout_seconds": 900
+    }
+  ],
+  "tools": [
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-c",
+        "import sys,zlib; print(\"Python \" + sys.version.split()[0] + \"; zlib \" + zlib.ZLIB_RUNTIME_VERSION)"
+      ]
+    }
+  ],
+  "configuration": {
+    "name": "native-image.lock.json",
+    "role": "configuration",
+    "path": "target/native-image.lock.json",
+    "media_type": "application/json"
+  },
+  "inputs": [
+    {
+      "name": "linux-asahi-7.1.13.asahi3-2-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/linux-asahi-7.1.13.asahi3-2-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "bash-5.3.20-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/bash-5.3.20-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "brotli-1.2.0-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/brotli-1.2.0-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "busybox-1.36.1-4-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/busybox-1.36.1-4-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "bzip2-1.0.8-6-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/bzip2-1.0.8-6-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "e2fsprogs-1.47.4-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/e2fsprogs-1.47.4-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "expat-2.8.5-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/expat-2.8.5-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "filesystem-2025.10.12-1-any.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/filesystem-2025.10.12-1-any.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "gdbm-1.26-2-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/gdbm-1.26-2-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "glibc-2.43+r22+g8362e8ce10b2-2-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/glibc-2.43+r22+g8362e8ce10b2-2-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "iana-etc-20260617-1-any.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/iana-etc-20260617-1-any.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "keyutils-1.6.3-4-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/keyutils-1.6.3-4-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "kmod-34.2-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/kmod-34.2-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "krb5-1.22.2-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/krb5-1.22.2-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "libevent-2.1.13-2-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/libevent-2.1.13-2-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "libffi-3.8.0-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/libffi-3.8.0-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "libgcc-16.1.1+r12+g301eb08fa2c5-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/libgcc-16.1.1+r12+g301eb08fa2c5-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "libldap-2.7.1-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/libldap-2.7.1-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "libnsl-2.0.1-2-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/libnsl-2.0.1-2-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "libsasl-2.1.28-5-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/libsasl-2.1.28-5-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "libstdc++-16.1.1+r12+g301eb08fa2c5-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/libstdc++-16.1.1+r12+g301eb08fa2c5-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "libtirpc-1.3.8-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/libtirpc-1.3.8-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "libverto-0.3.2-6-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/libverto-0.3.2-6-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "libxcrypt-4.5.2-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/libxcrypt-4.5.2-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "linux-api-headers-7.2-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/linux-api-headers-7.2-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "lmdb-0.9.35-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/lmdb-0.9.35-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "lz4-1:1.10.0-2-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/lz4-1:1.10.0-2-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "mpdecimal-4.0.1-3-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/mpdecimal-4.0.1-3-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "ncurses-6.6-2-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/ncurses-6.6-2-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "openssl-3.6.4-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/openssl-3.6.4-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "python-3.14.7-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/python-3.14.7-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "readline-8.3.6-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/readline-8.3.6-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "sqlite-3.53.4-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/sqlite-3.53.4-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "tzdata-2026d-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/tzdata-2026d-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "util-linux-libs-2.42.4-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/util-linux-libs-2.42.4-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "xz-5.8.4-1-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/xz-5.8.4-1-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "zlib-1:1.3.2-3-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/zlib-1:1.3.2-3-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "zstd-1.5.7-3-aarch64.pkg.tar.xz",
+      "role": "binary_package",
+      "path": "build/native-image/inputs/zstd-1.5.7-3-aarch64.pkg.tar.xz",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "kernel.PKGINFO",
+      "role": "provider_metadata",
+      "path": "build/native-image/inputs/kernel.PKGINFO",
+      "media_type": "text/plain"
+    },
+    {
+      "name": "kernel.BUILDINFO",
+      "role": "provider_metadata",
+      "path": "build/native-image/inputs/kernel.BUILDINFO",
+      "media_type": "text/plain"
+    },
+    {
+      "name": "native-init",
+      "role": "init_source",
+      "path": "target/native-init",
+      "media_type": "text/plain"
+    },
+    {
+      "name": "native_boot.py",
+      "role": "bootstrap_source",
+      "path": "target/native_boot.py",
+      "media_type": "text/x-python"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Image.gz",
+      "role": "kernel",
+      "path": "build/native-image/Image.gz",
+      "media_type": "application/gzip"
+    },
+    {
+      "name": "j313.dtb",
+      "role": "dtb",
+      "path": "build/native-image/j313.dtb",
+      "media_type": "application/octet-stream"
+    },
+    {
+      "name": "initramfs.cpio.gz",
+      "role": "initramfs",
+      "path": "build/native-image/initramfs.cpio.gz",
+      "media_type": "application/gzip"
+    },
+    {
+      "name": "collector.py",
+      "role": "collector",
+      "path": "build/native-image/collector.py",
+      "media_type": "text/x-python"
+    },
+    {
+      "name": "payload.tar",
+      "role": "payload",
+      "path": "build/native-image/payload.tar",
+      "media_type": "application/x-tar"
+    },
+    {
+      "name": "rootfs.cpio.gz",
+      "role": "rootfs",
+      "path": "build/native-image/initramfs.cpio.gz",
+      "media_type": "application/gzip"
+    },
+    {
+      "name": "bundle-metadata.json",
+      "role": "bundle_metadata",
+      "path": "build/native-image/bundle-metadata.json",
+      "media_type": "application/json"
+    }
+  ],
+  "firmware_references": [
+    "Observed proxy banner: OSFW 13.5; iBoot 8422.141.2; target MacBookAir10,1 J313 chip 0x8103; binary provenance not independently attested.",
+    "No firmware blob installation or internal disk mount; DTB handoff compatibility and native USB return require physical qualification."
+  ],
+  "dependencies": [
+    "Signed prebuilt ALARM linux-asahi 7.1.13.asahi3-2; this recipe reproduces image assembly, not the provider kernel compilation.",
+    "37 pinned Arch Linux ARM userspace packages; package SHA256/size and signing evidence recorded separately.",
+    "Python stdlib tarfile/gzip/zlib image assembly."
+  ],
+  "maximum_runtime_seconds": 900,
+  "maximum_output_bytes": 1048576,
+  "return_behavior": "RAM-only candidate: accept one bounded launch via ACM, emit capture, request reboot; watchdog requests reboot at 180s from init. Kernel hang, actual result delivery and return/re-identification remain unqualified; owner physical recovery required."
+}

@@ -25,8 +25,10 @@ Use `--role known_good` for a reviewed return image. Recipe JSON uses the
 and unsupported artifact roles. Commands are argument arrays launched with
 `shell=False`. It must declare
 `kernel`, `dtb`, `initramfs`, `collector`, and `payload` outputs and a root
-filesystem input or output. No M1-specific recipe is included yet because the
-ThinkPad cross-toolchain and target source inventory have not been recorded.
+filesystem input or output. The J313 candidate recipe in
+`target/native-image.recipe.json` assembles pinned prebuilt ALARM packages;
+see [native image instructions](NATIVE-HARNESS.md). It does not claim to
+reproduce the distribution's kernel compilation.
 
 The runner requires an active session with enough remaining active time. It
 stops build processes if the session pauses, the budget closes, the deadline is
@@ -50,9 +52,8 @@ The manifest and its artifact digests are evidence for a separate exact
 procedure review. Any changed output has a different content digest, so a
 previous procedure or approval cannot silently authorize it. The builder only
 creates and records artifacts; it does not load or execute them on the target.
-The M1-specific recipe cannot be selected until the ThinkPad toolchain and
-source inventory are recorded. Native execution and return behavior remain
-physical qualification gates.
+The candidate recipe records the assembly tool and package inputs. Native
+execution and return behavior remain physical qualification gates.
 
 The standalone [`native_capture.py`](../target/native_capture.py) source is a
 bounded Linux collector for a future native image. It emits the host's native

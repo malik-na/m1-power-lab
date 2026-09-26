@@ -1,0 +1,21 @@
+#!/usr/bin/busybox sh
+# RAM-only candidate init. No internal disk is mounted and no shell is exposed.
+[ "$$" -eq 1 ] || exit 2
+export PATH=/usr/bin:/usr/sbin
+bb=/usr/bin/busybox
+finish() {
+    echo 'M1Lab: reboot requested; host must independently observe recovery.' >&2
+    $bb reboot -f
+    # If reboot returns, remain quiescent for owner recovery, never rerun capture.
+    while :; do $bb sleep 60; done
+}
+trap finish EXIT
+$bb mount -t devtmpfs devtmpfs /dev || exit 1
+$bb mount -t proc proc /proc || exit 1
+$bb mount -t sysfs sysfs /sys || exit 1
+$bb mount -t tmpfs -o mode=0755 tmpfs /run || exit 1
+# Independent userspace watchdog also covers module/channel setup. A kernel
+# hang can defeat it: the host deadline and physical recovery remain required.
+( $bb sleep 180; $bb reboot -f ) &
+/usr/bin/python3 -I /usr/lib/m1lab/native_boot.py
+exit $?

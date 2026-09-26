@@ -1,7 +1,7 @@
 # Native Linux capture source
 
-`native_capture.py` is a standalone, read-only target-side collector for a
-future native Linux image. It consumes an immutable
+`native_capture.py` is a standalone, read-only target-side collector included
+in the [J313 candidate image](../docs/NATIVE-HARNESS.md). It consumes an immutable
 `m1lab.native-launch.v1` manifest and emits the existing
 `m1lab.native-result.v1` length-prefixed, checksummed identity/data/end frames
 to stdout. The host owns and configures that descriptor; this program does not
@@ -51,8 +51,8 @@ credential-screened view of recognized collector records. Raw binary frames
 are not inserted into Codex context. Offline import deliberately marks target
 identity, physical source, and capture timing as unverified,
 even when frame checksums and sequence are valid. Neither command dispatches a
-target operation. The collector source is now available, but no M1-specific
-recipe, image, result transport, or return path is qualified. Do not use its
+target operation. The candidate recipe and image are available, but the
+result transport and return path remain unqualified. Do not use its
 output as power evidence until the sensor provenance, observer effect,
 physical channel, and recovery gates are qualified on the actual setup.
 
