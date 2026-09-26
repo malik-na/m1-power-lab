@@ -96,7 +96,7 @@ boundary to enable hardware dispatch. systemd stops the full service cgroup,
 including the Codex app-server, and escalates after the 20-second shutdown
 window if graceful cleanup does not finish.
 
-### Prepared hardware-helper unit
+## Prepared hardware-helper unit
 
 `systemd/m1-power-lab-helper.service` and
 `config/m1-power-lab-helper.env.example` are prepare-only artifacts. The release
@@ -135,6 +135,8 @@ separate helper directory. Never overwrite or delete `owner.lock.deny` when
 restoring an older coordinator archive: it retains refusal of already attempted
 dispatches, including uncertain ones. Restore/migration of the combined state
 still requires qualification before production dispatch is enabled.
+
+## Codex runtime configuration
 
 The app-server refuses to start if the configured executable is missing or its
 SHA-256 differs from the configured pin. Calculate it with `sha256sum` after

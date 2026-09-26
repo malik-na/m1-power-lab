@@ -2,6 +2,21 @@
 
 ## Host-only gate
 
+- At source `2032eee` on 2026-09-26, the ThinkPad full suite passed
+  **180 tests in 17.73 seconds**, no warnings reported, using
+  `.venv/bin/python -m pytest -q` with host socket permissions through Codex
+  `gpt-6-sol` medium. Fourteen supervisor tests now include a kernel process
+  handle for the current coordinator generation: dead/invalid handles refuse
+  startup, generation changes during lookup refuse startup, and coordinator
+  death ends a hung helper without restarting it. Twelve isolated maintenance
+  cases retain the usage/unknown-effect gates and verify active-helper and
+  owner-lock refusal, history preservation, and symlink/FIFO refusal.
+  `bash -n scripts/release.sh` and `systemd-analyze verify
+  systemd/m1-power-lab.service systemd/m1-power-lab-helper.service` passed using
+  installed systemd 261.2. Standards and independent spec review found no
+  blocking findings in this increment. The helper unit/configuration are
+  prepare-only: no installation or device-cgroup/systemd lifecycle qualification
+  is claimed. Prior physical helper evidence is tied to `b5b420d` below.
 - At source `b5b420d` on 2026-09-26, the ThinkPad full suite passed
   **170 tests in 16.77 seconds**, no warnings reported, with
   `.venv/bin/python -m pytest -q` using host socket permissions through Codex
