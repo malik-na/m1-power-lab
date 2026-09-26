@@ -2,7 +2,43 @@
 
 ## Host-only gate
 
-- Latest T480 regression run: **90 passed**, with no reported warnings.
+- Latest full ThinkPad suite: **98 passed**, with no warnings reported; 24
+  focused runtime/resume cases passed. The eight new cases cover interrupted
+  and reconciled-unknown resume across reopening, actual synthetic subprocess
+  EOF/malformed-output cleanup, cancellation of a shutdown caller, and event
+  artifact failures with successful, failed, or cancelled cleanup. A historical
+  unknown job first reproduced a stuck concurrency slot; three failure cases
+  reproduced runtime work remaining active after an unknown outcome.
+  Shutdown is now shared and shielded from caller cancellation. Unknown usage
+  stays nonterminal and uncertain even when earlier response counts exist.
+  Failed cleanup records diagnostics and retains the active job and reservation.
+  Historical unknown outcomes remain in the journal after reconciliation but
+  do not permanently occupy concurrency slots. Resume retains failed scientific
+  evidence, brief, thread identity, read-only authority, and usage accounting.
+  The final process check found no synthetic workers remaining. These tests
+  do not qualify live provider resume or physical process/device behavior.
+  The live service was separately confirmed active with its session paused,
+  two historical jobs, and usage uncertainty still set; it remains `f560929`.
+- The pinned Codex 0.156.0 standalone OS sandbox passed a no-model canary
+  probe on the T480 in a separate transient `m1lab` systemd unit. The unit
+  matched the deployed service's filesystem/device protections, including
+  `RestrictSUIDSGID=no`, and had a 90-second runtime bound. It used a new
+  synthetic HOME/CODEX_HOME, no credentials, and the same `m1lab-read-only`
+  profile (`:root=deny`, `:minimal=read`, workspace read, network disabled).
+  Workspace reading succeeded; outside and symlink reads were hidden;
+  workspace writes returned read-only filesystem; outside writes were denied.
+  IPv4, IPv6, filesystem Unix, and abstract Unix connections returned EPERM
+  after all four unsandboxed listener controls passed. All synthetic canary
+  hashes remained unchanged; the child started and completed successfully.
+  The unit exited successfully in 290 ms. The fixture remains at
+  `/var/lib/m1-power-lab/qualification-20260926a` on the T480.
+  Binary SHA-256: `78a11f06e0a2dda42d13fba1d50dc62e8cbdb2d5f69789722f4d4d99b5cdbe30`.
+  This qualifies the selected shared Linux sandbox behavior under these outer
+  service restrictions. It does not qualify app-server tool routing, escalation
+  handling, inherited descriptors, managed-config equivalence, actual devices,
+  or live-model recovery. The probe did not change the production service or
+  resume the paused lab session.
+- The preceding T480 regression run: **90 passed**, with no reported warnings.
   Twenty new cases cover four SSE replay/reconnect/snapshot cases through a
   real temporary HTTP server and sixteen hardware-helper cases through real
   Unix sockets with a fixed synthetic backend. The SSE cases verify header

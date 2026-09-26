@@ -258,6 +258,7 @@ class AppServerCodexAdapter:
         self._event_sequence = 0
         self._write_lock = asyncio.Lock()
         self._start_lock = asyncio.Lock()
+        self._shutdown_task: asyncio.Task[None] | None = None
         self._stderr_tail = ""
         self._initialized = False
         self._closed = False
@@ -344,26 +345,35 @@ class AppServerCodexAdapter:
         return self._require_job(job_id).usage
 
     async def close(self) -> None:
-        if self._closed:
-            return
-        self._closed = True
+        await self._close_runtime("runtime closed before terminal status")
+
+    async def _close_runtime(self, reason: str) -> None:
+        # Retire work even if the initiating caller is cancelled. Every caller
+        # awaits the same cleanup; closing admission is not proof it finished.
+        if self._shutdown_task is None:
+            self._closed = True
+            self._shutdown_task = asyncio.create_task(self._shutdown(reason))
+        await asyncio.shield(self._shutdown_task)
+
+    async def _shutdown(self, reason: str) -> None:
         for state in self._jobs.values():
             if state.deadline_task is not None:
                 state.deadline_task.cancel()
         process = self._process
-        if process is not None and process.returncode is None:
+        if process is not None:
             await self._terminate_process_group(process)
-        for task in (self._reader_task, self._stderr_task):
-            if task is not None and not task.done():
+        readers = [
+            task for task in (self._reader_task, self._stderr_task)
+            if task is not None
+        ]
+        for task in readers:
+            if not task.done():
                 task.cancel()
-        await asyncio.gather(
-            *(task for task in (self._reader_task, self._stderr_task) if task is not None),
-            return_exceptions=True,
-        )
-        self._fail_pending(RuntimeUnavailable("Codex app-server adapter closed"))
+        await asyncio.gather(*readers, return_exceptions=True)
+        self._fail_pending(RuntimeUnavailable(reason))
         for state in self._jobs.values():
             if not state.handle.status.terminal:
-                self._finish_job(state, JobStatus.UNKNOWN, "runtime closed before terminal status")
+                self._finish_job(state, JobStatus.UNKNOWN, reason)
 
     async def _ensure_started(self) -> None:
         if self._closed:
@@ -620,10 +630,7 @@ class AppServerCodexAdapter:
             if failure is None and not self._closed:
                 failure = RuntimeUnavailable("Codex app-server stdout closed")
             if failure is not None:
-                self._fail_pending(failure)
-                for state in self._jobs.values():
-                    if not state.handle.status.terminal:
-                        self._finish_job(state, JobStatus.UNKNOWN, str(failure))
+                await self._close_runtime(str(failure))
 
     async def _read_stderr(self) -> None:
         process = self._process

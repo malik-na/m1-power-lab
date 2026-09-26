@@ -324,6 +324,33 @@ class InvestigationOrchestrator:
                 _safe_error(consumption_error),
             )
 
+        if consumption_error is not None or final_handle.status is JobStatus.UNKNOWN:
+            # Stop the shared runtime before releasing this job's resources.
+            # Sibling jobs also become unknown if their transport is retired.
+            # Do not close the orchestrator here: it would await this consumer.
+            try:
+                await self._runtime.close()
+            except BaseException as cleanup_error:
+                reason = f"runtime cleanup failed: {_safe_error(cleanup_error)}"
+                self._core.mark_usage_uncertain(
+                    session_id, final_handle.thread_id or final_handle.job_id, reason
+                )
+                current = self._core.job(job_id)
+                result = {
+                    **current.result,
+                    "cleanup_completed": False,
+                    "cleanup_error": reason,
+                    "event_summaries": summaries,
+                    "event_artifact_ids": artifact_ids,
+                    "last_runtime_sequence": last_sequence,
+                }
+                if consumption_error is not None:
+                    result["stream_error"] = _safe_error(consumption_error)
+                self._core.update_job(job_id, state=current.state, result=result)
+                # Retirement was not confirmed: retain the active job and its
+                # reservation for explicit cleanup and reconciliation.
+                return
+
         try:
             try:
                 usage_result = self._account_usage(session_id, job_id, final_handle)
@@ -419,10 +446,11 @@ class InvestigationOrchestrator:
             return {"reported": True, "tokens": 0, "uncertain": False}
 
         normalized, uncertainty = _normalize_terminal_usage(usage)
-        if handle.status is JobStatus.INTERRUPTED and normalized is not None:
+        incomplete = handle.status in {JobStatus.INTERRUPTED, JobStatus.UNKNOWN}
+        if incomplete and normalized is not None:
             # Counts may cover an earlier completed response; cancellation can
             # leave the last response unreported even after a usage notification.
-            uncertainty = "interrupted response usage coverage was not confirmed"
+            uncertainty = f"{handle.status.value} response usage coverage was not confirmed"
         if usage_error:
             uncertainty = f"runtime usage lookup failed: {usage_error}"
         if normalized is not None:
@@ -435,7 +463,7 @@ class InvestigationOrchestrator:
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
                     cumulative=cumulative,
-                    terminal=handle.status is not JobStatus.INTERRUPTED,
+                    terminal=not incomplete,
                 )
             )
         if uncertainty is not None:

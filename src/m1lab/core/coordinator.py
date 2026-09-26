@@ -957,19 +957,19 @@ class CoreApp:
                 session.phase, set()
             )
             active_jobs = tx.execute(
-                "SELECT COUNT(*) FROM jobs WHERE session_id=? AND state IN ('admitted','running','unknown')",
+                "SELECT COUNT(*) FROM jobs WHERE session_id=? AND state IN ('admitted','running')",
                 (request.session_id,),
             ).fetchone()[0]
             active_primaries = tx.execute(
                 "SELECT COUNT(*) FROM jobs WHERE session_id=? "
                 "AND json_extract(evidence_manifest_json,'$._m1lab_parent_job_id') IS NULL "
                 "AND kind IN ('investigate','implement','conclude') "
-                "AND state IN ('admitted','running','unknown')",
+                "AND state IN ('admitted','running')",
                 (request.session_id,),
             ).fetchone()[0]
             active_helpers = tx.execute(
                 "SELECT COUNT(*) FROM jobs WHERE session_id=? "
-                "AND kind IN ('analyze','review','chat') AND state IN ('admitted','running','unknown')",
+                "AND kind IN ('analyze','review','chat') AND state IN ('admitted','running')",
                 (request.session_id,),
             ).fetchone()[0]
             if request.parent_job_id is not None:
