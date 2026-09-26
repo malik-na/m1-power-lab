@@ -204,10 +204,14 @@ owner lock. No dispatch intent was recorded. See the
    coordinator integration, retaining explicit refusal while physical boot,
    build and recovery qualification is missing. Do not deploy over the lab's
    unresolved usage hold.
-3. Locate exact native kernel/DTB/initramfs/rootfs inputs before creating an M1
-   build recipe. The local inventory found collector source and historical
-   captures but no complete known-good image bundle. Native transport must be
-   established separately from the proxy tty.
+3. A pinned J313 candidate now exists: signed ALARM kernel/DTB/modules plus
+   37 Arch Linux ARM userspace packages assembled at `520d05b`. All seven
+   session-published output hashes matched an independent assembly; ARM64
+   userspace/collector emulation passed. No known-good return image is
+   qualified. Complete observed boot/config identity and reviewed native
+   launch/channel ownership, then exercise the candidate on the M1. Native
+   transport must be established separately from the proxy tty. See
+   [candidate instructions](NATIVE-HARNESS.md).
 
 The upstream m1n1 checkout's `AGENTS.md` prohibits AI work on that project;
 inspection stopped when that instruction was discovered and no upstream files

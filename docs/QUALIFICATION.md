@@ -2,6 +2,24 @@
 
 ## Host-only gate
 
+- At source `520d05b`, the actual J313 RAM-only candidate was built and
+  published into the separate `build/harness-state` journal with all package
+  inputs and seven output artifacts. A second independent assembly matched
+  every output SHA-256. The image uses pinned signed ALARM kernel/DTB/modules
+  and 37 userspace packages; this reproduces assembly, not provider kernel
+  compilation. ARM64 Python, BusyBox and kmod ran under qemu-user; all five USB
+  module dependency trees resolved, and the exact collector emitted a complete
+  synthetic framed capture. GNU cpio read the archive and its required files.
+  `.venv/bin/python -m pytest -q tests/integration/test_native_boot.py
+  tests/integration/test_native_cli.py` passed **8 tests in 3.65 seconds**.
+  The latest full-suite result remains the 210-test checkpoint below.
+  Native startup source review found no concrete blocker; exact artifact and
+  procedure review remains required before dispatch. No Mac image was booted.
+  USB ownership/channel, observed target boot/config identity, return and
+  recovery remain pending. Both the separate harness build session and the
+  existing live session are paused; the live usage hold remains intact.
+  See [build evidence](evidence/2026-09-26-native-build.json) and
+  [candidate instructions](NATIVE-HARNESS.md).
 - At source `a16f31e` on 2026-09-26, the ThinkPad full suite passed
   **210 tests in 29.46 seconds**, no warnings reported, using
   `.venv/bin/python -m pytest -q` with host socket permissions through Codex

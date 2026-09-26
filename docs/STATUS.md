@@ -3,8 +3,11 @@
 This file distinguishes implemented behavior from physical qualification.
 
 Current owner scope: build and verify the harness end to end using the m1n1
-connection. Scientific investigation remains stopped. Source checkpoint
-`a16f31e` passed 210 host tests; persistent physical helper inspection passed
+connection. Scientific investigation remains stopped. Source `520d05b` produced
+a pinned J313 candidate through the session-linked builder; an independent
+assembly matched all seven output digests. Eight focused native CLI/launch
+checks passed; the latest full suite remains 210 tests at `a16f31e`.
+Persistent physical helper inspection passed
 on earlier source `b5b420d`. Separate helper service packaging is prepared;
 installed service `f560929` and the paused lab usage hold are unchanged.
 
@@ -26,8 +29,8 @@ installed service `f560929` and the paused lab usage hold are unchanged.
 | ThinkPad-to-Mac transport | Direct setup and bounded helper/IPC inspection passed; full transport unqualified | USB-A to USB-C at topology `1-1`, USB `1209:316d`, interface `00`, hashed serial binding, chip `0x8103`. One-shot and persistent helper checks completed fixed read-only requests and exited cleanly, with socket removal and owner-lock release verified for the persistent path. Target version banner previously matched host release tag `v1.6.1`; exact target binary, boot epoch, reviewed coordinator dispatch, failure/recovery and native channel remain pending; see [probe evidence](evidence/2026-09-26-proxy-helper.json) |
 | Hardware-helper boundary | Typed bounded IPC now includes inspect-only snapshots; fixed physical observer and one-shot supervised probe implemented | 42 socket/deny-guard cases, 11 PTY transport cases, 13 observer cases, 14 supervisor cases and 4 coordinator/IPC cases pass. Durable intent refusal survives actual process death; startup/request/cleanup stalls are bounded. Physical persistent inspections and normal shutdown passed, retaining no capabilities, no boot epoch and `qualified=false`. Separate service packaging is prepared with coordinator process binding and source maintenance guards; actual unit permissions/lifecycle, qualified dispatch and recovery remain pending; see [harness contract](PROXY-HARNESS.md) |
 | Live m1n1 adapter | Disabled | Implement only after transport and recovery qualification |
-| Native run manifests and result channel | Host collector-to-acquisition/import path verified with synthetic subprocess data | Fourteen collector/import and sixteen descriptor-receiver cases cover flowing child output, complete/partial/unknown outcomes, fixed deadlines under slow input, retained incomplete bytes, wire bounds, launch binding and sample screening. Descriptor acquisition and file import share publication; host timeout never claims target stop. No live dispatch route is enabled. Target/source/timing remain unverified. M1 image integration, independent identity, physical channel/ownership, return/re-identification, sensors, and recovery remain pending |
-| Reproducible target builds | Host runner verified with real temporary Git/build processes | Four fixture cases cover clean/dirty provenance, immutable manifest and artifact hashes, failure, timeout and worktree cleanup. Fixtures are text stand-ins. No complete known-good native image bundle was found locally; exact target inputs, required cross-toolchain, M1 recipe and physical return remain pending |
+| Native run manifests and result channel | Host acquisition CLI and RAM-only J313 candidate implemented | Synthetic collector/acquisition/import checks cover complete/partial/unknown results, deadlines and retained bytes; eight focused CLI/launch-reader cases pass. Actual ARM64 collector emitted complete synthetic framing under qemu-user. Target/source/timing remain unverified; observed boot/config identity, physical channel ownership, reviewed dispatch and return/recovery remain pending. No live dispatch route is enabled |
+| Reproducible target builds | Actual pinned candidate assembled and session-linked at `520d05b` | Independent assembly matched all seven output hashes. Kernel/DTB/modules and 37 userspace packages are pinned; input bytes, provider metadata, source/recipe/tool and output digests are recorded. This reproduces assembly from signed binaries, not the provider kernel compilation. No qualified known-good image or physical return yet; see [build evidence](evidence/2026-09-26-native-build.json) |
 | Power measurement | Unqualified | Establish sensor provenance, energy boundary, cadence, noise and observer effect |
 | Real investigation | Not started | Requires the live transport and measurement gates |
 
