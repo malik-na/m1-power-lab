@@ -193,9 +193,13 @@
 
 ## Live transport gate
 
-- Physical inventory is partial: T480 host facts have been observed, but the
-  cable, USB identity, target mode, m1n1 revisions, and recovery remain
-  unqualified. See [lab inventory](LAB-INVENTORY.md).
+- Physical inventory is partial. An owner-authorized direct setup probe on
+  2026-09-26 caught USB `1209:316d` during boot and completed NOP and identity
+  queries against m1n1 `v1.6.1` on the M1 MacBook Air. Host checkout tag also
+  reports `v1.6.1`; exact target build identity remains unverified. This probe
+  bypassed the application path by explicit owner request and does not qualify
+  coordinator dispatch, exclusive helper ownership, boot epochs, recovery,
+  native results, or measurement. See [lab inventory](LAB-INVENTORY.md).
 - The exact target and boot epoch can be identified.
 - Host and target m1n1 builds match.
 - Only the hardware helper owns the selected USB/serial interfaces.

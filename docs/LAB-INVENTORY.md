@@ -1,11 +1,12 @@
 # Physical lab inventory
 
-Last observed: 2026-09-26 on the ThinkPad over Tailscale, and on the Apple
-machine from the current Codex execution shell.
+Last observed: 2026-09-26 on the ThinkPad, including an owner-authorized
+direct m1n1 setup probe during the Mac's boot. Earlier Apple Linux facts below
+were collected before development moved to the ThinkPad.
 
-This is a partial inventory. The ThinkPad host facts were collected with the
-read-only inventory script, without USB enumeration. No target control or
-mutation was performed.
+This is a partial inventory. Initial host collection omitted USB enumeration;
+subsequent USB metadata and direct proxy observations are recorded below.
+The direct setup probe does not qualify the application's live helper path.
 
 ## Observed ThinkPad host
 
@@ -18,8 +19,8 @@ mutation was performed.
 | Python / Git | 3.14.7 / 2.55.0 | version probes |
 | Available build tools | GCC 16.2.1, Clang 22.1.8, GNU Make 4.4.1 | version probes |
 | Missing build tools | AArch64 GCC cross compilers, Rust/Cargo, CMake, Ninja | PATH probes |
-| m1n1 | No executable on PATH; no source checkout supplied; commit unknown | PATH and source probe |
-| USB | `lsusb` available; enumeration deliberately omitted | inventory collection flags |
+| m1n1 | No executable on PATH; local clean checkout `06a4601a351ebfd1abb6abba9a44c34e40d94776`, tagged `v1.6.1` | PATH probe and subsequent local Git inspection |
+| USB | `lsusb` available; subsequent metadata and proxy probe recorded below | inventory collector and owner-authorized setup probe |
 
 The inventory reported `usb_devices_enumerated=false`,
 `usb_devices_opened=false`, and no serial numbers. On this host, the 36 host
@@ -32,7 +33,7 @@ Follow-up on 2026-09-26: a local m1n1 source checkout was found at
 Python 3.14.7 environment at `/home/naeem/Projects/m1n1-venv` and an earlier
 standalone connection script at `/home/naeem/Projects/m1n1-connect.py`. The
 script opens `/dev/ttyACM0` directly for NOP handshakes and proxy identity
-queries; it was inspected but not run. That device path was absent during this
+queries; at discovery it was inspected but not run. That device path was absent during this
 follow-up check. The Mac's running m1n1 build identity and the compatibility
 of host and target revisions remain unverified. The owner reports the Mac is
 running its normal Asahi/ALARM installation, with m1n1 proxy mode reportedly
@@ -48,7 +49,43 @@ collection. Six devices were enumerated: two Linux root hubs, `8087:0a2b`,
 No Apple/m1n1 device was observed, and the host had no `ttyACM*`, `ttyUSB*`, or
 `/dev/m1n1` node. This does not establish cable data capability or what will
 enumerate during the Mac's next boot. The live lab pause and usage hold remain
-intact; no reboot or proxy command was performed.
+intact; no reboot or proxy command was performed during that metadata check.
+
+### Owner-authorized proxy setup probe
+
+Later on 2026-09-26, the owner explicitly requested running the existing
+connection script. The initial attempt failed because `/dev/ttyACM0` was
+absent. A three-minute wait caught the interface during a subsequent boot,
+but the connection failed before opening it with permission denied. The
+owner then authorized sudo access. A second bounded wait ran as `naeem` with
+temporary primary group `uucp`; no account memberships, udev rules, or device
+permissions were changed. It verified USB ID `1209:316d` before running the
+existing script exactly once with `timeout --kill-after=2s 15s`.
+
+The probe completed successfully (exit 0) using
+`/home/naeem/Projects/m1n1-venv/bin/python -u /home/naeem/Projects/m1n1-connect.py`.
+The inspected script SHA-256 was
+`f6b6b0898b3090a8da9ebfe21da436eb3490bf9b8df6fa1aa1a1c3f36e4c3f16`.
+
+| Observation | Value |
+|---|---|
+| USB identity and host topology | `1209:316d`, host path `1-1`, interface `1-1:1.0` |
+| Serial nodes after the probe | `/dev/ttyACM0` and `/dev/ttyACM1`, mode `0660`, owner `root:uucp` |
+| Target boot banner | `m1n1 v1.6.1`, running in EL2 |
+| Reported model / target / board | `MacBookAir10,1` / `J313` / `0x26` |
+| NOP transport and proxy handshakes | Both succeeded |
+| Chip ID returned by proxy | `0x8103` |
+| m1n1 base / boot-arguments address | `0x805574000` / `0x805cac088` |
+| Firmware reported in boot output | OS `13.5 (iBoot-8422.141.2)`; system `unknown (mBoot-20457.0.125.0.2)` |
+
+This demonstrates a working data path and direct proxy replies for this boot.
+The script closed its serial connection; it sent no exit/continue-boot command.
+The target banner matches the host checkout's release tag, but the exact target
+build digest/commit and independent per-device identity remain unverified.
+No coordinator boot-epoch record, exclusive helper ownership, normal reviewed
+dispatch, mode-return recovery, native result channel, or measurement was
+qualified by this probe. The installed lab service and its paused usage hold
+were not changed.
 
 An isolated `m1lab diagnostics` run on the T480 on 2026-09-26 observed AC power,
 12% battery, 62 °C maximum temperature, and 7.7 GiB free disk space. A second
@@ -129,8 +166,8 @@ and mode qualification require owner-observed entries below.
 | ThinkPad T480 identity, CPU, RAM, firmware | Observed above on 2026-09-26 | Recheck after relevant host updates |
 | ThinkPad OS, kernel, installed toolchain | Observed above; AArch64 and several build tools missing | Install only tools required by the qualified build path |
 | Cable, adapters, port mapping | Owner reports ThinkPad USB-A to Mac USB-C; exact positions and adapters unknown | Record physical port positions and cable/adapter details |
-| USB permissions and device identity | Host enumeration completed at 12:20 UTC; no Apple/m1n1 device or serial interface observed | Identify the target interface and its permissions when present during an attended setup check |
-| Host/target m1n1 commits | Host checkout `06a4601a351ebfd1abb6abba9a44c34e40d94776` found; target build unknown | Verify the target build and compatibility before proxy qualification |
+| USB permissions and device identity | Direct setup probe observed `1209:316d` at `1-1`; serial nodes `0660 root:uucp` | Establish independent per-target identity and exclusive helper ownership |
+| Host/target m1n1 commits | Clean host `06a4601a351ebfd1abb6abba9a44c34e40d94776` tagged `v1.6.1`; target banner `v1.6.1` | Verify exact target build provenance before claiming matching builds |
 | Owner attendance | Required for physical connect, reset, recovery, and mode transitions | Owner must be present for each such operation |
 
 ## Modes and recovery matrix
@@ -139,17 +176,18 @@ and mode qualification require owner-observed entries below.
 |---|---|---|---|---|---|
 | Disconnected | Known possible; no USB device enumerated in this observation | Not assessed | Not assessed | Not assessed | Required to establish physical state |
 | Linux boot on observed Mac | Observed running | Not assessed | Not assessed | Not assessed | Required for physical recovery |
-| m1n1 proxy | Unknown; no helper, cable, or target round trip qualified | Unknown | Unknown | Unknown | Required; do not start until recovery is qualified |
+| m1n1 proxy | Direct NOP and identity-query round trip demonstrated; coordinator/helper path unqualified | Unknown | Unknown | Unknown | Required for further physical qualification |
 | m1n1 hypervisor | Unknown | Unknown | Unknown | Unknown | Required; not qualified |
 | Native experiment | Unknown | Unknown | Unknown | Unknown | Required; not qualified |
 
 ## Bounded next attempt
 
-1. With the owner present, identify the cable and ports and opt in to USB
-   device identity and permission inventory on the ThinkPad.
-2. Record host and target m1n1 revisions and build details.
-3. Keep proxy, hypervisor, and native modes gated until the matching recovery
-   path and owner-attendance requirements are demonstrated.
+1. Preserve the observed cable arrangement; record remaining physical port
+   positions and establish the exact target build and per-device identity.
+2. Prepare a bounded return/re-identification procedure and recovery instructions
+   from the pinned source for owner review before further target commands.
+3. Qualify exclusive helper ownership, boot-epoch tracking, and reviewed
+   coordinator dispatch before treating the application transport as ready.
 
-Until those steps are complete, the transport and every live target mode remain
-unqualified. No proxy command or state-changing target operation was attempted.
+Application transport, recovery, native results, and measurement remain
+unqualified. The successful direct setup probe is limited evidence toward M2.
