@@ -243,6 +243,24 @@ def create_app(
         app.router.add_event_handler("startup", start_push_delivery)
         app.router.add_event_handler("shutdown", stop_push_delivery)
 
+    host_safety_runner = getattr(facade, "run_host_safety", None)
+    if host_safety_runner is not None and getattr(facade, "investigator", None) is not None:
+        async def start_host_safety() -> None:
+            app.state.host_safety_task = asyncio.create_task(host_safety_runner())
+
+        async def stop_host_safety() -> None:
+            task = getattr(app.state, "host_safety_task", None)
+            if task is None:
+                return
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+        app.router.add_event_handler("startup", start_host_safety)
+        app.router.add_event_handler("shutdown", stop_host_safety)
+
     closer = getattr(facade, "close", None)
     if closer is not None:
         app.router.add_event_handler("shutdown", closer)

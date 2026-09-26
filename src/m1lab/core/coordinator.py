@@ -794,6 +794,45 @@ class CoreApp:
         report.orphan_artifact_paths = sorted(str(path.relative_to(self.journal.paths.artifacts)) for path in self.journal.paths.artifacts.rglob("*") if path.is_file() and str(path.relative_to(self.journal.paths.artifacts)) not in known)
         return report
 
+    def pause_for_host_safety(self, session_id: str, blockers: list[str]) -> bool:
+        """Durably pause active work after a host-readiness guard trips."""
+
+        reasons = [str(item).strip()[:256] for item in blockers if str(item).strip()]
+        if not reasons:
+            return False
+        with self.journal.transaction() as tx:
+            row = tx.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
+            if row is None:
+                raise NotFoundError(f"session {session_id} does not exist")
+            session = self._session_from_row(row)
+            if session.phase in {
+                SessionPhase.PAUSED,
+                SessionPhase.COMPLETED,
+                SessionPhase.STOPPED,
+            }:
+                return False
+            live_job = tx.execute(
+                "SELECT 1 FROM jobs WHERE session_id=? AND state IN ('admitted','running') LIMIT 1",
+                (session_id,),
+            ).fetchone()
+            active_work = session.phase in ACTIVE_PHASES or live_job is not None
+            if not active_work:
+                return False
+            self.journal.append_event(
+                tx,
+                kind="host.readiness_blocked",
+                session_id=session_id,
+                subject_id=session_id,
+                data={"blockers": reasons},
+            )
+            self._transition_phase_in_tx(
+                tx,
+                session_id,
+                SessionPhase.PAUSED,
+                "host readiness guard: " + "; ".join(reasons),
+            )
+            return True
+
     def report_usage(self, update: UsageUpdate) -> UsageResult:
         return self.budgets.report_usage(update)
 

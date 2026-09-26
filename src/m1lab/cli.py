@@ -1033,11 +1033,19 @@ async def _run_investigation(
         workspace=settings.workspace,
         host_blockers=_host_blocker_reader(settings),
     )
+    facade = CoordinatorFacade(core, request.session_id, investigator=orchestrator)
+    safety_task = asyncio.create_task(facade.run_host_safety())
     try:
+        await asyncio.sleep(0)
         launch = await orchestrator.start(request)
         record = await orchestrator.wait(launch.job_id)
         return record.model_dump(mode="json")
     finally:
+        safety_task.cancel()
+        try:
+            await safety_task
+        except asyncio.CancelledError:
+            pass
         await orchestrator.close()
 
 

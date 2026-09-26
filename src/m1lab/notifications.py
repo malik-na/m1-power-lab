@@ -36,6 +36,7 @@ _RECOVERY_EVENTS = frozenset(
         "budget.usage_uncertain",
         "budget.active_time_reconciled",
         "artifact.unavailable",
+        "host.readiness_blocked",
     }
 )
 

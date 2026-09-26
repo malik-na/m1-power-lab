@@ -104,6 +104,13 @@ record is created leaves a failed job record and releases its reservation; it
 does not start Codex. These checks do not qualify sleep inhibition, lid
 behavior, shutdown handling, or the correctness of the T480's sensors.
 
+While the app-server runtime is enabled, the coordinator repeats these host
+checks every five seconds. A blocker or failed readiness sample pauses active
+work, records `host.readiness_blocked`, and requests interruption of live
+Codex jobs. The owner must inspect the cause and resume explicitly after host
+readiness returns; recovery never auto-resumes paid work. On service shutdown,
+the runtime is interrupted through its normal close path.
+
 Sleep and lid inhibition is opt-in. Set `M1LAB_INHIBIT_SLEEP=1` in the
 root-owned environment file to run the service under `systemd-inhibit` with
 sleep, idle, and lid-switch handling locks. The locks exist only while the

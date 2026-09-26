@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta
 import json
+import logging
 import os
 from typing import Any
 
@@ -54,6 +55,8 @@ _COMMANDS: dict[str, CommandKind] = {
     "approval.deny": CommandKind.DENY,
     "approval.revoke": CommandKind.REVOKE,
 }
+
+_LOG = logging.getLogger(__name__)
 
 
 def latest_session_id(core: CoreApp) -> str | None:
@@ -110,6 +113,30 @@ class CoordinatorFacade:
 
     async def run_push_notifications(self) -> None:
         await self.push_notifications.run()
+
+    async def run_host_safety(self) -> None:
+        """Pause active work and interrupt Codex when host readiness is lost."""
+
+        if self.investigator is None:
+            return
+        while True:
+            try:
+                blockers = HostAdmissionPolicy().blockers(self.host_monitor.sample())
+            except Exception:
+                _LOG.exception("host readiness sample failed")
+                blockers = ["host readiness could not be sampled"]
+            try:
+                if blockers and self.core.pause_for_host_safety(self.session_id, blockers):
+                    interrupted, failures = await self._interrupt_active_jobs()
+                    _LOG.warning(
+                        "host readiness paused session %s; interruption requested for %s job(s), %s failed",
+                        self.session_id,
+                        interrupted,
+                        failures,
+                    )
+            except Exception:
+                _LOG.exception("host readiness safety action failed")
+            await asyncio.sleep(5)
 
     def _require_push_owner(self, owner: Owner) -> None:
         if owner.login != self.core.session(self.session_id).owner:
