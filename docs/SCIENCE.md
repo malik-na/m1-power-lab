@@ -77,6 +77,20 @@ Codex must compare the selected experiment's decision value and total cost
 alternative. These estimates are advisory; coordinator budget and operation
 checks remain authoritative.
 
+New or materially revised hypothesis proposals include the complete fields of a
+`HypothesisRecord`, including a primary metric, falsifiers and references to
+already published evidence. They are not added to the durable graph
+automatically. After reviewing a completed turn, publish them explicitly with
+stable IDs derived from that immutable job:
+
+```bash
+m1lab --session SESSION_ID science hypotheses --job-id JOB_ID
+```
+
+The command validates the prior evidence references against the selected
+session. Repeating the command for the same completed job returns the same
+records rather than duplicating them.
+
 When a derived result exists, Codex also returns a typed `scientific_decision`
 bound to its exact hypothesis, protocol, and result IDs. It must cite the result
 in supporting or counterevidence, explain `decision_delta`, and propose a

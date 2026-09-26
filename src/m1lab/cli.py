@@ -216,6 +216,10 @@ def parser() -> argparse.ArgumentParser:
     decision_source = science_decision.add_mutually_exclusive_group(required=True)
     decision_source.add_argument("path", nargs="?", type=Path, help="completed Codex output JSON")
     decision_source.add_argument("--job-id", help="read the completed Codex output from this durable job")
+    science_hypotheses = science_commands.add_parser(
+        "hypotheses", help="publish typed hypothesis proposals from a completed Codex job"
+    )
+    science_hypotheses.add_argument("--job-id", required=True)
     science_commands.add_parser("list", help="list validated scientific records")
     science_commands.add_parser("brief", help="build a compact evidence brief")
     science_derive = science_commands.add_parser(
@@ -580,8 +584,14 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
                 raise ValueError("no scientific records are published for this session")
             return store.brief(published[:64]).model_dump(mode="json")
         document = (
-            _completed_codex_output(core, session_id, args.job_id)
-            if args.science_action == "decision" and args.job_id
+            _completed_codex_output(
+                core,
+                session_id,
+                args.job_id,
+                field="hypotheses" if args.science_action == "hypotheses" else "scientific_decision",
+            )
+            if args.science_action == "hypotheses"
+            or (args.science_action == "decision" and args.job_id)
             else json.loads(args.path.read_text(encoding="utf-8"))
         )
         if args.science_action == "publish":
@@ -594,6 +604,8 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
             return _derive_scientific_result(store, session_id, document)
         if args.science_action == "decision":
             return _publish_codex_decision(store, session_id, document)
+        if args.science_action == "hypotheses":
+            return _publish_codex_hypotheses(store, session_id, args.job_id, document)
         if args.science_action == "checkpoint":
             checkpoint = document.get("redesign_checkpoint") if isinstance(document, dict) else None
             if not isinstance(checkpoint, dict) or checkpoint.get("required") is not True:
@@ -688,12 +700,14 @@ def _derive_scientific_result(
     return published.model_dump(mode="json")
 
 
-def _completed_codex_output(core: CoreApp, session_id: str, job_id: str) -> dict[str, Any]:
+def _completed_codex_output(
+    core: CoreApp, session_id: str, job_id: str, *, field: str = "scientific_decision"
+) -> dict[str, Any]:
     job = core.job(job_id)
     if job.session_id != session_id:
         raise ValueError("Codex job does not belong to the selected session")
     if job.state != "completed":
-        raise ValueError("scientific decisions can only be published from a completed Codex job")
+        raise ValueError("scientific proposals can only be published from a completed Codex job")
     artifact_ids = job.result.get("event_artifact_ids", [])
     if not isinstance(artifact_ids, list) or any(not isinstance(item, str) for item in artifact_ids):
         raise ValueError("completed Codex job has no valid runtime event artifact list")
@@ -708,9 +722,15 @@ def _completed_codex_output(core: CoreApp, session_id: str, job_id: str) -> dict
         except (CoreError, OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, RecursionError):
             continue
         for candidate in reversed(_structured_output_candidates(payload)):
-            if isinstance(candidate.get("scientific_decision"), dict):
+            value = candidate.get(field)
+            valid_value = (
+                isinstance(value, list)
+                if field == "hypotheses"
+                else isinstance(value, dict)
+            )
+            if valid_value:
                 return candidate
-    raise ValueError("completed Codex job contains no structured scientific_decision output")
+    raise ValueError(f"completed Codex job contains no structured {field} output")
 
 
 def _structured_output_candidates(value: Any) -> list[dict[str, Any]]:
@@ -719,7 +739,7 @@ def _structured_output_candidates(value: Any) -> list[dict[str, Any]]:
     while stack:
         current = stack.pop()
         if isinstance(current, dict):
-            if "scientific_decision" in current:
+            if "scientific_decision" in current or "hypotheses" in current:
                 candidates.append(current)
             stack.extend(current.values())
         elif isinstance(current, list):
@@ -813,6 +833,43 @@ def _publish_codex_decision(
         "decision": published_decision.model_dump(mode="json"),
         "claim_evidence": [item.model_dump(mode="json") for item in published_claims],
     }
+
+
+def _publish_codex_hypotheses(
+    store: ScientificRecordStore, session_id: str, job_id: str, document: Any
+) -> list[dict[str, Any]]:
+    if not isinstance(document, dict) or not isinstance(document.get("hypotheses"), list):
+        raise ValueError("Codex output must contain a hypotheses array")
+    proposals = document["hypotheses"]
+    if not proposals:
+        raise ValueError("Codex output contains no hypothesis proposals")
+    fields = {
+        "mode", "statement", "proposed_mechanism", "predicted_effect",
+        "primary_metric", "falsifiers", "prior_evidence_refs",
+    }
+    existing = {item.record.id: item for item in store.list(session_id)}
+    published = []
+    for index, proposal in enumerate(proposals):
+        if not isinstance(proposal, dict) or set(proposal) != fields:
+            raise ValueError("hypothesis proposals have unknown or missing fields")
+        stable_id = "hyp_codex_" + hashlib.sha256(
+            f"{job_id}:{index}".encode("utf-8")
+        ).hexdigest()[:24]
+        record = HypothesisRecord.model_validate(
+            {**proposal, "id": stable_id, "session_id": session_id}
+        )
+        prior = existing.get(stable_id)
+        if prior is not None:
+            if prior.record.model_dump(exclude={"created_at"}) != record.model_dump(
+                exclude={"created_at"}
+            ):
+                raise ValueError("hypothesis proposal ID conflicts with an existing record")
+            published.append(prior)
+            continue
+        item = store.publish(record)
+        existing[stable_id] = item
+        published.append(item)
+    return [item.model_dump(mode="json") for item in published]
 
 
 def _submit(core: CoreApp, session: Any, kind: CommandKind, payload: dict[str, Any], revision: int | None) -> dict[str, Any]:

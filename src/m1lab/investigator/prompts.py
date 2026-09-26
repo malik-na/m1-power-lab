@@ -67,11 +67,18 @@ OUTPUT_SCHEMA: dict[str, Any] = {
             "items": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["statement", "confidence", "rationale"],
+                "required": [
+                    "mode", "statement", "proposed_mechanism", "predicted_effect",
+                    "primary_metric", "falsifiers", "prior_evidence_refs",
+                ],
                 "properties": {
+                    "mode": {"type": "string", "enum": ["exploration", "confirmation"]},
                     "statement": {"type": "string"},
-                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                    "rationale": {"type": "string"},
+                    "proposed_mechanism": {"type": "string"},
+                    "predicted_effect": {"type": "string"},
+                    "primary_metric": {"type": "string"},
+                    "falsifiers": {"type": "array", "items": {"type": "string"}},
+                    "prior_evidence_refs": {"type": "array", "items": {"type": "string"}},
                 },
             },
         },
@@ -507,7 +514,7 @@ def build_prompt(request: InvestigationRequest, manifest: Mapping[str, Any]) -> 
     role_instructions = (
         "Review only the exact registered procedure revision and digest in the manifest. Populate "
         "procedure_review with an evidence-backed accepted, changes_required, or rejected disposition. "
-        "Do not rewrite or register a procedure. Set proposed_experiments to an empty array and "
+        "Do not rewrite or register a procedure. Set proposed_experiments and hypotheses to empty arrays and "
         "scientific_decision to null. Set "
         "redesign_checkpoint.required only when the scientific brief explicitly requires one; never "
         "treat review of an existing procedure as permission to bypass it."
@@ -518,6 +525,9 @@ def build_prompt(request: InvestigationRequest, manifest: Mapping[str, Any]) -> 
         "a typed procedure draft candidate whose expected_benefit preserves the decision-value rationale "
         "and selected-versus-cheaper cost comparison. The owner must validate and register it, then run a "
         "separate completed review job on that exact immutable revision before approval. If the brief "
+        "contains a new or materially revised explanation, provide it as a complete typed hypothesis "
+        "proposal with prior evidence references; the owner publishes it explicitly from this completed job. "
+        "Do not repeat unchanged hypotheses already present in the manifest. If the brief "
         "requires a redesign checkpoint, set required=true, cite the exact two inconclusive derived "
         "result IDs in chronological order, explain the design findings, and state a concrete redesign "
         "before recommending another experiment for that hypothesis. Set procedure_review to null. If the "
