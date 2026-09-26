@@ -227,6 +227,10 @@ switch_release() {
     echo "release is missing its m1lab executable: $release_path" >&2
     exit 1
   }
+  runuser -u "$SERVICE_USER" -- "$release_path/.venv/bin/m1lab" --help >/dev/null || {
+    echo "service account cannot run the selected release: $release_path" >&2
+    exit 1
+  }
   temporary_link="$APP_ROOT/.current.$$.next"
   rm -f -- "$temporary_link"
   ln -s "releases/$release_id" "$temporary_link"
@@ -267,8 +271,12 @@ if [[ -e "$release_path" || -L "$release_path" ]]; then
   echo "resuming installation of completed release $release_id ($source_commit)"
 else
   staging=$(mktemp -d "$APP_ROOT/releases/.staging.XXXXXX")
+  created_release=
   cleanup() {
     if [[ -n ${staging:-} && -d $staging ]]; then rm -rf -- "$staging"; fi
+    if [[ -n ${created_release:-} && -d $created_release ]]; then
+      rm -rf -- "$created_release"
+    fi
   }
   trap cleanup EXIT
   git_repo archive --format=tar HEAD | tar -xf - -C "$staging"
@@ -276,14 +284,17 @@ else
   install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 \
     "$STATE_ROOT" "$STATE_ROOT/workspace" "$STATE_ROOT/codex"
   install -d -o root -g root -m 0755 "$APP_ROOT/releases"
-  python3 -m venv "$staging/.venv"
-  "$staging/.venv/bin/python" -m pip install --requirement "$staging/requirements.lock"
-  "$staging/.venv/bin/python" -m pip install --no-deps "$staging"
-  printf '%s\n' "$source_commit" > "$staging/.m1lab-release-commit"
-  chown -R root:root "$staging"
-  chmod -R go-w "$staging"
   mv -- "$staging" "$release_path"
   staging=
+  created_release=$release_path
+  python3 -m venv "$release_path/.venv"
+  "$release_path/.venv/bin/python" -m pip install --requirement "$release_path/requirements.lock"
+  "$release_path/.venv/bin/python" -m pip install --no-deps "$release_path"
+  chown -R root:root "$release_path"
+  chmod -R go-w "$release_path"
+  chmod 0755 "$release_path"
+  printf '%s\n' "$source_commit" > "$release_path/.m1lab-release-commit"
+  created_release=
 fi
 
 # mktemp creates the staging directory as 0700. The root-owned release must be
