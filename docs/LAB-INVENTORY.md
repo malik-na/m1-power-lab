@@ -39,11 +39,11 @@ record its current commit and whether tracked files are modified. The inventory
 contains only the change count, not repository paths or file contents; untracked
 files are excluded from this status summary.
 Review the JSON before attaching it to the lab record. It records available
-versions of Git, native and AArch64 cross compilers, Make, CMake, and Ninja to
-support build provenance. USB enumeration is separate and opt-in with
-`--include-usb`; defer it until the owner is ready to inventory the connection.
-Even then, cable identity, physical port mapping, target recovery, and mode
-qualification require owner-observed entries below.
+versions of Git, native and AArch64 cross compilers, Rust/Cargo, Make, CMake,
+and Ninja to support build provenance. USB enumeration is separate and opt-in
+with `--include-usb`; defer it until the owner is ready to inventory the
+connection. Even then, cable identity, physical port mapping, target recovery,
+and mode qualification require owner-observed entries below.
 
 | Field | State | Required observation |
 |---|---|---|

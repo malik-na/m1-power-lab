@@ -234,6 +234,8 @@ def collect(repo: Path | None, *, include_usb: bool = False) -> dict[str, object
                 "aarch64_none_elf_gcc": command_version(
                     "aarch64-none-elf-gcc", ["--version"]
                 ),
+                "rustc": command_version("rustc", ["--version"]),
+                "cargo": command_version("cargo", ["--version"]),
                 "make": command_version("make", ["--version"]),
                 "cmake": command_version("cmake", ["--version"]),
                 "ninja": command_version("ninja", ["--version"]),
