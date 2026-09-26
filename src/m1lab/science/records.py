@@ -623,7 +623,12 @@ class ScientificRecordStore:
         )
         claim_records = [item.record for item in history if isinstance(item.record, ClaimEvidence)]
         result = next(reversed(results), None)
-        hypothesis = next(reversed(hypotheses), None)
+        selected_record = decision or result
+        hypothesis = (
+            next((item for item in hypotheses if item.id == selected_record.hypothesis_id), None)
+            if selected_record is not None
+            else next(reversed(hypotheses), None)
+        )
         counter = (
             tuple(_compact(evidence.rationale) for evidence in decision.counterevidence[:12])
             if decision
@@ -740,6 +745,7 @@ def _latest_inconclusive_pair(
             for record in records.values()
             if isinstance(record, DerivedResultRecord)
             and record.hypothesis_id == hypothesis_id
+            and record.outcome != OutcomeCategory.INVALID
             and (checkpoint is None or record.derived_at > checkpoint.created_at)
         ),
         key=lambda item: item.derived_at,
@@ -793,6 +799,8 @@ def _uninformative_streaks(
             latest_checkpoint_at[checkpoint.hypothesis_id] = checkpoint.created_at
     grouped: dict[str, list[DerivedResultRecord]] = {}
     for result in results:
+        if result.outcome == OutcomeCategory.INVALID:
+            continue
         checkpoint_at = latest_checkpoint_at.get(result.hypothesis_id)
         if checkpoint_at is not None and result.derived_at <= checkpoint_at:
             continue
