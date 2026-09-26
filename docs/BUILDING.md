@@ -81,9 +81,11 @@ m1lab --session SESSION_ID native-launch \
 
 `m1lab native-import` preserves a saved framed stream and a normalized,
 credential-screened capture artifact after checking framing, digests, sequence,
-launch binding, and output bounds. Raw binary frames are not inserted into
-Codex context; use the screened decoded artifact for analysis. Offline import
-explicitly records `physical_source_verified=false` and
+launch binding, output bounds, and the collector record schema. The screened
+view rejects duplicate JSON keys and is rebuilt from the recognized fields.
+Raw binary frames are not inserted into Codex context; use the screened
+decoded artifact for analysis. Offline import explicitly records
+`physical_source_verified=false` and
 `capture_timing_verified=false`; even a protocol-complete file is not a
 verified target observation or a scientific measurement. The future live
 adapter must receive frames before the launch deadline and establish the
