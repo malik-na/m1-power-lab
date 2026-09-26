@@ -27,8 +27,8 @@ ThinkPad host or a ThinkPad-to-Mac connection.
 
 ## Planned host and physical connection
 
-For the next T480 visit, collect current host facts without opening USB
-devices or recording their serial numbers:
+On the ThinkPad, collect host facts without sampling USB devices or recording
+their serial numbers:
 
 ```bash
 python3 scripts/collect-host-inventory.py --output /tmp/t480-host-inventory.json
@@ -38,12 +38,12 @@ If the host m1n1 source checkout is available, add `--m1n1-repo PATH` to
 record its current commit and whether tracked files are modified. The inventory
 contains only the change count, not repository paths or file contents; untracked
 files are excluded from this status summary.
-Review the JSON before attaching it to the lab record. The collector reports
-only currently enumerated USB product IDs, labels, sysfs port paths, and
-device-node permissions; cable identity, physical port mapping, target recovery,
-and mode qualification still require owner-observed entries below.
-It records available versions of Git, native and AArch64 cross compilers, Make,
-CMake, and Ninja to support build provenance.
+Review the JSON before attaching it to the lab record. It records available
+versions of Git, native and AArch64 cross compilers, Make, CMake, and Ninja to
+support build provenance. USB enumeration is separate and opt-in with
+`--include-usb`; defer it until the owner is ready to inventory the connection.
+Even then, cable identity, physical port mapping, target recovery, and mode
+qualification require owner-observed entries below.
 
 | Field | State | Required observation |
 |---|---|---|
@@ -68,8 +68,8 @@ CMake, and Ninja to support build provenance.
 
 1. Run the host-side inventory on the ThinkPad T480; this must be done in its
    own shell because the current shell is on the Mac.
-2. With the owner present, identify the cable and ports and collect USB device
-   identity and permission evidence on the ThinkPad.
+2. With the owner present, identify the cable and ports and opt in to USB
+   device identity and permission inventory on the ThinkPad.
 3. Record host and target m1n1 revisions and build details.
 4. Keep proxy, hypervisor, and native modes gated until the matching recovery
    path and owner-attendance requirements are demonstrated.

@@ -191,7 +191,7 @@ def m1n1_repository(path: Path | None) -> dict[str, object]:
     }
 
 
-def collect(repo: Path | None) -> dict[str, object]:
+def collect(repo: Path | None, *, include_usb: bool = False) -> dict[str, object]:
     model = read_text(SYS / "firmware/devicetree/base/model")
     try:
         memory = next(
@@ -207,6 +207,7 @@ def collect(repo: Path | None) -> dict[str, object]:
         "collection": {
             "read_only": True,
             "usb_devices_opened": False,
+            "usb_devices_enumerated": include_usb,
             "serial_numbers_collected": False,
             "limitations": [
                 "Does not establish cable identity, physical port mapping, recovery, or target mode qualification.",
@@ -241,7 +242,7 @@ def collect(repo: Path | None) -> dict[str, object]:
             },
             "m1n1_repository": m1n1_repository(repo),
         },
-        "usb_devices": usb_devices(),
+        "usb_devices": usb_devices() if include_usb else [],
         "target_qualification": {
             "proxy": "unqualified",
             "hypervisor": "unqualified",
@@ -262,11 +263,18 @@ def collect(repo: Path | None) -> dict[str, object]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--m1n1-repo", type=Path, help="optional host m1n1 source checkout")
+    parser.add_argument(
+        "--include-usb",
+        action="store_true",
+        help="also enumerate USB device metadata and permissions",
+    )
     parser.add_argument("--output", type=Path, help="write JSON to this path (mode 0600)")
     args = parser.parse_args()
     if not sys.platform.startswith("linux"):
         raise SystemExit("host inventory collection requires Linux")
-    document = json.dumps(collect(args.m1n1_repo), indent=2, sort_keys=True) + "\n"
+    document = json.dumps(
+        collect(args.m1n1_repo, include_usb=args.include_usb), indent=2, sort_keys=True
+    ) + "\n"
     if args.output is None:
         print(document, end="")
         return

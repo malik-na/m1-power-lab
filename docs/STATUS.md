@@ -13,6 +13,7 @@ This file distinguishes implemented behavior from physical qualification.
 | Owner web UI | Host rendered | Four responsive views, revisioned commands, SSE and local/Tailscale identity modes |
 | Owner push notifications | Explicit subscription management and generic deduplicated delivery implemented | VAPID configuration and actual iPhone delivery remain unqualified |
 | ThinkPad service deployment | Guarded immutable release install and rollback implemented; host deployment pending | [Operations guide](OPERATIONS.md); install, service readiness, release rollback, restore, and uninstall are not yet qualified on the T480 |
+| ThinkPad host inventory | Read-only host/software inventory implemented; T480 observation pending | USB enumeration is opt-in and remains deferred with physical connection inventory |
 | ThinkPad lab availability | AC, thermal, disk, and explicitly requested inhibitor state gate and supervise Codex jobs; opt-in systemd sleep/lid inhibitor and status reporting implemented | Five-second readiness supervision pauses active phases and interrupts live Codex jobs while preserving review/approval waits; inhibitor acquisition/release, actual sensor, AC-loss, thermal-pressure, and shutdown behavior still need T480 qualification |
 | Tailscale on ThinkPad | Pending physical setup | Configure Serve, exact owner login and tailnet policy; verify no Funnel |
 | iPhone 12 mini | Pending physical check | Verify all views, Home Screen install, reconnect and approval handling |
