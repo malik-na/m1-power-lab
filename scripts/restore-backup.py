@@ -37,7 +37,7 @@ def restore(bundle: Path, root: Path) -> None:
         except BlockingIOError as exc:
             raise SystemExit("coordinator is running; stop it before restoring") from exc
 
-        with tempfile.TemporaryDirectory(prefix=".m1lab-restore-", dir=root.parent) as temporary:
+        with tempfile.TemporaryDirectory(prefix=".m1lab-restore-", dir=root) as temporary:
             stage = Path(temporary)
             database = stage / "m1lab.sqlite3"
             artifact_root = stage / "artifacts"
