@@ -34,9 +34,11 @@ flowchart LR
   transports wrap each JSON message in a four-byte big-endian payload length;
   incomplete frames and trailing bytes fail closed. The blocking stream
   helpers handle short reads and writes; a transport caller must enforce its
-  deadline. The experiment service also checks the adapter's operation ID and
-  response timing, preserving late results as evidence while recording their
-  effects as unknown.
+  deadline. Deadline-bound descriptor helpers require a caller-owned,
+  nonblocking file descriptor and a monotonic deadline; they do not open or
+  configure a device. The experiment service also checks the adapter's
+  operation ID and response timing, preserving late results as evidence while
+  recording their effects as unknown.
 - The current build accepts only `ReplayHardwareAdapter`. The m1n1 adapter is
   an unavailable object that opens no device.
 - The helper codec does not open USB or serial devices. The helper process,

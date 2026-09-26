@@ -13,7 +13,10 @@ import binascii
 from datetime import datetime
 import json
 import math
+import os
+import select
 import struct
+import time
 from typing import Any, BinaryIO
 
 from .hardware import (
@@ -112,6 +115,101 @@ def write_helper_frame(stream: BinaryIO, payload: bytes, *, maximum: int) -> Non
     flush = getattr(stream, "flush", None)
     if flush is not None:
         flush()
+
+
+def read_helper_frame_until(
+    fd: int, *, maximum: int, deadline_monotonic: float
+) -> bytes:
+    """Read one bounded frame from a nonblocking descriptor before a deadline.
+
+    The caller owns and configures the descriptor. Any timeout or framing error
+    after dispatch must be treated as an unknown effect; this function never
+    retries an operation.
+    """
+
+    _require_nonblocking_fd(fd)
+    header = _read_fd_exact_until(fd, HELPER_FRAME_HEADER_BYTES, deadline_monotonic)
+    (length,) = struct.unpack("!I", header)
+    if length == 0 or length > maximum:
+        raise HelperProtocolError("helper frame length is empty or exceeds its bound")
+    return header + _read_fd_exact_until(fd, length, deadline_monotonic)
+
+
+def write_helper_frame_until(
+    fd: int,
+    payload: bytes,
+    *,
+    maximum: int,
+    deadline_monotonic: float,
+) -> None:
+    """Write one complete bounded frame to a nonblocking descriptor by deadline."""
+
+    _require_nonblocking_fd(fd)
+    remaining = memoryview(add_length_prefix(payload, maximum=maximum))
+    while remaining:
+        _wait_for_fd(fd, writable=True, deadline_monotonic=deadline_monotonic)
+        try:
+            written = os.write(fd, remaining)
+        except BlockingIOError:
+            continue
+        except InterruptedError:
+            continue
+        if written <= 0:
+            raise HelperProtocolError("helper descriptor closed or refused a frame write")
+        remaining = remaining[written:]
+
+
+def _read_fd_exact_until(fd: int, size: int, deadline_monotonic: float) -> bytes:
+    chunks = bytearray()
+    while len(chunks) < size:
+        _wait_for_fd(fd, writable=False, deadline_monotonic=deadline_monotonic)
+        try:
+            chunk = os.read(fd, size - len(chunks))
+        except BlockingIOError:
+            continue
+        except InterruptedError:
+            continue
+        if not chunk:
+            raise HelperProtocolError("helper descriptor closed before the frame was complete")
+        chunks.extend(chunk)
+    return bytes(chunks)
+
+
+def _wait_for_fd(fd: int, *, writable: bool, deadline_monotonic: float) -> None:
+    if type(deadline_monotonic) not in (int, float):
+        raise ValueError("helper deadline must be a finite monotonic timestamp")
+    try:
+        finite_deadline = math.isfinite(deadline_monotonic)
+    except OverflowError:
+        finite_deadline = False
+    if not finite_deadline:
+        raise ValueError("helper deadline must be a finite monotonic timestamp")
+    while True:
+        remaining = deadline_monotonic - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("helper frame deadline expired")
+        try:
+            readable, writable_fds, _ = select.select(
+                [] if writable else [fd],
+                [fd] if writable else [],
+                [],
+                min(remaining, 60.0),
+            )
+        except InterruptedError:
+            continue
+        if (writable and writable_fds) or (not writable and readable):
+            return
+
+
+def _require_nonblocking_fd(fd: int) -> None:
+    if type(fd) is not int or fd < 0:
+        raise ValueError("helper descriptor must be a non-negative file descriptor")
+    try:
+        blocking = os.get_blocking(fd)
+    except OSError as exc:
+        raise HelperProtocolError("helper descriptor is unavailable") from exc
+    if blocking:
+        raise HelperProtocolError("deadline-bound helper I/O requires a nonblocking descriptor")
 
 
 def _read_exact(stream: BinaryIO, size: int) -> bytes:
