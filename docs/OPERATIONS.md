@@ -128,8 +128,13 @@ sudo -u m1lab env M1LAB_DATA_DIR=/var/lib/m1-power-lab \
   --owner owner@example.com --target-identity m1-target
 sudo systemctl enable --now m1-power-lab
 sudo systemctl --no-pager status m1-power-lab
-sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab diagnostics
+sudo -u m1lab env M1LAB_DATA_DIR=/var/lib/m1-power-lab \
+  /opt/m1-power-lab/current/.venv/bin/m1lab diagnostics
 ```
+
+Service-account CLI commands do not inherit the systemd service environment.
+Set `M1LAB_DATA_DIR=/var/lib/m1-power-lab` explicitly, as in these examples,
+to use the deployed journal and selected session.
 
 On each service start, `m1lab serve` takes the coordinator lock and reconciles
 the durable journal before opening the HTTP listener. Startup refuses a journal
@@ -292,7 +297,8 @@ Create a verified bundle before every update and keep it with the release that
 created it:
 
 ```bash
-sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab \
+sudo -u m1lab env M1LAB_DATA_DIR=/var/lib/m1-power-lab \
+  /opt/m1-power-lab/current/.venv/bin/m1lab \
   backup-bundle /var/lib/m1-power-lab/pre-update.zip
 ```
 
@@ -340,18 +346,24 @@ the maintenance check, create a verified backup, then install and start the
 new release:
 
 ```bash
-sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab status
-sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab jobs
-sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab control pause
+sudo -u m1lab env M1LAB_DATA_DIR=/var/lib/m1-power-lab \
+  /opt/m1-power-lab/current/.venv/bin/m1lab status
+sudo -u m1lab env M1LAB_DATA_DIR=/var/lib/m1-power-lab \
+  /opt/m1-power-lab/current/.venv/bin/m1lab jobs
+sudo -u m1lab env M1LAB_DATA_DIR=/var/lib/m1-power-lab \
+  /opt/m1-power-lab/current/.venv/bin/m1lab control pause
 sudo systemctl stop m1-power-lab
 sudo scripts/release.sh check
-sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab backup-bundle \
+sudo -u m1lab env M1LAB_DATA_DIR=/var/lib/m1-power-lab \
+  /opt/m1-power-lab/current/.venv/bin/m1lab backup-bundle \
   /var/lib/m1-power-lab/pre-update.zip
 RELEASE_ID=$(git rev-parse --short HEAD)
 sudo scripts/release.sh install "$RELEASE_ID"
 sudo systemctl start m1-power-lab
-sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab diagnostics
-sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab status
+sudo -u m1lab env M1LAB_DATA_DIR=/var/lib/m1-power-lab \
+  /opt/m1-power-lab/current/.venv/bin/m1lab diagnostics
+sudo -u m1lab env M1LAB_DATA_DIR=/var/lib/m1-power-lab \
+  /opt/m1-power-lab/current/.venv/bin/m1lab status
 ```
 
 To roll back code, stop the service and atomically point `current` at the prior
@@ -363,8 +375,10 @@ release.
 sudo systemctl stop m1-power-lab
 sudo /opt/m1-power-lab/current/scripts/release.sh switch OLD_RELEASE
 sudo systemctl start m1-power-lab
-sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab diagnostics
-sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab status
+sudo -u m1lab env M1LAB_DATA_DIR=/var/lib/m1-power-lab \
+  /opt/m1-power-lab/current/.venv/bin/m1lab diagnostics
+sudo -u m1lab env M1LAB_DATA_DIR=/var/lib/m1-power-lab \
+  /opt/m1-power-lab/current/.venv/bin/m1lab status
 ```
 
 ## Uninstall
@@ -388,13 +402,18 @@ applications, preserve their routes and remove only the lab proxy through
 the Tailscale configuration instead.
 
 ```bash
-sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab status
-sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab jobs
-sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab control pause
-sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab jobs
+sudo -u m1lab env M1LAB_DATA_DIR=/var/lib/m1-power-lab \
+  /opt/m1-power-lab/current/.venv/bin/m1lab status
+sudo -u m1lab env M1LAB_DATA_DIR=/var/lib/m1-power-lab \
+  /opt/m1-power-lab/current/.venv/bin/m1lab jobs
+sudo -u m1lab env M1LAB_DATA_DIR=/var/lib/m1-power-lab \
+  /opt/m1-power-lab/current/.venv/bin/m1lab control pause
+sudo -u m1lab env M1LAB_DATA_DIR=/var/lib/m1-power-lab \
+  /opt/m1-power-lab/current/.venv/bin/m1lab jobs
 sudo systemctl stop m1-power-lab
 sudo /opt/m1-power-lab/current/scripts/release.sh check
-sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab backup-bundle \
+sudo -u m1lab env M1LAB_DATA_DIR=/var/lib/m1-power-lab \
+  /opt/m1-power-lab/current/.venv/bin/m1lab backup-bundle \
   /var/lib/m1-power-lab/final-backup.zip
 sudo systemctl disable m1-power-lab
 sudo rm -f /etc/systemd/system/m1-power-lab.service \

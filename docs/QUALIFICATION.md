@@ -18,26 +18,52 @@
   mode, with provider-reported usage of 19,816 tokens and no usage uncertainty.
   The replacement session `session_f73011ac092642b88fabdccbaba723ff` was
   stopped after qualification. A new owner-matched session
-  `session_6419f91cb6c943af80b4f3ad9ad1c067` is paused, with the prior
+  `session_6419f91cb6c943af80b4f3ad9ad1c067` was initially paused, with the prior
   remaining token and time allowances carried forward conservatively. No
   physical M1 observation was made.
 - The configured Codex executable SHA-256 is verified before app-server startup.
 - Live app-server startup, authenticated completion, and terminal usage are
-  demonstrated on the T480. Cancellation, sandbox escape checks, and recovery
+  demonstrated on the T480. A service-hosted turn also accepted cancellation
+  and reached `interrupted`; terminal usage, sandbox escape checks, and recovery
   from interrupted live turns remain unqualified.
 - A subsequent chat through the deployed `3c49b9e` service failed before a
   model turn: Bubblewrap reported `Can't mkdir parents for /: Function not
   implemented` while loading AGENTS.md. A thread-start-only probe in a
   temporary unit reproduced the same error in 2.497 seconds. Changing only
   `RestrictSUIDSGID` to `no` passed with active profile `m1lab-read-only` in
-  1.800 seconds. The prepared service fix is `193dd7e`; deployment is pending
-  exact owner approval of this property change.
+  1.800 seconds. Exact owner approval of this property change was received;
+  release `f560929`, including service fix `193dd7e`, is now installed and
+  the service is active with zero observed restarts. HTTPS `/overview` returns
+  200 and push remains enabled and enrolled. Effective properties confirm
+  `RestrictSUIDSGID=no`, `NoNewPrivileges=yes`, `PrivateDevices=yes`,
+  `ProtectSystem=strict`, and `ProtectHome=yes`. A verified pre-update bundle
+  was created before installation.
   The failed job `job_b9f0d62514ce4f54bf27a583f8d9c005` remains in history.
   Its usage hold was resolved with a zero additional token bound using the
   [pinned Codex source](https://github.com/openai/codex/blob/rust-v0.156.0/codex-rs/core/src/session/session.rs#L1391): the AGENTS.md refresh failure aborts before model
   client construction, prewarming, or submission-loop creation. This
   evidence applies only to that exact failure; generic internal RPC errors
-  remain uncertain. The session is paused.
+  remain uncertain. The session was paused after this failure.
+- On release `f560929`, one controlled service-hosted `gpt-6-sol` medium
+  turn reached running and accepted an HTTPS interruption request (202) after
+  ten seconds. Job `job_8d593331ce6f4e2b8e1d6ba95cf58cd2` reached
+  `interrupted`; token and active-time reservations were released. The session
+  was then confirmed paused. Provider usage was not reported, so usage remains
+  uncertain and new model admission remains blocked. No usage bound was
+  invented, no retry launched, and the earlier unknown job remains in history.
+  This demonstrates cancellation and conservative accounting behavior, not
+  complete interrupted-turn usage reconciliation or recovery.
+- On 2026-09-26 the T480 passed three synthetic scientific-cycle integration
+  cases, eight maintenance regression cases, and the full suite of 49 tests
+  in 2.85 seconds. Science cases cover decision lineage, evidence and brief
+  persistence on reopening, and redesign after two valid inconclusive results,
+  including an intervening invalid result. They use no model calls or physical
+  M1 evidence. M3 remains partial: they do not demonstrate a changed leading
+  explanation, selection between experiments by cost, closure of a contradicted
+  hypothesis, or job restart without expanded authority. Maintenance cases
+  preserve historical unknown jobs, permit maintenance after usage resolution,
+  and retain guards for active jobs, operations, reservations, and active time;
+  mocked service/account commands do not qualify live process cleanup.
 - Opt-in lab mode on release `3c49b9e` acquired a logind block inhibitor for
   `sleep:idle:handle-lid-switch` as `m1lab` while the service was active and
   `/overview` returned HTTP 200. The inhibitor disappeared after service stop;
