@@ -15,6 +15,7 @@ from m1lab.adapters.runtime import (
     NoopCodexAdapter,
     RuntimeEvent,
     RuntimeRequestNotSent,
+    RuntimeRequestRejected,
     RuntimeUnavailable,
     RuntimeOutcomeUnknown,
     SandboxMode,
@@ -231,6 +232,101 @@ def test_workspace_write_profile_grants_only_declared_subdirectory(tmp_path):
     assert profile["filesystem"][":workspace_roots"] == {".": "read"}
     assert profile["filesystem"][str(writable)] == "write"
     assert profile["network"] == {"enabled": False}
+
+
+def test_runtime_resume_reasserts_scoped_profile_before_starting_turn(tmp_path):
+    adapter = AppServerCodexAdapter(expected_sha256="0" * 64)
+    requests = []
+
+    async def ready():
+        return None
+
+    async def rpc(method, params):
+        requests.append((method, params))
+        if method == "thread/resume":
+            return {
+                "thread": {"id": "recorded-thread"},
+                "activePermissionProfile": {"id": "m1lab-read-only"},
+            }
+        return {"turn": {"id": "new-turn"}}
+
+    adapter._ensure_started = ready
+    adapter._rpc = rpc
+    request = JobRequest(
+        prompt="Inspect the recorded evidence only.",
+        cwd=tmp_path,
+        model="gpt-6-sol",
+        deadline_seconds=10,
+        reasoning_effort="medium",
+    )
+
+    async def resume_and_close():
+        handle = await adapter.resume_job("recorded-thread", request)
+        await adapter.close()
+        return handle
+
+    handle = asyncio.run(resume_and_close())
+
+    assert handle.resumed is True
+    assert (handle.thread_id, handle.turn_id) == ("recorded-thread", "new-turn")
+    assert [method for method, _ in requests] == ["thread/resume", "turn/start"]
+    resume_params = requests[0][1]
+    assert resume_params["threadId"] == "recorded-thread"
+    assert resume_params["cwd"] == str(tmp_path)
+    assert resume_params["model"] == "gpt-6-sol"
+    assert resume_params["approvalPolicy"] == "never"
+    assert resume_params["permissions"] == "m1lab-read-only"
+    assert resume_params["config"]["default_permissions"] == "m1lab-read-only"
+    profile = resume_params["config"]["permissions"]["m1lab-read-only"]
+    assert profile["filesystem"] == {
+        ":root": "deny",
+        ":minimal": "read",
+        ":workspace_roots": {".": "read"},
+    }
+    assert profile["network"] == {"enabled": False}
+    turn_params = requests[1][1]
+    assert turn_params["threadId"] == "recorded-thread"
+    assert turn_params["effort"] == "medium"
+    assert turn_params["approvalPolicy"] == "never"
+
+
+@pytest.mark.parametrize("active_profile", [None, "default"])
+def test_runtime_refuses_resume_when_scoped_profile_is_not_active(
+    tmp_path, active_profile
+):
+    adapter = AppServerCodexAdapter(expected_sha256="0" * 64)
+    requests = []
+    closed = []
+
+    async def ready():
+        return None
+
+    async def rpc(method, params):
+        requests.append(method)
+        response = {"thread": {"id": "recorded-thread"}}
+        if active_profile is not None:
+            response["activePermissionProfile"] = {"id": active_profile}
+        return response
+
+    async def close():
+        closed.append(True)
+
+    adapter._ensure_started = ready
+    adapter._rpc = rpc
+    adapter.close = close
+    request = JobRequest(
+        prompt="Inspect the recorded evidence only.",
+        cwd=tmp_path,
+        model="gpt-6-sol",
+        deadline_seconds=10,
+    )
+
+    with pytest.raises(RuntimeRequestRejected, match="permission profile"):
+        asyncio.run(adapter.resume_job("recorded-thread", request))
+
+    assert requests == ["thread/resume"]
+    assert closed == [True]
+    assert adapter._jobs == {}
 
 
 def test_state_changing_rpc_internal_error_is_outcome_unknown():

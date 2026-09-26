@@ -2,7 +2,19 @@
 
 ## Host-only gate
 
-- Latest full ThinkPad suite: **98 passed**, with no warnings reported; 24
+- On 2026-09-26 the ThinkPad full suite passed **102 tests** with
+  `.venv/bin/python -m pytest -q` (no warnings reported). Three new runtime
+  cases verify the app-server resume request reasserts the read-only profile,
+  workspace, model, medium effort, and never-approve policy, and that an absent
+  or different active profile closes the adapter before `turn/start`. One new
+  scripted scientific case preserves a lower-cost, discriminating proposal and
+  its four-dimensional cost rationale across reopening while refusing dispatch
+  before exact procedure review. These are synthetic host contracts; they do
+  not demonstrate live provider resume, live Codex experiment selection, or
+  physical target measurements. The first sandboxed full-suite attempt had
+  78 passes and 24 socket-setup errors because that execution sandbox denied
+  local listeners; the complete run passed with host socket permissions.
+- Preceding full ThinkPad suite: **98 passed**, with no warnings reported; 24
   focused runtime/resume cases passed. The eight new cases cover interrupted
   and reconciled-unknown resume across reopening, actual synthetic subprocess
   EOF/malformed-output cleanup, cancellation of a shutdown caller, and event

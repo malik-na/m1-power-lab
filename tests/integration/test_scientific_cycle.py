@@ -353,6 +353,109 @@ def test_contradicting_evidence_changes_leading_hypothesis_and_preserves_decisio
         reopened.close()
 
 
+def test_cheaper_discriminating_choice_is_durable_but_requires_review(tmp_path):
+    """Scripted choice checks proposal lineage, not live Codex judgment."""
+    paths = AppPaths(tmp_path / "cheaper-choice")
+    core = CoreApp.open(paths)
+    try:
+        session = core.create_session(SessionCreate(
+            objective="Distinguish synthetic mechanisms A and B at lower cost",
+            owner="owner", host_identity="host",
+        ))
+        started = core.submit(OwnerCommand(
+            session_id=session.id, owner=session.owner, kind=CommandKind.START,
+            expected_revision=session.revision, payload={},
+        ))
+        assert started.status is CommandStatus.APPLIED
+        store = ScientificRecordStore(core)
+        first = _hypothesis(session.id, "Mechanism A predicts a register transition before wake.")
+        second = _hypothesis(session.id, "Mechanism B predicts no register transition before wake.")
+        store.publish(first)
+        store.publish(second)
+        protocol = _protocol(first).model_copy(update={
+            "title": "Existing synthetic pre-wake capture inspection",
+            "workload": "read-only synthetic register capture inspection",
+        })
+        store.publish(protocol)
+
+        # The fixture chooses one existing-capture inspection over a fresh
+        # capture. Both distinguish A from B; every resource dimension is lower.
+        selected_cost = {
+            "codex_tokens": 800, "elapsed_minutes": 5,
+            "target_active_minutes": 0, "owner_minutes": 0,
+        }
+        fresh_capture_cost = {
+            "codex_tokens": 3000, "elapsed_minutes": 25,
+            "target_active_minutes": 8, "owner_minutes": 5,
+        }
+        assert all(selected_cost[key] < fresh_capture_cost[key] for key in selected_cost)
+        rationale = (
+            "Inspect the existing synthetic register capture to distinguish A's predicted "
+            "pre-wake transition from B's predicted absence. Cost: 800 Codex tokens, "
+            "5 elapsed minutes, 0 target-active minutes, 0 owner minutes. "
+            "A fresh capture also discriminates, but costs 3000 tokens, 25 elapsed minutes, "
+            "8 target-active minutes, and 5 owner minutes; reuse is sufficient because "
+            "the existing capture includes the pre-wake interval."
+        )
+        proposal = {
+            "selected": "existing synthetic capture inspection",
+            "hypothesis_ids": [first.id, second.id],
+            "predictions": {
+                first.id: "pre-wake transition present",
+                second.id: "pre-wake transition absent",
+            },
+            "selected_cost": selected_cost,
+            "fresh_capture_cost": fresh_capture_cost,
+            "selection_rationale": rationale,
+            "evidence_scope": "synthetic_host_only",
+        }
+        artifact = core.publish_artifact(
+            json.dumps(proposal, sort_keys=True).encode(),
+            media_type="application/json",
+            provenance={"session_id": session.id, "evidence_scope": "host_only"},
+        )
+        draft = ProcedureDraft(
+            session_id=session.id,
+            title="Inspect existing synthetic pre-wake capture",
+            hypothesis_id=first.id,
+            protocol_id=protocol.id,
+            operations=[TypedOperation(
+                kind="inspect_register", parameters={"address": "0x1000"},
+                mutates_target=False, timeout_seconds=5,
+            )],
+            prerequisites={"inspect_register"},
+            expected_benefit=rationale,
+        )
+        procedure = core.register_procedure(draft)
+        assert core.session(session.id).phase is SessionPhase.AWAITING_REVIEW
+        target = core.record_target(TargetSnapshot(
+            session_id=session.id, identity="synthetic-m1", boot_epoch="synthetic-boot",
+            mode=TargetMode.REPLAY, configuration_digest="synthetic-capture",
+            capabilities={"inspect_register"},
+        ))
+        denied = core.authorize_operation(DispatchRequest(
+            session_id=session.id, procedure_id=procedure.procedure_id,
+            procedure_revision=procedure.revision, target_snapshot_id=target.id,
+            adapter_mode=TargetMode.REPLAY,
+        ))
+        assert not denied.eligibility.eligible
+        assert "exact procedure revision lacks an accepted review" in denied.eligibility.reasons
+        assert core.list_records(session.id, "operations") == []
+    finally:
+        core.close()
+
+    reopened = CoreApp.open(paths)
+    try:
+        restored = json.loads(reopened.read_session_artifact(session.id, artifact.id))
+        assert restored == proposal
+        restored_procedures = reopened.list_records(session.id, "procedures")
+        assert len(restored_procedures) == 1
+        assert restored_procedures[0].expected_benefit == rationale
+        assert reopened.list_records(session.id, "operations") == []
+    finally:
+        reopened.close()
+
+
 @pytest.mark.parametrize("invalid_between", [False, True], ids=["consecutive", "invalid-does-not-reset"])
 def test_two_valid_inconclusive_results_require_redesign_and_separate_review(core, invalid_between):
     session = core.create_session(
