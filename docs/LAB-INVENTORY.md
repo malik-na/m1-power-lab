@@ -26,6 +26,13 @@ The inventory reported `usb_devices_enumerated=false`,
 tests passed and the replay demo completed on 2026-09-26. These results do not
 qualify an M1 connection or power measurement.
 
+An isolated `m1lab diagnostics` run on the T480 on 2026-09-26 observed AC power,
+12% battery, 62 °C maximum temperature, and 7.7 GiB free disk space. A second
+sample measured 63 °C and 8,292,458,496 bytes free. The current admission
+policy found no blocker at those instants (AC required, temperature below
+90 °C, at least 5 GiB free). Sleep/lid inhibition was not requested; lid,
+AC-loss, thermal-pressure, low-disk, and shutdown responses remain unqualified.
+
 ## Observed execution machine
 
 | Field | Observed value | Source |

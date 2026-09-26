@@ -98,7 +98,7 @@ analysis, review, or owner-chat helper jobs. The default
 can be lowered to `1` or `2` in the service environment. Every job, including
 helpers, gets its own durable record, deadline, reservation, usage accounting,
 and stop handling. Hidden runtime child jobs are not part of the accounting
-model. The app-server uses `high` reasoning effort by default and rejects
+model. The app-server uses `medium` reasoning effort by default and rejects
 `ultra`, which the upstream [Codex protocol](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/config_types.rs)
 identifies as the route to proactive multi-agent behavior.
 

@@ -451,7 +451,7 @@ class AppServerCodexAdapter:
             params["outputSchema"] = dict(request.output_schema)
         # Keep app-server turns below Ultra so proactive subagent work cannot
         # bypass M1 Power Lab's durable helper-job and usage scheduler.
-        params["effort"] = request.reasoning_effort or "high"
+        params["effort"] = request.reasoning_effort or "medium"
         try:
             response = await self._rpc("turn/start", params)
             turn_id = _nested_string(response, "turn", "id")
