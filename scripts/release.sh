@@ -13,6 +13,7 @@ usage() {
 Usage:
   sudo scripts/release.sh install RELEASE_ID
   sudo scripts/release.sh switch RELEASE_ID
+  sudo scripts/release.sh check
 
 install builds an immutable release from the current Git commit and switches
 the current symlink. switch selects an already installed release (rollback).
@@ -23,14 +24,23 @@ EOF
 }
 
 [[ ${EUID} -eq 0 ]] || { echo "run this command with sudo" >&2; exit 1; }
-[[ $# -eq 2 ]] || usage
+[[ $# -ge 1 ]] || usage
 action=$1
-release_id=$2
-[[ $release_id =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$ ]] || {
-  echo "release ID may contain only letters, digits, dot, underscore, and hyphen" >&2
-  exit 2
-}
-case $action in install|switch) ;; *) usage ;; esac
+case $action in
+  check)
+    [[ $# -eq 1 ]] || usage
+    release_id=
+    ;;
+  install|switch)
+    [[ $# -eq 2 ]] || usage
+    release_id=$2
+    [[ $release_id =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$ ]] || {
+      echo "release ID may contain only letters, digits, dot, underscore, and hyphen" >&2
+      exit 2
+    }
+    ;;
+  *) usage ;;
+esac
 
 if systemctl is-active --quiet "$SERVICE_NAME"; then
   echo "$SERVICE_NAME is active; quiesce the session and stop it before switching releases" >&2
@@ -128,6 +138,11 @@ try:
 finally:
     connection.close()
 PY
+fi
+
+if [[ $action == check ]]; then
+  echo "service is stopped and durable coordinator state is clear for maintenance"
+  exit 0
 fi
 
 release_path="$APP_ROOT/releases/$release_id"

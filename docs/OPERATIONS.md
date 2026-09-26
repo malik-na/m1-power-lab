@@ -247,23 +247,23 @@ sudo systemctl start m1-power-lab
 
 ## Update and rollback
 
-Install an update into a new release directory using the same archive, venv,
-and package installation steps as the first install. Do not modify an installed
-release; keep the prior release directory as the known-good rollback target.
-Inspect status and jobs as `m1lab`, pause or stop the session, and wait until no
-job is admitted or running. Resolve any unknown job or operation first. Do not
-transition releases during an active experiment. Create a verified backup,
-then switch the symlink and restart:
+Install updates from a clean, committed checkout using the guarded installer.
+Do not modify an installed release; keep the prior release directory as the
+known-good rollback target. Inspect status and jobs as `m1lab`, pause or stop
+the session, and resolve any unknown job or operation. Stop the service, run
+the maintenance check, create a verified backup, then install and start the
+new release:
 
 ```bash
 sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab status
 sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab jobs
 sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab control pause
+sudo systemctl stop m1-power-lab
+sudo /opt/m1-power-lab/current/scripts/release.sh check
 sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab backup-bundle \
   /var/lib/m1-power-lab/pre-update.zip
-sudo systemctl stop m1-power-lab
-sudo ln -s releases/NEW_RELEASE /opt/m1-power-lab/current.next
-sudo mv -Tf /opt/m1-power-lab/current.next /opt/m1-power-lab/current
+RELEASE_ID=$(git rev-parse --short HEAD)
+sudo scripts/release.sh install "$RELEASE_ID"
 sudo systemctl start m1-power-lab
 sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab diagnostics
 sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab status
@@ -276,7 +276,7 @@ release.
 
 ```bash
 sudo systemctl stop m1-power-lab
-sudo scripts/release.sh switch OLD_RELEASE
+sudo /opt/m1-power-lab/current/scripts/release.sh switch OLD_RELEASE
 sudo systemctl start m1-power-lab
 sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab diagnostics
 sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab status
@@ -284,13 +284,20 @@ sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab status
 
 ## Uninstall
 
-Create and verify a final bundle before removing the service. Keep the data
-root if its evidence or Codex state is still needed.
+Pause the session and wait for Codex jobs and operations to reach terminal,
+resolved states. Create and verify a final bundle before removing the service.
+Keep the data root if its evidence or Codex state is still needed.
 
 ```bash
+sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab status
+sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab jobs
+sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab control pause
+sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab jobs
+sudo systemctl stop m1-power-lab
+sudo /opt/m1-power-lab/current/scripts/release.sh check
 sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab backup-bundle \
   /var/lib/m1-power-lab/final-backup.zip
-sudo systemctl disable --now m1-power-lab
+sudo systemctl disable m1-power-lab
 sudo rm -f /etc/systemd/system/m1-power-lab.service /etc/m1-power-lab.env
 sudo systemctl daemon-reload
 sudo rm -rf /opt/m1-power-lab
