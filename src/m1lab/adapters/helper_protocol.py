@@ -394,7 +394,7 @@ def _decode_json(frame: bytes, maximum: int, label: str) -> Any:
             object_pairs_hook=_unique_object,
             parse_constant=_reject_constant,
         )
-    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError, RecursionError) as exc:
         raise HelperProtocolError(f"helper {label} is not valid bounded JSON") from exc
 
 
