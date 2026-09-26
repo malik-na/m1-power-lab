@@ -3,6 +3,7 @@
 from .coordinator import CoreApp
 from .errors import ConflictError, CoreError, IneligibleError, NotFoundError, ValidationError
 from .models import (
+    ACTIVE_PHASES,
     ApprovalRecord,
     ApprovalScope,
     ArtifactRecord,
@@ -40,7 +41,7 @@ from .models import (
 )
 
 __all__ = [
-    "ApprovalRecord", "ApprovalScope", "ArtifactRecord", "BudgetSnapshot", "CommandKind",
+    "ACTIVE_PHASES", "ApprovalRecord", "ApprovalScope", "ArtifactRecord", "BudgetSnapshot", "CommandKind",
     "CommandResult", "CommandStatus", "ConflictError", "CoreApp", "CoreError",
     "DispatchEnvelope", "DispatchRequest", "EligibilityResult", "EventRecord", "IneligibleError", "JobCreate", "JobRecord",
     "NotFoundError", "OperationAuthorization", "OperationOutcome", "OperationRecord", "OperationState", "OwnerCommand",
