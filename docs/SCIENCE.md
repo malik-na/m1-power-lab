@@ -71,7 +71,10 @@ evidence manifest, the operator evidence view and full JSON exports.
 
 The bounded Codex brief includes all recent competing hypotheses and their
 predictions, strongest support and counterevidence, inconclusive or invalid
-attempts, current resource limits, and whether a redesign checkpoint is due.
+attempts, current resource limits, whether a new redesign checkpoint is due,
+and any existing checkpoint that the first redesigned protocol still needs to
+reference. A checkpoint resets the uninformative-result streak; results from
+before that redesign cannot count toward the next checkpoint.
 Codex must compare the selected experiment's decision value and total cost
 (tokens, elapsed time, target-active time, and owner time) with a cheaper
 alternative. These estimates are advisory; coordinator budget and operation

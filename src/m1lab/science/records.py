@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from math import isclose
 from typing import Iterable, Protocol
 
@@ -209,6 +210,13 @@ class ScientificRecordStore:
         protocol_id = draft.protocol_id
         checkpoint_id = draft.redesign_checkpoint_id
         if not any((hypothesis_id, protocol_id, checkpoint_id)):
+            index = self._record_index(draft.session_id)
+            if any(
+                _pending_redesign_checkpoint_id(index, item.id) is not None
+                for item in index.values()
+                if isinstance(item, HypothesisRecord)
+            ):
+                raise ValueError("procedure must bind the pending redesign checkpoint to its hypothesis")
             return
         if not hypothesis_id or not protocol_id:
             raise ValueError("scientific procedure binding requires both hypothesis_id and protocol_id")
@@ -229,7 +237,13 @@ class ScientificRecordStore:
                 or protocol.redesign_checkpoint_id != checkpoint_id
             ):
                 raise ValueError("procedure redesign checkpoint does not match its hypothesis, protocol, and results")
-        elif checkpoint_id is not None:
+        else:
+            pending_checkpoint_id = _pending_redesign_checkpoint_id(index, hypothesis_id)
+            protocol_checkpoint_id = protocol.redesign_checkpoint_id
+            expected_checkpoint_id = pending_checkpoint_id or protocol_checkpoint_id
+            if expected_checkpoint_id != checkpoint_id:
+                raise ValueError("procedure must match its protocol's pending redesign checkpoint")
+        if checkpoint_id is not None:
             checkpoint = _require_record(index, checkpoint_id, RedesignCheckpointRecord)
             if (
                 checkpoint.hypothesis_id != hypothesis_id
@@ -375,6 +389,12 @@ class ScientificRecordStore:
                 raise ValueError(
                     "two consecutive inconclusive results require a redesign checkpoint before another protocol"
                 )
+            pending_checkpoint_id = _pending_redesign_checkpoint_id(index, record.hypothesis_id)
+            if (
+                pending_checkpoint_id is not None
+                and record.redesign_checkpoint_id != pending_checkpoint_id
+            ):
+                raise ValueError("the first protocol after a redesign must cite its checkpoint")
             if record.redesign_checkpoint_id is not None:
                 checkpoint = _require_record(
                     index, record.redesign_checkpoint_id, RedesignCheckpointRecord
@@ -591,7 +611,11 @@ class ScientificRecordStore:
         manifest = self.manifest(records)
         resource_limits = self._core.snapshot(manifest.session_id).budget.model_dump(mode="json")
         hypotheses = [item.record for item in records if isinstance(item.record, HypothesisRecord)]
+        protocols = [item.record for item in records if isinstance(item.record, ExperimentProtocol)]
         results = [item.record for item in records if isinstance(item.record, DerivedResultRecord)]
+        checkpoints = [
+            item.record for item in records if isinstance(item.record, RedesignCheckpointRecord)
+        ]
         decisions = [item.record for item in records if isinstance(item.record, DecisionRecord)]
         claim_records = [item.record for item in records if isinstance(item.record, ClaimEvidence)]
         decision = decisions[-1] if decisions else None
@@ -635,9 +659,17 @@ class ScientificRecordStore:
             for item in results[-24:]
             if item.outcome in {OutcomeCategory.INCONCLUSIVE, OutcomeCategory.INVALID}
         )
-        streaks = _uninformative_streaks(results)
+        streaks = _uninformative_streaks(results, checkpoints)
         redesign_hypotheses = tuple(
             hypothesis_id for hypothesis_id, streak in streaks.items() if streak >= 2
+        )
+        record_index = {
+            item.id: item for item in (*hypotheses, *protocols, *results, *checkpoints)
+        }
+        pending_checkpoints = tuple(
+            {"hypothesis_id": item.id, "checkpoint_id": checkpoint_id}
+            for item in hypotheses
+            if (checkpoint_id := _pending_redesign_checkpoint_id(record_index, item.id)) is not None
         )
         streak = max(streaks.values(), default=0)
         finding = (
@@ -675,6 +707,7 @@ class ScientificRecordStore:
             uninformative_streak=streak,
             redesign_checkpoint_required=bool(redesign_hypotheses),
             redesign_hypothesis_ids=redesign_hypotheses,
+            pending_redesign_checkpoints=pending_checkpoints,
             resource_limits=resource_limits,
         )
 
@@ -697,12 +730,14 @@ def _require_record(
 def _latest_inconclusive_pair(
     records: dict[str, ScientificRecord], hypothesis_id: str
 ) -> tuple[str, str] | None:
+    checkpoint = _latest_redesign_checkpoint(records, hypothesis_id)
     results = sorted(
         (
             record
             for record in records.values()
             if isinstance(record, DerivedResultRecord)
             and record.hypothesis_id == hypothesis_id
+            and (checkpoint is None or record.derived_at > checkpoint.created_at)
         ),
         key=lambda item: item.derived_at,
     )
@@ -713,9 +748,51 @@ def _latest_inconclusive_pair(
     return (results[-2].id, results[-1].id)
 
 
-def _uninformative_streaks(results: list[DerivedResultRecord]) -> dict[str, int]:
+def _latest_redesign_checkpoint(
+    records: dict[str, ScientificRecord], hypothesis_id: str
+) -> RedesignCheckpointRecord | None:
+    return max(
+        (
+            record
+            for record in records.values()
+            if isinstance(record, RedesignCheckpointRecord)
+            and record.hypothesis_id == hypothesis_id
+        ),
+        key=lambda item: item.created_at,
+        default=None,
+    )
+
+
+def _pending_redesign_checkpoint_id(
+    records: dict[str, ScientificRecord], hypothesis_id: str
+) -> str | None:
+    checkpoint = _latest_redesign_checkpoint(records, hypothesis_id)
+    if checkpoint is None:
+        return None
+    consumed = any(
+        isinstance(record, ExperimentProtocol)
+        and record.hypothesis_id == hypothesis_id
+        and record.redesign_checkpoint_id == checkpoint.id
+        and record.created_at >= checkpoint.created_at
+        for record in records.values()
+    )
+    return None if consumed else checkpoint.id
+
+
+def _uninformative_streaks(
+    results: list[DerivedResultRecord],
+    checkpoints: list[RedesignCheckpointRecord],
+) -> dict[str, int]:
+    latest_checkpoint_at: dict[str, datetime] = {}
+    for checkpoint in checkpoints:
+        previous = latest_checkpoint_at.get(checkpoint.hypothesis_id)
+        if previous is None or checkpoint.created_at > previous:
+            latest_checkpoint_at[checkpoint.hypothesis_id] = checkpoint.created_at
     grouped: dict[str, list[DerivedResultRecord]] = {}
     for result in results:
+        checkpoint_at = latest_checkpoint_at.get(result.hypothesis_id)
+        if checkpoint_at is not None and result.derived_at <= checkpoint_at:
+            continue
         grouped.setdefault(result.hypothesis_id, []).append(result)
     streaks: dict[str, int] = {}
     for hypothesis_id, values in grouped.items():

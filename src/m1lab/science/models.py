@@ -375,6 +375,7 @@ class EvidenceBrief(ScientificModel):
     uninformative_streak: int = Field(default=0, ge=0)
     redesign_checkpoint_required: bool = False
     redesign_hypothesis_ids: tuple[str, ...] = ()
+    pending_redesign_checkpoints: tuple[dict[str, str], ...] = ()
     resource_limits: dict[str, Any] = Field(default_factory=dict)
 
 
