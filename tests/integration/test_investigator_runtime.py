@@ -205,6 +205,7 @@ def test_runtime_uses_restricted_permission_profile_for_read_only_turn(tmp_path)
     thread = requests[0][1]
     assert "sandbox" not in thread
     assert thread["permissions"] == "m1lab-read-only"
+    assert thread["config"]["default_permissions"] == "m1lab-read-only"
     filesystem = thread["config"]["permissions"]["m1lab-read-only"]["filesystem"]
     assert filesystem[":root"] == "deny"
     assert filesystem[":minimal"] == "read"

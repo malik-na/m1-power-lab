@@ -272,7 +272,10 @@ class AppServerCodexAdapter:
             "cwd": str(request.cwd),
             "approvalPolicy": "never",
             "permissions": profile_id,
-            "config": {"permissions": {profile_id: profile}},
+            "config": {
+                "permissions": {profile_id: profile},
+                "default_permissions": profile_id,
+            },
             "serviceName": "m1-power-lab",
         }
         response = await self._rpc("thread/start", thread_params)
@@ -296,7 +299,10 @@ class AppServerCodexAdapter:
                 "cwd": str(request.cwd),
                 "approvalPolicy": "never",
                 "permissions": profile_id,
-                "config": {"permissions": {profile_id: profile}},
+                "config": {
+                    "permissions": {profile_id: profile},
+                    "default_permissions": profile_id,
+                },
             },
         )
         await self._require_profile(response, profile_id)
