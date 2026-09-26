@@ -120,6 +120,37 @@ def browser(tmp_path):
         yield base_url, request, csrf_token
 
 
+def read_stream_events(base_url, *, count, cursor="0", last_event_id=None):
+    """Read a known finite replay, then close the otherwise unbounded response."""
+    assert 0 < count <= 100
+    headers = {"Tailscale-User-Login": OWNER_LOGIN, "Accept": "text/event-stream"}
+    if last_event_id is not None:
+        headers["Last-Event-ID"] = str(last_event_id)
+    request = Request(f"{base_url}/api/events?cursor={cursor}", headers=headers)
+    events = []
+    fields = {}
+    with build_opener().open(request, timeout=3) as response:
+        assert response.status == 200
+        assert response.headers.get_content_type() == "text/event-stream"
+        assert response.headers["Cache-Control"] == "no-store"
+        # Account for the initial retry directive and bound malformed framing.
+        for _ in range(count * 8 + 10):
+            line = response.readline(65_537)
+            assert line, "SSE stream ended before the expected replay was complete"
+            assert len(line) <= 65_536, "SSE frame line exceeded the fixture bound"
+            text = line.decode().rstrip("\r\n")
+            if not text:
+                if "data" in fields:
+                    events.append({"cursor": fields["id"], **json.loads(fields["data"])})
+                    if len(events) == count:
+                        return events
+                fields = {}
+            elif not text.startswith(":"):
+                name, _, value = text.partition(":")
+                fields[name] = value.removeprefix(" ")
+    raise AssertionError("SSE replay exceeded the bounded frame count")
+
+
 def test_exact_tailscale_owner_identity_is_required(browser):
     _, request, _ = browser
     for identity in (None, "other@example.test", "Owner@example.test"):
@@ -208,3 +239,93 @@ def test_lifecycle_command_retries_and_conflicts_are_side_effect_free(browser):
     assert after["session"]["phase"] == before["session"]["phase"] == "investigating"
     for kind in ("jobs", "operations", "approvals"):
         assert after["records"][kind] == before["records"][kind] == []
+
+
+def test_sse_last_event_id_overrides_query_and_replays_strictly_after(browser):
+    base_url, request, csrf_token = browser
+    assert request("/overview")[0] == 200
+    status, _, body = request(
+        "/api/commands", method="POST",
+        body={
+            "command_id": str(uuid4()), "kind": "session.start",
+            "expected_revision": "1", "payload": {},
+        },
+        headers={"Origin": base_url, "X-CSRF-Token": csrf_token()},
+    )
+    assert status == 202
+    assert json.loads(body)["status"] == "applied"
+    status, _, body = request("/api/export")
+    assert status == 200
+    exported = json.loads(body)
+    recorded = exported["events"]
+    assert len(recorded) >= 3
+    resume_cursor = recorded[1]["cursor"]
+    expected = [event for event in recorded if event["cursor"] > resume_cursor]
+
+    replay = read_stream_events(
+        base_url, count=len(expected), cursor="0", last_event_id=resume_cursor,
+    )
+
+    assert [int(event["cursor"]) for event in replay] == [event["cursor"] for event in expected]
+    assert all(int(event["cursor"]) > resume_cursor for event in replay)
+    assert [event["kind"] for event in replay] == [event["kind"] for event in expected]
+    for actual, durable in zip(replay, expected, strict=True):
+        assert actual["revision"] == str(exported["session"]["revision"])
+        assert all(actual["payload"][key] == value for key, value in durable["data"].items())
+
+
+def test_sse_reconnect_returns_authoritative_phase_change_while_disconnected(browser):
+    base_url, request, csrf_token = browser
+    assert request("/overview")[0] == 200
+    status, _, body = request("/api/export")
+    assert status == 200
+    initial = json.loads(body)
+    first_stream = read_stream_events(base_url, count=len(initial["events"]))
+    last_cursor = int(first_stream[-1]["cursor"])
+    assert last_cursor == initial["events"][-1]["cursor"]
+
+    # The first response is closed before the owner changes authoritative state.
+    status, _, body = request(
+        "/api/commands", method="POST",
+        body={
+            "command_id": str(uuid4()), "kind": "session.start",
+            "expected_revision": str(initial["session"]["revision"]), "payload": {},
+        },
+        headers={"Origin": base_url, "X-CSRF-Token": csrf_token()},
+    )
+    assert status == 202
+    receipt = json.loads(body)
+    assert receipt["status"] == "applied"
+    status, _, body = request("/api/export")
+    assert status == 200
+    current = json.loads(body)
+    missed = [event for event in current["events"] if event["cursor"] > last_cursor]
+    assert missed
+
+    replay = read_stream_events(base_url, count=len(missed), last_event_id=last_cursor)
+
+    assert [int(event["cursor"]) for event in replay] == [event["cursor"] for event in missed]
+    phase_changes = [event for event in replay if event["kind"] == "session.phase_changed"]
+    assert len(phase_changes) == 1
+    assert phase_changes[0]["payload"]["phase"] == current["session"]["phase"] == "investigating"
+    assert phase_changes[0]["revision"] == receipt["revision"] == str(current["session"]["revision"])
+
+
+@pytest.mark.parametrize("invalid_cursor", ["malformed", "ahead"])
+def test_sse_invalid_cursor_requests_current_snapshot(browser, invalid_cursor):
+    base_url, request, _ = browser
+    status, _, body = request("/api/export")
+    assert status == 200
+    exported = json.loads(body)
+    latest_cursor = exported["events"][-1]["cursor"]
+    supplied = "not-a-cursor" if invalid_cursor == "malformed" else str(latest_cursor + 100)
+
+    event, = read_stream_events(base_url, count=1, last_event_id=supplied)
+
+    assert event["kind"] == "snapshot_required"
+    assert event["revision"] == str(exported["session"]["revision"])
+    if invalid_cursor == "ahead":
+        assert event["cursor"] == str(latest_cursor)
+        assert event["payload"]["reason"] == "event cursor is ahead of this session"
+    else:
+        assert event["cursor"] == ""

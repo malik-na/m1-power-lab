@@ -2,7 +2,20 @@
 
 ## Host-only gate
 
-- Latest host regression run on the T480: **70 passed in 4.30 seconds**, with
+- Latest T480 regression run: **90 passed**, with no reported warnings.
+  Twenty new cases cover four SSE replay/reconnect/snapshot cases through a
+  real temporary HTTP server and sixteen hardware-helper cases through real
+  Unix sockets with a fixed synthetic backend. The SSE cases verify header
+  cursor precedence, strictly-after replay, authoritative phase changes after
+  reconnect, and malformed/ahead cursor recovery. Helper cases verify typed
+  request/result lineage, protocol and capability checks, identity/boot/config
+  rejection before backend entry, digest syntax and capture/frame bounds,
+  exclusive ownership, and unknown outcome after backend disconnect without
+  automatic replay. The focused HTTP/helper run passed all 24 cases.
+  These checks do not qualify iPhone browser behavior, physical devices,
+  artifact-content verification, or durable duplicate-dispatch prevention.
+  The live service remains on `f560929`, paused with its usage hold intact.
+- The preceding host regression run on the T480: **70 passed in 4.30 seconds**, with
   no pytest warnings. Eighteen new cases cover seven injected host-readiness
   faults, seven notification contracts with delivery stubbed, and four HTTP
   owner-interface contracts through a real temporary loopback server.
