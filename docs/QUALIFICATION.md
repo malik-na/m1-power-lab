@@ -2,9 +2,12 @@
 
 ## Host-only gate
 
-- On 2026-09-26 the T480 ran 36 host tests and the replay demo; the installed
-  `e6fc7ba` loopback service served `/overview` as `m1lab` without a restart
-  during the observed window. This does not qualify the live Codex runtime.
+- On 2026-09-26 the T480 ran 36 host tests and the replay demo. The installed
+  `e6fc7ba` and `f58395f` loopback releases each served `/overview` as `m1lab`
+  with HTTP 200 and zero restarts during their observed windows. The update,
+  rollback, and return to `f58395f` passed the stopped-service maintenance
+  check. The original session survived the update with its budget unchanged.
+  This does not qualify the live Codex runtime.
 - The configured Codex executable SHA-256 is verified before app-server startup.
 - Live app-server startup, authenticated job lifecycle, cancellation and usage remain unqualified until a bounded turn completes on the deployment host.
 - Replay operations preserve intent, completion and unknown-effect outcomes.

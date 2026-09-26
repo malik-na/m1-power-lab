@@ -34,10 +34,12 @@ policy found no blocker at those instants (AC required, temperature below
 AC-loss, thermal-pressure, low-disk, and shutdown responses remain unqualified.
 
 The `e6fc7ba` release was installed on the T480 and started in loopback mode
-with replay hardware and Codex runtime disabled. The service ran as `m1lab`,
-listened only on `127.0.0.1:8765`, and returned HTTP 200 for `/overview` with
-zero restarts during the check. This does not establish remote access, a live
-model turn, or long-term host availability.
+with replay hardware and Codex runtime disabled. The service ran as `m1lab`
+and listened only on `127.0.0.1:8765`. The `f58395f` update, rollback to
+`e6fc7ba`, and return to `f58395f` each started and returned HTTP 200 for
+`/overview` with zero restarts during the check. The original session survived
+the update with its budget unchanged. This does not establish remote access,
+a live model turn, or long-term host availability.
 
 ## Observed execution machine
 
