@@ -1,8 +1,9 @@
-"""Prepare native launch evidence and import bounded result streams.
+"""Prepare native launch evidence and preserve bounded result streams.
 
 This module opens no device and dispatches no target operation. A prepared
-launch is an immutable artifact; importing frames preserves the raw stream and
-records its protocol-level result separately from physical qualification.
+launch is an immutable artifact; file import and caller-owned descriptor input
+preserve raw streams and record protocol results separately from physical
+qualification. Neither acquisition path dispatches target work.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from m1lab.adapters import (
     MAX_NATIVE_OUTPUT_BYTES,
     NativeCapture,
     NativeHarnessError,
+    NativeImageManifest,
     NativeLaunchManifest,
     NativeResultAssembler,
     decode_native_image_manifest,
@@ -29,13 +31,14 @@ from m1lab.adapters import (
 )
 from m1lab.core import ArtifactRecord, CoreApp
 from m1lab.core.models import new_id, utc_now
+from m1lab.adapters.native_stream import MAX_NATIVE_STREAM_BYTES, receive_native_result_stream
 
 
 IMAGE_MANIFEST_MEDIA_TYPE = "application/vnd.m1lab.native-image-manifest+json"
 LAUNCH_MANIFEST_MEDIA_TYPE = "application/vnd.m1lab.native-launch-manifest+json"
 CAPTURE_STREAM_MEDIA_TYPE = "application/octet-stream"
 CAPTURE_MEDIA_TYPE = "application/vnd.m1lab.native-capture+json;version=1"
-MAX_CAPTURE_STREAM_BYTES = 32 * 1024 * 1024
+MAX_CAPTURE_STREAM_BYTES = MAX_NATIVE_STREAM_BYTES
 MAX_CAPTURE_SAMPLES = 4094
 MAX_SAMPLE_PERIOD_MS = 60_000
 MIN_LAUNCH_HEADROOM_MS = 1000
@@ -146,6 +149,57 @@ def import_native_capture(
 ) -> tuple[NativeCapture, ArtifactRecord, ArtifactRecord]:
     """Preserve and parse a bounded result stream without asserting its origin."""
 
+    launch, image = _capture_manifests(
+        core, session_id, launch_artifact_id, image_manifest_artifact_id,
+        require_current_deadline=False,
+    )
+    raw_stream = _read_stream_file(stream_path)
+    capture = _parse_saved_capture(raw_stream, launch, image)
+    return _publish_capture(
+        core, session_id, launch_artifact_id, image_manifest_artifact_id,
+        launch, raw_stream, capture,
+        acquisition={"mode": "file", "terminal_received_before_deadline": False,
+                     "target_stop_verified": False},
+    )
+
+
+def receive_native_capture(
+    core: CoreApp,
+    session_id: str,
+    *,
+    launch_artifact_id: str,
+    image_manifest_artifact_id: str,
+    fd: int,
+) -> tuple[NativeCapture, ArtifactRecord, ArtifactRecord]:
+    """Preserve bounded descriptor input; no dispatch or physical qualification.
+
+    The owner of the channel supplies an exclusively owned nonblocking fd.
+    This function does not open, configure, or close the channel. In particular,
+    a host timeout neither stops target execution nor authorizes a retry.
+    """
+
+    launch, image = _capture_manifests(
+        core, session_id, launch_artifact_id, image_manifest_artifact_id,
+        require_current_deadline=True,
+    )
+    receipt = receive_native_result_stream(fd, launch, image)
+    return _publish_capture(
+        core, session_id, launch_artifact_id, image_manifest_artifact_id,
+        launch, receipt.raw_stream, receipt.capture,
+        acquisition={"mode": "descriptor", "stop_reason": receipt.stop_reason,
+                     "terminal_received_before_deadline": receipt.terminal_received_before_deadline,
+                     "target_stop_verified": False},
+    )
+
+
+def _capture_manifests(
+    core: CoreApp,
+    session_id: str,
+    launch_artifact_id: str,
+    image_manifest_artifact_id: str,
+    *,
+    require_current_deadline: bool,
+) -> tuple[NativeLaunchManifest, NativeImageManifest]:
     artifacts = {item.id: item for item in core.artifacts(session_id)}
     launch_artifact = artifacts.get(launch_artifact_id)
     if (
@@ -171,8 +225,10 @@ def import_native_capture(
         raise NativeHarnessError("published launch manifest digest does not match its bytes")
     if hashlib.sha256(image_bytes).hexdigest() != image_artifact.sha256:
         raise NativeHarnessError("published image manifest digest does not match its bytes")
-    launch = decode_native_launch_manifest(launch_bytes, require_current_deadline=False)
-    expected_sample_count, _ = _collector_parameters(launch.parameters)
+    launch = decode_native_launch_manifest(
+        launch_bytes, require_current_deadline=require_current_deadline
+    )
+    _collector_parameters(launch.parameters)
     image = decode_native_image_manifest(image_bytes)
     if launch_artifact.provenance.get("image_manifest_artifact_id") != image_artifact.id:
         raise NativeHarnessError("launch artifact references a different image manifest")
@@ -187,11 +243,17 @@ def import_native_capture(
         for output in image.outputs
     ):
         raise NativeHarnessError("launch image digest does not match its published image output")
+    launch.validate_against_image(image, require_current_deadline=require_current_deadline)
+    return launch, image
+
+
+def _parse_saved_capture(
+    raw_stream: bytes, launch: NativeLaunchManifest, image: NativeImageManifest
+) -> NativeCapture:
     # This command imports a completed file after acquisition. It validates
     # frame integrity and launch binding, but cannot attest when or where the
     # file was captured. The live adapter must use the default deadline check.
     assembler = NativeResultAssembler(launch, image, enforce_receive_deadline=False)
-    raw_stream = _read_stream_file(stream_path)
     offset = 0
     message = ""
     while offset < len(raw_stream):
@@ -223,19 +285,35 @@ def import_native_capture(
             frame_count=capture.frame_count,
             message=message,
         )
+    return capture
+
+
+def _publish_capture(
+    core: CoreApp,
+    session_id: str,
+    launch_artifact_id: str,
+    image_manifest_artifact_id: str,
+    launch: NativeLaunchManifest,
+    raw_stream: bytes,
+    capture: NativeCapture,
+    *,
+    acquisition: dict[str, object],
+) -> tuple[NativeCapture, ArtifactRecord, ArtifactRecord]:
+    expected_sample_count, _ = _collector_parameters(launch.parameters)
     raw_artifact = core.publish_artifact(
         raw_stream,
         media_type=CAPTURE_STREAM_MEDIA_TYPE,
         provenance={
             "session_id": session_id,
             "record_type": "native_result_stream",
-            "launch_artifact_id": launch_artifact.id,
-            "image_manifest_artifact_id": image_artifact.id,
+            "launch_artifact_id": launch_artifact_id,
+            "image_manifest_artifact_id": image_manifest_artifact_id,
             "protocol_status": capture.status,
             "identity_verified": False,
             "launch_binding_verified": capture.launch_binding_verified,
             "physical_source_verified": False,
             "capture_timing_verified": False,
+            "stream_acquisition": acquisition,
         },
     )
     from m1lab.investigator.prompts import scrub_text
@@ -263,6 +341,7 @@ def import_native_capture(
     capture_document["protocol_status"] = capture.status
     capture_document["physical_source_verified"] = False
     capture_document["capture_timing_verified"] = False
+    capture_document["stream_acquisition"] = acquisition
     capture_document["payload_screening"] = screening
     capture_document["raw_stream_artifact_id"] = raw_artifact.id
     normalized_artifact = core.publish_artifact(
@@ -277,8 +356,8 @@ def import_native_capture(
         provenance={
             "session_id": session_id,
             "record_type": "native_capture",
-            "launch_artifact_id": launch_artifact.id,
-            "image_manifest_artifact_id": image_artifact.id,
+            "launch_artifact_id": launch_artifact_id,
+            "image_manifest_artifact_id": image_manifest_artifact_id,
             "raw_stream_artifact_id": raw_artifact.id,
             "capture_status": safe_capture.status,
             "protocol_status": capture.status,
@@ -287,6 +366,7 @@ def import_native_capture(
             "physical_source_verified": False,
             "capture_timing_verified": False,
             "payload_screening": screening,
+            "stream_acquisition": acquisition,
         },
     )
     return safe_capture, raw_artifact, normalized_artifact

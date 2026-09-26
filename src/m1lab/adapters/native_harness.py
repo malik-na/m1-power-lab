@@ -318,6 +318,10 @@ class NativeResultAssembler:
         self._terminal_status: Literal["complete", "partial"] | None = None
         self._invalid_message = ""
 
+    @property
+    def has_terminal_frame(self) -> bool:
+        return self._terminal_status is not None
+
     def accept(self, frame_bytes: bytes) -> None:
         try:
             self._accept(decode_native_result_frame(frame_bytes))

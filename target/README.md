@@ -61,3 +61,9 @@ synthetic sysfs snapshots, transport its real framed output through a pipe,
 and import it into isolated coordinator artifact storage. Offline import can
 accept an expired saved launch while live decoding retains its deadline gate.
 These tests establish software behavior only; they do not run on the Mac.
+
+The host's descriptor receiver can also consume the collector's stdout as it
+flows, preserving partial wire bytes on channel failure and applying the same
+sample screening before publishing a capture. This is a host acquisition
+primitive for future qualified channel wiring. Its receive deadline bounds
+host waiting; it cannot stop a stuck target or demonstrate recovery.

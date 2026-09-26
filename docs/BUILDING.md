@@ -97,6 +97,24 @@ verified target observation or a scientific measurement. The future live
 adapter must receive frames before the launch deadline and establish the
 physical source and mode itself.
 
+The host library now provides `receive_native_capture` for a caller-owned,
+exclusively accessed nonblocking descriptor. It validates the published
+image/launch bindings, fixes a monotonic receive deadline, retains incomplete
+prefix/frame bytes on timeout or channel loss, and uses the same sample
+screening and artifact publication as file import. A terminal frame ends one
+run without requiring channel EOF; trailing bytes in that same read invalidate
+the capture. Traffic arriving afterward belongs to the channel owner's next
+state decision. The receiver never retries, opens/configures/closes a device,
+launches target work, or changes the lab session phase.
+
+Descriptor evidence records `stream_acquisition`, including why acquisition
+stopped and whether a terminal frame arrived before the host deadline.
+`target_stop_verified` remains false, including after a timeout or complete
+frame. Target identity, physical source and target capture timing remain
+unverified. Real channel ownership, independent identity, supervisor wiring,
+mode transitions and recovery still require qualification; this library
+function is not enabled as a live hardware dispatch route or CLI command.
+
 ```bash
 m1lab --session SESSION_ID native-import \
   --launch-artifact LAUNCH_ARTIFACT_ID \
