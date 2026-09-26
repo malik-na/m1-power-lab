@@ -2,6 +2,19 @@
 
 ## Host-only gate
 
+- At source `b5b420d` on 2026-09-26, the ThinkPad full suite passed
+  **170 tests in 16.77 seconds**, no warnings reported, with
+  `.venv/bin/python -m pytest -q` using host socket permissions through Codex
+  `gpt-6-sol` medium. Thirteen deny-guard cases cover duplicate IDs/steps,
+  restart after an actual child exit during execution, malformed/capacity/write
+  failures, deadline expiry during persistence, and cleanup before unlocking.
+  Eight supervisor cases cover repeated requests, startup/request/cleanup
+  stalls, child crash, parent death both idle and during a hung request, and
+  lock release. Four coordinator/IPC cases use a test-only replay fixture;
+  the real helper client remains rejected by the experiment service.
+  Standards review found no hard violations and one optional typed-event
+  suggestion; independent spec review found no blocker for the inspect-only
+  increment. These tests do not qualify physical crash/recovery behavior.
 - At source `956a617` on 2026-09-26, the ThinkPad full suite passed
   **145 tests in 10.04 seconds**, with no warnings reported, using
   `.venv/bin/python -m pytest -q` with host socket permissions through Codex
@@ -206,6 +219,16 @@
 
 ## Live transport gate
 
+- At 13:04:58 UTC on 2026-09-26, the persistent helper at `b5b420d`
+  completed two read-only inspections over the real USB/IPC path. Both matched
+  the locally recorded USB identity and retained `qualified=false`, no boot
+  epoch and no capabilities. SIGTERM to the supervisor produced normal exit
+  0, removed the socket and released the owner lock. Its deny journal stayed
+  empty: no dispatch was attempted. The
+  [redacted evidence](evidence/2026-09-26-persistent-helper.json) establishes
+  persistent inspection and normal shutdown on this connection, not physical
+  failure recovery, coordinator dispatch, or native transport. No installed
+  service change or scientific investigation occurred.
 - At 12:46:06 UTC on 2026-09-26, the inspect-only harness at `956a617`
   completed one physical observation through a separate helper and the real
   Unix-socket client. It checked topology/interface/VID/PID and hashed USB

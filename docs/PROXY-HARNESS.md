@@ -59,6 +59,10 @@ This check does not supply a verified target binary digest, boot epoch,
 coordinator dispatch, or production helper wiring. The persistent supervisor
 and duplicate guard described below have separate host qualification; this
 one-shot physical record does not prove their failure behavior on the Mac.
+The later [persistent helper record](evidence/2026-09-26-persistent-helper.json)
+demonstrates two physical inspections and normal shutdown, socket removal and
+lock release. Its dispatch journal stayed empty. Crash and timeout behavior
+are covered by synthetic host tests, not physical recovery demonstrations.
 
 Proxy access does not establish a native Linux result channel. The exact
 kernel, DTB, initramfs, root filesystem, collector and payload build inputs,

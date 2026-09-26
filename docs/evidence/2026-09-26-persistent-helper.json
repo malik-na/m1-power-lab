@@ -1,0 +1,41 @@
+{
+  "source_commit": "b5b420dc30e2fbb65d5c846a03227668aed4bf53",
+  "scope": "inspect-only persistent helper lifecycle",
+  "observations": [
+    {
+      "observed_at": "2026-09-26T13:04:58.813517+00:00",
+      "available": true,
+      "qualified": false,
+      "mode": "proxy",
+      "boot_epoch": null,
+      "capabilities": [],
+      "matches_prior_usb_identity": true
+    },
+    {
+      "observed_at": "2026-09-26T13:04:58.815465+00:00",
+      "available": true,
+      "qualified": false,
+      "mode": "proxy",
+      "boot_epoch": null,
+      "capabilities": [],
+      "matches_prior_usb_identity": true
+    }
+  ],
+  "qualified": false,
+  "boot_epoch": null,
+  "limitations": [
+    "no coordinator dispatch",
+    "no exact target binary verification",
+    "no boot epoch qualification",
+    "no native result channel",
+    "no target recovery or scientific investigation"
+  ],
+  "owner_lock_released": true,
+  "socket_removed": true,
+  "supervisor_exit_status": 0,
+  "dispatch_journal_bytes": 0,
+  "command": "sudo -u naeem -g uucp timeout 35s /home/naeem/Work/m1-power-lab/.venv/bin/python /tmp/m1lab-check-persistent-helper.py",
+  "driver_sha256": "da2878da8b47d8170df552f2a6fd4b85eca99e7b3e60aa9bd8bbe61188e6e6c3",
+  "method": "Standalone supervisor CLI, two HelperHardwareAdapter.inspect calls, SIGTERM to supervisor, wait for exit 0, socket absence and owner-lock reacquisition. Local prior USB serial digest compared but not emitted. Temporary state directory used only for this inspect-only qualification; no dispatch attempts.",
+  "preflight": "Host-visible ttyACM0/1 existed, interface 1-1:1.0 VID:PID 1209:316d matched prior identity; root fuser found no holders."
+}

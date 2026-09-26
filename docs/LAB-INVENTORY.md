@@ -189,12 +189,21 @@ holders were found; the helper used exclusive tty access and exited cleanly.
 This establishes one bounded helper/IPC round trip on the current connection.
 It does not establish a boot epoch or exact target binary identity.
 
+At 13:04:58 UTC, the persistent supervisor at `b5b420d` completed two more
+fixed read-only inspections against the same locally matched USB identity.
+Normal supervisor shutdown exited 0, removed its socket and released the
+owner lock. No dispatch intent was recorded. See the
+[redacted lifecycle record](evidence/2026-09-26-persistent-helper.json).
+
 1. Preserve the observed connection and independently identify a boot transition,
    exact target build, and an owner-reviewed return/recovery procedure. USB
    serial identity and address stability alone do not establish a boot epoch.
-2. Continue host harness work while these gates remain open: persistent helper
-   supervision and duplicate-dispatch handling, then reviewed coordinator
-   integration with explicit refusal when qualification evidence is missing.
+2. Persistent helper supervision and durable duplicate-dispatch refusal now
+   have host coverage; persistent physical inspection and normal shutdown
+   passed. Next prepare separate helper service packaging and reviewed
+   coordinator integration, retaining explicit refusal while physical boot,
+   build and recovery qualification is missing. Do not deploy over the lab's
+   unresolved usage hold.
 3. Locate exact native kernel/DTB/initramfs/rootfs inputs before creating an M1
    build recipe. The local inventory found collector source and historical
    captures but no complete known-good image bundle. Native transport must be
