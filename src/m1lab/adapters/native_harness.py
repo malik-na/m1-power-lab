@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import json
 import math
+import re
 from typing import Any, Literal, TypeVar
 
 from pydantic import (
@@ -218,6 +219,35 @@ class NativeLaunchManifest(NativeModel):
             raise NativeHarnessError("launch image digest is not an output of its image manifest")
 
 
+class ObservedLinuxIdentity(NativeModel):
+    """Bounded Linux self-report; it does not authenticate physical origin."""
+
+    boot_id: str = Field(min_length=36, max_length=36)
+    kernel_release: str = Field(min_length=1, max_length=128)
+    configuration_sha256: str
+
+    @field_validator("boot_id")
+    @classmethod
+    def boot_id_is_uuid(cls, value: str) -> str:
+        if not re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", value):
+            raise ValueError("observed Linux boot ID must be a canonical UUID")
+        return value
+
+    @field_validator("kernel_release")
+    @classmethod
+    def release_is_bounded_ascii(cls, value: str) -> str:
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+~-]*", value):
+            raise ValueError("observed Linux kernel release is invalid")
+        return value
+
+    @field_validator("configuration_sha256")
+    @classmethod
+    def configuration_is_sha256(cls, value: str) -> str:
+        if not _is_sha256(value):
+            raise ValueError("observed Linux configuration digest is invalid")
+        return value
+
+
 class NativeResultFrame(NativeModel):
     schema_version: Literal["m1lab.native-result.v1"] = NATIVE_RESULT_PROTOCOL
     frame_kind: Literal["identity", "data", "end"]
@@ -230,6 +260,7 @@ class NativeResultFrame(NativeModel):
     payload_base64: str = ""
     payload_sha256: str | None = None
     terminal_status: Literal["complete", "partial"] | None = None
+    observed_linux: ObservedLinuxIdentity | None = None
     frame_sha256: str = _UNSEALED_SHA256
 
     @field_validator("image_sha256", "configuration_sha256", "frame_sha256")
@@ -264,6 +295,8 @@ class NativeResultFrame(NativeModel):
         if self.frame_kind == "identity":
             if self.sequence != 0 or self.terminal_status is not None:
                 raise ValueError("identity frame must be sequence zero without terminal status")
+        elif self.observed_linux is not None:
+            raise ValueError("observed Linux identity is allowed only on identity frames")
         elif self.frame_kind == "end":
             if self.terminal_status is None:
                 raise ValueError("end frame requires a complete or partial status")
@@ -280,6 +313,7 @@ class NativeCapture(NativeModel):
     payload: bytes = Field(max_length=MAX_NATIVE_OUTPUT_BYTES)
     frame_count: int = Field(ge=0, le=MAX_NATIVE_RESULT_FRAMES)
     message: str = Field(max_length=1024)
+    observed_linux: ObservedLinuxIdentity | None = None
 
     @field_serializer("payload")
     def serialize_payload(self, value: bytes) -> str:
@@ -317,6 +351,7 @@ class NativeResultAssembler:
         self._frame_count = 0
         self._terminal_status: Literal["complete", "partial"] | None = None
         self._invalid_message = ""
+        self._observed_linux: ObservedLinuxIdentity | None = None
 
     @property
     def has_terminal_frame(self) -> bool:
@@ -349,6 +384,10 @@ class NativeResultAssembler:
                 raise NativeHarnessError("target identity frame must arrive first")
             if frame.boot_epoch != self.launch.boot_epoch:
                 raise NativeHarnessError("result boot epoch does not match the launch")
+            if (frame.observed_linux is not None
+                    and frame.observed_linux.configuration_sha256 != self.launch.configuration_sha256):
+                raise NativeHarnessError("observed Linux configuration does not match the launch")
+            self._observed_linux = frame.observed_linux
             self._launch_binding_verified = True
             self._expected_sequence = 1
             self._frame_count += 1
@@ -383,6 +422,7 @@ class NativeResultAssembler:
                 payload=bytes(self._payload),
                 frame_count=self._frame_count,
                 message=self._invalid_message,
+                observed_linux=self._observed_linux,
             )
         return NativeCapture(
             status=self._terminal_status or "unknown",
@@ -398,11 +438,14 @@ class NativeResultAssembler:
                     else ""
                 )
             )[:1024],
+            observed_linux=self._observed_linux,
         )
 
 
 def encode_native_result_frame(frame: NativeResultFrame) -> bytes:
     document = frame.model_dump(mode="json")
+    if document["observed_linux"] is None:
+        del document["observed_linux"]
     unsigned = {key: value for key, value in document.items() if key != "frame_sha256"}
     digest = hashlib.sha256(_canonical_json(unsigned)).hexdigest()
     document["frame_sha256"] = digest
@@ -443,6 +486,7 @@ def make_native_result_frame(
     sequence: int,
     payload: bytes = b"",
     terminal_status: Literal["complete", "partial"] | None = None,
+    observed_linux: ObservedLinuxIdentity | dict[str, str] | None = None,
 ) -> NativeResultFrame:
     """Create a checksummable identity, data, or terminal result frame."""
 
@@ -461,6 +505,7 @@ def make_native_result_frame(
         payload_base64=base64.b64encode(payload).decode("ascii") if payload else "",
         payload_sha256=hashlib.sha256(payload).hexdigest() if payload else None,
         terminal_status=terminal_status,
+        observed_linux=observed_linux,
     )
 
 

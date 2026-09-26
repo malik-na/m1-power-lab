@@ -7,11 +7,16 @@ in the [J313 candidate image](../docs/NATIVE-HARNESS.md). It consumes an immutab
 to stdout. The host owns and configures that descriptor; this program does not
 open USB, serial, or network devices.
 
-The identity frame repeats identity and boot-epoch values from the launch
-manifest. This binds frames to the requested launch, but does not independently
-observe or authenticate the physical target. The host assembler reports this
-as `launch_binding_verified`; `identity_verified` remains false until a live
-adapter verifies the target through an independent qualified observation.
+The identity frame repeats target identity and the prelaunch boot-epoch value.
+Native startup also reads Linux's boot UUID and kernel release and hashes the
+exact packaged image configuration before sampling. Its optional
+`observed_linux` identity object is a Linux self-report; the new Linux boot UUID
+is distinct from the prelaunch proxy epoch. The host checks the observed
+configuration digest against the launch and retains the bounded fields.
+`identity_verified` remains false until an independent live adapter verifies
+the physical source. Legacy frames without this object retain their original
+bytes/checksums. New images require an updated host decoder; old strict
+decoders reject the additional object.
 
 The launch `parameters` object must contain only `sample_count` and
 `sample_period_ms`. The program limits the run to one hour, the protocol frame

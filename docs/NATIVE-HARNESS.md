@@ -64,8 +64,14 @@ The gadget uses USB `1d6b:0104` and the public serial label
 The host channel owner must bind the expected physical USB path, acquire
 exclusive ownership, configure raw serial, then send exactly one compact
 `m1lab.native-launch.v1` JSON object followed by a newline. The target accepts
-at most 256 KiB, validates the launch using the in-image collector, and emits
-the existing checksummed native result frames. No shell commands are accepted.
+at most 256 KiB and validates the launch using the in-image collector. Before
+sampling, it reads Linux's boot UUID and kernel release and hashes the exact
+packaged lock at `/etc/m1lab/image-config.json`; missing or mismatched
+configuration refuses capture. The identity frame carries this bounded
+`observed_linux` self-report, followed by the checksummed native result frames.
+It does not authenticate physical origin. No shell commands are accepted.
+Use the matching updated host decoder: legacy frames still decode, but older
+strict hosts cannot accept the new identity object.
 
 The launch must fit both its own deadline and the remaining 150-second
 native window. Use a short setup capture with enough time for enumeration;
@@ -83,8 +89,8 @@ USB controller, sensor drivers or reboot. The source review found no concrete
 boot blocker; the selected exact image/procedure still needs review before
 execution through the coordinator/helper path.
 
-Next integration work is independently observed boot/configuration identity,
-exclusive native channel ownership and typed launch dispatch, followed by one
+Next integration work is exclusive native channel ownership and typed launch
+dispatch, followed by independent identity checks during one
 owner-attended M1 capture and observed return/re-identification. Preserve the
 existing normal ALARM boot path and physical recovery instructions. Never
 mark this candidate `known_good` solely because assembly or emulation passed.

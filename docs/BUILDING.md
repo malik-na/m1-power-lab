@@ -87,8 +87,11 @@ view rejects duplicate JSON keys and is rebuilt from the recognized fields.
 It also checks that a protocol-complete capture contains the requested number
 of samples; a mismatch is reported as an unknown capture while preserving the
 separate protocol status.
-Frame identity and boot-epoch values are echoes from the launch manifest. The
-host records their match as `launch_binding_verified`; it leaves
+Frame target identity and prelaunch boot-epoch values are echoes from the
+launch manifest. The candidate startup also supplies observed Linux boot UUID,
+kernel release and a digest of the exact packaged configuration before
+sampling. The host validates and retains that self-report separately.
+It records the launch match as `launch_binding_verified`; it leaves
 `identity_verified=false` until an independent live-target observation exists.
 Raw binary frames are not inserted into Codex context; use the screened
 decoded artifact for analysis. Offline import explicitly records

@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import importlib.util
 import errno
+import hashlib
 import os
 from pathlib import Path
 import select
+import stat
 import subprocess
 import termios
 import time
@@ -17,6 +19,9 @@ import tty
 BOOT_SECONDS = 150
 MAX_LAUNCH_BYTES = 256 * 1024
 GADGET = Path("/sys/kernel/config/usb_gadget/m1lab")
+BOOT_ID = Path("/proc/sys/kernel/random/boot_id")
+IMAGE_CONFIG = Path("/etc/m1lab/image-config.json")
+MAX_IMAGE_CONFIG_BYTES = 256 * 1024
 
 
 def _remaining(deadline: float) -> float:
@@ -92,6 +97,40 @@ def _configure_gadget(deadline: float) -> Path:
     return Path("/dev/ttyGS0")
 
 
+def _observe_linux(launch: dict, collector: object) -> dict[str, str]:
+    """Read fixed Linux boot facts and hash the exact packaged image config."""
+
+    boot_fd = os.open(BOOT_ID, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        boot_id_bytes = os.read(boot_fd, 65)
+    finally:
+        os.close(boot_fd)
+    try:
+        boot_id = boot_id_bytes.decode("ascii").strip("\n")
+    except UnicodeError as exc:
+        raise ValueError("Linux boot ID is invalid") from exc
+    config_fd = os.open(
+        IMAGE_CONFIG,
+        os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
+    )
+    try:
+        info = os.fstat(config_fd)
+        if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= MAX_IMAGE_CONFIG_BYTES:
+            raise ValueError("packaged image configuration is not a bounded regular file")
+        config = os.read(config_fd, MAX_IMAGE_CONFIG_BYTES + 1)
+        if len(config) != info.st_size:
+            raise ValueError("packaged image configuration changed while reading")
+    finally:
+        os.close(config_fd)
+    observed = {
+        "boot_id": boot_id,
+        "kernel_release": os.uname().release,
+        "configuration_sha256": hashlib.sha256(config).hexdigest(),
+    }
+    collector._validate_observed_linux(observed, launch)
+    return observed
+
+
 def main() -> int:
     deadline = time.monotonic() + BOOT_SECONDS
     fd = None
@@ -111,7 +150,8 @@ def main() -> int:
         # Bound the one accepted run by the remaining native window too.
         if launch["_remaining_deadline_seconds"] > _remaining(deadline):
             raise ValueError("launch exceeds native window")
-        collector._emit(fd, launch)
+        observed_linux = _observe_linux(launch, collector)
+        collector._emit(fd, launch, observed_linux=observed_linux)
         # Let queued result bytes reach the host before the reboot attempt.
         # No tcdrain: an absent host must not extend the finite window.
         time.sleep(min(2, _remaining(deadline)))

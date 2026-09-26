@@ -192,6 +192,7 @@ def _sysfs_snapshot() -> dict[str, Any]:
 def _frame(
     launch: dict[str, Any], kind: str, sequence: int, *, payload: bytes = b"",
     terminal_status: str | None = None,
+    observed_linux: dict[str, str] | None = None,
 ) -> bytes:
     document: dict[str, Any] = {
         "schema_version": PROTOCOL,
@@ -207,6 +208,11 @@ def _frame(
         "terminal_status": terminal_status,
         "frame_sha256": "0" * 64,
     }
+    if observed_linux is not None:
+        if kind != "identity":
+            raise CaptureError("observed Linux identity belongs only on the identity frame")
+        _validate_observed_linux(observed_linux, launch)
+        document["observed_linux"] = observed_linux
     unsigned = {key: value for key, value in document.items() if key != "frame_sha256"}
     document["frame_sha256"] = hashlib.sha256(canonical_json(unsigned)).hexdigest()
     encoded = canonical_json(document)
@@ -236,7 +242,28 @@ def _write_all(fd: int, data: bytes, deadline: float) -> None:
         offset += written
 
 
-def _emit(fd: int, launch: dict[str, Any]) -> tuple[int, int]:
+def _validate_observed_linux(observed: dict[str, str], launch: dict[str, Any]) -> None:
+    if not isinstance(observed, dict) or set(observed) != {
+        "boot_id", "kernel_release", "configuration_sha256"
+    }:
+        raise CaptureError("observed Linux identity has missing or unknown fields")
+    boot_id = observed["boot_id"]
+    release = observed["kernel_release"]
+    config = observed["configuration_sha256"]
+    if (not isinstance(boot_id, str)
+            or not re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", boot_id)
+            or not isinstance(release, str) or not 1 <= len(release) <= 128
+            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+~-]*", release)
+            or not isinstance(config, str) or not SHA256_RE.fullmatch(config)
+            or config != launch["configuration_sha256"]):
+        raise CaptureError("observed Linux identity does not match the launch")
+
+
+def _emit(
+    fd: int, launch: dict[str, Any], *, observed_linux: dict[str, str] | None = None
+) -> tuple[int, int]:
+    if observed_linux is not None:
+        _validate_observed_linux(observed_linux, launch)
     descriptor_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
     fcntl.fcntl(fd, fcntl.F_SETFL, descriptor_flags | os.O_NONBLOCK)
     count = launch["parameters"]["sample_count"]
@@ -255,7 +282,7 @@ def _emit(fd: int, launch: dict[str, Any]) -> tuple[int, int]:
     total_payload = 0
     frames = 0
     try:
-        _write_all(fd, _frame(launch, "identity", sequence), data_deadline)
+        _write_all(fd, _frame(launch, "identity", sequence, observed_linux=observed_linux), data_deadline)
         sequence += 1
         frames += 1
         for sample_index in range(count):

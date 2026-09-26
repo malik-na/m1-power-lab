@@ -284,6 +284,7 @@ def _parse_saved_capture(
             payload=capture.payload,
             frame_count=capture.frame_count,
             message=message,
+            observed_linux=capture.observed_linux,
         )
     return capture
 
@@ -336,6 +337,7 @@ def _publish_capture(
             "collector payload did not match the recognized schema or requested sample count"
             if accepted_status == "unknown" and capture.status != "unknown" else ""
         ))[:1024],
+        observed_linux=capture.observed_linux,
     )
     capture_document = safe_capture.model_dump(mode="json")
     capture_document["protocol_status"] = capture.status

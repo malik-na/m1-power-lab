@@ -300,6 +300,14 @@ def build(lock_path: Path, packages_dir: Path, kernel_package: Path, output_dir:
             shutil.copyfile(source, stage / output_name)
             source_hashes[source_name] = _sha256(source)
 
+        config_name = "etc/m1lab/image-config.json"
+        _safe_parent(root, config_name)
+        config = root / config_name
+        if config.exists() or config.is_symlink():
+            raise BundleError(f"image config collides with package: {config_name}")
+        shutil.copyfile(inputs / "native-image.lock.json", config)
+        config.chmod(0o644)
+
         _write_initramfs(root, stage / "initramfs.cpio.gz", epoch)
         output_names = ("Image", "Image.gz", "j313.dtb", "initramfs.cpio.gz", "collector.py", "native_boot.py")
         metadata = {
