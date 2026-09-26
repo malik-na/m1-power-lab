@@ -412,6 +412,28 @@ def create_app(
             headers={"Content-Disposition": 'attachment; filename="m1-power-lab-export.json"'},
         )
 
+    @app.get("/api/science-report.md")
+    async def science_report(owner: OwnerDependency) -> Response:
+        try:
+            await facade.get_view("overview", owner)
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        renderer = getattr(facade, "science_report", None)
+        if renderer is None:
+            raise HTTPException(status_code=501, detail="Scientific report is unavailable.")
+        try:
+            content = renderer()
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return Response(
+            content=content,
+            media_type="text/markdown; charset=utf-8",
+            headers={
+                "Content-Disposition": 'attachment; filename="m1-power-lab-research-report.md"',
+                "Cache-Control": "no-store",
+            },
+        )
+
     @app.get("/api/artifacts/{artifact_id}")
     async def artifact(artifact_id: str, owner: OwnerDependency) -> Response:
         try:

@@ -96,6 +96,7 @@ details summary { cursor: pointer; }
 .timeline-mark { z-index: 1; width: 11px; height: 11px; margin-top: 5px; border: 2px solid var(--bg); border-radius: 50%; background: var(--blue); }
 .timeline-item p { margin-bottom: .4rem; color: #d1dae6; font-size: .85rem; }
 .inline-link { font-size: .8rem; }
+.inline-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .8rem; }
 .risk-high { border-color: rgba(255,125,134,.55); }
 .risk-high .risk-label { color: var(--red); background: rgba(255,125,134,.12); }
 .risk-medium { border-color: rgba(255,196,107,.5); }

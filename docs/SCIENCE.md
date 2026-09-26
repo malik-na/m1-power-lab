@@ -60,7 +60,9 @@ derived outcomes and uncertainty, regression checks, observations and their raw
 artifact digests, claim evidence, redesign history, next actions, and an
 immutable record manifest. It is generated only from validated records and
 labels the limits of the evidence; it does not independently qualify a
-measurement or convert replay evidence into an M1 result.
+measurement or convert replay evidence into an M1 result. The owner can also
+download this report from the authenticated evidence view; the separate full
+JSON export remains available there.
 
 Derivation reads the primary metric from the cited observations. It does not
 accept caller supplied power values. Every pair must contain one baseline and

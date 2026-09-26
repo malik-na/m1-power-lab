@@ -31,6 +31,7 @@ from m1lab.science import (
     RegressionCheck,
     ScientificRecord,
     ScientificRecordStore,
+    render_scientific_report,
 )
 from m1lab.web.facade import (
     CommandReceipt,
@@ -422,6 +423,12 @@ class CoordinatorFacade:
             "events": [event.model_dump(mode="json") for event in events],
             "records": records,
         }
+
+    def science_report(self) -> str:
+        published = ScientificRecordStore(self.core).list(self.session_id)
+        if not published:
+            raise LookupError("no scientific records are published for this session")
+        return render_scientific_report(self.session_id, published)
 
     def artifact(self, artifact_id: str) -> tuple[bytes, str]:
         record = self.core.session_artifact(self.session_id, artifact_id)
