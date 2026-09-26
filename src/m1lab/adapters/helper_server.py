@@ -9,6 +9,7 @@ is never retried here.
 from __future__ import annotations
 
 from contextlib import AbstractContextManager
+from dataclasses import replace
 from datetime import datetime, timezone
 import fcntl
 import logging
@@ -27,7 +28,10 @@ from .hardware import (
     HardwareDispatch,
     HardwareError,
     HardwareResult,
+    HardwareResultStatus,
     InspectRegister,
+    MAX_RESULT_BYTES,
+    RunNativeCandidate,
     TargetSnapshot,
 )
 from .helper_protocol import (
@@ -244,7 +248,8 @@ class HelperServer:
             if remaining <= 0:
                 raise HardwareError("helper rejected an expired dispatch before execution")
             operation_deadline = time.monotonic() + remaining
-            _validate_dispatch_target(dispatch, self.adapter.inspect())
+            preflight_snapshot = self.adapter.inspect()
+            _validate_dispatch_target(dispatch, preflight_snapshot)
             if dispatch.deadline <= datetime.now(timezone.utc):
                 raise HardwareError("helper rejected a dispatch whose deadline elapsed during preflight")
             if self.dispatch_guard is None:
@@ -258,7 +263,23 @@ class HelperServer:
                 raise HardwareError("device backend returned a mismatched operation ID")
             if result.boot_epoch != dispatch.boot_epoch:
                 raise HardwareError("device backend returned a mismatched boot epoch")
-            _validate_dispatch_target(dispatch, self.adapter.inspect())
+            if isinstance(dispatch.operation, RunNativeCandidate):
+                try:
+                    returned = self.adapter.inspect()
+                except Exception:
+                    returned = None
+                capability = next(
+                    item for item in preflight_snapshot.capabilities
+                    if item.name == "run_native_candidate" and item.version == 1
+                )
+                if (len(result.payload) > capability.max_result_bytes
+                        or not _native_return_verified(dispatch, result, returned)):
+                    result = replace(
+                        result, status=HardwareResultStatus.UNKNOWN,
+                        message=(result.message[:4000] + " Native return could not be verified.")[:4096],
+                    )
+            else:
+                _validate_dispatch_target(dispatch, self.adapter.inspect())
             write_helper_frame_until(
                 connection.fileno(),
                 encode_result(result),
@@ -411,6 +432,9 @@ def _verify_peer_uid(connection: socket.socket, expected_uid: int) -> None:
 
 
 def _validate_dispatch_target(dispatch: HardwareDispatch, snapshot: TargetSnapshot) -> None:
+    if isinstance(dispatch.operation, RunNativeCandidate):
+        _validate_native_candidate_target(dispatch, snapshot)
+        return
     if not snapshot.available or not snapshot.qualified:
         raise HardwareError("helper target is unavailable or not physically qualified")
     if snapshot.target_id != dispatch.target_identity:
@@ -437,6 +461,52 @@ def _validate_dispatch_target(dispatch: HardwareDispatch, snapshot: TargetSnapsh
         raise HardwareError("helper target does not advertise this read-only operation")
     if required_bytes > capability.max_result_bytes:
         raise HardwareError("helper operation exceeds the advertised capability bound")
+
+
+def _validate_native_candidate_target(dispatch: HardwareDispatch, snapshot: TargetSnapshot) -> None:
+    """Allow one attended qualification run from the observed proxy state."""
+
+    if not snapshot.available or snapshot.mode != "proxy":
+        raise HardwareError("native candidate requires an available proxy target")
+    if snapshot.target_id != dispatch.target_identity:
+        raise HardwareError("native candidate target identity differs from the dispatch")
+    if snapshot.boot_epoch != dispatch.boot_epoch:
+        raise HardwareError("native candidate proxy boot epoch differs from the dispatch")
+    if snapshot.configuration_digest != dispatch.configuration_digest:
+        raise HardwareError("native candidate proxy configuration differs from the dispatch")
+    operation = dispatch.operation
+    assert isinstance(operation, RunNativeCandidate)
+    required = {
+        operation.payload_sha256, operation.image_manifest_sha256,
+        operation.launch_manifest_sha256,
+    }
+    if len(required) != 3 or not required.issubset(dispatch.artifact_digests):
+        raise HardwareError("native candidate requires its three reviewed artifact digests")
+    approval = dispatch.approval_scope
+    if (dispatch.approval_id is None or approval is None
+            or approval["physical_attendance_confirmed"] is not True
+            or approval["repeat_limit"] != 1
+            or approval["boot_epoch"] != dispatch.boot_epoch
+            or approval["configuration_digest"] != dispatch.configuration_digest):
+        raise HardwareError("native candidate requires exact attended one-run approval")
+    capability = next((item for item in snapshot.capabilities
+                       if item.name == "run_native_candidate" and item.version == 1), None)
+    if (capability is None or capability.mutating is not True
+            or not 0 < capability.max_result_bytes <= MAX_RESULT_BYTES):
+        raise HardwareError("native candidate capability is absent or not bounded")
+
+
+def _native_return_verified(
+    dispatch: HardwareDispatch, result: HardwareResult, snapshot: TargetSnapshot | None
+) -> bool:
+    if (snapshot is None or not snapshot.available or snapshot.mode != "proxy"
+            or snapshot.target_id != dispatch.target_identity
+            or snapshot.configuration_digest != dispatch.configuration_digest
+            or not snapshot.boot_epoch or snapshot.boot_epoch == dispatch.boot_epoch):
+        return False
+    if result.status is HardwareResultStatus.COMPLETED:
+        return result.values.get("return_boot_epoch") == snapshot.boot_epoch
+    return True
 
 
 def _validate_socket_path(path: Path) -> None:

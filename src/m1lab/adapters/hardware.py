@@ -132,8 +132,22 @@ class SimulateBoot:
             raise ValueError("next boot epoch must be 1..128 characters")
 
 
+@dataclass(frozen=True, slots=True)
+class RunNativeCandidate:
+    """Request the fixed native candidate from three content-addressed artifacts."""
+
+    payload_sha256: str
+    image_manifest_sha256: str
+    launch_manifest_sha256: str
+    kind: str = field(default="run_native_candidate", init=False)
+
+    def __post_init__(self) -> None:
+        for name in ("payload_sha256", "image_manifest_sha256", "launch_manifest_sha256"):
+            _require_sha256(getattr(self, name), name)
+
+
 HardwareOperation: TypeAlias = (
-    InspectRegister | CaptureMemory | WaitForReplay | SimulateBoot
+    InspectRegister | CaptureMemory | WaitForReplay | SimulateBoot | RunNativeCandidate
 )
 
 
@@ -227,6 +241,20 @@ class HardwareDispatch:
             raise ValueError("deadline must be timezone-aware")
         if self.deadline <= _utc_now():
             raise ValueError("dispatch deadline has expired")
+        if isinstance(self.operation, RunNativeCandidate):
+            if self.approval_id is None or self.approval_scope is None:
+                raise ValueError("native candidate requires exact approval")
+            if self.approval_scope["physical_attendance_confirmed"] is not True:
+                raise ValueError("native candidate requires confirmed physical attendance")
+            required = (
+                self.operation.payload_sha256,
+                self.operation.image_manifest_sha256,
+                self.operation.launch_manifest_sha256,
+            )
+            if any(digest not in self.artifact_digests for digest in required):
+                raise ValueError("native candidate artifacts must be in the dispatch envelope")
+            if (self.deadline - _utc_now()).total_seconds() > 480:
+                raise ValueError("native candidate deadline exceeds 480 seconds")
         if len(self.scope) > MAX_SCOPE_ENTRIES:
             raise ValueError("dispatch scope has too many entries")
         normalized: dict[str, str] = {}

@@ -78,12 +78,14 @@ host ACM exchange for a caller holding the helper owner lock. It checks the
 fixed USB labels and configured physical port before/after exclusive tty
 open, sends the launch once, and shares one monotonic deadline across send
 and receipt. Partial send is ambiguous; receive failures retain raw bytes.
-The transport never retries or changes devices. It is not yet enabled through
-a live coordinator/helper dispatch command. Synthetic PTY coverage does not
-qualify the actual USB channel.
+The transport never retries or changes devices. The explicit attended helper
+path below uses a 1 MiB wire cap and reserves time to observe proxy return.
+Synthetic PTY coverage does not qualify the actual USB channel.
 
-The launch must fit both its own deadline and the remaining 150-second
-native window. Use a short setup capture with enough time for enumeration;
+The requested sample duration must fit both its launch deadline and the
+remaining 150-second native window. Approval expiry may be later than the
+native window; it never extends the collector's sample duration. Use a short
+setup capture with enough time for enumeration;
 a Linux clock mismatch fails launch validation instead of inventing timing.
 After capture, the target allows two seconds for output delivery and requests
 reboot. A separate userspace watchdog requests reboot at 180 seconds from
@@ -98,12 +100,64 @@ USB controller, sensor drivers or reboot. The source review found no concrete
 boot blocker; the selected exact image/procedure still needs review before
 execution through the coordinator/helper path.
 
-Next integration work is exclusive native channel ownership and typed launch
-dispatch, followed by independent identity checks during one
-owner-attended M1 capture and observed return/re-identification. Preserve the
+Next is exact-artifact review and one owner-attended M1 capture, with
+independent identity checks and observed return/re-identification. Preserve the
 existing normal ALARM boot path and physical recovery instructions. Never
 mark this candidate `known_good` solely because assembly or emulation passed.
 Scientific sensor qualification and investigation remain stopped.
+
+## Explicit attended qualification path
+
+This path is separate from normal application startup and the installed lab.
+Use a dedicated harness state directory and explicit session ID. It requires
+an accepted review of the exact procedure and artifacts, followed by a
+single-use owner approval bound to the target, owned proxy connection
+generation, helper configuration and physical attendance. The coordinator
+rechecks these at dispatch. Neither CLI command resumes or reconciles a
+session; existing accounting and unresolved-operation gates still apply.
+
+1. Prepare the boot client environment using the hash-pinned
+   `scripts/m1n1-client-requirements.txt`. Select a regular interpreter file
+   inside that environment (a copied interpreter works; a symlink is refused).
+   Inventory and pin the existing `linux.py` executable and proxyclient tree.
+2. Create a private configuration JSON with exactly these string fields:
+   `artifact_root`, `usb_topology`, `expected_proxy_serial_sha256`,
+   `python_path`, `python_sha256`, `boot_script_path`, `boot_script_sha256`,
+   `proxyclient_path`, `proxyclient_sha256`. Paths must be absolute. The fixed boot command accepts
+   no command text from a procedure. Keep the serial digest in private setup
+   evidence. Publish the reviewed configuration/tool provenance with the
+   procedure's artifacts.
+3. From an operator process with the required device access, launch
+   `scripts/serve-native-helper.py --state-dir PRIVATE_HELPER_STATE
+   --config PRIVATE_CONFIG --owner-pid PARENT_PID`. The PID must be its
+   immediate parent. Keep this process alive through preparation and return.
+   Use a stable helper state directory so the durable denial journal survives
+   restarts. The worker holds exclusive ownership; supervisor bounds are
+   12 seconds startup, 480 seconds per request and 3 seconds per cleanup stage.
+4. Use `m1lab --session HARNESS_ID native-inspect --helper-socket SOCKET`.
+   The result is explicitly unqualified. Its epoch is a conservative owned
+   connection generation, not independently attested target boot identity.
+   Prepare the image-bound launch against this identity and epoch, with a
+   short sample duration, output limit at most 262144 bytes and a finite
+   expiry allowing review and boot. Register exactly one mutating
+   `run_native_candidate` operation with the payload, image manifest and
+   launch manifest SHA-256 parameters, required physical attendance, and a
+   timeout at most 480 seconds. Additional reviewed tool artifacts are allowed.
+5. Complete separate exact review and attended owner approval. Refresh the
+   recorded proxy snapshot immediately before dispatch (freshness is at most
+   30 seconds). Run `m1lab --session HARNESS_ID native-run --helper-socket
+   SOCKET --procedure-id PROCEDURE --procedure-revision REVISION
+   --target-snapshot SNAPSHOT` once.
+
+The helper stages only the three verified boot files, closes the proxy
+descriptor, invokes the pinned tethered boot tool once, receives the bounded
+native stream, and observes the same proxy USB identity again. A complete
+capture alone is insufficient: success also requires a new owned proxy
+connection and matching Linux image configuration. Raw received bytes are
+published before interpretation. Lost capture, launcher failure or missing
+return remains unknown, with no automatic repeat or promotion to known-good.
+The published capture retains unverified physical source and timing flags.
+Failure of the kernel or USB path may still require owner physical recovery.
 
 The USB composition follows the [Linux configfs gadget interface](https://www.kernel.org/doc/html/latest/usb/gadget_configfs.html).
 The kernel/DTB/initramfs bundle follows the [Asahi tethered boot interface](https://asahilinux.org/docs/sw/tethered-boot/);

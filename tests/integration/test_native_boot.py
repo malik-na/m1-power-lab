@@ -18,6 +18,16 @@ native_boot = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(native_boot)
 
 
+def test_approval_headroom_does_not_extend_or_prevent_short_native_capture():
+    launch = {
+        "parameters": {"sample_count": 3, "sample_period_ms": 1000},
+        "_remaining_deadline_seconds": 600,
+    }
+    native_boot._check_capture_window(launch, time.monotonic() + 149)
+    with pytest.raises(ValueError, match="capture exceeds native window"):
+        native_boot._check_capture_window(launch, time.monotonic() + 2)
+
+
 def test_fragmented_one_line_launch_is_received_from_pipe():
     read_fd, write_fd = os.pipe()
 

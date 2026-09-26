@@ -40,6 +40,8 @@ from m1lab.adapters import (
     SimulateBoot,
     WaitForReplay,
 )
+from m1lab.adapters.hardware import HardwareError
+from m1lab.adapters.helper_server import HelperHardwareAdapter
 from m1lab.core import (
     CommandKind,
     CoreApp,
@@ -59,6 +61,7 @@ from m1lab.core.errors import CoreError
 from m1lab.core.journal import JOURNAL_DISK_RESERVE_BYTES, SCHEMA_VERSION
 from m1lab.core.models import new_id, utc_now
 from m1lab.experiment import ExperimentService
+from m1lab.experiment.native_qualification import NativeQualificationError, NativeQualificationService
 from m1lab.investigator import EvidenceExcerpt, InvestigationOrchestrator, InvestigationRequest
 from m1lab.host import HostAdmissionPolicy, LinuxHostMonitor
 from m1lab.native_runs import import_native_capture, prepare_native_launch, receive_native_capture
@@ -224,6 +227,19 @@ def parser() -> argparse.ArgumentParser:
     native_receive.add_argument("--launch-artifact", required=True)
     native_receive.add_argument("--image-manifest-artifact", required=True)
 
+    native_inspect = commands.add_parser(
+        "native-inspect", help="record an unqualified native helper snapshot for attended qualification"
+    )
+    native_inspect.add_argument("--helper-socket", type=Path, required=True)
+
+    native_run = commands.add_parser(
+        "native-run", help="perform attended qualification that mutates a physical target"
+    )
+    native_run.add_argument("--helper-socket", type=Path, required=True)
+    native_run.add_argument("--procedure-id", required=True)
+    native_run.add_argument("--procedure-revision", type=int, required=True)
+    native_run.add_argument("--target-snapshot", required=True)
+
     procedure_register = commands.add_parser(
         "procedure-register", help="validate and freeze an explicit typed procedure draft"
     )
@@ -287,6 +303,8 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> None:
     args = parser().parse_args(argv)
+    if args.action in {"native-inspect", "native-run"} and not args.session:
+        parser().error(f"{args.action} requires an explicit --session")
     try:
         settings = Settings.from_env()
     except ValueError as exc:
@@ -295,12 +313,13 @@ def main(argv: list[str] | None = None) -> None:
     core = CoreApp.open(
         settings.paths,
         max_concurrent_jobs=settings.max_concurrent_codex_jobs,
+        allow_native_qualification=args.action == "native-run",
     )
     try:
         result = _dispatch(args, settings, core)
         if result is not None:
             _print(result, args.json)
-    except (CoreError, ValueError, OSError) as exc:
+    except (CoreError, HardwareError, NativeQualificationError, ValueError, OSError) as exc:
         print(f"m1lab: {exc}", file=sys.stderr)
         raise SystemExit(2) from exc
     finally:
@@ -330,6 +349,24 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
     if session_id is None:
         raise ValueError("no session exists; run 'm1lab init' first")
     session = core.session(session_id)
+
+    if args.action == "native-inspect":
+        snapshot = NativeQualificationService(
+            core, HelperHardwareAdapter(args.helper_socket)
+        ).inspect_and_record(session_id)
+        return snapshot.model_dump(mode="json")
+    if args.action == "native-run":
+        with _coordinator_lease(settings.paths.root / "coordinator.lock"):
+            report = NativeQualificationService(
+                core, HelperHardwareAdapter(args.helper_socket)
+            ).authorize_and_run(DispatchRequest(
+                session_id=session_id,
+                procedure_id=args.procedure_id,
+                procedure_revision=args.procedure_revision,
+                target_snapshot_id=args.target_snapshot,
+                adapter_mode=TargetMode.PROXY,
+            ))
+        return report.model_dump(mode="json")
 
     if args.action == "status":
         return core.snapshot(session_id).model_dump(mode="json")

@@ -153,6 +153,29 @@ def test_receive_deadline_keeps_partial_evidence_and_never_resends(captured, cha
     assert len(seen) == 1
 
 
+def test_caller_capture_bounds_wire_bytes_without_changing_signed_launch(captured, channel):
+    _session, image, _manifest, launch, _artifact, stream, _root = captured
+    transport, master, _slave, _usb, _interface, _opens, _settings = channel
+    seen = []
+
+    def target():
+        seen.append(_read_line(master))
+        os.write(master, stream[:40])
+
+    with transport:
+        worker = Thread(target=target)
+        worker.start()
+        receipt = transport.capture(
+            launch, image, deadline_monotonic=time.monotonic() + 1,
+            max_stream_bytes=17,
+        )
+        worker.join(timeout=2)
+        assert not worker.is_alive()
+    assert receipt.raw_stream == stream[:17]
+    assert receipt.stop_reason == "stream_limit"
+    assert seen == [encode_native_manifest(launch) + b"\n"]
+
+
 def test_partial_send_failure_is_ambiguous_and_never_retried(captured, channel, monkeypatch):
     _session, image, _manifest, launch, _artifact, _stream, _root = captured
     transport, master, _slave, _usb, _interface, _opens, _settings = channel

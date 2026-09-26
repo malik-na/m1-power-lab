@@ -147,9 +147,10 @@ def main() -> int:
         collector = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(collector)
         launch = collector.load_launch(launch_path)
-        # Bound the one accepted run by the remaining native window too.
-        if launch["_remaining_deadline_seconds"] > _remaining(deadline):
-            raise ValueError("launch exceeds native window")
+        # The immutable approval may expire later than this boot's window.
+        # The collector stops at the earlier of its sample duration and that
+        # expiry, so bound the requested duration here, not approval headroom.
+        _check_capture_window(launch, deadline)
         observed_linux = _observe_linux(launch, collector)
         collector._emit(fd, launch, observed_linux=observed_linux)
         # Let queued result bytes reach the host before the reboot attempt.
@@ -162,6 +163,13 @@ def main() -> int:
     finally:
         if fd is not None:
             os.close(fd)
+
+
+def _check_capture_window(launch: dict, deadline: float) -> None:
+    parameters = launch["parameters"]
+    seconds = parameters["sample_count"] * parameters["sample_period_ms"] / 1000
+    if seconds > _remaining(deadline):
+        raise ValueError("capture exceeds native window")
 
 
 if __name__ == "__main__":

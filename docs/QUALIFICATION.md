@@ -2,6 +2,25 @@
 
 ## Host-only gate
 
+- The attended native path now connects coordinator admission, typed helper
+  dispatch, verified bundle staging, the fixed pinned tethered boot client,
+  bounded ACM capture and re-observed proxy return. `native-inspect` and
+  `native-run` require an explicit session; only the latter enables the
+  qualification gate. Exact review, single-use attended approval, durable
+  duplicate refusal and unresolved accounting/operation gates remain active.
+  The helper reports `qualified=false`; its epoch identifies the owned proxy
+  connection, not independently attested boot state. Raw evidence precedes
+  interpretation, and absent/mismatched return stays unknown.
+  `.venv/bin/python -m pytest -q` passed **313 tests in 38.60 seconds** on the
+  ThinkPad using `gpt-6-sol` medium with host socket/process permissions. The
+  initial run exposed one test fixture expecting IPC refusal where typed
+  construction already refused; that assertion was corrected before this
+  passing run. Subsequent focused checks cover the added imported-client
+  tree pin. The actual `3f75558` published payload also passed bundle staging.
+  No physical native boot has occurred, and no live service was deployed or
+  resumed. The candidate's sample window now permits longer approval
+  headroom without extending its finite sample duration; this target change
+  requires a rebuilt image before physical use.
 - The identity-enabled candidate at `3f75558` was rebuilt and session-linked.
   Its packaged configuration SHA matched the image manifest. The actual
   packaged ARM64 Python/collector ran under qemu-user with synthetic sysfs and

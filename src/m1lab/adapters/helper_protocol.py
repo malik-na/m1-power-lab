@@ -29,6 +29,7 @@ from .hardware import (
     HardwareResult,
     HardwareResultStatus,
     InspectRegister,
+    RunNativeCandidate,
     SimulateBoot,
     TargetSnapshot,
     WaitForReplay,
@@ -558,6 +559,15 @@ def _operation_document(operation: HardwareOperation) -> dict[str, Any]:
         return {"kind": operation.kind, "parameters": {"duration_ms": operation.duration_ms}}
     if isinstance(operation, SimulateBoot):
         return {"kind": operation.kind, "parameters": {"next_boot_epoch": operation.next_boot_epoch}}
+    if isinstance(operation, RunNativeCandidate):
+        return {
+            "kind": operation.kind,
+            "parameters": {
+                "payload_sha256": operation.payload_sha256,
+                "image_manifest_sha256": operation.image_manifest_sha256,
+                "launch_manifest_sha256": operation.launch_manifest_sha256,
+            },
+        }
     raise HelperProtocolError(f"unsupported typed operation {type(operation).__name__}")
 
 
@@ -587,6 +597,18 @@ def _decode_operation(document: Any) -> HardwareOperation:
             return WaitForReplay(duration)
         if kind == "simulate_boot" and set(parameters) == {"next_boot_epoch"}:
             return SimulateBoot(_expect_string(parameters["next_boot_epoch"], "next_boot_epoch"))
+        if kind == "run_native_candidate" and set(parameters) == {
+            "payload_sha256", "image_manifest_sha256", "launch_manifest_sha256"
+        }:
+            return RunNativeCandidate(
+                payload_sha256=_expect_string(parameters["payload_sha256"], "payload_sha256"),
+                image_manifest_sha256=_expect_string(
+                    parameters["image_manifest_sha256"], "image_manifest_sha256"
+                ),
+                launch_manifest_sha256=_expect_string(
+                    parameters["launch_manifest_sha256"], "launch_manifest_sha256"
+                ),
+            )
     except (TypeError, ValueError) as exc:
         raise HelperProtocolError(f"invalid operation parameters: {exc}") from exc
     raise HelperProtocolError(f"unsupported operation or parameters for {kind!r}")

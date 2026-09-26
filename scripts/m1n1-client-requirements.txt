@@ -1,0 +1,6 @@
+# Client dependencies from the published Asahi tethered-boot interface.
+# Wheel hashes verified against the corresponding PyPI release pages.
+# https://pypi.org/project/pyserial/3.5/
+# https://pypi.org/project/construct/2.10.70/
+pyserial==3.5 --hash=sha256:c4451db6ba391ca6ca299fb3ec7bae67a5c55dde170964c7a14ceefec02f2cf0
+construct==2.10.70 --hash=sha256:c80be81ef595a1a821ec69dc16099550ed22197615f4320b57cc9ce2a672cb30

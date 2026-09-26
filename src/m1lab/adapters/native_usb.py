@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import errno
 import fcntl
+import math
 import os
 from pathlib import Path
 import re
@@ -25,7 +26,9 @@ from .native_harness import (
     decode_native_launch_manifest,
     encode_native_manifest,
 )
-from .native_stream import NativeStreamReceipt, receive_native_result_stream
+from .native_stream import (
+    MAX_NATIVE_STREAM_BYTES, NativeStreamReceipt, receive_native_result_stream,
+)
 
 
 _TTY_NAME = re.compile(r"ttyACM[0-9]+\Z")
@@ -121,7 +124,9 @@ class NativeUsbTransport:
             os.close(fd)
 
     def capture(
-        self, launch: NativeLaunchManifest, image: NativeImageManifest
+        self, launch: NativeLaunchManifest, image: NativeImageManifest,
+        *, deadline_monotonic: float | None = None,
+        max_stream_bytes: int | None = None,
     ) -> NativeStreamReceipt:
         """Send one validated launch and receive on the same bounded channel."""
 
@@ -133,15 +138,26 @@ class NativeUsbTransport:
         line = encoded + b"\n"
         if len(line) > _MAX_LAUNCH_LINE_BYTES:
             raise NativeHarnessError("native launch line exceeds target bound")
+        if (deadline_monotonic is not None
+                and (type(deadline_monotonic) not in (int, float)
+                     or not math.isfinite(deadline_monotonic))):
+            raise ValueError("native capture deadline must be a finite monotonic timestamp")
+        if max_stream_bytes is None:
+            max_stream_bytes = MAX_NATIVE_STREAM_BYTES
+        if type(max_stream_bytes) is not int or not 1 <= max_stream_bytes <= MAX_NATIVE_STREAM_BYTES:
+            raise ValueError("native stream byte limit is invalid")
         self._attempted = True
         self._verify_usb_binding()
         deadline = time.monotonic() + (launch.deadline - datetime.now(timezone.utc)).total_seconds()
+        if deadline_monotonic is not None:
+            deadline = min(deadline, deadline_monotonic)
         try:
             _write_all(self._fd, line, deadline)
         except (OSError, TimeoutError) as exc:
             raise NativeUsbError("native launch send ended ambiguously; never retry") from exc
         return receive_native_result_stream(
             self._fd, launch, image, deadline_monotonic=deadline,
+            max_stream_bytes=max_stream_bytes,
         )
 
     def _verify_usb_binding(self) -> None:

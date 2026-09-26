@@ -122,3 +122,15 @@ The unit requires a kernel process handle for the current coordinator
 generation and stops when that process exits, without a systemd start/restart
 dependency. The installed lab remains unchanged. Source release-maintenance
 checks now hold both coordinator and helper locks and preserve the deny journal.
+
+## Attended native candidate qualification
+
+The separate `scripts/serve-native-helper.py` and explicit owner CLI commands
+now provide the finite native qualification path described in
+[NATIVE-HARNESS.md](NATIVE-HARNESS.md#explicit-attended-qualification-path).
+The ordinary observer above still refuses execution. This separate backend
+records an owned connection generation with `qualified=false`; it does not
+claim an independently attested boot epoch. Exact review, single-use attended
+approval, immutable artifact binding and the existing denial journal remain
+required. Native return is re-observed before success, and ambiguity retains
+raw evidence without retry. No helper service was installed or lab resumed.

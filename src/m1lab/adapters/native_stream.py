@@ -42,6 +42,7 @@ class NativeStreamReceipt:
 def receive_native_result_stream(
     fd: int, launch: NativeLaunchManifest, image: NativeImageManifest,
     *, deadline_monotonic: float | None = None,
+    max_stream_bytes: int | None = None,
 ) -> NativeStreamReceipt:
     """Receive one finite stream without changing or closing its descriptor.
 
@@ -58,6 +59,10 @@ def receive_native_result_stream(
         raise NativeHarnessError("native result descriptor is unavailable") from exc
     if not flags & os.O_NONBLOCK:
         raise NativeHarnessError("native result descriptor must be nonblocking")
+    if max_stream_bytes is None:
+        max_stream_bytes = MAX_NATIVE_STREAM_BYTES
+    if type(max_stream_bytes) is not int or not 1 <= max_stream_bytes <= MAX_NATIVE_STREAM_BYTES:
+        raise ValueError("native stream byte limit is invalid")
     # Set the monotonic bound before validation so setup cannot extend it.
     started = time.monotonic()
     remaining = (launch.deadline - datetime.now(timezone.utc)).total_seconds()
@@ -76,7 +81,7 @@ def receive_native_result_stream(
         if remaining <= 0:
             reason, message = "deadline", "host receive deadline elapsed; target stop is unverified"
             break
-        if len(raw) >= MAX_NATIVE_STREAM_BYTES:
+        if len(raw) >= max_stream_bytes:
             reason, message = "stream_limit", "result channel reached its wire-byte limit"
             break
         try:
@@ -84,7 +89,7 @@ def receive_native_result_stream(
             if not readable:
                 reason, message = "deadline", "host receive deadline elapsed; target stop is unverified"
                 break
-            chunk = os.read(fd, min(65_536, MAX_NATIVE_STREAM_BYTES - len(raw)))
+            chunk = os.read(fd, min(65_536, max_stream_bytes - len(raw)))
         except (InterruptedError, BlockingIOError):
             continue
         except (OSError, ValueError):

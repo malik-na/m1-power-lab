@@ -53,18 +53,24 @@ from .models import (
 class CoreApp:
     """Deep module for durable state, policy, eligibility and reconciliation."""
 
-    def __init__(self, journal: Journal, *, max_concurrent_jobs: int = 3):
+    def __init__(self, journal: Journal, *, max_concurrent_jobs: int = 3,
+                 allow_native_qualification: bool = False):
         if type(max_concurrent_jobs) is not int or not 1 <= max_concurrent_jobs <= 3:
             raise ValueError("max_concurrent_jobs must be between 1 and 3")
+        if type(allow_native_qualification) is not bool:
+            raise ValueError("allow_native_qualification must be a bool")
         self.journal = journal
         self.budgets = BudgetLedger(journal)
         self.max_concurrent_jobs = max_concurrent_jobs
+        self.allow_native_qualification = allow_native_qualification
 
     @classmethod
-    def open(cls, paths: AppPaths, *, max_concurrent_jobs: int = 3) -> "CoreApp":
+    def open(cls, paths: AppPaths, *, max_concurrent_jobs: int = 3,
+             allow_native_qualification: bool = False) -> "CoreApp":
         if type(max_concurrent_jobs) is not int or not 1 <= max_concurrent_jobs <= 3:
             raise ValueError("max_concurrent_jobs must be between 1 and 3")
-        return cls(Journal(paths), max_concurrent_jobs=max_concurrent_jobs)
+        return cls(Journal(paths), max_concurrent_jobs=max_concurrent_jobs,
+                   allow_native_qualification=allow_native_qualification)
 
     def close(self) -> None:
         self.journal.close()
@@ -485,6 +491,51 @@ class CoreApp:
             return str(exc)
         return None
 
+    def _native_qualification_reasons(
+        self, mode: TargetMode, procedure: ProcedureRecord, target: TargetSnapshot,
+        approval_scope: ApprovalScope | None,
+    ) -> list[str]:
+        """The sole default-disabled exception to replay-only authorization."""
+
+        if mode is not TargetMode.PROXY:
+            return (["native candidate requires proxy mode"]
+                    if any(op.kind == "run_native_candidate" for op in procedure.operations) else [])
+        if not self.allow_native_qualification:
+            return ["real hardware dispatch is disabled in this build"]
+        reasons: list[str] = []
+        if (len(procedure.operations) != 1
+                or procedure.operations[0].kind != "run_native_candidate"):
+            reasons.append("proxy qualification requires exactly one native candidate operation")
+            return reasons
+        operation = procedure.operations[0]
+        parameters = operation.parameters
+        digest_keys = {"payload_sha256", "image_manifest_sha256", "launch_manifest_sha256"}
+        if (set(parameters) != digest_keys
+                or any(not isinstance(value, str) or len(value) != 64
+                       or any(char not in "0123456789abcdef" for char in value)
+                       for value in parameters.values())
+                or len(set(parameters.values())) != 3):
+            reasons.append("native candidate requires three distinct SHA-256 artifact parameters")
+        elif not set(parameters.values()).issubset(procedure.artifact_digests):
+            reasons.append("native candidate operation digests are missing from the reviewed procedure")
+        if not operation.mutates_target or procedure.physical_attendance != "required":
+            reasons.append("native candidate requires mutation and physical attendance")
+        if operation.timeout_seconds > 480:
+            reasons.append("native candidate timeout exceeds 480 seconds")
+        if target.mode is not TargetMode.PROXY or "run_native_candidate" not in target.capabilities:
+            reasons.append("proxy target does not advertise native candidate qualification")
+        if (target.fresh_until is None or target.observed_at > utc_now()
+                or target.fresh_until > target.observed_at + timedelta(seconds=30)
+                or not target.is_fresh(utc_now())):
+            reasons.append("native candidate requires a fresh finite proxy snapshot")
+        if (approval_scope is None or approval_scope.physical_attendance_confirmed is not True
+                or approval_scope.repeat_limit != 1
+                or approval_scope.boot_epoch != target.boot_epoch
+                or approval_scope.configuration_digest != target.configuration_digest
+                or approval_scope.target_identity != target.identity):
+            reasons.append("native candidate requires one exact attended approval")
+        return reasons
+
     def authorize_operation(self, request: DispatchRequest) -> OperationAuthorization:
         with self.journal.transaction() as tx:
             reasons: list[str] = []
@@ -504,12 +555,19 @@ class CoreApp:
             redesign_blocker = self._redesign_gate_blocker(session.id, procedure)
             if redesign_blocker is not None:
                 reasons.append(redesign_blocker)
-            if request.adapter_mode not in {TargetMode.REPLAY, TargetMode.SYNTHETIC}:
+            if request.adapter_mode not in {TargetMode.REPLAY, TargetMode.SYNTHETIC, TargetMode.PROXY}:
                 reasons.append("real hardware dispatch is disabled in this build")
             if request.adapter_mode != target.mode:
                 reasons.append("adapter mode does not match the target snapshot")
             if not target.is_fresh(utc_now()):
                 reasons.append("target snapshot is stale")
+            if request.adapter_mode is TargetMode.PROXY:
+                latest_target = tx.execute(
+                    "SELECT id FROM target_snapshots WHERE session_id=? ORDER BY observed_at DESC, rowid DESC LIMIT 1",
+                    (session.id,),
+                ).fetchone()
+                if latest_target is None or latest_target["id"] != target.id:
+                    reasons.append("native candidate requires the latest proxy snapshot")
             missing = procedure.prerequisites - target.capabilities
             if missing:
                 reasons.append("missing target capabilities: " + ", ".join(sorted(missing)))
@@ -555,6 +613,10 @@ class CoreApp:
                 else:
                     approval_id = approval["id"]
                     approval_scope = json_load(approval["scope_json"], {})
+            reasons.extend(self._native_qualification_reasons(
+                request.adapter_mode, procedure, target,
+                ApprovalScope.model_validate(approval_scope) if approval_scope is not None else None,
+            ))
             eligibility = EligibilityResult(eligible=not reasons, reasons=reasons, approval_id=approval_id, review_id=review_id)
             if reasons:
                 return OperationAuthorization(eligibility=eligibility)
@@ -637,9 +699,19 @@ class CoreApp:
                 or latest_target.mode != target.mode
             ):
                 raise ConflictError("target identity, boot epoch, configuration, or mode changed before dispatch")
+            if envelope.adapter_mode is TargetMode.PROXY:
+                if latest_target.id != target.id:
+                    raise ConflictError("native candidate requires the latest proxy snapshot")
+                unresolved = tx.execute(
+                    "SELECT id FROM operations WHERE session_id=? AND id<>? "
+                    "AND state IN ('intent','dispatched','unknown_effect') LIMIT 1",
+                    (row["session_id"], operation_id),
+                ).fetchone()
+                if unresolved is not None:
+                    raise ConflictError("another target operation is unresolved")
             if row["mutates_target"] and not row["approval_id"]:
                 raise ConflictError("state-changing operation has no exact approval at dispatch")
-            tx.execute("UPDATE operations SET state=?, dispatched_at=? WHERE id=?", (OperationState.DISPATCHED, iso(), operation_id))
+            scope = None
             if row["approval_id"]:
                 approval = tx.execute(
                     "SELECT * FROM approvals WHERE id=?", (row["approval_id"],)
@@ -672,6 +744,21 @@ class CoreApp:
                 )
                 if consumed.rowcount != 1:
                     raise ConflictError("approval was concurrently changed before dispatch")
+            native_reasons = self._native_qualification_reasons(
+                envelope.adapter_mode, procedure, target, scope,
+            )
+            if native_reasons:
+                raise ConflictError("; ".join(native_reasons))
+            if envelope.adapter_mode is TargetMode.PROXY:
+                review = tx.execute(
+                    "SELECT disposition FROM reviews WHERE id=? AND session_id=? AND procedure_id=? "
+                    "AND procedure_revision=? AND procedure_digest=?",
+                    (envelope.review_id, row["session_id"], row["procedure_id"],
+                     row["procedure_revision"], row["procedure_digest"]),
+                ).fetchone()
+                if review is None or review["disposition"] != ReviewDisposition.ACCEPTED:
+                    raise ConflictError("native candidate lacks its exact accepted review")
+            tx.execute("UPDATE operations SET state=?, dispatched_at=? WHERE id=?", (OperationState.DISPATCHED, iso(), operation_id))
             self.journal.append_event(tx, kind="operation.dispatched", session_id=row["session_id"], subject_id=operation_id, data={"boot_epoch": row["boot_epoch"]})
             self._transition_phase_in_tx(
                 tx, row["session_id"], SessionPhase.EXECUTING, "target operation dispatched"

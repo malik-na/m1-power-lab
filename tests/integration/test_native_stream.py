@@ -161,6 +161,29 @@ def test_wire_cap_preserves_exact_bounded_prefix_and_refuses_frame(captured, mon
     assert receipt.terminal_received_before_deadline is False
 
 
+def test_caller_wire_cap_preserves_exact_prefix_without_changing_global_default(captured):
+    _session, image, _manifest, launch, _artifact, stream, _root = captured
+    with _pipe() as (reader, writer):
+        os.write(writer, stream)
+        receipt = receive_native_result_stream(reader, launch, image, max_stream_bytes=17)
+    assert receipt.capture.status == "unknown"
+    assert receipt.raw_stream == stream[:17]
+    assert receipt.stop_reason == "stream_limit"
+
+
+def test_caller_deadline_can_stop_before_signed_launch_deadline(captured):
+    _session, image, _manifest, launch, _artifact, stream, _root = captured
+    with _pipe() as (reader, writer):
+        os.write(writer, stream[:2])
+        started = time.monotonic()
+        receipt = receive_native_result_stream(
+            reader, launch, image, deadline_monotonic=started + 0.08,
+        )
+    assert receipt.raw_stream == stream[:2]
+    assert receipt.stop_reason == "deadline"
+    assert time.monotonic() - started < 0.5
+
+
 def test_valid_sample_before_later_truncation_remains_in_unknown_capture(captured):
     _session, image, _manifest, launch, _artifact, stream, _root = captured
     frames = _frames(stream)
