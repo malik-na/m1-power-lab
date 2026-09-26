@@ -136,6 +136,8 @@ class JobRequest:
             if len(encoded) > 256_000:
                 raise ValueError("output schema exceeds 256,000 characters")
             object.__setattr__(self, "output_schema", MappingProxyType(dict(self.output_schema)))
+        if self.reasoning_effort not in {None, "low", "medium", "high", "xhigh"}:
+            raise ValueError("Codex job effort must be low, medium, high, or xhigh")
 
 
 @dataclass(frozen=True, slots=True)
@@ -447,8 +449,9 @@ class AppServerCodexAdapter:
         }
         if request.output_schema is not None:
             params["outputSchema"] = dict(request.output_schema)
-        if request.reasoning_effort is not None:
-            params["effort"] = request.reasoning_effort
+        # Keep app-server turns below Ultra so proactive subagent work cannot
+        # bypass M1 Power Lab's durable helper-job and usage scheduler.
+        params["effort"] = request.reasoning_effort or "high"
         try:
             response = await self._rpc("turn/start", params)
             turn_id = _nested_string(response, "turn", "id")

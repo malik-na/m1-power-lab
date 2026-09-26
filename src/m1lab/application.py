@@ -720,11 +720,14 @@ class CoordinatorFacade:
             for row in rows
         ]
         for row in self.core.journal.all(
-            "SELECT result_json, updated_at, state FROM jobs WHERE session_id=? "
-            "AND kind IN ('investigate','analyze','conclude','chat') ORDER BY created_at",
+            "SELECT id, kind, evidence_manifest_json, result_json, updated_at, state FROM jobs "
+            "WHERE session_id=? AND (runtime_id IS NULL OR runtime_id != 'host-review') "
+            "ORDER BY created_at",
             (self.session_id,),
         ):
             result = json_load(row["result_json"], {})
+            job_manifest = json_load(row["evidence_manifest_json"], {})
+            parent_job_id = job_manifest.get("_m1lab_parent_job_id")
             summaries = result.get("event_summaries", [])
             excerpt = ""
             for summary in reversed(summaries):
@@ -737,6 +740,9 @@ class CoordinatorFacade:
                     "text": excerpt or result.get("message") or "Codex job recorded no textual result.",
                     "created_at": row["updated_at"],
                     "status": row["state"],
+                    "job_id": row["id"],
+                    "parent_job_id": parent_job_id,
+                    "kind": row["kind"],
                 }
             )
         messages.sort(key=lambda item: str(item.get("created_at", "")))
@@ -745,6 +751,8 @@ class CoordinatorFacade:
     def _latest_thread_id(self) -> str | None:
         row = self.core.journal.one(
             "SELECT result_json FROM jobs WHERE session_id=? AND state IN ('completed','interrupted') "
+            "AND json_extract(evidence_manifest_json,'$._m1lab_parent_job_id') IS NULL "
+            "AND kind IN ('investigate','implement','conclude','chat') "
             "ORDER BY updated_at DESC LIMIT 1",
             (self.session_id,),
         )
@@ -785,6 +793,9 @@ class CoordinatorFacade:
                 "title": row["kind"],
                 "status": row["state"],
                 "usage": json_load(row["result_json"], {}).get("usage", "usage pending"),
+                "parent_job_id": json_load(row["evidence_manifest_json"], {}).get(
+                    "_m1lab_parent_job_id"
+                ),
             }
             for row in rows
         ]

@@ -383,6 +383,7 @@ class UsageResult(BaseModel):
 class JobCreate(BaseModel):
     session_id: str
     kind: Literal["investigate", "implement", "analyze", "review", "conclude", "chat"]
+    parent_job_id: str | None = None
     evidence_manifest: dict[str, Any] = Field(default_factory=dict)
     lease_expires_at: datetime
     deadline_at: datetime
@@ -398,6 +399,8 @@ class JobCreate(BaseModel):
             raise ValueError("job lease and deadline must be timezone-aware")
         if self.lease_expires_at > self.deadline_at:
             raise ValueError("job lease cannot outlive its absolute deadline")
+        if "_m1lab_parent_job_id" in self.evidence_manifest:
+            raise ValueError("job evidence manifest uses a reserved coordinator field")
         return self
 
 

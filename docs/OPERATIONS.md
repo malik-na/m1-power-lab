@@ -92,6 +92,32 @@ The app-server refuses to start if the configured executable is missing or its
 SHA-256 differs from the configured pin. Calculate it with `sha256sum` after
 installing the Codex CLI.
 
+The coordinator admits one primary Codex job and at most two concurrent
+analysis, review, or owner-chat helper jobs. The default
+`M1LAB_MAX_CONCURRENT_CODEX_JOBS=3`
+can be lowered to `1` or `2` in the service environment. Every job, including
+helpers, gets its own durable record, deadline, reservation, usage accounting,
+and stop handling. Hidden runtime child jobs are not part of the accounting
+model. The app-server uses `high` reasoning effort by default and rejects
+`ultra`, which the upstream [Codex protocol](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/config_types.rs)
+identifies as the route to proactive multi-agent behavior.
+
+An owner can start an independent helper against the current evidence, or link
+one to a completed primary job so its result and bounded parent artifacts are
+included in the helper's manifest:
+
+```bash
+m1lab --session SESSION_ID investigate --kind analyze \
+  --parent-job-id PRIMARY_JOB_ID \
+  --estimated-tokens 50000 --estimated-minutes 10 --deadline-minutes 10 \
+  "Independently examine the strongest counterevidence and identify a discriminating next step."
+```
+
+A primary job can have at most two linked analysis/review helpers over its
+lifetime. Helpers cannot spawn further helpers; review helpers still need an exact
+`--procedure-id`. All helper admission goes through the same coordinator and
+session budgets as primary jobs.
+
 Edit `/etc/m1-power-lab.env`, generate the CSRF secret shown in the example,
 and set the exact Tailscale login. Create the session with the same owner before
 starting the service:

@@ -26,6 +26,7 @@ class InvestigationRequest(BaseModel):
     cwd: Path
     model: str = Field(min_length=1, max_length=128)
     kind: Literal["investigate", "implement", "analyze", "review", "conclude", "chat"] = "investigate"
+    parent_job_id: str | None = Field(default=None, min_length=1, max_length=160)
     review_procedure_id: str | None = Field(default=None, min_length=1, max_length=160)
     estimated_tokens: int = Field(default=100_000, gt=0, le=100_000_000)
     estimated_active_seconds: int = Field(default=900, gt=0, le=86_400)
@@ -49,6 +50,10 @@ class InvestigationRequest(BaseModel):
             raise ValueError("review turns must identify the exact procedure to review")
         if self.kind != "review" and self.review_procedure_id is not None:
             raise ValueError("review_procedure_id is only valid for review turns")
+        if self.parent_job_id is not None and self.kind not in {"analyze", "review"}:
+            raise ValueError("bounded helper jobs must use analyze or review kind")
+        if self.reasoning_effort not in {None, "low", "medium", "high", "xhigh"}:
+            raise ValueError("reasoning_effort cannot enable unbudgeted proactive delegation")
         return self
 
 

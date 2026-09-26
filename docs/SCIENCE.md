@@ -167,6 +167,19 @@ same session, and that its procedure ID, revision, and digest match exactly.
 Neither registration nor review approves execution; owner approval and the
 existing target and recovery gates still apply.
 
+## Bounded helper analyses
+
+The coordinator admits one primary Codex job plus up to two independent
+analysis, review, or owner-chat helpers, subject to `M1LAB_MAX_CONCURRENT_CODEX_JOBS` and
+the shared token/time budgets. Helpers are explicit jobs: they use the same
+durable records, deadlines, evidence screening, interruption and usage
+reconciliation as the primary turn. The runtime does not spawn hidden child
+jobs. An owner can launch an independent `--kind analyze` helper or attach it
+to a completed primary job with `--parent-job-id`; a linked helper receives
+the parent's bounded result and selected runtime artifacts. A primary may
+have at most two linked helpers, and helpers cannot parent other jobs. See the
+[operations guide](OPERATIONS.md) for the command and limits.
+
 When a redesign checkpoint is due, a registered scientific procedure must
 identify its hypothesis, protocol, and matching checkpoint. This keeps a new
 procedure from bypassing the protocol-level checkpoint gate.

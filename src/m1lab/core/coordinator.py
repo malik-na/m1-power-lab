@@ -53,13 +53,18 @@ from .models import (
 class CoreApp:
     """Deep module for durable state, policy, eligibility and reconciliation."""
 
-    def __init__(self, journal: Journal):
+    def __init__(self, journal: Journal, *, max_concurrent_jobs: int = 3):
+        if type(max_concurrent_jobs) is not int or not 1 <= max_concurrent_jobs <= 3:
+            raise ValueError("max_concurrent_jobs must be between 1 and 3")
         self.journal = journal
         self.budgets = BudgetLedger(journal)
+        self.max_concurrent_jobs = max_concurrent_jobs
 
     @classmethod
-    def open(cls, paths: AppPaths) -> "CoreApp":
-        return cls(Journal(paths))
+    def open(cls, paths: AppPaths, *, max_concurrent_jobs: int = 3) -> "CoreApp":
+        if type(max_concurrent_jobs) is not int or not 1 <= max_concurrent_jobs <= 3:
+            raise ValueError("max_concurrent_jobs must be between 1 and 3")
+        return cls(Journal(paths), max_concurrent_jobs=max_concurrent_jobs)
 
     def close(self) -> None:
         self.journal.close()
@@ -921,7 +926,16 @@ class CoreApp:
         now = utc_now()
         if request.lease_expires_at <= now or request.deadline_at <= now:
             raise ValidationError("job lease and deadline must be in the future")
-        record = JobRecord(id=new_id("job"), state="admitted", created_at=now, updated_at=now, **request.model_dump())
+        record = JobRecord(
+            id=new_id("job"),
+            state="admitted",
+            created_at=now,
+            updated_at=now,
+            **request.model_dump(),
+        )
+        stored_manifest = dict(request.evidence_manifest)
+        if request.parent_job_id is not None:
+            stored_manifest["_m1lab_parent_job_id"] = request.parent_job_id
         rejection: str | None = None
         with self.journal.transaction() as tx:
             session_row = tx.execute(
@@ -942,13 +956,95 @@ class CoreApp:
             phase_admits = session.phase in ACTIVE_PHASES or request.kind in wait_kinds.get(
                 session.phase, set()
             )
-            if not phase_admits or not self.budgets.snapshot(session.id).admission_open:
+            active_jobs = tx.execute(
+                "SELECT COUNT(*) FROM jobs WHERE session_id=? AND state IN ('admitted','running','unknown')",
+                (request.session_id,),
+            ).fetchone()[0]
+            active_primaries = tx.execute(
+                "SELECT COUNT(*) FROM jobs WHERE session_id=? "
+                "AND json_extract(evidence_manifest_json,'$._m1lab_parent_job_id') IS NULL "
+                "AND kind IN ('investigate','implement','conclude') "
+                "AND state IN ('admitted','running','unknown')",
+                (request.session_id,),
+            ).fetchone()[0]
+            active_helpers = tx.execute(
+                "SELECT COUNT(*) FROM jobs WHERE session_id=? "
+                "AND kind IN ('analyze','review','chat') AND state IN ('admitted','running','unknown')",
+                (request.session_id,),
+            ).fetchone()[0]
+            if request.parent_job_id is not None:
+                parent = tx.execute(
+                    "SELECT session_id,kind,state,evidence_manifest_json FROM jobs WHERE id=?",
+                    (request.parent_job_id,),
+                ).fetchone()
+                child_count = tx.execute(
+                    "SELECT COUNT(*) FROM jobs WHERE json_extract(evidence_manifest_json,'$._m1lab_parent_job_id')=?",
+                    (request.parent_job_id,),
+                ).fetchone()[0]
+                parent_manifest = (
+                    json_load(parent["evidence_manifest_json"], {}) if parent is not None else {}
+                )
+                if (
+                    parent is None
+                    or parent["session_id"] != request.session_id
+                    or parent["kind"] not in {"investigate", "implement", "conclude"}
+                    or parent["state"] != "completed"
+                    or parent_manifest.get("_m1lab_parent_job_id") is not None
+                ):
+                    rejection = "helper parent must be a completed primary job in this session"
+                elif request.kind not in {"analyze", "review"}:
+                    rejection = "helper jobs must use analyze or review kind"
+                elif child_count >= 2:
+                    rejection = "a primary job may have at most two bounded helper jobs"
+            if rejection is None and active_jobs >= self.max_concurrent_jobs:
+                rejection = (
+                    "concurrent Codex job limit reached "
+                    f"({self.max_concurrent_jobs}); wait for a job to finish"
+                )
+            if rejection is None and request.kind in {"analyze", "review", "chat"} and active_helpers >= 2:
+                rejection = "at most two helper jobs may run alongside the primary investigator"
+            if (
+                rejection is None
+                and request.kind not in {"analyze", "review", "chat"}
+                and active_primaries >= 1
+            ):
+                rejection = "only one primary investigator job may run at a time"
+            if rejection is None and (
+                not phase_admits or not self.budgets.snapshot(session.id).admission_open
+            ):
                 rejection = "session state or budget does not admit a new job"
-            else:
+            elif rejection is None:
                 self.journal.ensure_artifact_capacity()
-                tx.execute("INSERT INTO jobs VALUES (?,?,?,?,?,?,?,?,?,?,?)", (record.id, record.session_id, record.kind, None, record.state, iso(record.lease_expires_at), iso(record.deadline_at), json_dump(record.evidence_manifest), "{}", iso(now), iso(now)))
+                tx.execute(
+                    "INSERT INTO jobs (id,session_id,kind,runtime_id,state,lease_expires_at,"
+                    "deadline_at,evidence_manifest_json,result_json,created_at,updated_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        record.id,
+                        record.session_id,
+                        record.kind,
+                        None,
+                        record.state,
+                        iso(record.lease_expires_at),
+                        iso(record.deadline_at),
+                        json_dump(stored_manifest),
+                        "{}",
+                        iso(now),
+                        iso(now),
+                    ),
+                )
                 self.budgets._sync_activity(tx, session.id, session.phase)
-                self.journal.append_event(tx, kind="job.admitted", session_id=record.session_id, subject_id=record.id, data={"kind": record.kind, "deadline_at": iso(record.deadline_at)})
+                self.journal.append_event(
+                    tx,
+                    kind="job.admitted",
+                    session_id=record.session_id,
+                    subject_id=record.id,
+                    data={
+                        "kind": record.kind,
+                        "parent_job_id": record.parent_job_id,
+                        "deadline_at": iso(record.deadline_at),
+                    },
+                )
         if rejection is not None:
             raise ConflictError(rejection)
         return record
@@ -1246,7 +1342,22 @@ class CoreApp:
         return TargetSnapshot(id=row["id"], session_id=row["session_id"], identity=row["identity"], boot_epoch=row["boot_epoch"], mode=row["mode"], configuration_digest=row["configuration_digest"], capabilities=set(json_load(row["capabilities_json"], [])), recovery=json_load(row["recovery_json"], {}), observed_at=row["observed_at"], fresh_until=row["fresh_until"])
 
     def _job_from_row(self, row) -> JobRecord:
-        return JobRecord(id=row["id"], session_id=row["session_id"], kind=row["kind"], runtime_id=row["runtime_id"], state=row["state"], evidence_manifest=json_load(row["evidence_manifest_json"], {}), result=json_load(row["result_json"], {}), lease_expires_at=row["lease_expires_at"], deadline_at=row["deadline_at"], created_at=row["created_at"], updated_at=row["updated_at"])
+        manifest = json_load(row["evidence_manifest_json"], {})
+        parent_job_id = manifest.pop("_m1lab_parent_job_id", None)
+        return JobRecord(
+            id=row["id"],
+            session_id=row["session_id"],
+            kind=row["kind"],
+            parent_job_id=parent_job_id,
+            runtime_id=row["runtime_id"],
+            state=row["state"],
+            evidence_manifest=manifest,
+            result=json_load(row["result_json"], {}),
+            lease_expires_at=row["lease_expires_at"],
+            deadline_at=row["deadline_at"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
 
     def _operation_from_row(self, row) -> OperationRecord:
         return OperationRecord(id=row["id"], session_id=row["session_id"], procedure_id=row["procedure_id"], procedure_revision=row["procedure_revision"], procedure_digest=row["procedure_digest"], approval_id=row["approval_id"], review_id=row["review_id"], target_snapshot_id=row["target_snapshot_id"], boot_epoch=row["boot_epoch"], adapter_mode=row["adapter_mode"], mutates_target=bool(row["mutates_target"]), state=row["state"], envelope=DispatchEnvelope.model_validate_json(row["envelope_json"]), result=json_load(row["result_json"], {}), created_at=row["created_at"], dispatched_at=row["dispatched_at"], completed_at=row["completed_at"], reconciliation=json_load(row["reconciliation_json"]) if row["reconciliation_json"] else None)

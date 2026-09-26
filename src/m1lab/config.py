@@ -17,6 +17,7 @@ class Settings:
     codex_runtime: str
     codex_executable: str
     codex_sha256: str
+    max_concurrent_codex_jobs: int
     workspace: Path
     csrf_secret: str
     vapid_public_key: str = ""
@@ -25,6 +26,13 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        raw_concurrency = os.getenv("M1LAB_MAX_CONCURRENT_CODEX_JOBS", "3")
+        try:
+            max_concurrent_codex_jobs = int(raw_concurrency)
+        except ValueError as exc:
+            raise ValueError("M1LAB_MAX_CONCURRENT_CODEX_JOBS must be an integer from 1 to 3") from exc
+        if not 1 <= max_concurrent_codex_jobs <= 3:
+            raise ValueError("M1LAB_MAX_CONCURRENT_CODEX_JOBS must be an integer from 1 to 3")
         data_dir = os.getenv("M1LAB_DATA_DIR")
         paths = AppPaths(Path(data_dir).expanduser()) if data_dir else default_paths()
         workspace_default = paths.root / "workspace"
@@ -37,6 +45,7 @@ class Settings:
             codex_runtime=os.getenv("M1LAB_CODEX_RUNTIME", "disabled"),
             codex_executable=os.getenv("M1LAB_CODEX_EXECUTABLE", "codex"),
             codex_sha256=os.getenv("M1LAB_CODEX_SHA256", ""),
+            max_concurrent_codex_jobs=max_concurrent_codex_jobs,
             workspace=Path(os.getenv("M1LAB_WORKSPACE", str(workspace_default))).expanduser().resolve(),
             csrf_secret=os.getenv("M1LAB_CSRF_SECRET", ""),
             vapid_public_key=os.getenv("M1LAB_VAPID_PUBLIC_KEY", ""),

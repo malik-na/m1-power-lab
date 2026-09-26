@@ -20,7 +20,7 @@
 <section class="section-heading"><div><p class="eyebrow">JOBS</p><h2>Codex activity</h2></div></section>
 <div class="job-strip">
 {% for job in data.jobs|default([]) %}
-  <article><span class="status-dot job-{{ job.status|default('unknown') }}"></span><div><b>{{ job.title }}</b><small>{{ job.status|default('unknown') }} · {{ job.usage|default('usage pending') }}</small></div></article>
+  <article><span class="status-dot job-{{ job.status|default('unknown') }}"></span><div><b>{{ job.title }}</b><small>{{ job.status|default('unknown') }} · {{ job.usage|default('usage pending') }}{% if job.parent_job_id %} · helper for {{ job.parent_job_id }}{% endif %}</small></div></article>
 {% else %}
   <p class="muted">No model jobs are active.</p>
 {% endfor %}
@@ -30,8 +30,9 @@
 <div class="conversation" aria-live="polite">
 {% for message in data.messages|default([]) %}
   <article class="message message-{{ message.role|default('assistant') }}">
-    <header><b>{{ 'You' if message.role == 'owner' else 'Investigator' }}</b><time>{{ message.created_at|default('') }}</time></header>
+    <header><b>{{ 'You' if message.role == 'owner' else ('Helper' if message.parent_job_id or message.kind in ['analyze', 'review'] else 'Investigator') }}</b><time>{{ message.created_at|default('') }}</time></header>
     <div>{{ message.text }}</div>
+    {% if message.job_id %}<small>Job {{ message.job_id }}{% if message.parent_job_id %} · helper for {{ message.parent_job_id }}{% endif %}</small>{% endif %}
     {% if message.status %}<small>{{ message.status }}</small>{% endif %}
   </article>
 {% else %}

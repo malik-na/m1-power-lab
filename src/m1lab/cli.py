@@ -248,6 +248,10 @@ def parser() -> argparse.ArgumentParser:
     )
     investigate.add_argument("--kind", choices=("investigate", "analyze", "review", "conclude"), default="investigate")
     investigate.add_argument("--procedure-id", help="exact procedure ID to review; required with --kind review")
+    investigate.add_argument(
+        "--parent-job-id",
+        help="completed primary job to which this bounded analyze/review helper belongs",
+    )
     investigate.add_argument("--estimated-tokens", type=int, default=100_000)
     investigate.add_argument("--estimated-minutes", type=int, default=15)
     investigate.add_argument("--deadline-minutes", type=int, default=15)
@@ -256,8 +260,15 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> None:
     args = parser().parse_args(argv)
-    settings = Settings.from_env()
-    core = CoreApp.open(settings.paths)
+    try:
+        settings = Settings.from_env()
+    except ValueError as exc:
+        print(f"m1lab: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+    core = CoreApp.open(
+        settings.paths,
+        max_concurrent_jobs=settings.max_concurrent_codex_jobs,
+    )
     try:
         result = _dispatch(args, settings, core)
         if result is not None:
@@ -528,6 +539,7 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
             ],
             "codex_model": settings.model,
             "codex_runtime": settings.codex_runtime,
+            "max_concurrent_codex_jobs": settings.max_concurrent_codex_jobs,
             "codex_readiness": codex_readiness,
             "codex_cli": codex_tool,
             "codex_executable": settings.codex_executable,
@@ -666,6 +678,7 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
             model=settings.model,
             kind=args.kind,
             review_procedure_id=args.procedure_id,
+            parent_job_id=args.parent_job_id,
             estimated_tokens=args.estimated_tokens,
             estimated_active_seconds=args.estimated_minutes * 60,
             deadline_seconds=args.deadline_minutes * 60,

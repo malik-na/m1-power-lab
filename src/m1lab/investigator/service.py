@@ -160,6 +160,7 @@ class InvestigationOrchestrator:
                 JobCreate(
                     session_id=request.session_id,
                     kind=request.kind,
+                    parent_job_id=request.parent_job_id,
                     evidence_manifest=manifest,
                     lease_expires_at=deadline_at,
                     deadline_at=deadline_at,
