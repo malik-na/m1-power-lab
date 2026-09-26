@@ -42,6 +42,8 @@ Review the JSON before attaching it to the lab record. The collector reports
 only currently enumerated USB product IDs, labels, sysfs port paths, and
 device-node permissions; cable identity, physical port mapping, target recovery,
 and mode qualification still require owner-observed entries below.
+It records available versions of Git, native and AArch64 cross compilers, Make,
+CMake, and Ninja to support build provenance.
 
 | Field | State | Required observation |
 |---|---|---|

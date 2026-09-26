@@ -227,6 +227,15 @@ def collect(repo: Path | None) -> dict[str, object]:
                 "git": command_version("git", ["--version"]),
                 "gcc": command_version("gcc", ["--version"]),
                 "clang": command_version("clang", ["--version"]),
+                "aarch64_linux_gnu_gcc": command_version(
+                    "aarch64-linux-gnu-gcc", ["--version"]
+                ),
+                "aarch64_none_elf_gcc": command_version(
+                    "aarch64-none-elf-gcc", ["--version"]
+                ),
+                "make": command_version("make", ["--version"]),
+                "cmake": command_version("cmake", ["--version"]),
+                "ninja": command_version("ninja", ["--version"]),
                 "lsusb": {"available": shutil.which("lsusb") is not None},
                 "m1n1_executable_available": shutil.which("m1n1") is not None,
             },
