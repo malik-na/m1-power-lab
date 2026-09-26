@@ -162,7 +162,10 @@ switch_release() {
 }
 
 if [[ $action == switch ]]; then
-  [[ -d "$release_path" ]] || { echo "release does not exist: $release_path" >&2; exit 1; }
+  [[ -d "$release_path" && ! -L "$release_path" ]] || {
+    echo "release must exist as a real directory: $release_path" >&2
+    exit 1
+  }
   switch_release
   echo "selected release $release_id; service remains stopped"
   exit 0
