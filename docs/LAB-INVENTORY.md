@@ -35,7 +35,9 @@ python3 scripts/collect-host-inventory.py --output /tmp/t480-host-inventory.json
 ```
 
 If the host m1n1 source checkout is available, add `--m1n1-repo PATH` to
-record its current commit; check and record working-tree changes separately.
+record its current commit and whether tracked files are modified. The inventory
+contains only the change count, not repository paths or file contents; untracked
+files are excluded from this status summary.
 Review the JSON before attaching it to the lab record. The collector reports
 only currently enumerated USB product IDs, labels, sysfs port paths, and
 device-node permissions; cable identity, physical port mapping, target recovery,

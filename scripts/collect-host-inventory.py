@@ -133,9 +133,14 @@ def usb_devices() -> list[dict[str, object]]:
     return devices
 
 
-def m1n1_repository(path: Path | None) -> dict[str, str | None]:
+def m1n1_repository(path: Path | None) -> dict[str, object]:
     if path is None:
-        return {"commit": None, "state": "not supplied"}
+        return {
+            "commit": None,
+            "state": "not supplied",
+            "tracked_worktree_clean": None,
+            "tracked_changes": None,
+        }
     try:
         result = subprocess.run(
             ["git", "-C", str(path), "rev-parse", "HEAD"],
@@ -143,14 +148,47 @@ def m1n1_repository(path: Path | None) -> dict[str, str | None]:
             capture_output=True,
             text=True,
             timeout=3,
-            env={"PATH": os.environ.get("PATH", ""), "LC_ALL": "C"},
+            env={
+                "PATH": os.environ.get("PATH", ""),
+                "LC_ALL": "C",
+                "GIT_OPTIONAL_LOCKS": "0",
+            },
         )
-        return {
-            "commit": result.stdout.strip(),
-            "state": "commit recorded; working tree not inspected",
-        }
+        commit = result.stdout.strip()
     except (OSError, subprocess.SubprocessError):
-        return {"commit": None, "state": "unavailable"}
+        return {
+            "commit": None,
+            "state": "unavailable",
+            "tracked_worktree_clean": None,
+            "tracked_changes": None,
+        }
+    try:
+        status = subprocess.run(
+            ["git", "-C", str(path), "status", "--porcelain=v1", "--untracked-files=no"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=3,
+            env={
+                "PATH": os.environ.get("PATH", ""),
+                "LC_ALL": "C",
+                "GIT_OPTIONAL_LOCKS": "0",
+            },
+        )
+    except (OSError, subprocess.SubprocessError):
+        return {
+            "commit": commit,
+            "state": "commit recorded; tracked worktree status unavailable",
+            "tracked_worktree_clean": None,
+            "tracked_changes": None,
+        }
+    changes = [line for line in status.stdout.splitlines() if line]
+    return {
+        "commit": commit,
+        "state": "tracked worktree clean" if not changes else "tracked worktree modified",
+        "tracked_worktree_clean": not changes,
+        "tracked_changes": len(changes),
+    }
 
 
 def collect(repo: Path | None) -> dict[str, object]:
