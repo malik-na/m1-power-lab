@@ -848,7 +848,8 @@ def _publish_codex_hypotheses(
         "primary_metric", "falsifiers", "prior_evidence_refs",
     }
     existing = {item.record.id: item for item in store.list(session_id)}
-    published = []
+    resolved: list[Any] = []
+    new_records: list[HypothesisRecord] = []
     for index, proposal in enumerate(proposals):
         if not isinstance(proposal, dict) or set(proposal) != fields:
             raise ValueError("hypothesis proposals have unknown or missing fields")
@@ -864,12 +865,20 @@ def _publish_codex_hypotheses(
                 exclude={"created_at"}
             ):
                 raise ValueError("hypothesis proposal ID conflicts with an existing record")
-            published.append(prior)
+            resolved.append(prior)
             continue
-        item = store.publish(record)
-        existing[stable_id] = item
-        published.append(item)
-    return [item.model_dump(mode="json") for item in published]
+        store.validate(record)
+        new_records.append(record)
+        resolved.append(record)
+    new_published = {
+        item.record.id: item for item in store.publish_many(new_records)
+    }
+    return [
+        (new_published[item.id] if isinstance(item, HypothesisRecord) else item).model_dump(
+            mode="json"
+        )
+        for item in resolved
+    ]
 
 
 def _submit(core: CoreApp, session: Any, kind: CommandKind, payload: dict[str, Any], revision: int | None) -> dict[str, Any]:

@@ -194,6 +194,14 @@ class ScientificRecordStore:
     def __init__(self, core: ScientificCore):
         self._core = core
 
+    def validate(self, record: ScientificRecord) -> None:
+        """Check session ownership and immutable scientific lineage without publishing."""
+
+        session = self._core.session(record.session_id)
+        if session.id != record.session_id:
+            raise ValueError("core returned a different session")
+        self._validate_lineage(record)
+
     def validate_procedure_binding(self, draft: ProcedureDraft) -> None:
         """Validate optional scientific lineage and any required redesign gate."""
 
@@ -230,10 +238,7 @@ class ScientificRecordStore:
                 raise ValueError("procedure checkpoint does not match its hypothesis and protocol")
 
     def publish(self, record: ScientificRecord) -> PublishedScientificRecord:
-        session = self._core.session(record.session_id)
-        if session.id != record.session_id:
-            raise ValueError("core returned a different session")
-        self._validate_lineage(record)
+        self.validate(record)
         envelope = ScientificArtifactEnvelope(
             session_id=record.session_id,
             record_id=record.id,
