@@ -1,0 +1,48 @@
+{
+  "date": "2026-09-26",
+  "host_source": "b971b9c5ab828bf6d9a91e21865abc9bd27029da",
+  "model": "gpt-6-sol",
+  "reasoning_effort": "medium",
+  "session_id": "session_41cb4dc4c29f4936ad31671ceebe77fe",
+  "procedure_id": "procedure_239dfb21fc4544019961f6ab65900385",
+  "procedure_digest": "9a9f833f7d22c790037936be17e5ef7faeb6b58e207b647e4fd96bbc6478a8e5",
+  "review_job_id": "job_d5dd467b89ab40a0be82a74fb825cb5d",
+  "review_tokens": 57879,
+  "review_usage_uncertain": false,
+  "owner_single_retry_approved": true,
+  "owner_attendance_confirmed": true,
+  "fresh_proxy_inspection_before_dispatch": true,
+  "requested_samples": 3,
+  "period_ms": 1000,
+  "operation_id": "operation_efc39ae30ffd4a67a02aa924c2691759",
+  "started_at": "2026-09-26T16:36:36.279269Z",
+  "finished_at": "2026-09-26T16:44:30.446472Z",
+  "outcome": "unknown_effect",
+  "captured_samples": 0,
+  "capture_payload_artifact": null,
+  "native_stop_reason": "capture_TimeoutError",
+  "boot_tool_exit_code": 1,
+  "return_snapshot_id": null,
+  "boot_log_observation": "Preparing to boot kernel, then pyserial Miniterm failed with termios.error (25, Inappropriate ioctl for device). Host launcher supplied non-terminal stdin. This does not establish whether Linux ran.",
+  "usb_observation": "Proxy interfaces disappeared after dispatch. No native ACM or proxy return observed during the bounded check.",
+  "result_artifact_id": "artifact_263584832b730037d7f3866b70448537ca78df553b456ebd8a951cb631bc7a56",
+  "diagnostics": {
+    "native-boot-tool-retry.log": {
+      "artifact_id": "artifact_7c547548c9d1d09f01910dd8ef9dd06445265de3ee7acce0af591e096786435f",
+      "sha256": "7c547548c9d1d09f01910dd8ef9dd06445265de3ee7acce0af591e096786435f",
+      "bytes": 23080
+    },
+    "native-retry-usb-observations.jsonl": {
+      "artifact_id": "artifact_d6a52a0f3e641994ade5e90bda69045ddfce7523d26ce798846aeea4ee740ed3",
+      "sha256": "d6a52a0f3e641994ade5e90bda69045ddfce7523d26ce798846aeea4ee740ed3",
+      "bytes": 74
+    }
+  },
+  "cleanup": "Qualification helper stopped normally after terminal operation result; no additional boot dispatched.",
+  "first_attempt": "Preserved as reconciled failed; original unknown outcome and evidence retained.",
+  "limitations": [
+    "Target execution and stop remain unverified; requires reconciliation before further target work.",
+    "No native channel, capture, reboot, or recovery qualification.",
+    "No scientific investigation or live deployment; installed lab pause and unresolved usage hold retained."
+  ]
+}

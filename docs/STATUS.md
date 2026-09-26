@@ -2,10 +2,15 @@
 
 This file distinguishes implemented behavior from physical qualification.
 
-The first attended native attempt failed in the host launcher before opening
-its default device path. The documented device-environment fix passes 17
-focused tests; no native capture or return is qualified yet. The failed attempt
-and responsive proxy check are retained in [evidence](evidence/2026-09-26-native-first-attempt.json).
+The first attended native attempt remains reconciled as failed. The owner-approved
+single retry used the corrected device environment, a fresh exact review,
+attendance approval and proxy check. It ended `unknown_effect`: zero captured
+samples and no observed proxy return. The boot client reached kernel handoff
+preparation, then failed initializing terminal I/O; target execution and stop
+remain unverified. The helper stopped normally, and no further boot was dispatched.
+See [first-attempt evidence](evidence/2026-09-26-native-first-attempt.json) and
+[retry evidence](evidence/2026-09-26-native-retry.json). Target reconciliation and
+the demonstrated boot-client terminal integration defect are the next gates.
 
 Current owner scope: build and verify the harness end to end using the m1n1
 connection. Scientific investigation remains stopped. Source `520d05b` produced

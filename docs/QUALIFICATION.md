@@ -10,8 +10,27 @@ record was preserved and reconciled as **failed** using the saved traceback
 and a successful same-device, five-request read-only proxy observation.
 The corrected launcher binds `M1N1DEVICE` into its configuration digest and
 retains a bounded boot-log tail/count/hash. Seventeen focused host tests pass.
-The corrected physical attempt remains pending; this failure does not qualify
-native USB, reboot or recovery. See [attempt evidence](evidence/2026-09-26-native-first-attempt.json).
+This failure does not qualify native USB, reboot or recovery.
+See [attempt evidence](evidence/2026-09-26-native-first-attempt.json).
+
+## Single attended retry
+
+The owner-authorized immediate retry used corrected launcher source `b971b9c`,
+a fresh exact `gpt-6-sol` medium review, fresh proxy inspection and a single-use
+attended approval. Operation `operation_efc39ae30ffd4a67a02aa924c2691759`
+ran from 16:36:36 to 16:44:30 UTC on 2026-09-26. It ended **unknown_effect**:
+zero captured samples, capture timeout and no observed return snapshot.
+The boot client logged kernel handoff preparation, then exited 1 when pyserial
+Miniterm tried terminal I/O on non-terminal stdin. This does not establish
+whether Linux executed. Proxy USB interfaces disappeared; neither the native
+ACM channel nor proxy return was observed. Target stop remains unverified.
+
+The helper stopped normally after the terminal result. Raw diagnostics and the
+typed result are retained; the first attempt remains reconciled as failed.
+No additional boot is authorized or dispatched. Reconcile target state and fix
+the demonstrated host terminal integration defect before another exact review.
+The installed `f560929` lab remains paused with its usage hold; science remains
+stopped. See [retry evidence](evidence/2026-09-26-native-retry.json).
 
 ## Host-only gate
 
@@ -31,8 +50,9 @@ native USB, reboot or recovery. See [attempt evidence](evidence/2026-09-26-nativ
   passing run. The final focused service/backend/launcher run passed **29 tests in
   2.16 seconds**, including the imported-client tree pin and a complete
   synthetic service round trip through the real helper IPC. The actual `3f75558` published payload also passed bundle staging.
-  No physical native boot has occurred, and no live service was deployed or
-  resumed. The candidate's sample window now permits longer approval
+  At this host checkpoint no physical native boot had been attempted; the
+  subsequent physical outcomes are recorded above. No live service was deployed
+  or resumed. The candidate's sample window now permits longer approval
   headroom without extending its finite sample duration; this target change
   is now built from `8b9ae1d` as `build_a790a2c29c0a4151b62b45862fd5a908`.
   Payload SHA-256 is
@@ -43,8 +63,8 @@ native USB, reboot or recovery. See [attempt evidence](evidence/2026-09-26-nativ
   `gpt-6-sol` medium review then accepted the exact three-sample procedure
   `e07bf8af…a797`, with **48,086 reported tokens** and no usage uncertainty
   in the harness session. The installed live session retains its separate
-  unresolved hold. Attended approval and actual native execution remain
-  pending; the fixed launch expiry cannot be extended under this review.
+  unresolved hold. That reviewed launch expired without dispatch; the separate
+  fresh reviews and attended attempts are recorded above.
   See [dispatch evidence](evidence/2026-09-26-native-dispatch.json).
 - The identity-enabled candidate at `3f75558` was rebuilt and session-linked.
   Its packaged configuration SHA matched the image manifest. The actual
