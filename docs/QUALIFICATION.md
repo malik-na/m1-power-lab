@@ -12,6 +12,7 @@
 
 ## Live transport gate
 
+- Physical inventory is partial: the current execution shell is on `MacBookAir10,1` running Arch Linux ARM, not on the planned ThinkPad host. See [lab inventory](LAB-INVENTORY.md).
 - The exact target and boot epoch can be identified.
 - Host and target m1n1 builds match.
 - Only the hardware helper owns the selected USB/serial interfaces.
