@@ -187,7 +187,9 @@ try:
         "SELECT COUNT(*) FROM sessions WHERE usage_uncertain != 0"
     ).fetchone()[0]
     unresolved_jobs = connection.execute(
-        "SELECT COUNT(*) FROM jobs WHERE state IN ('admitted','running','unknown')"
+        # Historical unknown outcomes remain after evidence-backed usage resolution.
+        # Their unresolved accounting is covered by uncertain_usage above.
+        "SELECT COUNT(*) FROM jobs WHERE state IN ('admitted','running')"
     ).fetchone()[0]
     unresolved_operations = connection.execute(
         "SELECT COUNT(*) FROM operations WHERE state IN ('intent','dispatched','unknown_effect')"

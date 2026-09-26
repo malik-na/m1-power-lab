@@ -330,7 +330,12 @@ sudo systemctl start m1-power-lab
 Install updates from a clean, committed checkout using the guarded installer.
 Do not modify an installed release; keep the prior release directory as the
 known-good rollback target. Inspect status and jobs as `m1lab`, pause or stop
-the session, and resolve any unknown job or operation. Stop the service, run
+the session, reconcile uncertain job usage with an evidence-backed
+`usage-resolve` bound, and reconcile any unknown-effect operation with
+`operation-reconcile`. Historical `unknown` job records remain intact after
+usage resolution and do not prevent maintenance. Admitted or running jobs,
+uncertain usage, active reservations, and open active-time segments still
+block maintenance. Stop the service, run
 the maintenance check, create a verified backup, then install and start the
 new release:
 
@@ -339,7 +344,7 @@ sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab status
 sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab jobs
 sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab control pause
 sudo systemctl stop m1-power-lab
-sudo /opt/m1-power-lab/current/scripts/release.sh check
+sudo scripts/release.sh check
 sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab backup-bundle \
   /var/lib/m1-power-lab/pre-update.zip
 RELEASE_ID=$(git rev-parse --short HEAD)
@@ -364,8 +369,10 @@ sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab status
 
 ## Uninstall
 
-Pause the session and wait for Codex jobs and operations to reach terminal,
-resolved states. Create and verify a final bundle before removing the service.
+Pause the session and wait for Codex jobs to settle, reconcile uncertain usage,
+and resolve unknown-effect operations. Historical unknown job outcomes may
+remain after usage resolution. Create and verify a final bundle before removing
+the service.
 Keep the data root if its evidence or Codex state is still needed.
 
 If this installation uses the dedicated Tailscale HTTPS listener shown above,
