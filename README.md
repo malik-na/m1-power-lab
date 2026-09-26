@@ -64,4 +64,5 @@ unrelated service secrets are not inherited.
 
 See `docs/OPERATIONS.md` for Tailscale Serve and service deployment.
 See `docs/SCIENCE.md` for the validated scientific record workflow.
+See `docs/BUILDING.md` for isolated target builds and artifact provenance.
 See `docs/STATUS.md` for the implemented and physically qualified boundary.

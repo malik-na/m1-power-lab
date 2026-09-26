@@ -20,6 +20,7 @@ This file distinguishes implemented behavior from physical qualification.
 | Hardware-helper boundary | Versioned bounded codec, deadline-bound Unix IPC, same-UID peer checks, exclusive owner lock, and pre-dispatch identity/configuration/capability validation implemented | No fixed physical backend or service wiring yet; device selection, helper ownership, and recovery await T480 inventory and qualification |
 | Live m1n1 adapter | Disabled | Implement only after transport and recovery qualification |
 | Native run manifests and result channel | Host contract implemented | Immutable image/launch manifests, bounded checksummed frames, target identity binding, and unknown/partial capture handling are implemented; image build, live harness run, return/re-identification, and recovery remain physical gates |
+| Reproducible target builds | Host runner implemented | Typed recipes, detached worktrees, exact source diffs, tool versions, configuration/input/output hashes, session-linked immutable artifacts, and active-time/disk bounds are implemented; an M1-specific recipe and T480 cross-toolchain inventory remain pending |
 | Power measurement | Unqualified | Establish sensor provenance, energy boundary, cadence, noise and observer effect |
 | Real investigation | Not started | Requires the live transport and measurement gates |
 

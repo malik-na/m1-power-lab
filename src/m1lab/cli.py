@@ -29,6 +29,7 @@ import uvicorn
 from pydantic import TypeAdapter
 
 from m1lab.application import CoordinatorFacade, latest_session_id
+from m1lab.builds import build_and_publish, load_build_recipe
 from m1lab.config import Settings
 from m1lab.adapters import (
     AppServerCodexAdapter,
@@ -185,6 +186,12 @@ def parser() -> argparse.ArgumentParser:
     commands.add_parser("diagnostics", help="show host and adapter readiness")
     commands.add_parser("replay-demo", help="run a complete deterministic replay cycle")
 
+    build = commands.add_parser("build", help="build and publish a pinned target artifact bundle")
+    build.add_argument("--recipe", type=Path, required=True, help="owner-reviewed build recipe JSON")
+    build.add_argument("--source-repo", type=Path, required=True, help="local target source Git checkout")
+    build.add_argument("--workspace", type=Path, help="isolated build worktree root")
+    build.add_argument("--role", choices=("known_good", "candidate"), required=True)
+
     procedure_register = commands.add_parser(
         "procedure-register", help="validate and freeze an explicit typed procedure draft"
     )
@@ -269,6 +276,22 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
 
     if args.action == "status":
         return core.snapshot(session_id).model_dump(mode="json")
+    if args.action == "build":
+        publication = build_and_publish(
+            core,
+            session_id,
+            args.source_repo,
+            args.workspace or settings.workspace / "builds",
+            load_build_recipe(args.recipe),
+            build_role=args.role,
+        )
+        return {
+            "build_id": publication.build_id,
+            "build_role": publication.build_role,
+            "manifest": publication.manifest.model_dump(mode="json"),
+            "manifest_artifact": publication.manifest_artifact.model_dump(mode="json"),
+            "artifacts": [item.model_dump(mode="json") for item in publication.artifacts],
+        }
     if args.action == "serve":
         if args.host not in {"127.0.0.1", "::1", "localhost"}:
             raise ValueError("serve must bind to loopback; use Tailscale Serve for remote access")

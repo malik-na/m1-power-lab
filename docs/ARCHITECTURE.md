@@ -58,6 +58,13 @@ flowchart LR
   as unknown. The framing helpers use caller-owned descriptors and deadlines;
   they do not build or launch target images, connect to hardware, or establish
   target return behavior. Those remain physical qualification gates.
+- Target builds use application-owned typed recipes in isolated detached Git
+  worktrees. The runner captures tracked dirty diffs, exact recipe commands,
+  tool versions, configuration, declared inputs, and bounded output hashes,
+  then publishes every artifact and the image manifest into the current
+  session. Builds consume active-time allowance, stop when the session pauses
+  or disk reserve falls, and never dispatch target artifacts. The M1-specific
+  recipe and host/target cross-toolchain remain pending T480 inventory.
 - The browser submits an idempotent command ID and expected session revision.
   It never talks to SQLite, Codex or a device directly.
 
