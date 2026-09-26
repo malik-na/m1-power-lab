@@ -1,10 +1,30 @@
 # Physical lab inventory
 
-Last observed: 2026-09-26 from the current Codex execution shell.
+Last observed: 2026-09-26 on the ThinkPad over Tailscale, and on the Apple
+machine from the current Codex execution shell.
 
-This is a partial inventory. The current execution shell is on the Apple target,
-not the planned ThinkPad host. No target control or mutation was performed while
-collecting these read-only host facts.
+This is a partial inventory. The ThinkPad host facts were collected with the
+read-only inventory script, without USB enumeration. No target control or
+mutation was performed.
+
+## Observed ThinkPad host
+
+| Field | Observed value | Source |
+|---|---|---|
+| Hardware | Lenovo ThinkPad T480; product and board `20L6S09700` | DMI from `scripts/collect-host-inventory.py` |
+| CPU / memory | Intel Core i5-8350U, 8 logical CPUs; 16,633,233,408 bytes RAM | `/proc/cpuinfo`, `/proc/meminfo` |
+| Firmware | Lenovo BIOS `N24ET81W (1.56 )`, dated `09/06/2025` | DMI |
+| OS / kernel | Omarchy 4.0.4, `7.2.5-3-omarchy`, x86_64 | `/etc/os-release`, kernel release |
+| Python / Git | 3.14.7 / 2.55.0 | version probes |
+| Available build tools | GCC 16.2.1, Clang 22.1.8, GNU Make 4.4.1 | version probes |
+| Missing build tools | AArch64 GCC cross compilers, Rust/Cargo, CMake, Ninja | PATH probes |
+| m1n1 | No executable on PATH; no source checkout supplied; commit unknown | PATH and source probe |
+| USB | `lsusb` available; enumeration deliberately omitted | inventory collection flags |
+
+The inventory reported `usb_devices_enumerated=false`,
+`usb_devices_opened=false`, and no serial numbers. On this host, the 36 host
+tests passed and the replay demo completed on 2026-09-26. These results do not
+qualify an M1 connection or power measurement.
 
 ## Observed execution machine
 
@@ -22,8 +42,8 @@ collecting these read-only host facts.
 | m1n1 | Not found on `PATH`; build/commit unknown | `command -v m1n1` |
 | Firmware / boot chain | Unknown; no firmware reference captured | Not observed |
 
-These facts describe where this shell runs. They do not qualify the planned
-ThinkPad host or a ThinkPad-to-Mac connection.
+These Apple-machine facts do not qualify a ThinkPad-to-Mac connection or the
+Mac's current proxy mode.
 
 ## Planned host and physical connection
 
@@ -47,10 +67,10 @@ and mode qualification require owner-observed entries below.
 
 | Field | State | Required observation |
 |---|---|---|
-| ThinkPad T480 identity, CPU, RAM, firmware | Unverified from this shell | Run inventory commands on the T480 and record exact outputs |
-| ThinkPad OS, kernel, installed toolchain | Unverified | Capture on the T480 |
+| ThinkPad T480 identity, CPU, RAM, firmware | Observed above on 2026-09-26 | Recheck after relevant host updates |
+| ThinkPad OS, kernel, installed toolchain | Observed above; AArch64 and several build tools missing | Install only tools required by the qualified build path |
 | Cable, adapters, port mapping | Unknown | Owner identifies the actual cable and both physical ports; inspect connection on the T480 |
-| USB permissions and device identity | Unknown | Install/use USB inspection tooling on the T480, then capture enumeration and permissions with the Mac connected |
+| USB permissions and device identity | Unknown | With the Mac connected, opt in to enumeration and permission capture on the T480 |
 | Host/target m1n1 commits | Unknown | Record both checked-out revisions and build identities before proxy qualification |
 | Owner attendance | Required for physical connect, reset, recovery, and mode transitions | Owner must be present for each such operation |
 
@@ -66,12 +86,10 @@ and mode qualification require owner-observed entries below.
 
 ## Bounded next attempt
 
-1. Run the host-side inventory on the ThinkPad T480; this must be done in its
-   own shell because the current shell is on the Mac.
-2. With the owner present, identify the cable and ports and opt in to USB
+1. With the owner present, identify the cable and ports and opt in to USB
    device identity and permission inventory on the ThinkPad.
-3. Record host and target m1n1 revisions and build details.
-4. Keep proxy, hypervisor, and native modes gated until the matching recovery
+2. Record host and target m1n1 revisions and build details.
+3. Keep proxy, hypervisor, and native modes gated until the matching recovery
    path and owner-attendance requirements are demonstrated.
 
 Until those steps are complete, the transport and every live target mode remain

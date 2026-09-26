@@ -54,12 +54,16 @@ def distro() -> dict[str, str]:
 
 
 def cpu_model() -> str | None:
+    values: dict[str, str] = {}
     for line in (read_text(Path("/proc/cpuinfo")) or "").splitlines():
         key, separator, value = line.partition(":")
-        if separator and key.strip().lower() in {"model name", "hardware", "model"}:
-            if value.strip():
-                return value.strip()
-    return None
+        name = key.strip().lower()
+        if separator and name in {"model name", "hardware", "model"} and value.strip():
+            values.setdefault(name, value.strip())
+    return next(
+        (values[name] for name in ("model name", "hardware", "model") if name in values),
+        None,
+    )
 
 
 def dmi_facts() -> dict[str, str | None]:
