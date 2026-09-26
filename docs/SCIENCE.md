@@ -88,6 +88,15 @@ the decision and its linked claim evidence from the completed output:
 m1lab --session SESSION_ID science decision codex-output.json
 ```
 
+Or publish directly from a completed Codex job without copying its output:
+
+```bash
+m1lab --session SESSION_ID science decision --job-id JOB_ID
+```
+
+This reads only the selected session's verified runtime event artifacts and
+requires that job to be completed.
+
 The command validates same-session scientific lineage and citations, then
 publishes immutable claim evidence followed by the decision. If there is no
 published derived result, Codex must set `scientific_decision` to `null`.

@@ -200,7 +200,9 @@ def parser() -> argparse.ArgumentParser:
     science_decision = science_commands.add_parser(
         "decision", help="validate and publish the scientific_decision from Codex output"
     )
-    science_decision.add_argument("path", type=Path, help="completed Codex output JSON")
+    decision_source = science_decision.add_mutually_exclusive_group(required=True)
+    decision_source.add_argument("path", nargs="?", type=Path, help="completed Codex output JSON")
+    decision_source.add_argument("--job-id", help="read the completed Codex output from this durable job")
     science_commands.add_parser("list", help="list validated scientific records")
     science_commands.add_parser("brief", help="build a compact evidence brief")
     science_derive = science_commands.add_parser(
@@ -530,7 +532,11 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
             if not published:
                 raise ValueError("no scientific records are published for this session")
             return store.brief(published[:64]).model_dump(mode="json")
-        document = json.loads(args.path.read_text(encoding="utf-8"))
+        document = (
+            _completed_codex_output(core, session_id, args.job_id)
+            if args.science_action == "decision" and args.job_id
+            else json.loads(args.path.read_text(encoding="utf-8"))
+        )
         if args.science_action == "publish":
             payload = document.get("record", document) if isinstance(document, dict) else document
             record = TypeAdapter(ScientificRecord).validate_python(payload)
@@ -631,6 +637,50 @@ def _derive_scientific_result(
         analysis_code_refs=tuple(document.get("analysis_code_refs", [])),
     )
     return published.model_dump(mode="json")
+
+
+def _completed_codex_output(core: CoreApp, session_id: str, job_id: str) -> dict[str, Any]:
+    job = core.job(job_id)
+    if job.session_id != session_id:
+        raise ValueError("Codex job does not belong to the selected session")
+    if job.state != "completed":
+        raise ValueError("scientific decisions can only be published from a completed Codex job")
+    artifact_ids = job.result.get("event_artifact_ids", [])
+    if not isinstance(artifact_ids, list) or any(not isinstance(item, str) for item in artifact_ids):
+        raise ValueError("completed Codex job has no valid runtime event artifact list")
+
+    for artifact_id in reversed(artifact_ids):
+        try:
+            raw = core.read_session_artifact(session_id, artifact_id, max_bytes=4_000_000)
+            envelope = json.loads(raw.decode("utf-8"))
+            if not isinstance(envelope, dict) or envelope.get("method") != "item/completed":
+                continue
+            payload = json.loads(envelope.get("payload_json", "null"))
+        except (CoreError, OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, RecursionError):
+            continue
+        for candidate in reversed(_structured_output_candidates(payload)):
+            if isinstance(candidate.get("scientific_decision"), dict):
+                return candidate
+    raise ValueError("completed Codex job contains no structured scientific_decision output")
+
+
+def _structured_output_candidates(value: Any) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    stack = [value]
+    while stack:
+        current = stack.pop()
+        if isinstance(current, dict):
+            if "scientific_decision" in current:
+                candidates.append(current)
+            stack.extend(current.values())
+        elif isinstance(current, list):
+            stack.extend(current)
+        elif isinstance(current, str):
+            try:
+                stack.append(json.loads(current))
+            except (json.JSONDecodeError, RecursionError):
+                continue
+    return candidates
 
 
 def _publish_codex_decision(
