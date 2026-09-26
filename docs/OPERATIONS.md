@@ -77,7 +77,9 @@ inherited. Explicit child environment overrides are limited to that same allowli
 The systemd unit also gives the coordinator and its Codex child a private `/dev`,
 so they cannot open host USB/serial devices. A future target helper must run as a
 separate service with only its qualified device access; do not remove this
-boundary to enable hardware dispatch.
+boundary to enable hardware dispatch. systemd stops the full service cgroup,
+including the Codex app-server, and escalates after the 20-second shutdown
+window if graceful cleanup does not finish.
 The app-server refuses to start if the configured executable is missing or its
 SHA-256 differs from the configured pin. Calculate it with `sha256sum` after
 installing the Codex CLI.
