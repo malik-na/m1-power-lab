@@ -264,14 +264,19 @@ class AppServerCodexAdapter:
 
     async def start_job(self, request: JobRequest) -> JobHandle:
         await self._ensure_started()
+        # Codex 0.156 selects restricted reads through named permission
+        # profiles; the legacy readOnly.access field is rejected.
+        profile_id, profile = _permission_profile(request)
         thread_params = {
             "model": request.model,
             "cwd": str(request.cwd),
             "approvalPolicy": "never",
-            "sandbox": _legacy_sandbox(request.sandbox),
+            "permissions": profile_id,
+            "config": {"permissions": {profile_id: profile}},
             "serviceName": "m1-power-lab",
         }
         response = await self._rpc("thread/start", thread_params)
+        await self._require_profile(response, profile_id)
         thread_id = _nested_string(response, "thread", "id")
         if thread_id is None:
             await self.close()
@@ -282,6 +287,7 @@ class AppServerCodexAdapter:
         if not thread_id or len(thread_id) > 256:
             raise ValueError("thread_id must be 1..256 characters")
         await self._ensure_started()
+        profile_id, profile = _permission_profile(request)
         response = await self._rpc(
             "thread/resume",
             {
@@ -289,14 +295,21 @@ class AppServerCodexAdapter:
                 "model": request.model,
                 "cwd": str(request.cwd),
                 "approvalPolicy": "never",
-                "sandbox": _legacy_sandbox(request.sandbox),
+                "permissions": profile_id,
+                "config": {"permissions": {profile_id: profile}},
             },
         )
+        await self._require_profile(response, profile_id)
         resumed_id = _nested_string(response, "thread", "id")
         if resumed_id != thread_id:
             await self.close()
             raise RuntimeOutcomeUnknown("thread/resume succeeded with an untrusted thread identity")
         return await self._start_turn(thread_id, request, resumed=True)
+
+    async def _require_profile(self, response: Mapping[str, Any], profile_id: str) -> None:
+        if _nested_string(response, "activePermissionProfile", "id") != profile_id:
+            await self.close()
+            raise RuntimeRequestRejected("Codex did not activate the requested permission profile")
 
     async def interrupt(self, job_id: str) -> None:
         state = self._require_job(job_id)
@@ -400,7 +413,11 @@ class AppServerCodexAdapter:
                                 "name": "m1_power_lab",
                                 "title": "M1 Power Lab",
                                 "version": "0.1.0",
-                            }
+                            },
+                            "capabilities": {
+                                "experimentalApi": True,
+                                "requestAttestation": False,
+                            },
                         },
                     ),
                     timeout=self._startup_timeout,
@@ -445,7 +462,6 @@ class AppServerCodexAdapter:
             "cwd": str(request.cwd),
             "model": request.model,
             "approvalPolicy": "never",
-            "sandboxPolicy": _sandbox_policy(request),
         }
         if request.output_schema is not None:
             params["outputSchema"] = dict(request.output_schema)
@@ -873,29 +889,23 @@ class NoopCodexAdapter:
             raise KeyError(f"unknown runtime job: {job_id}") from exc
 
 
-def _legacy_sandbox(mode: SandboxMode) -> str:
-    return mode.value
-
-
-def _sandbox_policy(request: JobRequest) -> dict[str, Any]:
-    if request.sandbox is SandboxMode.READ_ONLY:
-        return {
-            "type": "readOnly",
-            "access": {
-                "type": "restricted",
-                "includePlatformDefaults": True,
-                "readableRoots": [str(request.cwd)],
-            },
-        }
-    return {
-        "type": "workspaceWrite",
-        "writableRoots": [str(path) for path in request.writable_roots],
-        "readOnlyAccess": {
-            "type": "restricted",
-            "includePlatformDefaults": True,
-            "readableRoots": [str(request.cwd)],
-        },
-        "networkAccess": False,
+def _permission_profile(request: JobRequest) -> tuple[str, dict[str, Any]]:
+    profile_id = (
+        "m1lab-read-only"
+        if request.sandbox is SandboxMode.READ_ONLY
+        else "m1lab-workspace-write"
+    )
+    filesystem: dict[str, Any] = {
+        ":root": "deny",
+        ":minimal": "read",
+        ":workspace_roots": {".": "read"},
+    }
+    if request.sandbox is SandboxMode.WORKSPACE_WRITE:
+        for root in request.writable_roots:
+            filesystem[str(root)] = "write"
+    return profile_id, {
+        "filesystem": filesystem,
+        "network": {"enabled": False},
     }
 
 

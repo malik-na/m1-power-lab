@@ -17,6 +17,8 @@ from m1lab.adapters.runtime import (
     RuntimeRequestNotSent,
     RuntimeUnavailable,
     RuntimeOutcomeUnknown,
+    SandboxMode,
+    _permission_profile,
 )
 from m1lab.core.errors import ConflictError
 from m1lab.core.models import CommandKind, OwnerCommand, SessionCreate
@@ -142,7 +144,10 @@ def test_turn_start_without_returned_identity_is_outcome_unknown(tmp_path):
 
     async def rpc(method, params):
         if method == "thread/start":
-            return {"thread": {"id": "thread-1"}}
+            return {
+                "thread": {"id": "thread-1"},
+                "activePermissionProfile": {"id": "m1lab-read-only"},
+            }
         return {}
 
     async def close_without_process_management():
@@ -162,6 +167,68 @@ def test_turn_start_without_returned_identity_is_outcome_unknown(tmp_path):
         asyncio.run(adapter.start_job(request))
 
     assert next(iter(adapter._jobs.values())).handle.status is JobStatus.UNKNOWN
+
+
+def test_runtime_uses_restricted_permission_profile_for_read_only_turn(tmp_path):
+    adapter = AppServerCodexAdapter(expected_sha256="0" * 64)
+    requests = []
+
+    async def ready():
+        return None
+
+    async def rpc(method, params):
+        requests.append((method, params))
+        if method == "thread/start":
+            return {
+                "thread": {"id": "thread-1"},
+                "activePermissionProfile": {"id": "m1lab-read-only"},
+            }
+        return {"turn": {"id": "turn-1"}}
+
+    adapter._ensure_started = ready
+    adapter._rpc = rpc
+    request = JobRequest(
+        prompt="Inspect selected evidence only.",
+        cwd=tmp_path,
+        model="gpt-6-sol",
+        deadline_seconds=10,
+    )
+
+    async def launch_and_close():
+        handle = await adapter.start_job(request)
+        await adapter.close()
+        return handle
+
+    handle = asyncio.run(launch_and_close())
+
+    assert handle.status is JobStatus.RUNNING
+    thread = requests[0][1]
+    assert "sandbox" not in thread
+    assert thread["permissions"] == "m1lab-read-only"
+    filesystem = thread["config"]["permissions"]["m1lab-read-only"]["filesystem"]
+    assert filesystem[":root"] == "deny"
+    assert filesystem[":minimal"] == "read"
+    assert filesystem[":workspace_roots"] == {".": "read"}
+    assert "sandboxPolicy" not in requests[1][1]
+
+
+def test_workspace_write_profile_grants_only_declared_subdirectory(tmp_path):
+    writable = tmp_path / "declared"
+    request = JobRequest(
+        prompt="Write the declared result.",
+        cwd=tmp_path,
+        model="gpt-6-sol",
+        deadline_seconds=10,
+        sandbox=SandboxMode.WORKSPACE_WRITE,
+        writable_roots=(writable,),
+    )
+
+    profile_id, profile = _permission_profile(request)
+
+    assert profile_id == "m1lab-workspace-write"
+    assert profile["filesystem"][":workspace_roots"] == {".": "read"}
+    assert profile["filesystem"][str(writable)] == "write"
+    assert profile["network"] == {"enabled": False}
 
 
 def test_state_changing_rpc_internal_error_is_outcome_unknown():
