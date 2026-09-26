@@ -2,6 +2,9 @@
 
 ## Host-only gate
 
+- On 2026-09-26 the T480 ran 36 host tests and the replay demo; the installed
+  `e6fc7ba` loopback service served `/overview` as `m1lab` without a restart
+  during the observed window. This does not qualify the live Codex runtime.
 - The configured Codex executable SHA-256 is verified before app-server startup.
 - Live app-server startup, authenticated job lifecycle, cancellation and usage remain unqualified until a bounded turn completes on the deployment host.
 - Replay operations preserve intent, completion and unknown-effect outcomes.
@@ -12,7 +15,9 @@
 
 ## Live transport gate
 
-- Physical inventory is partial: the current execution shell is on `MacBookAir10,1` running Arch Linux ARM, not on the planned ThinkPad host. See [lab inventory](LAB-INVENTORY.md).
+- Physical inventory is partial: T480 host facts have been observed, but the
+  cable, USB identity, target mode, m1n1 revisions, and recovery remain
+  unqualified. See [lab inventory](LAB-INVENTORY.md).
 - The exact target and boot epoch can be identified.
 - Host and target m1n1 builds match.
 - Only the hardware helper owns the selected USB/serial interfaces.
