@@ -236,22 +236,33 @@ def import_native_capture(
             "record_type": "native_result_stream",
             "launch_artifact_id": launch_artifact.id,
             "image_manifest_artifact_id": image_artifact.id,
-            "capture_status": capture.status,
+            "protocol_status": capture.status,
             "physical_source_verified": False,
             "capture_timing_verified": False,
         },
     )
     from m1lab.investigator.prompts import scrub_text
 
-    screened_payload, screening = _screen_capture_payload(capture.payload)
+    screened_payload, screening = _screen_capture_payload(
+        capture.payload,
+        expected_sample_count=launch.parameters["sample_count"],
+        protocol_status=capture.status,
+    )
+    accepted_status = capture.status
+    if screening.startswith("omitted_"):
+        accepted_status = "unknown"
     safe_capture = NativeCapture(
-        status=capture.status,
+        status=accepted_status,
         identity_verified=capture.identity_verified,
         payload=screened_payload,
         frame_count=capture.frame_count,
-        message=scrub_text(capture.message)[:1024],
+        message=scrub_text(capture.message or (
+            "collector payload did not match the recognized schema or requested sample count"
+            if accepted_status == "unknown" and capture.status != "unknown" else ""
+        ))[:1024],
     )
     capture_document = safe_capture.model_dump(mode="json")
+    capture_document["protocol_status"] = capture.status
     capture_document["physical_source_verified"] = False
     capture_document["capture_timing_verified"] = False
     capture_document["payload_screening"] = screening
@@ -271,7 +282,8 @@ def import_native_capture(
             "launch_artifact_id": launch_artifact.id,
             "image_manifest_artifact_id": image_artifact.id,
             "raw_stream_artifact_id": raw_artifact.id,
-            "capture_status": capture.status,
+            "capture_status": safe_capture.status,
+            "protocol_status": capture.status,
             "identity_verified": capture.identity_verified,
             "physical_source_verified": False,
             "capture_timing_verified": False,
@@ -281,10 +293,17 @@ def import_native_capture(
     return safe_capture, raw_artifact, normalized_artifact
 
 
-def _screen_capture_payload(payload: bytes) -> tuple[bytes, str]:
-    """Return only known collector JSON records after credential/PII scrubbing."""
+def _screen_capture_payload(
+    payload: bytes,
+    *,
+    expected_sample_count: int,
+    protocol_status: str,
+) -> tuple[bytes, str]:
+    """Return only scrubbed records matching the launch's bounded sample count."""
 
     if not payload:
+        if protocol_status == "complete" and expected_sample_count > 0:
+            return b"", "omitted_sample_count_mismatch"
         return b"", "empty"
     safe_lines: list[bytes] = []
     expected_index = 0
@@ -329,6 +348,10 @@ def _screen_capture_payload(payload: bytes) -> tuple[bytes, str]:
         )
         expected_index += 1
         previous_monotonic_ns = record["monotonic_ns"]
+    if expected_index > expected_sample_count or (
+        protocol_status == "complete" and expected_index != expected_sample_count
+    ):
+        return b"", "omitted_sample_count_mismatch"
     output = b"\n".join(safe_lines) + b"\n"
     if len(output) > MAX_NATIVE_OUTPUT_BYTES:
         return b"", "omitted_screened_output_over_bound"

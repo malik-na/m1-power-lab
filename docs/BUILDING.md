@@ -83,6 +83,9 @@ m1lab --session SESSION_ID native-launch \
 credential-screened capture artifact after checking framing, digests, sequence,
 launch binding, output bounds, and the collector record schema. The screened
 view rejects duplicate JSON keys and is rebuilt from the recognized fields.
+It also checks that a protocol-complete capture contains the requested number
+of samples; a mismatch is reported as an unknown capture while preserving the
+separate protocol status.
 Raw binary frames are not inserted into Codex context; use the screened
 decoded artifact for analysis. Offline import explicitly records
 `physical_source_verified=false` and
