@@ -95,7 +95,7 @@ try:
     check = connection.execute("PRAGMA quick_check").fetchone()[0]
     if check != "ok":
         raise SystemExit(f"release refused: journal quick_check failed: {check}")
-    required = {"sessions", "jobs", "operations", "reservations"}
+    required = {"sessions", "jobs", "operations", "reservations", "active_segments"}
     tables = {
         row[0]
         for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
@@ -122,12 +122,16 @@ try:
         "SELECT COUNT(*) FROM reservations WHERE released_at IS NULL AND expires_at > ?",
         (datetime.now(timezone.utc).isoformat(),),
     ).fetchone()[0]
+    open_active_segments = connection.execute(
+        "SELECT COUNT(*) FROM active_segments WHERE ended_utc IS NULL"
+    ).fetchone()[0]
     counts = {
         "active_sessions": active_sessions,
         "uncertain_usage": uncertain_usage,
         "unresolved_jobs": unresolved_jobs,
         "unresolved_operations": unresolved_operations,
         "active_reservations": active_reservations,
+        "open_active_segments": open_active_segments,
     }
     blockers = [f"{name}={count}" for name, count in counts.items() if count]
     if blockers:
