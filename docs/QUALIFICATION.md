@@ -1,5 +1,32 @@
 # Qualification gates
 
+## Fourth attended attempt: proxy return caught, capture absent
+
+The fresh accepted review of `056724af…0f3546`, explicit owner approval/current
+attendance and fresh proxy inspection preceded one dispatch at 18:05:14 UTC.
+No native ACM channel or samples were observed. Proxy disappeared at 18:05:25
+and returned as `ttyACM1` at 18:05:39; the helper's continuous watcher caught it,
+completed its fixed identity check and retained the new owned connection.
+A follow-up inspection at 18:06:27 confirmed responsive proxy. The owner says
+the Mac returned by itself and no manual reboot occurred.
+
+The boot client exited zero. Its 23,960-byte log survives in private evidence;
+it records kernel/DTB/initramfs loading and handoff, then USB disconnect and a
+Miniterm reader/cancel traceback. The traceback does not establish why native
+startup ended. The owner saw Linux penguins/logs and fast M1Lab errors, but the
+exact failed stage is unknown. No native frames or Linux self-identity were
+captured. This demonstrates the corrected return catcher and retained logs on
+this attempt; it does not qualify a complete native round trip or known-good image.
+
+The original `unknown_effect` remains intact; evidence-backed reconciliation
+records the attempt as **failed**. Bounded package/runtime inspection identified
+no concrete missing interpreter, loader, direct library, kernel initrd support,
+mountpoint or matching module index. No speculative USB or pySerial patch is
+justified. The next discriminating evidence is a video of the existing target
+failure markers under a new exact review and attended approval. This approval
+is consumed; no fifth dispatch is authorized. See
+[fourth-attempt evidence](evidence/2026-09-26-native-fourth-attempt.json).
+
 ## Native failure diagnostics
 
 The third attempt lost its unnamed boot log when the helper was stopped.
@@ -31,8 +58,9 @@ serializer warnings; stored artifact hashes and contents verified correctly.
 This is a candidate, with physical native execution and return still pending.
 Fresh exact review accepted procedure `056724af…0f3546`; its completed
 `gpt-6-sol` medium job reported 90,606 tokens with no usage uncertainty.
-Fresh owner approval and current physical attendance remain pending. All prior
-single-use test approvals are consumed. The reviewed launch expires at
+Its fresh owner approval and attendance confirmation were consumed by the
+fourth attempt above. All prior single-use test approvals are consumed.
+The reviewed launch expires at
 2026-09-26 18:12:32 UTC; expiry requires a newly bound reviewed proposal.
 See [candidate evidence](evidence/2026-09-26-native-diagnostics-build.json).
 

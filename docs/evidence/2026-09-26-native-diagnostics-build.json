@@ -29,7 +29,7 @@
     "Host byte verification only; no native execution, result channel, console visibility, automatic return, or physical recovery qualification.",
     "Prior FDT framebuffer handoff report makes display plausible but does not establish visibility.",
     "Build metadata emitted Pydantic created_at string serializer warnings; this review does not alter metadata.",
-    "No fourth physical dispatch; exact review accepted but fresh attended owner approval is required.",
+    "Fourth attempt dispatched once and reconciled failed; no fifth dispatch is approved.",
     "Live investigation pause and unresolved usage hold remain intact; science stays stopped."
   ],
   "exact_procedure_review": {
@@ -40,8 +40,13 @@
     "reported_tokens": 90606,
     "harness_lifetime_tokens": 257995,
     "usage_uncertain": false,
-    "owner_approval": "pending",
-    "physical_attendance": "pending",
+    "owner_approval": "received and consumed by fourth attempt",
+    "physical_attendance": "confirmed for fourth attempt",
     "launch_deadline": "2026-09-26T18:12:32.817309Z"
+  },
+  "physical_execution": {
+    "operation_id": "operation_ac6684945ba74258a094ec11f56ea1a1",
+    "result": "failed capture; automatic proxy return caught; original unknown_effect retained",
+    "evidence": "2026-09-26-native-fourth-attempt.json"
   }
 }

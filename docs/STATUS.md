@@ -7,6 +7,17 @@ Owner-selected coordination uses the installed Agents Orchestrator on
 `gpt-6-sol` with medium reasoning. One integration owner controls commits and
 physical dispatch; the orchestrator assigns bounded tasks against the existing plan.
 
+The fourth attended test failed to capture native samples, but the continuous
+watcher caught and held the returning proxy at 18:05:39 UTC. The owner confirmed
+it returned by itself, without a manual reboot, and reported Linux penguins/logs
+with M1Lab errors that passed too quickly to read. The full 23,960-byte boot log
+survived and was published privately. The original `unknown_effect` is retained
+and the attempt is reconciled as failed. Kernel handoff and USB disconnect are
+logged; the exact native failure stage remains unknown. Bounded image/runtime
+inspection identified no concrete packaging defect. The next useful evidence is
+a recording of the existing target diagnostics during a separately approved run.
+See [fourth-attempt evidence](evidence/2026-09-26-native-fourth-attempt.json).
+
 The next candidate adds diagnostics for the demonstrated missing-evidence gap:
 private boot logs survive helper death, and target startup emits fixed stage
 markers with a five-second failure-only hold before its existing reboot request.
@@ -16,7 +27,7 @@ is still unverified. Clean source `350819d` produced diagnostic candidate
 `build_7307a7fbd37d412681afe9a3a4259fbb`; independent package review passed all
 36 checks. Fresh exact review accepted procedure `056724af…0f3546` with 90,606
 reported tokens in the isolated harness session, without usage uncertainty.
-Fresh attended owner approval remains pending before another physical attempt.
+Its single attended approval was consumed by the fourth attempt above.
 See [diagnostic evidence](evidence/2026-09-26-native-diagnostics.json)
 and [candidate evidence](evidence/2026-09-26-native-diagnostics-build.json).
 

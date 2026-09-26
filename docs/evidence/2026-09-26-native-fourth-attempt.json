@@ -1,0 +1,51 @@
+{
+  "date": "2026-09-26",
+  "host_head": "35dfb90b056d095e007c1f4ec2ac72d66b7617e9",
+  "candidate_source": "350819d20b19187951ab27ac0f7e4e0936e6c6b7",
+  "build_id": "build_7307a7fbd37d412681afe9a3a4259fbb",
+  "procedure_id": "procedure_a1e26243f6374311ac9be416753f2572",
+  "procedure_digest": "056724afe01a226b79e1b774d24a2901fdb2d4a610f60438b346c524900f3546",
+  "operation_id": "operation_ac6684945ba74258a094ec11f56ea1a1",
+  "approval": "Fresh exact review accepted, owner explicitly approved one test and confirmed physical attendance, then fresh proxy inspection and formal single-use approval preceded dispatch.",
+  "started_at": "2026-09-26T18:05:14.634461Z",
+  "finished_at": "2026-09-26T18:05:39.565075Z",
+  "outcome": {
+    "initial": "unknown_effect",
+    "reconciled": "failed",
+    "native_samples_captured": 0,
+    "native_channel_observed": false,
+    "boot_tool_exit_code": 0,
+    "native_stop_reason": "capture_NativeCandidateError",
+    "proxy_return_caught": true,
+    "fresh_return_connection": "53eb72e423c4432eb9b4943a20c38dbf",
+    "automatic_return_owner_confirmed": true,
+    "known_good": false
+  },
+  "usb_observation": {
+    "proxy_disappeared": "2026-09-26T18:05:25.097058+00:00",
+    "proxy_returned": "2026-09-26T18:05:39.354938+00:00",
+    "return_tty": "ttyACM1",
+    "fresh_followup_proxy_snapshot_at": "2026-09-26T18:06:27.725976Z"
+  },
+  "owner_observation": {
+    "manual_reboot": false,
+    "screen": "Lots of penguins, Linux logs and rapid M1Lab errors; exact error unreadable.",
+    "scope": "Owner report supports visible Linux console output; no captured native identity or failure stage."
+  },
+  "diagnostics": {
+    "retained_boot_log_bytes": 23960,
+    "boot_log_sha256": "d328b1325d7e258c1addfc4eb25b9d5e5ed9de5a0f9ce7b1d529414b0f87dd64",
+    "host_log": "Kernel/DTB/initramfs loaded; next-stage handoff followed by USB disconnect and Miniterm reader/cancel traceback. Launcher exit0. No target Linux/init stage reached host log.",
+    "cause": "Not established. Timing does not distinguish panic10 from early init failure plus5-second diagnostic hold.",
+    "bounded_host_review": "No missing init interpreter, loader/direct libraries, kernel initrd/script support, mountpoints or matching module-tree/index identified. No source fix justified yet."
+  },
+  "artifacts": {
+    "usb": "artifact_612d4e3b2e7da556f21928634f3c6a7e5ca468a38b84c14de16c71454dcaf79b",
+    "return_snapshot": "artifact_6f1483ca18842cf08b28a793c441722ff19ae5a5834044af9331898e59a091b2",
+    "execution": "artifact_3d3e2951dac046f99f6ade72a8a0f847312df1f113009143e09042a4d6549903",
+    "owner_observation": "artifact_47234670cd2b02fd40044c78f51dc93d2f3228d757de44e66534b03c2aa1664a",
+    "boot_log": "artifact_d328b1325d7e258c1addfc4eb25b9d5e5ed9de5a0f9ce7b1d529414b0f87dd64"
+  },
+  "remaining_gate": "Exact target failure-stage evidence, preferably owner screen recording on a separately reviewed and approved attended test. No automatic retry.",
+  "live_lab": "Installed f560929 investigation remains paused with unresolved usage hold; no deploy or scientific investigation."
+}
