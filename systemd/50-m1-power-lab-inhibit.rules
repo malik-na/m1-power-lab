@@ -1,0 +1,11 @@
+// The service account may hold only the logind locks requested by lab mode.
+polkit.addRule(function(action, subject) {
+    if (subject.user !== "m1lab") {
+        return;
+    }
+    if (action.id === "org.freedesktop.login1.inhibit-block-sleep" ||
+        action.id === "org.freedesktop.login1.inhibit-block-idle" ||
+        action.id === "org.freedesktop.login1.inhibit-handle-lid-switch") {
+        return polkit.Result.YES;
+    }
+});

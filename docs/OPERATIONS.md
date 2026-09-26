@@ -165,10 +165,11 @@ Sleep and lid inhibition is opt-in. Set `M1LAB_INHIBIT_SLEEP=1` in the
 root-owned environment file to run the service under `systemd-inhibit` with
 sleep, idle, and lid-switch handling locks. The locks exist only while the
 service process is alive and are released automatically when it exits; no
-logind settings are edited. If logind denies the lock or the command is
-missing, the service fails to start rather than claiming inhibition. Leave
-the setting unset until this behavior has been checked on the T480. The lock
-does not block explicit shutdown requests.
+logind settings are edited. Installation adds a Polkit rule granting only the
+`m1lab` account the three logind inhibitor actions needed for this mode. If
+logind denies the lock or the command is missing, the service fails to start
+rather than claiming inhibition. A held lock does not qualify actual lid
+behavior. The lock does not block explicit shutdown requests.
 
 The overview and `m1lab diagnostics` report whether inhibition was not
 requested, requested but unconfirmed, or held by the service wrapper. A held
@@ -377,7 +378,9 @@ sudo /opt/m1-power-lab/current/scripts/release.sh check
 sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab backup-bundle \
   /var/lib/m1-power-lab/final-backup.zip
 sudo systemctl disable m1-power-lab
-sudo rm -f /etc/systemd/system/m1-power-lab.service /etc/m1-power-lab.env
+sudo rm -f /etc/systemd/system/m1-power-lab.service \
+  /etc/polkit-1/rules.d/50-m1-power-lab-inhibit.rules \
+  /etc/m1-power-lab.env
 sudo systemctl daemon-reload
 sudo rm -rf /opt/m1-power-lab
 sudo userdel m1lab

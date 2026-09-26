@@ -7,6 +7,7 @@ SERVICE_NAME=m1-power-lab.service
 SERVICE_USER=m1lab
 ENV_FILE=/etc/m1-power-lab.env
 UNIT_FILE=/etc/systemd/system/m1-power-lab.service
+POLKIT_RULE_FILE=/etc/polkit-1/rules.d/50-m1-power-lab-inhibit.rules
 
 usage() {
   cat >&2 <<'EOF'
@@ -305,6 +306,9 @@ install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 \
   "$STATE_ROOT" "$STATE_ROOT/workspace" "$STATE_ROOT/codex"
 
 install -m 0644 "$release_path/systemd/m1-power-lab.service" "$UNIT_FILE"
+install -d -o root -g root -m 0755 /etc/polkit-1/rules.d
+install -o root -g root -m 0644 \
+  "$release_path/systemd/50-m1-power-lab-inhibit.rules" "$POLKIT_RULE_FILE"
 if [[ ! -e $ENV_FILE ]]; then
   install -o root -g root -m 0600 "$release_path/config/m1-power-lab.env.example" "$ENV_FILE"
 fi
