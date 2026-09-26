@@ -58,6 +58,7 @@ from m1lab.core.journal import JOURNAL_DISK_RESERVE_BYTES
 from m1lab.core.models import new_id, utc_now
 from m1lab.experiment import ExperimentService
 from m1lab.investigator import EvidenceExcerpt, InvestigationOrchestrator, InvestigationRequest
+from m1lab.host import HostAdmissionPolicy, LinuxHostMonitor
 from m1lab.notifications import PushConfig
 from m1lab.science import (
     ClaimEvidence,
@@ -275,7 +276,10 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
         if settings.codex_runtime == "app-server":
             _prepare_workspace(settings.workspace)
             investigator = InvestigationOrchestrator(
-                core, _codex_adapter(settings), workspace=settings.workspace
+                core,
+                _codex_adapter(settings),
+                workspace=settings.workspace,
+                host_blockers=_host_blocker_reader(settings),
             )
         elif settings.codex_runtime != "disabled":
             raise ValueError("M1LAB_CODEX_RUNTIME must be 'disabled' or 'app-server'")
@@ -1023,7 +1027,10 @@ async def _run_investigation(
     core: CoreApp, request: InvestigationRequest, settings: Settings
 ) -> dict[str, Any]:
     orchestrator = InvestigationOrchestrator(
-        core, _codex_adapter(settings), workspace=settings.workspace
+        core,
+        _codex_adapter(settings),
+        workspace=settings.workspace,
+        host_blockers=_host_blocker_reader(settings),
     )
     try:
         launch = await orchestrator.start(request)
@@ -1031,6 +1038,12 @@ async def _run_investigation(
         return record.model_dump(mode="json")
     finally:
         await orchestrator.close()
+
+
+def _host_blocker_reader(settings: Settings):
+    monitor = LinuxHostMonitor(settings.paths.root)
+    policy = HostAdmissionPolicy()
+    return lambda: policy.blockers(monitor.sample())
 
 
 def _codex_adapter(settings: Settings) -> AppServerCodexAdapter:

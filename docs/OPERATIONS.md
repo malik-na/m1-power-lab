@@ -96,6 +96,14 @@ readiness and startup errors with:
 sudo journalctl -u m1-power-lab --since today --no-pager
 ```
 
+CLI and web Codex jobs take fresh AC, thermal, and data-disk readings before
+admission and again immediately before runtime launch. Work is denied unless
+AC is confirmed, a thermal reading is available and below 90 °C, and at least
+5 GiB is free under the data root. An admission change after a durable job
+record is created leaves a failed job record and releases its reservation; it
+does not start Codex. These checks do not qualify sleep inhibition, lid
+behavior, shutdown handling, or the correctness of the T480's sensors.
+
 ## Tailscale access
 
 Keep the application on loopback and proxy private HTTPS with Tailscale Serve:

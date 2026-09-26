@@ -10,7 +10,7 @@ import asyncio
 from datetime import timedelta
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from m1lab.adapters import (
     CodexRuntime,
@@ -36,12 +36,20 @@ _MAX_SUMMARIES = 120
 class InvestigationOrchestrator:
     """Coordinates CoreApp admission and a CodexRuntime without hardware access."""
 
-    def __init__(self, core: CoreApp, runtime: CodexRuntime, *, workspace: Path) -> None:
+    def __init__(
+        self,
+        core: CoreApp,
+        runtime: CodexRuntime,
+        *,
+        workspace: Path,
+        host_blockers: Callable[[], list[str]] | None = None,
+    ) -> None:
         if not workspace.is_absolute():
             raise ValueError("Codex workspace must be absolute")
         self._core = core
         self._runtime = runtime
         self._workspace = workspace.resolve()
+        self._host_blockers = host_blockers
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._runtime_ids: dict[str, str] = {}
         self._reservations: dict[str, str] = {}
@@ -103,6 +111,7 @@ class InvestigationOrchestrator:
     async def _launch(self, request: InvestigationRequest, *, thread_id: str | None) -> JobLaunch:
         if request.cwd.resolve() != self._workspace:
             raise ValueError("Codex job cwd must be the configured dedicated workspace")
+        self._require_host_readiness()
         evidence_artifacts = []
         for evidence in request.evidence:
             cleaned = scrub_text(evidence.content).encode("utf-8")
@@ -144,6 +153,7 @@ class InvestigationOrchestrator:
         durable: JobRecord | None = None
         handle: JobHandle | None = None
         try:
+            self._require_host_readiness()
             durable = self._core.create_job(
                 JobCreate(
                     session_id=request.session_id,
@@ -162,6 +172,7 @@ class InvestigationOrchestrator:
                 output_schema=OUTPUT_SCHEMA,
                 reasoning_effort=request.reasoning_effort,
             )
+            self._require_host_readiness()
             handle = (
                 await self._runtime.start_job(runtime_request)
                 if thread_id is None
@@ -221,6 +232,13 @@ class InvestigationOrchestrator:
             thread_id=handle.thread_id,
             state=running.state,
         )
+
+    def _require_host_readiness(self) -> None:
+        if self._host_blockers is None:
+            return
+        blockers = self._host_blockers()
+        if blockers:
+            raise ValueError("host work admission is closed: " + "; ".join(blockers))
 
     async def _consume(
         self,
