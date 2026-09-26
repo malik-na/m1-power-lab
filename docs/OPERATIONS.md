@@ -36,6 +36,11 @@ The system unit uses this layout:
 Install the first release from the repository root. Replace `0.1.0` with a
 unique version or commit ID for later releases.
 
+Run these commands on the ThinkPad. They create a dedicated service account,
+release tree, private state root, and root-owned environment file. Application
+releases remain separate from the database, artifacts, workspace, and Codex
+home.
+
 ```bash
 sudo useradd --system --home-dir /var/lib/m1-power-lab --create-home \
   --shell /usr/bin/nologin m1lab
@@ -83,6 +88,18 @@ sudo -u m1lab env M1LAB_DATA_DIR=/var/lib/m1-power-lab \
   --owner owner@example.com --target-identity m1-target
 sudo systemctl enable --now m1-power-lab
 sudo systemctl --no-pager status m1-power-lab
+sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab diagnostics
+```
+
+On each service start, `m1lab serve` takes the coordinator lock and reconciles
+the durable journal before opening the HTTP listener. Diagnostics report the
+OS/platform, Python and Codex versions, configured paths, Codex executable pin
+status, runtime configuration, and unqualified hardware gates. An executable
+pin match does not qualify authentication or a live model turn. Check process
+readiness and startup errors with:
+
+```bash
+sudo journalctl -u m1-power-lab --since today --no-pager
 ```
 
 ## Tailscale access
@@ -175,9 +192,18 @@ sudo systemctl start m1-power-lab
 
 Install an update into a new release directory using the same archive, venv,
 and package installation steps as the first install. Do not modify an installed
-release. After taking a backup, switch the symlink and restart:
+release; keep the prior release directory as the known-good rollback target.
+Inspect status and jobs as `m1lab`, pause or stop the session, and wait until no
+job is admitted or running. Resolve any unknown job or operation first. Do not
+transition releases during an active experiment. Create a verified backup,
+then switch the symlink and restart:
 
 ```bash
+sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab status
+sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab jobs
+sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab control pause
+sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab backup-bundle \
+  /var/lib/m1-power-lab/pre-update.zip
 sudo systemctl stop m1-power-lab
 sudo ln -s releases/NEW_RELEASE /opt/m1-power-lab/current.next
 sudo mv -Tf /opt/m1-power-lab/current.next /opt/m1-power-lab/current
@@ -188,7 +214,39 @@ sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab status
 
 To roll back code, stop the service and atomically point `current` at the prior
 release. If the new release changed durable data incompatibly, restore the
-matching pre-update bundle before starting the old release.
+matching pre-update bundle after switching code and before starting the old
+release.
+
+```bash
+sudo systemctl stop m1-power-lab
+sudo ln -s releases/OLD_RELEASE /opt/m1-power-lab/current.rollback
+sudo mv -Tf /opt/m1-power-lab/current.rollback /opt/m1-power-lab/current
+sudo systemctl start m1-power-lab
+sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab diagnostics
+sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab status
+```
+
+## Uninstall
+
+Create and verify a final bundle before removing the service. Keep the data
+root if its evidence or Codex state is still needed.
+
+```bash
+sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab backup-bundle \
+  /var/lib/m1-power-lab/final-backup.zip
+sudo systemctl disable --now m1-power-lab
+sudo rm -f /etc/systemd/system/m1-power-lab.service /etc/m1-power-lab.env
+sudo systemctl daemon-reload
+sudo rm -rf /opt/m1-power-lab
+sudo userdel m1lab
+```
+
+After securely retaining the verified backup, remove `/var/lib/m1-power-lab`
+only if its evidence and Codex state are no longer required:
+
+```bash
+sudo rm -rf /var/lib/m1-power-lab
+```
 
 ## Qualification boundary
 

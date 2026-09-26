@@ -407,6 +407,28 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
     if args.action == "reconcile":
         return core.reconcile().model_dump(mode="json")
     if args.action == "diagnostics":
+        codex_tool = _tool_version(settings.codex_executable)
+        codex_path = codex_tool.get("path")
+        codex_sha256_actual = None
+        codex_pin_matches = False
+        if codex_path:
+            try:
+                codex_sha256_actual = _file_sha256_path(Path(codex_path))
+                codex_pin_matches = bool(settings.codex_sha256) and (
+                    codex_sha256_actual.lower() == settings.codex_sha256.lower()
+                )
+            except OSError:
+                pass
+        if settings.codex_runtime == "disabled":
+            codex_readiness = "disabled"
+        elif not codex_tool.get("available"):
+            codex_readiness = "executable_unavailable"
+        elif not settings.codex_sha256:
+            codex_readiness = "executable_pin_missing"
+        elif not codex_pin_matches:
+            codex_readiness = "executable_pin_mismatch"
+        else:
+            codex_readiness = "executable_pinned_live_turn_unqualified"
         return {
             "app_version": "0.1.0",
             "python": platform.python_version(),
@@ -416,11 +438,19 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
             "session_id": session_id,
             "configured_hardware": settings.hardware_adapter,
             "live_hardware_qualified": False,
+            "unqualified_hardware_gates": [
+                "ThinkPad-to-Mac transport and target identity",
+                "proxy, hypervisor, and native mode recovery",
+                "native result channel and power measurement",
+            ],
             "codex_model": settings.model,
             "codex_runtime": settings.codex_runtime,
-            "codex_cli": _tool_version(settings.codex_executable),
+            "codex_readiness": codex_readiness,
+            "codex_cli": codex_tool,
             "codex_executable": settings.codex_executable,
             "codex_sha256": settings.codex_sha256 or None,
+            "codex_sha256_actual": codex_sha256_actual,
+            "codex_sha256_matches": codex_pin_matches,
             "workspace": str(settings.workspace),
             "tailscale_cli": _tool_version("tailscale"),
             "tailscale_headers": settings.trust_tailscale_headers,

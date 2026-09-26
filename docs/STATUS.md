@@ -10,6 +10,7 @@ This file distinguishes implemented behavior from physical qualification.
 | Codex runtime | Implemented, opt in | SHA-256 pinned, read only app-server adapter and budgeted job supervisor; authenticated live turn still needs host qualification |
 | Owner CLI | Host implemented | Lifecycle, budgets, approvals, events, artifacts, jobs, operation and usage recovery, export, backup, replay and diagnostics |
 | Owner web UI | Host rendered | Four responsive views, revisioned commands, SSE and local/Tailscale identity modes |
+| ThinkPad service deployment | Instructions and systemd unit implemented; host deployment pending | [Operations guide](OPERATIONS.md); install, service readiness, release rollback, restore, and uninstall are not yet qualified on the T480 |
 | Tailscale on ThinkPad | Pending physical setup | Configure Serve, exact owner login and tailnet policy; verify no Funnel |
 | iPhone 12 mini | Pending physical check | Verify all views, Home Screen install, reconnect and approval handling |
 | ThinkPad-to-Mac transport | Unqualified | Identify cable/ports, m1n1 versions, target identity, boot epoch and exclusive helper ownership |
