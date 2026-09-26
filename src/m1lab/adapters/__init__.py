@@ -46,7 +46,11 @@ from .helper_protocol import (
     HELPER_PROTOCOL_VERSION,
     HelperProtocolError,
     decode_request as decode_helper_request,
+    decode_request_frame as decode_helper_request_frame,
     decode_result as decode_helper_result,
+    decode_result_frame as decode_helper_result_frame,
+    encode_request_frame as encode_helper_request_frame,
+    encode_result_frame as encode_helper_result_frame,
     encode_request as encode_helper_request,
     encode_result as encode_helper_result,
 )
@@ -88,7 +92,11 @@ __all__ = [
     "TokenUsage",
     "WaitForReplay",
     "decode_helper_request",
+    "decode_helper_request_frame",
     "decode_helper_result",
+    "decode_helper_result_frame",
     "encode_helper_request",
+    "encode_helper_request_frame",
     "encode_helper_result",
+    "encode_helper_result_frame",
 ]

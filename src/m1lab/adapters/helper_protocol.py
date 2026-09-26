@@ -13,6 +13,7 @@ import binascii
 from datetime import datetime
 import json
 import math
+import struct
 from typing import Any
 
 from .hardware import (
@@ -32,6 +33,7 @@ from .hardware import (
 HELPER_PROTOCOL_VERSION = 1
 MAX_HELPER_REQUEST_BYTES = 64 * 1024
 MAX_HELPER_RESPONSE_BYTES = 1_500_000
+HELPER_FRAME_HEADER_BYTES = 4
 
 _REQUEST_FIELDS = frozenset(
     {
@@ -60,6 +62,45 @@ _REQUEST_FIELDS = frozenset(
 
 class HelperProtocolError(ValueError):
     """A helper request or result violates the versioned wire contract."""
+
+
+def add_length_prefix(payload: bytes, *, maximum: int) -> bytes:
+    """Wrap one encoded message in a four-byte big-endian length prefix."""
+
+    if not isinstance(payload, bytes) or not payload or len(payload) > maximum:
+        raise HelperProtocolError("helper payload is empty, not bytes, or exceeds its bound")
+    return struct.pack("!I", len(payload)) + payload
+
+
+def remove_length_prefix(frame: bytes, *, maximum: int) -> bytes:
+    """Extract exactly one complete message; reject truncation and trailing bytes."""
+
+    if not isinstance(frame, bytes) or len(frame) < HELPER_FRAME_HEADER_BYTES:
+        raise HelperProtocolError("helper frame is missing its complete length prefix")
+    (length,) = struct.unpack("!I", frame[:HELPER_FRAME_HEADER_BYTES])
+    if length == 0 or length > maximum:
+        raise HelperProtocolError("helper frame length is empty or exceeds its bound")
+    if len(frame) != HELPER_FRAME_HEADER_BYTES + length:
+        raise HelperProtocolError("helper frame is truncated or contains trailing bytes")
+    return frame[HELPER_FRAME_HEADER_BYTES:]
+
+
+def encode_request_frame(dispatch: HardwareDispatch) -> bytes:
+    return add_length_prefix(encode_request(dispatch), maximum=MAX_HELPER_REQUEST_BYTES)
+
+
+def decode_request_frame(frame: bytes) -> HardwareDispatch:
+    payload = remove_length_prefix(frame, maximum=MAX_HELPER_REQUEST_BYTES)
+    return decode_request(payload)
+
+
+def encode_result_frame(result: HardwareResult) -> bytes:
+    return add_length_prefix(encode_result(result), maximum=MAX_HELPER_RESPONSE_BYTES)
+
+
+def decode_result_frame(frame: bytes, *, expected_operation_id: str) -> HardwareResult:
+    payload = remove_length_prefix(frame, maximum=MAX_HELPER_RESPONSE_BYTES)
+    return decode_result(payload, expected_operation_id=expected_operation_id)
 
 
 def encode_request(dispatch: HardwareDispatch) -> bytes:

@@ -30,7 +30,9 @@ flowchart LR
 - Each typed dispatch carries its coordinator operation ID, exact procedure and
   accepted review digests, artifact digests, target/boot/configuration identity,
   deadline, and approval scope. A versioned bounded JSON codec is available for
-  a separate helper process; it rejects unknown operations and fields.
+  a separate helper process; it rejects unknown operations and fields. Stream
+  transports wrap each JSON message in a four-byte big-endian payload length;
+  incomplete frames and trailing bytes fail closed.
 - The current build accepts only `ReplayHardwareAdapter`. The m1n1 adapter is
   an unavailable object that opens no device.
 - The helper codec does not open USB or serial devices. The helper process,
