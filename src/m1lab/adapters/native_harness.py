@@ -287,7 +287,12 @@ class NativeCapture(NativeModel):
 
 
 class NativeResultAssembler:
-    """Validate result lineage and retain received bytes without inferring loss."""
+    """Validate launch binding and retain bytes without asserting frame origin.
+
+    The checksummed identity frame repeats values from the launch manifest. It
+    cannot independently prove target identity or boot epoch; a live adapter
+    must establish those from its qualified target observation.
+    """
 
     def __init__(
         self,
