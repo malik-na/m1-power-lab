@@ -186,11 +186,20 @@ class NativeLaunchManifest(NativeModel):
             raise ValueError("launch parameters must be bounded scalar values")
         return values
 
-    def validate_against_image(self, image: NativeImageManifest) -> None:
-        """Bind this launch to a specific immutable image manifest."""
+    def validate_against_image(
+        self,
+        image: NativeImageManifest,
+        *,
+        require_current_deadline: bool = True,
+    ) -> None:
+        """Bind this launch to a specific immutable image manifest.
+
+        Offline frame import may validate image binding after the launch has
+        expired. Only live capture enforces current wall-clock eligibility.
+        """
 
         remaining_runtime = (self.deadline - datetime.now(timezone.utc)).total_seconds()
-        if remaining_runtime <= 0:
+        if require_current_deadline and remaining_runtime <= 0:
             raise NativeHarnessError("launch deadline has expired")
         if self.image_manifest_sha256 != image.digest():
             raise NativeHarnessError("launch image manifest digest does not match its manifest")
@@ -198,7 +207,7 @@ class NativeLaunchManifest(NativeModel):
             raise NativeHarnessError("launch configuration does not match the image manifest")
         if self.output_limit_bytes > image.maximum_output_bytes:
             raise NativeHarnessError("launch output limit exceeds the image manifest bound")
-        if (self.deadline - datetime.now(timezone.utc)).total_seconds() > image.maximum_runtime_seconds:
+        if require_current_deadline and remaining_runtime > image.maximum_runtime_seconds:
             raise NativeHarnessError("launch deadline exceeds the image runtime bound")
         if self.image_sha256 not in {artifact.sha256 for artifact in image.outputs}:
             raise NativeHarnessError("launch image digest is not an output of its image manifest")
@@ -278,9 +287,18 @@ class NativeCapture(NativeModel):
 class NativeResultAssembler:
     """Validate result lineage and retain received bytes without inferring loss."""
 
-    def __init__(self, launch: NativeLaunchManifest, image: NativeImageManifest):
-        launch.validate_against_image(image)
+    def __init__(
+        self,
+        launch: NativeLaunchManifest,
+        image: NativeImageManifest,
+        *,
+        enforce_receive_deadline: bool = True,
+    ):
+        launch.validate_against_image(
+            image, require_current_deadline=enforce_receive_deadline
+        )
         self.launch = launch
+        self._enforce_receive_deadline = enforce_receive_deadline
         self._identity_verified = False
         self._expected_sequence = 0
         self._payload = bytearray()
@@ -300,7 +318,7 @@ class NativeResultAssembler:
             raise NativeHarnessError("result stream is already invalid")
         if self._terminal_status is not None:
             raise NativeHarnessError("result stream contains frames after its terminal frame")
-        if datetime.now(timezone.utc) > self.launch.deadline:
+        if self._enforce_receive_deadline and datetime.now(timezone.utc) > self.launch.deadline:
             raise NativeHarnessError("result frame arrived after the launch deadline")
         if frame.run_id != self.launch.run_id:
             raise NativeHarnessError("result frame belongs to a different run")

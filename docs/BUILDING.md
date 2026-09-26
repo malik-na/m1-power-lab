@@ -62,3 +62,35 @@ calculation. A recipe must include Python 3, hash the exact collector source,
 and install it in the target root filesystem. This source does not qualify the
 M1 sensors, channel, return path, or recovery behavior; see the
 [collector notes](../target/README.md).
+
+The host CLI can validate and publish a launch manifest against a session's
+published image manifest and output artifact. It requires the target identity
+to match the session and records the explicitly supplied boot epoch and
+recovery expectation. Preparing this artifact does not start a target
+operation:
+
+```bash
+m1lab --session SESSION_ID native-launch \
+  --image-manifest-artifact IMAGE_MANIFEST_ID \
+  --image-artifact PAYLOAD_ARTIFACT_ID \
+  --target-identity TARGET_ID --boot-epoch EXPECTED_BOOT_EPOCH \
+  --sample-count 60 --sample-period-ms 1000 \
+  --deadline-seconds 120 --output-limit-bytes 1048576 \
+  --recovery-expectation "qualified mode-specific recovery instructions"
+```
+
+`m1lab native-import` preserves a saved framed stream and a normalized,
+credential-screened capture artifact after checking framing, digests, sequence,
+launch binding, and output bounds. Raw binary frames are not inserted into
+Codex context; use the screened decoded artifact for analysis. Offline import
+explicitly records `physical_source_verified=false` and
+`capture_timing_verified=false`; even a protocol-complete file is not a
+verified target observation or a scientific measurement. The future live
+adapter must receive frames before the launch deadline and establish the
+physical source and mode itself.
+
+```bash
+m1lab --session SESSION_ID native-import \
+  --launch-artifact LAUNCH_ARTIFACT_ID \
+  --image-manifest-artifact IMAGE_MANIFEST_ID /path/to/result.frames
+```

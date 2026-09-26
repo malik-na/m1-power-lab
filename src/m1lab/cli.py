@@ -61,6 +61,7 @@ from m1lab.core.models import new_id, utc_now
 from m1lab.experiment import ExperimentService
 from m1lab.investigator import EvidenceExcerpt, InvestigationOrchestrator, InvestigationRequest
 from m1lab.host import HostAdmissionPolicy, LinuxHostMonitor
+from m1lab.native_runs import import_native_capture, prepare_native_launch
 from m1lab.notifications import PushConfig
 from m1lab.science import (
     ClaimEvidence,
@@ -197,6 +198,26 @@ def parser() -> argparse.ArgumentParser:
     build.add_argument("--workspace", type=Path, help="isolated build worktree root")
     build.add_argument("--role", choices=("known_good", "candidate"), required=True)
 
+    native_launch = commands.add_parser(
+        "native-launch", help="validate and publish a bounded native launch manifest; does not dispatch it"
+    )
+    native_launch.add_argument("--image-manifest-artifact", required=True)
+    native_launch.add_argument("--image-artifact", required=True, help="session artifact ID for the declared payload output")
+    native_launch.add_argument("--target-identity", required=True, help="must match the selected session")
+    native_launch.add_argument("--boot-epoch", required=True)
+    native_launch.add_argument("--sample-count", type=int, required=True)
+    native_launch.add_argument("--sample-period-ms", type=int, required=True)
+    native_launch.add_argument("--deadline-seconds", type=int, default=600)
+    native_launch.add_argument("--output-limit-bytes", type=int, default=1_048_576)
+    native_launch.add_argument("--recovery-expectation", required=True)
+
+    native_import = commands.add_parser(
+        "native-import", help="preserve and validate a saved native result stream without claiming its origin"
+    )
+    native_import.add_argument("--launch-artifact", required=True)
+    native_import.add_argument("--image-manifest-artifact", required=True)
+    native_import.add_argument("stream", type=Path)
+
     procedure_register = commands.add_parser(
         "procedure-register", help="validate and freeze an explicit typed procedure draft"
     )
@@ -321,6 +342,40 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
             "manifest": publication.manifest.model_dump(mode="json"),
             "manifest_artifact": publication.manifest_artifact.model_dump(mode="json"),
             "artifacts": [item.model_dump(mode="json") for item in publication.artifacts],
+        }
+    if args.action == "native-launch":
+        launch, artifact = prepare_native_launch(
+            core,
+            session_id,
+            image_manifest_artifact_id=args.image_manifest_artifact,
+            image_artifact_id=args.image_artifact,
+            target_identity=args.target_identity,
+            boot_epoch=args.boot_epoch,
+            sample_count=args.sample_count,
+            sample_period_ms=args.sample_period_ms,
+            deadline_seconds=args.deadline_seconds,
+            output_limit_bytes=args.output_limit_bytes,
+            recovery_expectation=args.recovery_expectation,
+        )
+        return {
+            "launch": launch.model_dump(mode="json"),
+            "launch_artifact": artifact.model_dump(mode="json"),
+            "physical_dispatch_performed": False,
+        }
+    if args.action == "native-import":
+        capture, raw_artifact, normalized_artifact = import_native_capture(
+            core,
+            session_id,
+            launch_artifact_id=args.launch_artifact,
+            image_manifest_artifact_id=args.image_manifest_artifact,
+            stream_path=args.stream,
+        )
+        return {
+            "capture": capture.model_dump(mode="json"),
+            "raw_stream_artifact": raw_artifact.model_dump(mode="json"),
+            "capture_artifact": normalized_artifact.model_dump(mode="json"),
+            "physical_source_verified": False,
+            "capture_timing_verified": False,
         }
     if args.action == "serve":
         if args.host not in {"127.0.0.1", "::1", "localhost"}:

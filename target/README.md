@@ -27,7 +27,13 @@ the requested raw samples were framed and emitted.
 
 An owner-reviewed build recipe must place Python 3 and this source in the
 target image, hash the exact collector source, and bind the launch manifest to
-that image. The collector source is now available, but no M1-specific recipe,
-image, result transport, or return path is qualified. Do not use its output as
-power evidence until the sensor provenance, observer effect, physical channel,
-and recovery gates are qualified on the actual setup.
+that image. `m1lab native-launch` prepares the manifest as a session artifact;
+`m1lab native-import` preserves a returned byte stream and publishes a
+credential-screened view of recognized collector records. Raw binary frames
+are not inserted into Codex context. Offline
+import deliberately marks physical source and capture timing as unverified,
+even when frame checksums and sequence are valid. Neither command dispatches a
+target operation. The collector source is now available, but no M1-specific
+recipe, image, result transport, or return path is qualified. Do not use its
+output as power evidence until the sensor provenance, observer effect,
+physical channel, and recovery gates are qualified on the actual setup.

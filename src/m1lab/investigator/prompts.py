@@ -520,6 +520,26 @@ def _artifact_excerpts(
     for artifact in artifacts:
         if remaining <= 0:
             break
+        if artifact.provenance.get("record_type") == "native_result_stream":
+            note = (
+                "Binary native result frames are preserved as a raw artifact but are not "
+                "inserted into model context. Use the linked screened native_capture artifact "
+                "for decoded observations."
+            )
+            excerpts.append(
+                {
+                    "artifact_id": artifact.id,
+                    "sha256": artifact.sha256,
+                    "media_type": artifact.media_type,
+                    "excerpt": note,
+                    "truncated": True,
+                    "character_range": [0, 0],
+                    "line_count": 1,
+                    "raw_binary_omitted": True,
+                }
+            )
+            remaining -= len(note)
+            continue
         try:
             raw = core.read_artifact(
                 session_id,
