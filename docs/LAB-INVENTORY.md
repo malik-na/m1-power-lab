@@ -54,10 +54,11 @@ original environment. Physical lid closure was not tested.
 Tailscale Serve was then configured to proxy to the loopback service. On the
 T480, HTTPS `/overview` returned HTTP 200, exact owner identity was required
 for direct loopback requests, and no public Funnel entry was enabled. The
-owner-matched investigation session remains paused. Access from the iPhone
-12 mini and tailnet policy have not been checked.
+owner-matched investigation session remains paused. Full workflows from the
+iPhone 12 mini and tailnet policy have not been checked.
 The T480 also has a stable service-owned VAPID key pair, and the enabled push
-config endpoint responds over Serve. No phone is enrolled, so notification
+config endpoint responds over Serve. The owner subsequently reported iPhone
+enrollment, confirmed by `enrolled=true` from the HTTPS endpoint. Notification
 delivery remains unqualified.
 
 ## Observed execution machine
