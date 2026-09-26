@@ -15,6 +15,7 @@ import platform
 import shutil
 import socket
 import sqlite3
+import stat
 import subprocess
 import sys
 import tempfile
@@ -76,6 +77,9 @@ from m1lab.science import (
     StudyMode,
 )
 from m1lab.web import WebSettings, create_app
+
+
+MAX_CLI_EVIDENCE_BYTES = 1_000_000
 
 
 def parser() -> argparse.ArgumentParser:
@@ -226,7 +230,13 @@ def parser() -> argparse.ArgumentParser:
 
     investigate = commands.add_parser("investigate", help="run one bounded Codex evidence turn")
     investigate.add_argument("instruction")
-    investigate.add_argument("--evidence", action="append", type=Path, default=[])
+    investigate.add_argument(
+        "--evidence",
+        action="append",
+        type=Path,
+        default=[],
+        help="selected technical evidence file (regular files up to 1 MB; review for private content)",
+    )
     investigate.add_argument("--kind", choices=("investigate", "analyze", "review", "conclude"), default="investigate")
     investigate.add_argument("--procedure-id", help="exact procedure ID to review; required with --kind review")
     investigate.add_argument("--estimated-tokens", type=int, default=100_000)
@@ -615,7 +625,7 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
         _prepare_workspace(settings.workspace)
         evidence = []
         for path in args.evidence:
-            content = path.read_text(encoding="utf-8")
+            content = _read_evidence_file(path)
             evidence.append(EvidenceExcerpt(label=path.name, content=content))
         request = InvestigationRequest(
             session_id=session_id,
@@ -1091,6 +1101,47 @@ def _prepare_workspace(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
     if not path.is_dir():
         raise ValueError(f"Codex workspace is not a directory: {path}")
+
+
+def _read_evidence_file(path: Path) -> str:
+    """Read one selected, bounded regular file without following symlinks."""
+
+    try:
+        path_info = path.lstat()
+    except OSError as exc:
+        raise ValueError(f"could not inspect evidence file {path.name!r}: {exc}") from exc
+    if not stat.S_ISREG(path_info.st_mode):
+        raise ValueError("evidence input must be a regular non-symlink file")
+    if path_info.st_size > MAX_CLI_EVIDENCE_BYTES:
+        raise ValueError(f"evidence file exceeds {MAX_CLI_EVIDENCE_BYTES} bytes")
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise ValueError(f"could not securely open evidence file {path.name!r}: {exc}") from exc
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError("evidence input must be a regular file")
+        if info.st_size > MAX_CLI_EVIDENCE_BYTES:
+            raise ValueError(f"evidence file exceeds {MAX_CLI_EVIDENCE_BYTES} bytes")
+        with os.fdopen(descriptor, "rb") as stream:
+            descriptor = -1
+            raw = stream.read(MAX_CLI_EVIDENCE_BYTES + 1)
+        if len(raw) > MAX_CLI_EVIDENCE_BYTES:
+            raise ValueError(f"evidence file exceeds {MAX_CLI_EVIDENCE_BYTES} bytes")
+        try:
+            return raw.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError("evidence files must contain UTF-8 text") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
 
 
 def _request_job_interrupt(base_url: str, job_id: str) -> dict[str, Any]:

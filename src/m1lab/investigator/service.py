@@ -115,6 +115,7 @@ class InvestigationOrchestrator:
         evidence_artifacts = []
         for evidence in request.evidence:
             cleaned = scrub_text(evidence.content).encode("utf-8")
+            clean_label = scrub_text(evidence.label)
             evidence_artifacts.append(
                 self._core.publish_artifact(
                     cleaned,
@@ -122,8 +123,9 @@ class InvestigationOrchestrator:
                     provenance={
                         "session_id": request.session_id,
                         "kind": "investigation_evidence",
-                        "label": evidence.label,
+                        "label": clean_label,
                         "credential_scrubbed": True,
+                        "personal_data_patterns_scrubbed": ["email address", "home-directory prefix"],
                     },
                 )
             )

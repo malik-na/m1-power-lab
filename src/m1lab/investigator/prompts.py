@@ -30,6 +30,10 @@ _SECRET_TEXT = (
     re.compile(r"(?i)\b((?:api[_-]?key|token|password|secret)\s*[:=]\s*)[^\s,;]{8,}"),
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.DOTALL),
 )
+_PERSONAL_TEXT = (
+    re.compile(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b"),
+    re.compile(r"(?i)(?<![\w.])/(?:home|Users)/[^/\s:'\"<>]+"),
+)
 
 
 OUTPUT_SCHEMA: dict[str, Any] = {
@@ -258,6 +262,8 @@ def scrub_text(value: str) -> str:
     cleaned = value
     for pattern in _SECRET_TEXT:
         cleaned = pattern.sub(lambda match: (match.group(1) if match.lastindex else "") + "[REDACTED]", cleaned)
+    for pattern in _PERSONAL_TEXT:
+        cleaned = pattern.sub("[PERSONAL_DATA_REDACTED]", cleaned)
     return cleaned
 
 
@@ -446,7 +452,7 @@ def build_prompt(request: InvestigationRequest, manifest: Mapping[str, Any]) -> 
         content = scrub_text(evidence.content)
         preview = content[: min(len(content), remaining, 16_000)]
         remaining -= len(preview)
-        previews.append({"label": evidence.label, "media_type": evidence.media_type, "excerpt": preview})
+        previews.append({"label": scrub_text(evidence.label), "media_type": evidence.media_type, "excerpt": preview})
         if remaining <= 0:
             break
     manifest_json = json.dumps(manifest, sort_keys=True, ensure_ascii=False)
