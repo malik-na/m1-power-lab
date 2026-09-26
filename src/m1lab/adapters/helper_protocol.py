@@ -14,7 +14,7 @@ from datetime import datetime
 import json
 import math
 import struct
-from typing import Any
+from typing import Any, BinaryIO
 
 from .hardware import (
     MAX_CAPTURE_BYTES,
@@ -85,6 +85,45 @@ def remove_length_prefix(frame: bytes, *, maximum: int) -> bytes:
     return frame[HELPER_FRAME_HEADER_BYTES:]
 
 
+def read_helper_frame(stream: BinaryIO, *, maximum: int) -> bytes:
+    """Read one complete bounded frame from a blocking binary stream.
+
+    Callers must enforce their own deadline and classify any failure after
+    dispatch as an unknown effect. This helper never retries an operation.
+    """
+
+    header = _read_exact(stream, HELPER_FRAME_HEADER_BYTES)
+    (length,) = struct.unpack("!I", header)
+    if length == 0 or length > maximum:
+        raise HelperProtocolError("helper frame length is empty or exceeds its bound")
+    return header + _read_exact(stream, length)
+
+
+def write_helper_frame(stream: BinaryIO, payload: bytes, *, maximum: int) -> None:
+    """Write one bounded frame fully, handling short writes on blocking streams."""
+
+    frame = add_length_prefix(payload, maximum=maximum)
+    remaining = memoryview(frame)
+    while remaining:
+        written = stream.write(remaining)
+        if not isinstance(written, int) or written <= 0:
+            raise HelperProtocolError("helper stream closed or refused a frame write")
+        remaining = remaining[written:]
+    flush = getattr(stream, "flush", None)
+    if flush is not None:
+        flush()
+
+
+def _read_exact(stream: BinaryIO, size: int) -> bytes:
+    chunks = bytearray()
+    while len(chunks) < size:
+        chunk = stream.read(size - len(chunks))
+        if not isinstance(chunk, bytes) or not chunk:
+            raise HelperProtocolError("helper stream ended before the frame was complete")
+        chunks.extend(chunk)
+    return bytes(chunks)
+
+
 def encode_request_frame(dispatch: HardwareDispatch) -> bytes:
     return add_length_prefix(encode_request(dispatch), maximum=MAX_HELPER_REQUEST_BYTES)
 
@@ -101,6 +140,27 @@ def encode_result_frame(result: HardwareResult) -> bytes:
 def decode_result_frame(frame: bytes, *, expected_operation_id: str) -> HardwareResult:
     payload = remove_length_prefix(frame, maximum=MAX_HELPER_RESPONSE_BYTES)
     return decode_result(payload, expected_operation_id=expected_operation_id)
+
+
+def write_request(stream: BinaryIO, dispatch: HardwareDispatch) -> None:
+    write_helper_frame(stream, encode_request(dispatch), maximum=MAX_HELPER_REQUEST_BYTES)
+
+
+def read_request(stream: BinaryIO) -> HardwareDispatch:
+    return decode_request_frame(
+        read_helper_frame(stream, maximum=MAX_HELPER_REQUEST_BYTES)
+    )
+
+
+def write_result(stream: BinaryIO, result: HardwareResult) -> None:
+    write_helper_frame(stream, encode_result(result), maximum=MAX_HELPER_RESPONSE_BYTES)
+
+
+def read_result(stream: BinaryIO, *, expected_operation_id: str) -> HardwareResult:
+    return decode_result_frame(
+        read_helper_frame(stream, maximum=MAX_HELPER_RESPONSE_BYTES),
+        expected_operation_id=expected_operation_id,
+    )
 
 
 def encode_request(dispatch: HardwareDispatch) -> bytes:

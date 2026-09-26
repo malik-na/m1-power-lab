@@ -51,8 +51,14 @@ from .helper_protocol import (
     decode_result_frame as decode_helper_result_frame,
     encode_request_frame as encode_helper_request_frame,
     encode_result_frame as encode_helper_result_frame,
+    read_helper_frame,
+    read_request as read_helper_request,
+    read_result as read_helper_result,
     encode_request as encode_helper_request,
     encode_result as encode_helper_result,
+    write_helper_frame,
+    write_request as write_helper_request,
+    write_result as write_helper_result,
 )
 
 __all__ = [
@@ -99,4 +105,10 @@ __all__ = [
     "encode_helper_request_frame",
     "encode_helper_result",
     "encode_helper_result_frame",
+    "read_helper_frame",
+    "read_helper_request",
+    "read_helper_result",
+    "write_helper_frame",
+    "write_helper_request",
+    "write_helper_result",
 ]

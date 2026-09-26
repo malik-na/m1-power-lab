@@ -15,7 +15,7 @@ This file distinguishes implemented behavior from physical qualification.
 | Tailscale on ThinkPad | Pending physical setup | Configure Serve, exact owner login and tailnet policy; verify no Funnel |
 | iPhone 12 mini | Pending physical check | Verify all views, Home Screen install, reconnect and approval handling |
 | ThinkPad-to-Mac transport | Unqualified | Identify cable/ports, m1n1 versions, target identity, boot epoch and exclusive helper ownership |
-| Hardware-helper wire protocol | Versioned bounded request/result codec and strict length-prefixed framing implemented | No helper server owns a device yet; physical interface selection and exclusivity await T480 inventory |
+| Hardware-helper wire protocol | Versioned bounded request/result codec, strict length-prefixed framing, and blocking short-read/write handling implemented | Transport deadlines remain caller-owned; no helper server owns a device yet; physical interface selection and exclusivity await T480 inventory |
 | Live m1n1 adapter | Disabled | Implement only after transport and recovery qualification |
 | Native result channel | Unqualified | Demonstrate finite harness result and return/re-identification |
 | Power measurement | Unqualified | Establish sensor provenance, energy boundary, cadence, noise and observer effect |
