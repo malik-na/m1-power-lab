@@ -52,6 +52,10 @@ resolve unknown work, make and verify a backup, then stop the service. Run the
 installer from the new committed checkout using a new release ID. The previous
 release and state remain available. Review the configuration and run
 `m1lab diagnostics` against the selected release before starting the unit.
+The installer takes the same coordinator lock as the service and reads the
+journal read-only; it refuses to install or switch while a session phase is
+active, job/operation effects or usage are unresolved, or a live budget
+reservation remains.
 
 Install Codex through its supported system-wide installation method. Set its
 absolute path and the executable's SHA-256 digest as `M1LAB_CODEX_SHA256` in
