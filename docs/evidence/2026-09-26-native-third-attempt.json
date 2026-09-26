@@ -1,0 +1,60 @@
+{
+  "date": "2026-09-26",
+  "host_source": "083646a",
+  "model": "gpt-6-sol",
+  "reasoning_effort": "medium",
+  "procedure_id": "procedure_a8c05b74220443dfb0db1eca1fcb9115",
+  "procedure_digest": "b50f8488835ad93f7dc1bad23a65eab44ff9e4ad7ec1c0feb76c4d0c57e17e3a",
+  "review_job_id": "job_0680d6e650b14d129394aef16545382c",
+  "review_tokens": 63665,
+  "review_usage_uncertain": false,
+  "owner_single_test_approved": true,
+  "owner_attendance_confirmed": true,
+  "fresh_proxy_inspection_before_dispatch": true,
+  "requested_samples": 3,
+  "period_ms": 1000,
+  "operation_id": "operation_7769e4f46cd849e3aa2b9398d50d60d5",
+  "dispatched_at": "2026-09-26T17:11:33.105388+00:00",
+  "initial_outcome": "unknown_effect",
+  "reconciliation": {
+    "evidence_artifact_ids": [
+      "artifact_e0a6117115180078db4aa1472c8f14abdf4d54ffb2734ad03fdbf0a0f65893b6",
+      "artifact_5f5e3d532462ca080bb0d03d57a137cd07edd6a7e39f15285b23bd7ff2fd36f3",
+      "artifact_32c075a88516fbbdadc04a91b91d85a00b433ea211713dfb32f8fca365bff523",
+      "artifact_d82e9ca63e067e6ef049c8b48f93b2dff180db641383c75454adb1b9be2a5ea4"
+    ],
+    "note": "Failed third native harness attempt: no native samples observed. USB monitor saw proxy at 17:13:58 UTC for roughly 5.5 seconds while the helper still awaited native capture, then it disappeared. Host wait was stopped to arm a recovery catcher, preserving the original UNKNOWN_EFFECT due to helper shutdown. Owner confirms manual reboot during this test; identity-bound five-request proxy observation succeeded at 17:14:48 UTC. This establishes manual recovery only, not automatic return, Linux execution or native capture. No further native boot authorized.",
+    "resolved_state": "failed"
+  },
+  "captured_samples": 0,
+  "native_channel_observed": false,
+  "proxy_usb_window": {
+    "appeared_at": "2026-09-26T17:13:58.738053+00:00",
+    "disappeared_at": "2026-09-26T17:14:04.265703+00:00",
+    "proxy_tty": "ttyACM1",
+    "interface": "1-1:1.0",
+    "connected_by_harness": false
+  },
+  "observed_defect": "Backend waited for native tty until capture cutoff before watching proxy return, missing a roughly five-second proxy enumeration.",
+  "intervention": "Stopped host helper to arm bounded recovery catcher; no additional native boot dispatched. Original unknown result retained.",
+  "manual_recovery": {
+    "owner_confirmed": true,
+    "proxy_observed_at": "2026-09-26T17:14:48.076186+00:00",
+    "available": true,
+    "qualified": false,
+    "mode": "proxy",
+    "automatic_native_return": false
+  },
+  "artifacts": {
+    "native-owner-reboot-proxy.json": "artifact_e0a6117115180078db4aa1472c8f14abdf4d54ffb2734ad03fdbf0a0f65893b6",
+    "native-execution-result.json": "artifact_5f5e3d532462ca080bb0d03d57a137cd07edd6a7e39f15285b23bd7ff2fd36f3",
+    "native-third-usb-observations.jsonl": "artifact_32c075a88516fbbdadc04a91b91d85a00b433ea211713dfb32f8fca365bff523"
+  },
+  "boot_log": "No third-attempt boot log retained: attempted private log extraction was interrupted before completion, then worker cleanup closed temporary log.",
+  "limitations": [
+    "Whether the candidate Linux ran is not established.",
+    "No native capture or automatic-return qualification.",
+    "Installed live investigation pause and unresolved usage hold preserved."
+  ],
+  "owner_screen_observation_before_manual_reboot": "It had booted the normal installed OS"
+}

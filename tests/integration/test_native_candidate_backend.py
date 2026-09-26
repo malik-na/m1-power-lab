@@ -70,10 +70,11 @@ def _dispatch(backend, *, seconds=30):
 def _synthetic_environment(monkeypatch, backend, events, *, raw=b"fixed frame bytes",
                            status="complete", observed=True, return_proxy=True,
                            capture_error=False, tool_exit=0, launch_seconds=20,
-                           boot_log=b"", capture_ready_path=None):
+                           boot_log=b"", capture_ready_path=None,
+                           early_proxy_return=False):
     monkeypatch.setattr(backend, "_verify_tools", lambda: events.append("verify_tools"))
 
-    def tty(vid, _pid, _deadline, *, proxy):
+    def tty(vid, _pid, _deadline, *, proxy, cancel=None):
         events.append("find_proxy" if proxy else "find_native")
         events.append(("tty_deadline", vid, _deadline))
         if proxy and "launch" in events and not return_proxy:
@@ -81,6 +82,19 @@ def _synthetic_environment(monkeypatch, backend, events, *, raw=b"fixed frame by
         return backend.device_root / ("ttyACM0" if proxy else "ttyACM1")
 
     monkeypatch.setattr(backend, "_wait_for_tty", tty)
+    original = (backend.device_root / "ttyACM0", (1, 1, 1, "1"))
+    returned = (backend.device_root / "ttyACM2", (1, 2, 2, "2"))
+
+    def proxy_presence():
+        if backend._observer is not None and "capture" not in events:
+            return original
+        if not return_proxy:
+            raise OSError("synthetic proxy never returned")
+        if not early_proxy_return and "capture" not in events:
+            return None
+        return returned
+
+    monkeypatch.setattr(backend, "_proxy_presence", proxy_presence)
 
     class Observer:
         def __init__(self, device, **_kw):
@@ -199,7 +213,7 @@ def test_complete_synthetic_round_trip_closes_proxy_before_launch(tmp_path, monk
         assert result.values["return_boot_epoch"] != dispatch.boot_epoch
         assert backend.inspect().boot_epoch == result.values["return_boot_epoch"]
     assert events.index("observer_close") < events.index("launch") < events.index("native_open")
-    assert events.index("native_close") < events.index("find_proxy", events.index("launch"))
+    assert events.count("observer_open") == 2
     assert backend.inspect().available is False
 
 
@@ -225,6 +239,10 @@ def test_device_environment_key_changes_configuration_digest(tmp_path):
         old_configuration, sort_keys=True, separators=(",", ":"),
     ).encode()).hexdigest()
     old_configuration["console_control"] = "pty-stdin-miniterm-ctrl-]"
+    assert backend.configuration_digest != hashlib.sha256(json.dumps(
+        old_configuration, sort_keys=True, separators=(",", ":"),
+    ).encode()).hexdigest()
+    old_configuration["return_watch"] = "same-topology-proxy-generation-v1"
     assert backend.configuration_digest == hashlib.sha256(json.dumps(
         old_configuration, sort_keys=True, separators=(",", ":"),
     ).encode()).hexdigest()
@@ -371,6 +389,100 @@ def test_installed_pyserial_miniterm_exits_over_owned_pty(tmp_path, monkeypatch)
     assert "Miniterm graceful exit" in result.values["boot_log_tail"]
 
 
+def test_early_proxy_return_interrupts_native_wait_and_stays_unknown(tmp_path, monkeypatch):
+    """A proxy reboot window must be caught while native never enumerates."""
+
+    backend = _backend(tmp_path)
+    events = []
+    _synthetic_environment(monkeypatch, backend, events, early_proxy_return=True)
+    native_wait = backend._wait_for_tty
+
+    def no_native(vid, pid, deadline, *, proxy, cancel=None):
+        if not proxy:
+            assert cancel is not None
+            cancel.wait(1.0)
+            raise TimeoutError("synthetic native tty never appeared")
+        return native_wait(vid, pid, deadline, proxy=proxy, cancel=cancel)
+
+    monkeypatch.setattr(backend, "_wait_for_tty", no_native)
+    with backend:
+        dispatch = _dispatch(backend)
+        started = time.monotonic()
+        result = backend.execute(dispatch)
+        elapsed = time.monotonic() - started
+    assert elapsed < 0.6
+    assert result.status is HardwareResultStatus.UNKNOWN
+    assert result.values["return_boot_epoch"] is not None
+    assert "capture" not in events
+
+
+def test_return_watcher_joins_even_when_boot_tool_cleanup_fails(tmp_path, monkeypatch):
+    backend = _backend(tmp_path)
+    events = []
+    _synthetic_environment(monkeypatch, backend, events)
+    monkeypatch.setattr(backend, "_watch_return", lambda *_args: None)
+    original_join = module._join_return_watcher
+
+    def joined(watcher, stop, deadline):
+        original_join(watcher, stop, deadline)
+        events.append("watcher_joined")
+
+    def failed_finish(_process, _deadline):
+        events.append("finish_failed")
+        raise OSError("synthetic boot tool cleanup failure")
+
+    monkeypatch.setattr(module, "_join_return_watcher", joined)
+    monkeypatch.setattr(module, "_finish_process", failed_finish)
+    with backend:
+        result = backend.execute(_dispatch(backend))
+    assert result.status is HardwareResultStatus.UNKNOWN
+    assert events.index("finish_failed") < events.index("watcher_joined")
+
+
+def test_boot_tool_cleanup_runs_if_watcher_cannot_start(tmp_path, monkeypatch):
+    backend = _backend(tmp_path)
+    events = []
+    _synthetic_environment(monkeypatch, backend, events)
+
+    class CannotStart:
+        def __init__(self, **_kwargs):
+            pass
+
+        def start(self):
+            events.append("watcher_start_failed")
+            raise RuntimeError("synthetic thread start failure")
+
+    monkeypatch.setattr(module, "Thread", CannotStart)
+    monkeypatch.setattr(module, "_finish_process", lambda *_args: events.append("tool_cleaned") or 0)
+    with backend:
+        result = backend.execute(_dispatch(backend))
+    assert result.status is HardwareResultStatus.UNKNOWN
+    assert events.index("watcher_start_failed") < events.index("tool_cleaned")
+
+
+def test_stuck_return_watcher_exits_helper_worker(monkeypatch):
+    joins = []
+    stop = module.Event()
+
+    class StuckWatcher:
+        def join(self, timeout):
+            joins.append(timeout)
+
+        def is_alive(self):
+            return True
+
+    def fatal_exit(code):
+        raise RuntimeError(f"synthetic worker exit {code}")
+
+    monkeypatch.setattr(module.os, "_exit", fatal_exit)
+    with pytest.raises(RuntimeError, match="synthetic worker exit 71"):
+        module._join_return_watcher(StuckWatcher(), stop, time.monotonic())
+    assert stop.is_set()
+    assert len(joins) == 2
+    assert joins[0] == 0
+    assert joins[1] == 0.5
+
+
 @pytest.mark.parametrize("dispatch_seconds,launch_seconds", [(30, 20), (20, 30)])
 def test_capture_cutoff_is_minimum_and_proxy_return_uses_envelope(
     tmp_path, monkeypatch, dispatch_seconds, launch_seconds
@@ -383,10 +495,8 @@ def test_capture_cutoff_is_minimum_and_proxy_return_uses_envelope(
     assert result.status is HardwareResultStatus.COMPLETED
     capture_bound = next(item for item in events if isinstance(item, tuple)
                          and item[0] == "capture_bound")
-    return_bound = [item for item in events if isinstance(item, tuple)
-                    and item[:2] == ("tty_deadline", "1209")][-1]
     assert capture_bound[2] == module.MAX_RESULT_BYTES
-    assert return_bound[2] > capture_bound[1]
+    assert result.values["return_boot_epoch"] is not None
     remaining = capture_bound[1] - time.monotonic()
     assert remaining <= min(launch_seconds, dispatch_seconds - 10)
 

@@ -151,7 +151,20 @@ session; existing accounting and unresolved-operation gates still apply.
 
 The helper stages only the three verified boot files, closes the proxy
 descriptor, invokes the pinned tethered boot tool once, receives the bounded
-native stream, and observes the same proxy USB identity again. The boot client
+native stream, and observes the same proxy USB identity again. A watcher in that
+same helper starts immediately after the boot client and remains active during
+native startup and capture. It scans the bound USB identity across tty renumbering,
+distinguishes the original enumeration from a return, and opens the returning
+proxy immediately for fixed read-only inspection. An early return without a
+complete capture remains unknown. The watcher must end before a result is
+reported; a stuck watcher terminates the helper worker under supervision.
+
+For attended manual recovery, stop the failed helper, arm a bounded identity-bound
+catcher and verify that it is waiting **before** asking the owner to reboot.
+Do not wait for a completed reboot or assume the interface is always `ttyACM0`:
+the proxy window can expire and continue into the installed OS.
+
+The boot client
 gets an owned pseudo-terminal on stdin for pySerial Miniterm. After capture
 finishes or fails, the helper sends Miniterm's Ctrl+] exit byte and applies
 bounded process-group cleanup. This host-console control is included in the

@@ -22,6 +22,7 @@ import stat
 import subprocess
 import termios
 from tempfile import TemporaryFile
+from threading import Event, Thread
 import time
 import tty
 from uuid import uuid4
@@ -41,6 +42,7 @@ _TTY = re.compile(r"ttyACM[0-9]+\Z")
 _BOOTARGS = "console=tty0 earlycon rdinit=/init panic=10"
 _DEVICE_ENV_KEY = "M1N1DEVICE"
 _CONSOLE_CONTROL = "pty-stdin-miniterm-ctrl-]"
+_RETURN_WATCH = "same-topology-proxy-generation-v1"
 _MAX_TOOL_BYTES = 128 << 20
 _MAX_PROXYCLIENT_FILES = 4096
 _MAX_PROXYCLIENT_BYTES = 256 << 20
@@ -99,6 +101,7 @@ class NativeCandidateBackend:
             "proxyclient_sha256": proxyclient_sha256,
             "device_env_key": _DEVICE_ENV_KEY,
             "console_control": _CONSOLE_CONTROL,
+            "return_watch": _RETURN_WATCH,
             "bootargs": _BOOTARGS,
         }
         self.configuration_digest = hashlib.sha256(json.dumps(
@@ -190,6 +193,9 @@ class NativeCandidateBackend:
                 )
                 if capture_deadline <= time.monotonic():
                     raise NativeCandidateError("native launch has insufficient bounded return window")
+                origin_proxy = self._proxy_presence()
+                if origin_proxy is None or origin_proxy[0] != self._observer.device:
+                    raise NativeCandidateError("original owned proxy enumeration is unavailable")
                 proxy_device = self._observer.device
                 self._close_observer()
                 with TemporaryFile(mode="w+b") as log:
@@ -213,51 +219,57 @@ class NativeCandidateBackend:
                     finally:
                         os.close(console_slave)
                     tool_started = True
+                    watcher_stop = Event()
+                    return_ready = Event()
+                    watcher = Thread(
+                        target=self._watch_return,
+                        args=(origin_proxy[1], total_deadline, watcher_stop, return_ready),
+                        daemon=False,
+                    )
+                    watcher_started = False
                     try:
-                        device = self._wait_for_tty("1d6b", "0104", capture_deadline, proxy=False)
-                        with NativeUsbTransport(
-                            device, expected_usb_topology=self.usb_topology,
-                            sysfs_root=self.sysfs_root, device_root=self.device_root,
-                        ) as transport:
-                            receipt = transport.capture(
-                                launch, image, deadline_monotonic=capture_deadline,
-                                max_stream_bytes=MAX_RESULT_BYTES,
+                        watcher.start()
+                        watcher_started = True
+                        try:
+                            device = self._wait_for_tty(
+                                "1d6b", "0104", capture_deadline,
+                                proxy=False, cancel=return_ready,
                             )
-                        raw = receipt.raw_stream
-                        stop_reason = receipt.stop_reason
-                        complete = (
-                            receipt.capture.status == "complete"
-                            and receipt.capture.observed_linux is not None
-                            and receipt.terminal_received_before_deadline
-                            and len(receipt.raw_stream) <= MAX_RESULT_BYTES
-                        )
-                    except Exception as exc:
-                        stop_reason = f"capture_{type(exc).__name__}"[:80]
+                            with NativeUsbTransport(
+                                device, expected_usb_topology=self.usb_topology,
+                                sysfs_root=self.sysfs_root, device_root=self.device_root,
+                            ) as transport:
+                                receipt = transport.capture(
+                                    launch, image, deadline_monotonic=capture_deadline,
+                                    max_stream_bytes=MAX_RESULT_BYTES,
+                                )
+                            raw = receipt.raw_stream
+                            stop_reason = receipt.stop_reason
+                            complete = (
+                                receipt.capture.status == "complete"
+                                and receipt.capture.observed_linux is not None
+                                and receipt.terminal_received_before_deadline
+                                and len(receipt.raw_stream) <= MAX_RESULT_BYTES
+                            )
+                        except Exception as exc:
+                            stop_reason = f"capture_{type(exc).__name__}"[:80]
                     finally:
                         try:
-                            _request_console_exit(process, console_master)
-                            tool_exit = _finish_process(process, total_deadline)
+                            try:
+                                _request_console_exit(process, console_master)
+                                tool_exit = _finish_process(process, total_deadline)
+                            finally:
+                                os.close(console_master)
+                                log.seek(0)
+                                boot_log = log.read(_MAX_LOG_BYTES + 1)
                         finally:
-                            os.close(console_master)
-                            log.seek(0)
-                            boot_log = log.read(_MAX_LOG_BYTES + 1)
+                            if watcher_started:
+                                _join_return_watcher(watcher, watcher_stop, total_deadline)
                     if len(boot_log) > _MAX_LOG_BYTES:
                         reason = "boot tool log exceeded its fixed bound"
                         complete = False
-                # The proxy USB connection must re-enumerate and pass five
-                # fresh read-only requests before the helper reports return.
-                if time.monotonic() < total_deadline:
-                    try:
-                        returned_device = self._wait_for_tty(
-                            "1209", "316d", total_deadline - 5.1, proxy=True,
-                        )
-                        self._open_observer(returned_device)
-                        if time.monotonic() < total_deadline:
-                            return_epoch = self._connection_epoch
-                        else:
-                            self._close_observer()
-                    except Exception:
-                        self._close_observer()
+                if return_ready.is_set():
+                    return_epoch = self._connection_epoch
                 if complete and tool_exit == 0 and return_epoch is not None:
                     reason = "Native capture and fresh proxy return observed; physical qualification remains open."
                 elif reason == "native candidate did not complete":
@@ -309,47 +321,99 @@ class NativeCandidateBackend:
         if observer is not None:
             observer.__exit__(None, None, None)
 
-    def _wait_for_tty(self, vid: str, pid: str, deadline: float, *, proxy: bool) -> Path:
+    def _scan_tty(
+        self, vid: str, pid: str, *, proxy: bool
+    ) -> tuple[Path, tuple[int, int, int, str]] | None:
+        matches = []
+        entries = list(self.sysfs_root.glob("ttyACM*"))
+        if len(entries) > 64:
+            raise NativeCandidateError("too many candidate tty entries")
+        for entry in entries:
+            if not _TTY.fullmatch(entry.name):
+                continue
+            try:
+                interface = (entry / "device").resolve(strict=True)
+                usb = interface.parent
+                if (interface.name != f"{self.usb_topology}:1.0"
+                        or usb.name != self.usb_topology
+                        or _read_sysfs(interface / "bInterfaceNumber") != "00"
+                        or _read_sysfs(usb / "idVendor").lower() != vid
+                        or _read_sysfs(usb / "idProduct").lower() != pid):
+                    continue
+                serial = _read_sysfs(usb / "serial")
+                if proxy:
+                    if hashlib.sha256(serial.encode()).hexdigest() != self.expected_proxy_serial_sha256:
+                        continue
+                elif serial != "m1lab-native-candidate":
+                    continue
+                device = self.device_root / entry.name
+                if device.exists():
+                    usb_info, interface_info = usb.stat(), interface.stat()
+                    try:
+                        devnum = _read_sysfs(usb / "devnum")
+                    except OSError:
+                        devnum = ""
+                    generation = (
+                        usb_info.st_dev, usb_info.st_ino, interface_info.st_ino, devnum,
+                    )
+                    matches.append((device, generation))
+            except (OSError, UnicodeError):
+                continue
+        if len(matches) > 1:
+            raise NativeCandidateError("ambiguous tty at the selected USB topology")
+        return matches[0] if matches else None
+
+    def _proxy_presence(self) -> tuple[Path, tuple[int, int, int, str]] | None:
+        return self._scan_tty("1209", "316d", proxy=True)
+
+    def _watch_return(
+        self, original_generation: tuple[int, int, int, str], deadline: float,
+        stop: Event, ready: Event,
+    ) -> None:
+        departed = False
+        while not stop.is_set() and time.monotonic() < deadline - 5.1:
+            try:
+                presence = self._proxy_presence()
+            except Exception:
+                # Ambiguous topology cannot support a return claim.
+                return
+            if presence is None:
+                departed = True
+            elif departed or presence[1] != original_generation:
+                try:
+                    self._open_observer(presence[0])
+                    if time.monotonic() < deadline:
+                        ready.set()
+                    else:
+                        self._close_observer()
+                    return
+                except Exception:
+                    # Enumeration can precede proxy RPC readiness. Retry only
+                    # the read-only observation while the total bound allows.
+                    self._close_observer()
+            stop.wait(0.05)
+
+    def _wait_for_tty(
+        self, vid: str, pid: str, deadline: float, *, proxy: bool,
+        cancel: Event | None = None,
+    ) -> Path:
         while True:
+            if cancel is not None and cancel.is_set():
+                raise NativeCandidateError("proxy returned before native candidate tty")
             if time.monotonic() >= deadline:
                 raise TimeoutError("selected USB tty did not appear before deadline")
-            matches = []
-            entries = list(self.sysfs_root.glob("ttyACM*"))
-            if len(entries) > 64:
-                raise NativeCandidateError("too many candidate tty entries")
-            for entry in entries:
-                if not _TTY.fullmatch(entry.name):
-                    continue
-                try:
-                    interface = (entry / "device").resolve(strict=True)
-                    usb = interface.parent
-                    if (interface.name != f"{self.usb_topology}:1.0"
-                            or usb.name != self.usb_topology
-                            or _read_sysfs(interface / "bInterfaceNumber") != "00"
-                            or _read_sysfs(usb / "idVendor").lower() != vid
-                            or _read_sysfs(usb / "idProduct").lower() != pid):
-                        continue
-                    serial = _read_sysfs(usb / "serial")
-                    if proxy:
-                        if hashlib.sha256(serial.encode()).hexdigest() != self.expected_proxy_serial_sha256:
-                            continue
-                    elif serial != "m1lab-native-candidate":
-                        continue
-                    device = self.device_root / entry.name
-                    if device.exists():
-                        matches.append(device)
-                except (OSError, UnicodeError):
-                    continue
-            if len(matches) > 1:
-                raise NativeCandidateError("ambiguous tty at the selected USB topology")
-            if matches:
+            match = self._scan_tty(vid, pid, proxy=proxy)
+            if match:
                 if time.monotonic() >= deadline:
                     raise TimeoutError("selected USB tty appeared after deadline")
-                return matches[0]
+                return match[0]
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise TimeoutError("selected USB tty did not appear before deadline")
-            time.sleep(min(_POLL_SECONDS, remaining))
+            if cancel is not None:
+                cancel.wait(min(_POLL_SECONDS, remaining))
+            else:
+                time.sleep(min(_POLL_SECONDS, remaining))
 
     def _unavailable(self) -> TargetSnapshot:
         return TargetSnapshot(
@@ -471,6 +535,19 @@ def _request_console_exit(process: subprocess.Popen[bytes], master_fd: int) -> N
             os.write(master_fd, b"\x1d")
         except OSError:
             pass  # The console may already have disconnected; timeout cleanup follows.
+
+
+def _join_return_watcher(watcher: Thread, stop: Event, deadline: float) -> None:
+    """Keep the helper-owned device lease until the watcher ends or worker dies."""
+
+    watcher.join(timeout=max(0, deadline - time.monotonic()))
+    stop.set()
+    watcher.join(timeout=0.5)
+    if watcher.is_alive():
+        # Returning would release the helper lock while the thread can still
+        # open a proxy. The independent supervisor records worker death as an
+        # unknown effect and closes all process-owned descriptors.
+        os._exit(71)
 
 
 def _finish_process(process: subprocess.Popen[bytes], deadline: float) -> int | None:

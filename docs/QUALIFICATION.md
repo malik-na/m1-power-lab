@@ -1,5 +1,32 @@
 # Qualification gates
 
+## Third attended attempt: missed proxy window
+
+At `083646a`, a fresh exact review accepted procedure `b50f8488…e17e3a`
+using `gpt-6-sol` medium (63,665 reported tokens, no usage uncertainty).
+The owner approved one new three-sample test and confirmed attendance.
+Fresh inspection and formal single-use approval preceded dispatch at 17:11:33 UTC.
+No native ACM channel or sample capture was observed. Proxy USB appeared as
+`ttyACM1` at 17:13:58 UTC and disappeared about five seconds later, while the
+helper was waiting for native capture instead of watching return.
+
+The host wait was stopped to arm a recovery catcher. This produced an honest
+`unknown_effect` result. At 17:14:48 UTC the fixed identity-bound five-request
+probe confirmed responsive proxy; the owner confirmed manual reboot. The attempt
+had reached the normal installed OS before that manual reboot, according to the
+owner's screen observation. It is reconciled as **failed** with its original
+unknown outcome retained. This
+establishes manual recovery only. No third-attempt boot log was retained after
+the interrupted extraction and helper cleanup. The host now watches continuously
+for a returned same-identity proxy during native startup/capture, including tty
+renumbering. It requires fresh fixed observation, leaves proxy-only return unknown,
+and ends child/watcher ownership before reporting. The changed configuration
+digest requires new approval scope. **23 focused backend checks passed in 0.98s**;
+independent code review found no blocking issue. This fix still needs fresh exact
+review and a separately approved physical attempt. See
+[watcher evidence](evidence/2026-09-26-native-return-watcher.json).
+See [evidence](evidence/2026-09-26-native-third-attempt.json).
+
 ## First attended native attempt
 
 The owner-approved three-sample attempt reached coordinator/helper dispatch.

@@ -1,0 +1,25 @@
+{
+  "date": "2026-09-26",
+  "base_source": "083646a",
+  "model": "gpt-6-sol",
+  "reasoning_effort": "medium",
+  "demonstrated_failure": "Proxy USB enumerated as ttyACM1 for roughly 5.5 seconds during the third attempt while backend only waited for native tty; it was not caught. Owner observed normal installed OS before manual recovery reboot.",
+  "red_regression": {
+    "command": ".venv/bin/pytest -q tests/integration/test_native_candidate_backend.py::test_early_proxy_return_interrupts_native_wait_and_stays_unknown",
+    "result": "Failed before fix: native wait consumed 1.0007s versus less than 0.6s early-return requirement."
+  },
+  "fix": "Start same-helper proxy watcher immediately after Popen; bind original USB enumeration and scan topology/identity across tty renumbering; perform fresh fixed inspection on return and hold proxy during native capture. Early proxy-only return cancels native wait and stays UNKNOWN. Join watcher on all post-launch paths; a stuck watcher terminates helper worker instead of releasing ownership with live I/O. Changed configuration digest requires fresh review/approval.",
+  "tests": {
+    "command": ".venv/bin/pytest -q tests/integration/test_native_candidate_backend.py",
+    "passed": 23,
+    "seconds": 0.98,
+    "scope": "Synthetic early return, original-versus-new proxy generation, failed capture/tool, actual pySerial loopback PTY, and post-Popen cleanup/fatal watcher checks. No physical target opened."
+  },
+  "review": "Independent gpt-6-sol medium code review found no blocking finding; final additional test verifies fatal worker-exit decision without changing implementation.",
+  "limitations": [
+    "No fourth physical attempt dispatched or approved.",
+    "Native result channel and automatic return remain unqualified.",
+    "Proxy generation is ownership evidence, not independent target boot attestation.",
+    "Live lab remains paused with its unresolved usage hold; scientific investigation stopped."
+  ]
+}

@@ -2,6 +2,17 @@
 
 This file distinguishes implemented behavior from physical qualification.
 
+The third attended native attempt exposed a return-watching gap: proxy USB
+appeared for about five seconds while the helper was still waiting for the
+native channel. No samples were captured. The host wait was stopped; a bounded
+catcher connected after the owner's manual reboot. The attempt is reconciled
+as failed with its original unknown outcome retained. Continuous proxy-return
+observation during native startup/capture is now implemented; 23 focused backend
+checks pass and independent review found no blocking issue. The next gate is
+fresh exact review and a separately approved physical test. See
+[third-attempt evidence](evidence/2026-09-26-native-third-attempt.json).
+The [watcher evidence](evidence/2026-09-26-native-return-watcher.json) remains host-only.
+
 The first attended native attempt remains reconciled as failed. The owner-approved
 single retry used the corrected device environment, a fresh exact review,
 attendance approval and proxy check. It ended `unknown_effect`: zero captured
@@ -16,7 +27,8 @@ See [first-attempt evidence](evidence/2026-09-26-native-first-attempt.json) and
 fix now passes 19 focused host checks, including real pySerial Miniterm over a
 local loopback port. It supplies a private PTY and requests graceful console exit
 after capture; fresh review and approval are required for its changed configuration.
-The next gate is the physical round trip. See [fix evidence](evidence/2026-09-26-native-terminal-fix.json).
+The subsequent third-attempt outcome is recorded above. See
+[fix evidence](evidence/2026-09-26-native-terminal-fix.json).
 
 Current owner scope: build and verify the harness end to end using the m1n1
 connection. Scientific investigation remains stopped. Source `520d05b` produced
