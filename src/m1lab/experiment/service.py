@@ -160,8 +160,20 @@ class ExperimentService:
                 result = self._adapter.execute(
                     HardwareDispatch(
                         operation_id=dispatch_id,
+                        coordinator_operation_id=envelope.operation_id,
+                        session_id=envelope.session_id,
+                        target_identity=envelope.target_identity,
+                        target_snapshot_id=envelope.target_snapshot_id,
+                        configuration_digest=envelope.configuration_digest,
+                        procedure_id=envelope.procedure_id,
+                        procedure_revision=envelope.procedure_revision,
+                        review_id=envelope.review_id,
+                        approval_id=envelope.approval_id,
+                        approval_scope=envelope.approval_scope,
                         boot_epoch=expected_boot,
                         procedure_digest=envelope.procedure_digest,
+                        artifact_digests=tuple(envelope.artifact_digests),
+                        operation_index=index,
                         operation=hardware_operation,
                         deadline=deadline,
                         scope={

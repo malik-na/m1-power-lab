@@ -27,8 +27,15 @@ flowchart LR
   approve work or call the hardware adapter.
 - The experiment service accepts only an exact authorized envelope and maps
   each operation to a bounded typed adapter call.
+- Each typed dispatch carries its coordinator operation ID, exact procedure and
+  accepted review digests, artifact digests, target/boot/configuration identity,
+  deadline, and approval scope. A versioned bounded JSON codec is available for
+  a separate helper process; it rejects unknown operations and fields.
 - The current build accepts only `ReplayHardwareAdapter`. The m1n1 adapter is
   an unavailable object that opens no device.
+- The helper codec does not open USB or serial devices. The helper process,
+  exclusive physical interface ownership, and transport recovery remain
+  unqualified until the ThinkPad inventory and recovery path are recorded.
 - The browser submits an idempotent command ID and expected session revision.
   It never talks to SQLite, Codex or a device directly.
 

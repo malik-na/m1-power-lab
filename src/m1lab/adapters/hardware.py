@@ -137,8 +137,20 @@ HardwareOperation: TypeAlias = (
 @dataclass(frozen=True, slots=True)
 class HardwareDispatch:
     operation_id: str
+    coordinator_operation_id: str
+    session_id: str
+    target_identity: str
+    target_snapshot_id: str
+    configuration_digest: str
+    procedure_id: str
+    procedure_revision: int
+    review_id: str
+    approval_id: str | None
+    approval_scope: Mapping[str, object] | None
     boot_epoch: str
     procedure_digest: str
+    artifact_digests: tuple[str, ...]
+    operation_index: int
     operation: HardwareOperation
     deadline: datetime
     artifact_digest: str | None = None
@@ -147,13 +159,71 @@ class HardwareDispatch:
     def __post_init__(self) -> None:
         if not self.operation_id or len(self.operation_id) > 128:
             raise ValueError("operation_id must be 1..128 characters")
+        if not self.coordinator_operation_id or len(self.coordinator_operation_id) > 128:
+            raise ValueError("coordinator_operation_id must be 1..128 characters")
+        for name, value in (
+            ("session_id", self.session_id),
+            ("target_identity", self.target_identity),
+            ("target_snapshot_id", self.target_snapshot_id),
+            ("procedure_id", self.procedure_id),
+        ):
+            if not value or len(value) > 160:
+                raise ValueError(f"{name} must be 1..160 characters")
+        if self.procedure_revision < 1 or self.operation_index < 0:
+            raise ValueError("procedure revision and operation index are invalid")
+        if not self.review_id or len(self.review_id) > 128:
+            raise ValueError("dispatch requires the exact accepted review ID")
+        if self.approval_id is not None and (
+            not self.approval_id or len(self.approval_id) > 128
+        ):
+            raise ValueError("approval ID must be 1..128 characters")
+        if (self.approval_id is None) != (self.approval_scope is None):
+            raise ValueError("approval ID and exact approval scope must travel together")
+        if self.approval_scope is not None:
+            approval = dict(self.approval_scope)
+            expected_approval_fields = {
+                "target_identity",
+                "boot_epoch",
+                "configuration_digest",
+                "repeat_limit",
+                "expires_at",
+                "physical_attendance_confirmed",
+            }
+            if set(approval) != expected_approval_fields:
+                raise ValueError("approval scope has unknown or missing fields")
+            if approval.get("target_identity") != self.target_identity:
+                raise ValueError("approval scope target does not match the dispatch target")
+            if approval.get("boot_epoch") not in (None, self.boot_epoch):
+                raise ValueError("approval scope boot epoch does not match the dispatch")
+            if approval.get("configuration_digest") not in (None, self.configuration_digest):
+                raise ValueError("approval scope configuration does not match the dispatch")
+            expires_at = approval.get("expires_at")
+            if not isinstance(expires_at, str):
+                raise ValueError("approval scope is missing its expiry")
+            expiry = datetime.fromisoformat(expires_at)
+            if expiry.tzinfo is None or expiry <= _utc_now():
+                raise ValueError("approval scope has expired or has no timezone")
+            if type(approval.get("repeat_limit")) is not int or approval["repeat_limit"] < 1:
+                raise ValueError("approval scope repeat limit is invalid")
+            if type(approval.get("physical_attendance_confirmed")) is not bool:
+                raise ValueError("approval scope attendance flag is invalid")
+            object.__setattr__(self, "approval_scope", MappingProxyType(approval))
         if not self.boot_epoch or len(self.boot_epoch) > 128:
             raise ValueError("boot_epoch must be 1..128 characters")
         _require_sha256(self.procedure_digest, "procedure_digest")
+        _require_sha256(self.configuration_digest, "configuration_digest")
+        if len(self.artifact_digests) > 256:
+            raise ValueError("dispatch contains too many artifact digests")
+        if len(set(self.artifact_digests)) != len(self.artifact_digests):
+            raise ValueError("dispatch artifact digests must be unique")
+        for digest in self.artifact_digests:
+            _require_sha256(digest, "artifact_digest")
         if self.artifact_digest is not None:
             _require_sha256(self.artifact_digest, "artifact_digest")
-        if self.deadline.tzinfo is None:
+        if self.deadline.tzinfo is None or self.deadline.utcoffset() is None:
             raise ValueError("deadline must be timezone-aware")
+        if self.deadline <= _utc_now():
+            raise ValueError("dispatch deadline has expired")
         if len(self.scope) > MAX_SCOPE_ENTRIES:
             raise ValueError("dispatch scope has too many entries")
         normalized: dict[str, str] = {}

@@ -517,12 +517,14 @@ class CoreApp:
                 review_id = review_row["id"]
             mutates = any(op.mutates_target for op in procedure.operations)
             approval_id = None
+            approval_scope = None
             if mutates:
                 approval = self._matching_approval(tx, procedure, target)
                 if approval is None:
                     reasons.append("state-changing procedure lacks a current exact approval")
                 else:
                     approval_id = approval["id"]
+                    approval_scope = json_load(approval["scope_json"], {})
             eligibility = EligibilityResult(eligible=not reasons, reasons=reasons, approval_id=approval_id, review_id=review_id)
             if reasons:
                 return OperationAuthorization(eligibility=eligibility)
@@ -532,8 +534,14 @@ class CoreApp:
                 operation_id=operation_id, session_id=session.id, procedure_id=procedure.procedure_id,
                 procedure_revision=procedure.revision, procedure_digest=procedure.digest,
                 target_identity=target.identity, target_snapshot_id=target.id, boot_epoch=target.boot_epoch,
-                configuration_digest=target.configuration_digest, adapter_mode=request.adapter_mode,
-                operations=procedure.operations, deadline_at=deadline,
+                configuration_digest=target.configuration_digest,
+                review_id=review_id or "",
+                approval_id=approval_id,
+                approval_scope=approval_scope,
+                adapter_mode=request.adapter_mode,
+                operations=procedure.operations,
+                artifact_digests=sorted(procedure.artifact_digests),
+                deadline_at=deadline,
             )
             tx.execute("INSERT INTO operations VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,NULL,NULL)", (operation_id, session.id, procedure.procedure_id, procedure.revision, procedure.digest, approval_id, review_id, target.id, target.boot_epoch, request.adapter_mode, int(mutates), OperationState.INTENT, envelope.model_dump_json(), "{}", iso()))
             self.journal.append_event(tx, kind="operation.intent_recorded", session_id=session.id, subject_id=operation_id, data={"procedure_id": procedure.procedure_id, "procedure_revision": procedure.revision, "boot_epoch": target.boot_epoch})
@@ -550,6 +558,8 @@ class CoreApp:
             stored_envelope = DispatchEnvelope.model_validate_json(row["envelope_json"])
             if stored_envelope != envelope:
                 raise ConflictError("dispatch envelope differs from the authorized durable intent")
+            if not envelope.review_id:
+                raise ConflictError("dispatch envelope lacks its exact accepted review identity")
             session = tx.execute("SELECT phase FROM sessions WHERE id=?", (row["session_id"],)).fetchone()
             if session is None or SessionPhase(session["phase"]) not in ACTIVE_PHASES:
                 raise ConflictError("session no longer admits dispatch")

@@ -308,8 +308,12 @@ class DispatchEnvelope(BaseModel):
     target_snapshot_id: str
     boot_epoch: str
     configuration_digest: str
+    review_id: str = ""
+    approval_id: str | None = None
+    approval_scope: dict[str, Any] | None = None
     adapter_mode: TargetMode
     operations: list[TypedOperation]
+    artifact_digests: list[str] = Field(default_factory=list)
     deadline_at: datetime
 
 

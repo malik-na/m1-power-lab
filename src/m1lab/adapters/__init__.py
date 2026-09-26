@@ -42,6 +42,14 @@ from .runtime import (
     SandboxMode,
     TokenUsage,
 )
+from .helper_protocol import (
+    HELPER_PROTOCOL_VERSION,
+    HelperProtocolError,
+    decode_request as decode_helper_request,
+    decode_result as decode_helper_result,
+    encode_request as encode_helper_request,
+    encode_result as encode_helper_result,
+)
 
 __all__ = [
     "AppServerCodexAdapter",
@@ -54,6 +62,8 @@ __all__ = [
     "HardwareResult",
     "HardwareResultStatus",
     "HardwareUnavailable",
+    "HELPER_PROTOCOL_VERSION",
+    "HelperProtocolError",
     "HardwareOperation",
     "InspectRegister",
     "JobHandle",
@@ -77,4 +87,8 @@ __all__ = [
     "TargetSnapshot",
     "TokenUsage",
     "WaitForReplay",
+    "decode_helper_request",
+    "decode_helper_result",
+    "encode_helper_request",
+    "encode_helper_result",
 ]
