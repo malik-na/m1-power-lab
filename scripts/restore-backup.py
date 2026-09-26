@@ -15,6 +15,8 @@ import tempfile
 from datetime import datetime, timezone
 import zipfile
 
+from m1lab.core.journal import MIN_SUPPORTED_SCHEMA_VERSION, SCHEMA_VERSION
+
 JOURNAL_DISK_RESERVE_BYTES = 512 * 1024 * 1024
 
 
@@ -45,8 +47,20 @@ def restore(bundle: Path, root: Path) -> None:
                 if len(names) != len(set(names)):
                     raise SystemExit("backup contains duplicate archive members")
                 manifest = json.loads(archive.read("manifest.json"))
-                if manifest.get("format") != "m1lab-backup-v1":
+                backup_format = manifest.get("format")
+                if backup_format not in {"m1lab-backup-v1", "m1lab-backup-v2"}:
                     raise SystemExit("unsupported backup format")
+                manifest_schema = manifest.get("schema_version")
+                if backup_format == "m1lab-backup-v2" and manifest_schema is None:
+                    raise SystemExit("version-two backup is missing its schema version")
+                if manifest_schema is not None and type(manifest_schema) is not int:
+                    raise SystemExit("backup schema version is invalid")
+                if manifest_schema is not None and not (
+                    MIN_SUPPORTED_SCHEMA_VERSION <= manifest_schema <= SCHEMA_VERSION
+                ):
+                    raise SystemExit(
+                        "backup schema version is outside this release's supported range"
+                    )
                 manifest_artifacts = manifest.get("artifacts")
                 if not isinstance(manifest_artifacts, list):
                     raise SystemExit("backup artifact manifest is invalid")
@@ -89,7 +103,12 @@ def restore(bundle: Path, root: Path) -> None:
                     if _file_digest(destination) != digest:
                         raise SystemExit(f"artifact {item.get('id')} failed digest validation")
 
-            _validate_database(database, artifact_root, manifest_artifacts)
+            _validate_database(
+                database,
+                artifact_root,
+                manifest_artifacts,
+                expected_schema_version=manifest_schema,
+            )
             database.chmod(0o600)
             artifact_root.chmod(0o700)
             stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -133,7 +152,11 @@ def _extract_member(archive: zipfile.ZipFile, name: str, destination: Path) -> N
 
 
 def _validate_database(
-    database: Path, artifacts: Path, manifest_artifacts: list[dict[str, object]]
+    database: Path,
+    artifacts: Path,
+    manifest_artifacts: list[dict[str, object]],
+    *,
+    expected_schema_version: int | None,
 ) -> None:
     connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row
@@ -141,6 +164,28 @@ def _validate_database(
         result = connection.execute("PRAGMA quick_check").fetchone()[0]
         if result != "ok":
             raise SystemExit(f"SQLite quick_check failed: {result}")
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        if "schema_migrations" not in tables:
+            raise SystemExit("backup database has no schema migration history")
+        schema_versions = [
+            row[0] for row in connection.execute("SELECT version FROM schema_migrations")
+        ]
+        if not schema_versions or any(
+            type(version) is not int or version < 1 for version in schema_versions
+        ):
+            raise SystemExit("backup database has invalid schema migration history")
+        database_schema = max(schema_versions)
+        if not MIN_SUPPORTED_SCHEMA_VERSION <= database_schema <= SCHEMA_VERSION:
+            raise SystemExit(
+                "backup database schema version is outside this release's supported range"
+            )
+        if expected_schema_version is not None and database_schema != expected_schema_version:
+            raise SystemExit("backup manifest schema version disagrees with its database")
         rows = connection.execute(
             "SELECT id, sha256, size_bytes, relative_path, available FROM artifacts"
         ).fetchall()

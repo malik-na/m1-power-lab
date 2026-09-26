@@ -54,7 +54,7 @@ from m1lab.core import (
     TypedOperation,
 )
 from m1lab.core.errors import CoreError
-from m1lab.core.journal import JOURNAL_DISK_RESERVE_BYTES
+from m1lab.core.journal import JOURNAL_DISK_RESERVE_BYTES, SCHEMA_VERSION
 from m1lab.core.models import new_id, utc_now
 from m1lab.experiment import ExperimentService
 from m1lab.investigator import EvidenceExcerpt, InvestigationOrchestrator, InvestigationRequest
@@ -1113,12 +1113,17 @@ def _backup_bundle(core: CoreApp, destination: Path) -> dict[str, Any]:
                 artifacts = connection.execute(
                     "SELECT id, sha256, size_bytes, relative_path, available FROM artifacts ORDER BY id"
                 ).fetchall()
+                schema_version = connection.execute(
+                    "SELECT MAX(version) FROM schema_migrations"
+                ).fetchone()[0]
                 dangling = connection.execute(
                     "SELECT COUNT(*) FROM artifact_links l LEFT JOIN artifacts a "
                     "ON a.id=l.artifact_id WHERE a.id IS NULL"
                 ).fetchone()[0]
             finally:
                 connection.close()
+            if type(schema_version) is not int or schema_version != SCHEMA_VERSION:
+                raise ValueError("backup database schema version does not match this release")
             if dangling:
                 raise ValueError("backup database has artifact links without artifact metadata")
             for row in artifacts:
@@ -1157,7 +1162,11 @@ def _backup_bundle(core: CoreApp, destination: Path) -> dict[str, Any]:
             )
             os.close(handle)
             partial = Path(partial_name)
-            manifest = {"format": "m1lab-backup-v1", "artifacts": []}
+            manifest = {
+                "format": "m1lab-backup-v2",
+                "schema_version": schema_version,
+                "artifacts": [],
+            }
             try:
                 with zipfile.ZipFile(partial, "w", compression=zipfile.ZIP_DEFLATED) as archive:
                     archive.write(database, "m1lab.sqlite3")
