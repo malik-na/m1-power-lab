@@ -16,8 +16,11 @@
   host-only Codex turn on the T480 through the `m1lab` coordinator. Job
   `job_c4b06fe7f5f44710926be4d698c0f8b7` ended `completed` in proposal
   mode, with provider-reported usage of 19,816 tokens and no usage uncertainty.
-  The replacement session `session_f73011ac092642b88fabdccbaba723ff` is
-  paused. No physical M1 observation was made.
+  The replacement session `session_f73011ac092642b88fabdccbaba723ff` was
+  stopped after qualification. A new owner-matched session
+  `session_6419f91cb6c943af80b4f3ad9ad1c067` is paused, with the prior
+  remaining token and time allowances carried forward conservatively. No
+  physical M1 observation was made.
 - The configured Codex executable SHA-256 is verified before app-server startup.
 - Live app-server startup, authenticated completion, and terminal usage are
   demonstrated on the T480. Cancellation, sandbox escape checks, and recovery
@@ -29,6 +32,14 @@
   `/overview` at HTTP 200, and no M1 Power Lab inhibitor. The initial attempt
   without the service-account Polkit rule failed with an interactive
   authorization error. Actual T480 lid behavior remains untested.
+- Tailscale Serve on the T480 proxies HTTPS to the loopback-only service.
+  On 2026-09-26, local requests with a missing or incorrect
+  `Tailscale-User-Login` returned HTTP 403, while the configured owner login
+  returned HTTP 200. An HTTPS request to the tailnet Serve address returned
+  HTTP 200; the service was active and its environment file had mode 0600.
+  Serve status showed the proxy and no public Funnel entry. Actual iPhone
+  access, mobile layout, reconnection, push delivery, and tailnet policy remain
+  unqualified.
 - Replay operations preserve intent, completion and unknown-effect outcomes.
 - Stale revisions, revoked approvals and exhausted budgets fail closed.
 - Coordinator restart reconciles incomplete jobs, operations and artifacts.

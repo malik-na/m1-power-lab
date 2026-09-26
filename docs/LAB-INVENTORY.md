@@ -44,13 +44,18 @@ live data root, and the service restarted with HTTP 200, zero restarts, and
 the same session and full budget. Release `10934e9` was later installed with
 the Codex app-server enabled; a host-only turn completed as `m1lab` with
 provider-reported usage of 19,816 tokens. The service uses pinned Codex
-0.156 and `gpt-6-sol` at medium reasoning effort. This establishes neither
-Tailscale Serve access nor long-term host availability or a physical M1 result.
+0.156 and `gpt-6-sol` at medium reasoning effort. This does not establish
+long-term host availability or a physical M1 result.
 Release `3c49b9e` added the service-account logind inhibitor permission. With
 opt-in lab mode enabled, logind listed the `m1lab` service holding
 `sleep:idle:handle-lid-switch` in block mode while `/overview` returned HTTP
 200. The lock was absent after stopping the service and returning to the
 original environment. Physical lid closure was not tested.
+Tailscale Serve was then configured to proxy to the loopback service. On the
+T480, HTTPS `/overview` returned HTTP 200, exact owner identity was required
+for direct loopback requests, and no public Funnel entry was enabled. The
+owner-matched investigation session remains paused. Access from the iPhone
+12 mini and tailnet policy have not been checked.
 
 ## Observed execution machine
 
