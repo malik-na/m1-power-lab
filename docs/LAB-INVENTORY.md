@@ -176,18 +176,34 @@ and mode qualification require owner-observed entries below.
 |---|---|---|---|---|---|
 | Disconnected | Known possible; no USB device enumerated in this observation | Not assessed | Not assessed | Not assessed | Required to establish physical state |
 | Linux boot on observed Mac | Observed running | Not assessed | Not assessed | Not assessed | Required for physical recovery |
-| m1n1 proxy | Direct NOP and identity-query round trip demonstrated; coordinator/helper path unqualified | Unknown | Unknown | Unknown | Required for further physical qualification |
+| m1n1 proxy | Direct setup and separate-helper NOP/identity checks demonstrated; coordinator dispatch unqualified | Unknown | Unknown | Unknown | Required for further physical qualification |
 | m1n1 hypervisor | Unknown | Unknown | Unknown | Unknown | Required; not qualified |
 | Native experiment | Unknown | Unknown | Unknown | Unknown | Required; not qualified |
 
 ## Bounded next attempt
 
-1. Preserve the observed cable arrangement; record remaining physical port
-   positions and establish the exact target build and per-device identity.
-2. Prepare a bounded return/re-identification procedure and recovery instructions
-   from the pinned source for owner review before further target commands.
-3. Qualify exclusive helper ownership, boot-epoch tracking, and reviewed
-   coordinator dispatch before treating the application transport as ready.
+At 12:46:06 UTC on 2026-09-26, source `956a617` completed the separate-helper
+inspection described in [the evidence record](evidence/2026-09-26-proxy-helper.json).
+USB serial was bound by SHA-256 without emitting its raw value. No existing tty
+holders were found; the helper used exclusive tty access and exited cleanly.
+This establishes one bounded helper/IPC round trip on the current connection.
+It does not establish a boot epoch or exact target binary identity.
+
+1. Preserve the observed connection and independently identify a boot transition,
+   exact target build, and an owner-reviewed return/recovery procedure. USB
+   serial identity and address stability alone do not establish a boot epoch.
+2. Continue host harness work while these gates remain open: persistent helper
+   supervision and duplicate-dispatch handling, then reviewed coordinator
+   integration with explicit refusal when qualification evidence is missing.
+3. Locate exact native kernel/DTB/initramfs/rootfs inputs before creating an M1
+   build recipe. The local inventory found collector source and historical
+   captures but no complete known-good image bundle. Native transport must be
+   established separately from the proxy tty.
+
+The upstream m1n1 checkout's `AGENTS.md` prohibits AI work on that project;
+inspection stopped when that instruction was discovered and no upstream files
+were edited. The independent M1 Power Lab harness remains the development
+workspace. Current owner scope is harness development and verification only.
 
 Application transport, recovery, native results, and measurement remain
 unqualified. The successful direct setup probe is limited evidence toward M2.

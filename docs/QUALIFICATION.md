@@ -2,6 +2,19 @@
 
 ## Host-only gate
 
+- At source `956a617` on 2026-09-26, the ThinkPad full suite passed
+  **145 tests in 10.04 seconds**, with no warnings reported, using
+  `.venv/bin/python -m pytest -q` with host socket permissions through Codex
+  `gpt-6-sol` medium. Added coverage includes strict helper snapshot IPC,
+  fixed proxy wire requests and deadlines over PTYs, USB identity refusal and
+  probe process cleanup, configuration drift before and during execution, and
+  four real temporary-Git build-runner cases. The build cases produce text
+  fixtures, not M1 images. Physical evidence is recorded separately below.
+  Standards review found no hard violations and one optional duplicated socket
+  setup observation; the distinct inspection/dispatch outcome paths were kept.
+  Spec review's bounded-inspection concern is resolved for the fixed observer
+  and one-shot watchdog, and failed-completion reporting was corrected in
+  `956a617`. Persistent helper supervision and real image builds remain gates.
 - On 2026-09-26 the ThinkPad full suite passed **102 tests** with
   `.venv/bin/python -m pytest -q` (no warnings reported). Three new runtime
   cases verify the app-server resume request reasserts the read-only profile,
@@ -193,6 +206,20 @@
 
 ## Live transport gate
 
+- At 12:46:06 UTC on 2026-09-26, the inspect-only harness at `956a617`
+  completed one physical observation through a separate helper and the real
+  Unix-socket client. It checked topology/interface/VID/PID and hashed USB
+  serial, held the tty exclusively during the check, completed five fixed
+  requests, and exited normally. It returned chip `0x8103`, base `0x805574000`,
+  and bootargs address `0x805cac088`; `qualified=false`, no boot epoch and no
+  capabilities were retained. No existing serial holders were found before
+  opening. This is limited helper-path evidence, not full exclusive-ownership
+  failure qualification or reviewed coordinator dispatch. See the
+  [recorded output](evidence/2026-09-26-proxy-helper.json) and
+  [probe contract](PROXY-HARNESS.md). Current owner scope is harness development
+  and end-to-end verification; scientific investigation is not authorized to
+  start at this stage. The installed `f560929` service remains separate, active
+  with zero observed restarts, and its paused session/usage hold was preserved.
 - Physical inventory is partial. An owner-authorized direct setup probe on
   2026-09-26 caught USB `1209:316d` during boot and completed NOP and identity
   queries against m1n1 `v1.6.1` on the M1 MacBook Air. Host checkout tag also

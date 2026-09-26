@@ -1,0 +1,37 @@
+{
+  "source_commit": "956a61778bc37d8750b6884409947227841ec30c",
+  "command": "sudo -u naeem -g uucp timeout 15s /home/naeem/Work/m1-power-lab/.venv/bin/python /home/naeem/Work/m1-power-lab/scripts/probe-m1n1-helper.py --device /dev/ttyACM0 --usb-topology 1-1 --expected-serial-sha256 EXPECTED_USB_SERIAL_SHA256",
+  "exit_status": 0,
+  "preflight": "Root fuser inspection reported no holders of ttyACM0 or ttyACM1; sysfs interface, topology, VID/PID and serial digest matched.",
+  "output": {
+    "available": true,
+    "boot_epoch": null,
+    "capabilities": [],
+    "device": "/dev/ttyACM0",
+    "limitations": [
+      "no dispatch qualification",
+      "no native-result qualification",
+      "no boot-epoch qualification",
+      "no recovery qualification"
+    ],
+    "message": "Five fixed read-only m1n1 proxy requests completed; dispatch and recovery remain unqualified.",
+    "mode": "proxy",
+    "observed_at": "2026-09-26T12:46:06.341611+00:00",
+    "proxy_identity": {
+      "base": 34449342464,
+      "bootargs_address": 34456912008,
+      "chip_id": 33027
+    },
+    "qualified": false,
+    "schema_version": 1,
+    "serial_sha256": "[redacted per-device identifier]",
+    "source": "m1n1-v1.6.1-fixed-read-only-proxy-observation",
+    "usb_interface": "00",
+    "usb_topology": "1-1",
+    "usb_vid_pid": "1209:316d"
+  },
+  "qualification": "One owner-authorized setup observation through a separate helper process and real IPC. Not a coordinator procedure, native result, recovery demonstration, or scientific investigation. Protocol source label does not independently verify the running target binary.",
+  "redactions": [
+    "USB serial SHA-256 removed from command and output before publication; complete record retained locally."
+  ]
+}
