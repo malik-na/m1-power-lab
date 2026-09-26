@@ -348,6 +348,9 @@ def test_disconnect_after_backend_entry_is_unknown_and_never_automatically_repla
     assert backend.calls == [uncertain]
     # The owner remains available; only a distinct explicit request runs next.
     backend.fail_after_entry = False
-    following = _dispatch("separate-explicit-operation")
+    following = replace(
+        _dispatch("separate-explicit-operation"),
+        coordinator_operation_id="separate-coordinator-operation",
+    )
     assert client.execute(following).status is HardwareResultStatus.COMPLETED
     assert backend.calls == [uncertain, following]

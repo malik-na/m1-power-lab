@@ -32,6 +32,13 @@ def _serve_one(
 ) -> None:
     observer = None
     owner = server = None
+
+    def close_backend():
+        nonlocal observer
+        closing, observer = observer, None
+        if closing is not None:
+            closing.__exit__(None, None, None)
+
     try:
         def backend_factory():
             nonlocal observer
@@ -43,6 +50,7 @@ def _serve_one(
 
         owner, server = start_exclusive_helper(
             Path(lock_path), Path(socket_path), backend_factory,
+            backend_cleanup=close_backend,
         )
         connection.send({"event": "ready"})
         server.serve_once()
@@ -62,13 +70,11 @@ def _serve_one(
             try:
                 if server is not None:
                     server.close()
+                else:
+                    close_backend()
             finally:
-                try:
-                    if observer is not None:
-                        observer.__exit__(None, None, None)
-                finally:
-                    if owner is not None:
-                        owner.__exit__(None, None, None)
+                if owner is not None:
+                    owner.__exit__(None, None, None)
         finally:
             connection.close()
 

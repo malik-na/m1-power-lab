@@ -56,10 +56,9 @@ continue boot, reconnect to a different target, or retry a procedure.
 ## Gates still open
 
 This check does not supply a verified target binary digest, boot epoch,
-coordinator dispatch, durable duplicate-dispatch protection, or production
-helper wiring. A persistent helper also needs a supervisor and qualified
-failure/cleanup behavior; the generic adapter interface alone cannot bound a
-blocked backend.
+coordinator dispatch, or production helper wiring. The persistent supervisor
+and duplicate guard described below have separate host qualification; this
+one-shot physical record does not prove their failure behavior on the Mac.
 
 Proxy access does not establish a native Linux result channel. The exact
 kernel, DTB, initramfs, root filesystem, collector and payload build inputs,
@@ -67,3 +66,48 @@ known-good return image, mode transitions and independent recovery still need
 qualification. No power measurement or scientific result follows from this
 setup check. See [qualification](QUALIFICATION.md) and
 [build requirements](BUILDING.md).
+
+## Persistent helper development
+
+`scripts/serve-m1n1-helper.py` runs a separate supervisor and one worker. Only
+the worker constructs the fixed in-package observer and opens the tty. The
+supervisor watches startup, each entire request (including protocol and journal
+I/O), and cleanup. Its default bounds are eight seconds for startup, twelve for
+a request, and three per shutdown stage. A failed worker is terminated, then
+killed if needed, and reaped; it is never restarted automatically. Linux parent
+death signaling stops the worker if its supervisor disappears.
+
+The observer still exposes inspection only, no qualified capabilities or boot
+epoch. The script accepts device and identity configuration, never backend
+module names, commands, or executable proposals. The caller supplies a stable
+private state directory; its `owner.lock`, `helper.sock`, and `owner.lock.deny`
+must refer to the same selected target across explicit restarts. Production
+state must not be placed in a temporary directory.
+
+The deny journal adds a refusal check alongside the coordinator's authoritative
+SQLite history. Before backend execution it persists and fsyncs digests of the
+operation ID, coordinator operation plus step index, and canonical request.
+Either repeated ID or repeated step is refused, including changed payloads or
+new request IDs. Even an earlier success is not executed again. A crash or
+deadline expiry after reservation leaves the intent denied. The helper
+rechecks the deadline after the durable write and before execution.
+
+The journal contains no outcomes or raw target payloads. It is limited to
+1 MiB and 4096 entries; capacity exhaustion, malformed/truncated records, or
+failed writes prevent dispatch. A write failure invalidates the open guard.
+There is no automatic pruning or reset: do not delete the journal to retry a
+request. Client ambiguity remains unknown and requires the coordinator's
+evidence-backed reconciliation. The guard cannot prove a USB operation had no
+effect or protect history that an operator removes.
+
+Socket, guard and backend cleanup run before owner-lock release, including
+startup failure. Direct helper servers without a guard may inspect but refuse
+dispatch. The application still rejects a live helper adapter at its experiment
+service boundary; the coordinator/IPC integration tests use an explicitly
+synthetic replay fixture.
+
+The installed application has `PrivateDevices=yes`. The physical helper needs
+a separate service unit with its own constrained device access; spawning it
+inside the application would inherit that device restriction. No helper unit
+has been installed or enabled, no application device isolation has been
+relaxed, and this development entry point does not resume the paused lab.

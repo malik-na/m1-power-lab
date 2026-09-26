@@ -195,11 +195,15 @@ def test_probe_closes_socket_then_tty_then_owner_lock():
             events.append("tty-close")
 
     class Server:
+        def __init__(self, cleanup):
+            self.cleanup = cleanup
+
         def serve_once(self):
             events.append("serve")
 
         def close(self):
             events.append("socket-close")
+            self.cleanup()
 
     class Owner:
         def __exit__(self, *_args):
@@ -212,10 +216,10 @@ def test_probe_closes_socket_then_tty_then_owner_lock():
         def close(self):
             events.append("pipe-close")
 
-    def start(_lock, _socket, factory):
+    def start(_lock, _socket, factory, *, backend_cleanup):
         events.append("owner-lock")
         factory()
-        return Owner(), Server()
+        return Owner(), Server(backend_cleanup)
 
     serve_one.__globals__["M1N1Observer"] = Observer
     serve_one.__globals__["start_exclusive_helper"] = start

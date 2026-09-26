@@ -46,6 +46,7 @@ from .helper_protocol import (
     read_helper_frame_until,
     write_helper_frame_until,
 )
+from .helper_dispatch_guard import HelperDispatchGuard
 
 
 MAX_HELPER_HANDSHAKE_SECONDS = 5.0
@@ -182,9 +183,13 @@ class HelperServer:
         adapter: HardwareAdapter,
         *,
         expected_uid: int | None = None,
+        dispatch_guard: HelperDispatchGuard | None = None,
+        backend_cleanup: Callable[[], None] | None = None,
     ):
         self.socket_path = socket_path.expanduser().absolute()
         self.adapter = adapter
+        self.dispatch_guard = dispatch_guard
+        self._backend_cleanup = backend_cleanup
         self.expected_uid = os.getuid() if expected_uid is None else expected_uid
         _validate_socket_path(self.socket_path)
         if type(self.expected_uid) is not int or self.expected_uid < 0:
@@ -238,10 +243,16 @@ class HelperServer:
             remaining = (dispatch.deadline - datetime.now(timezone.utc)).total_seconds()
             if remaining <= 0:
                 raise HardwareError("helper rejected an expired dispatch before execution")
+            operation_deadline = time.monotonic() + remaining
             _validate_dispatch_target(dispatch, self.adapter.inspect())
             if dispatch.deadline <= datetime.now(timezone.utc):
                 raise HardwareError("helper rejected a dispatch whose deadline elapsed during preflight")
-            operation_deadline = time.monotonic() + remaining
+            if self.dispatch_guard is None:
+                raise HardwareError("helper dispatch guard is unavailable")
+            self.dispatch_guard.reserve(dispatch)
+            if (dispatch.deadline <= datetime.now(timezone.utc)
+                    or time.monotonic() >= operation_deadline):
+                raise HardwareError("helper rejected a dispatch whose deadline elapsed after reservation")
             result = self.adapter.execute(dispatch)
             if result.operation_id != dispatch.operation_id:
                 raise HardwareError("device backend returned a mismatched operation ID")
@@ -311,9 +322,18 @@ class HelperServer:
 
     def close(self) -> None:
         listener, self._listener = self._listener, None
-        if listener is not None:
-            listener.close()
-        _remove_stale_socket(self.socket_path, allow_missing=True)
+        try:
+            if listener is not None:
+                listener.close()
+                _remove_stale_socket(self.socket_path, allow_missing=True)
+        finally:
+            try:
+                if self.dispatch_guard is not None:
+                    self.dispatch_guard.close()
+            finally:
+                cleanup, self._backend_cleanup = self._backend_cleanup, None
+                if cleanup is not None:
+                    cleanup()
 
     def __enter__(self) -> "HelperServer":
         self.listen()
@@ -328,6 +348,8 @@ def start_exclusive_helper(
     lock_path: Path,
     socket_path: Path,
     backend_factory: Callable[[], HardwareAdapter],
+    *,
+    backend_cleanup: Callable[[], None] | None = None,
 ) -> tuple[HelperOwnerLock, HelperServer]:
     """Acquire ownership before constructing a fixed in-process backend.
 
@@ -338,12 +360,31 @@ def start_exclusive_helper(
 
     lock = HelperOwnerLock(lock_path)
     lock.__enter__()
+    guard = None
+    server = None
+    backend_started = False
     try:
+        guard = HelperDispatchGuard(lock.path)
+        backend_started = True
         backend = backend_factory()
-        server = HelperServer(socket_path, backend)
+        server = HelperServer(
+            socket_path, backend, dispatch_guard=guard,
+            backend_cleanup=backend_cleanup,
+        )
         server.listen()
     except Exception:
-        lock.__exit__(None, None, None)
+        try:
+            if server is not None:
+                server.close()
+            else:
+                try:
+                    if guard is not None:
+                        guard.close()
+                finally:
+                    if backend_started and backend_cleanup is not None:
+                        backend_cleanup()
+        finally:
+            lock.__exit__(None, None, None)
         raise
     return lock, server
 
