@@ -854,31 +854,86 @@ class CoreApp:
             return True
 
     def report_usage(self, update: UsageUpdate) -> UsageResult:
-        return self.budgets.report_usage(update)
+        result = self.budgets.report_usage(update)
+        self._enforce_budget_exhaustion(update.session_id)
+        return result
 
     def reserve_budget(self, request: ReservationRequest) -> ReservationRecord:
         return self.budgets.reserve(request)
 
     def release_budget(self, reservation_id: str) -> None:
         self.budgets.release_reservation(reservation_id)
+        session_id = self.journal.one(
+            "SELECT session_id FROM reservations WHERE id=?", (reservation_id,)
+        )
+        if session_id is not None:
+            self._enforce_budget_exhaustion(session_id["session_id"])
+
+    def budget_limit_reached(self, session_id: str) -> bool:
+        budget = self.budgets.snapshot(session_id)
+        return (
+            budget.tokens_used >= budget.token_limit
+            or budget.active_seconds_used >= budget.active_seconds_limit
+        )
+
+    def _enforce_budget_exhaustion(self, session_id: str) -> bool:
+        """Persist the exhausted phase only when actual use reaches a hard limit."""
+        with self.journal.transaction() as tx:
+            return self._enforce_budget_exhaustion_in_tx(tx, session_id)
+
+    def _enforce_budget_exhaustion_in_tx(
+        self, tx: sqlite3.Connection, session_id: str
+    ) -> bool:
+        budget = self.budgets.snapshot(session_id)
+        if not (
+            budget.tokens_used >= budget.token_limit
+            or budget.active_seconds_used >= budget.active_seconds_limit
+        ):
+            return False
+        row = tx.execute(
+            "SELECT phase FROM sessions WHERE id=?", (session_id,)
+        ).fetchone()
+        if row is None:
+            raise NotFoundError(f"session {session_id} does not exist")
+        phase = SessionPhase(row["phase"])
+        if phase in {
+            SessionPhase.BUDGET_EXHAUSTED,
+            SessionPhase.COMPLETED,
+            SessionPhase.STOPPED,
+        }:
+            return False
+        self._transition_phase_in_tx(
+            tx,
+            session_id,
+            SessionPhase.BUDGET_EXHAUSTED,
+            "actual Codex token or active-time allowance exhausted",
+        )
+        return True
 
     def mark_usage_uncertain(self, session_id: str, source_id: str, reason: str) -> None:
         self.budgets.mark_usage_uncertain(session_id, source_id, reason)
 
     def resolve_usage_uncertainty(self, session_id: str, *, upper_bound_tokens: int, evidence: str, owner_decision: bool = False) -> None:
         self.budgets.resolve_usage_uncertainty(session_id, upper_bound_tokens=upper_bound_tokens, evidence=evidence, owner_decision=owner_decision)
+        self._enforce_budget_exhaustion(session_id)
 
     def create_job(self, request: JobCreate) -> JobRecord:
         now = utc_now()
         if request.lease_expires_at <= now or request.deadline_at <= now:
             raise ValidationError("job lease and deadline must be in the future")
         record = JobRecord(id=new_id("job"), state="admitted", created_at=now, updated_at=now, **request.model_dump())
+        rejection: str | None = None
         with self.journal.transaction() as tx:
             session_row = tx.execute(
                 "SELECT * FROM sessions WHERE id=?", (request.session_id,)
             ).fetchone()
             if session_row is None:
                 raise NotFoundError(f"session {request.session_id} does not exist")
+            self._enforce_budget_exhaustion_in_tx(tx, request.session_id)
+            session_row = tx.execute(
+                "SELECT * FROM sessions WHERE id=?", (request.session_id,)
+            ).fetchone()
+            assert session_row is not None
             session = self._session_from_row(session_row)
             wait_kinds = {
                 SessionPhase.AWAITING_REVIEW: {"review", "chat"},
@@ -888,11 +943,14 @@ class CoreApp:
                 session.phase, set()
             )
             if not phase_admits or not self.budgets.snapshot(session.id).admission_open:
-                raise ConflictError("session state or budget does not admit a new job")
-            self.journal.ensure_artifact_capacity()
-            tx.execute("INSERT INTO jobs VALUES (?,?,?,?,?,?,?,?,?,?,?)", (record.id, record.session_id, record.kind, None, record.state, iso(record.lease_expires_at), iso(record.deadline_at), json_dump(record.evidence_manifest), "{}", iso(now), iso(now)))
-            self.budgets._sync_activity(tx, session.id, session.phase)
-            self.journal.append_event(tx, kind="job.admitted", session_id=record.session_id, subject_id=record.id, data={"kind": record.kind, "deadline_at": iso(record.deadline_at)})
+                rejection = "session state or budget does not admit a new job"
+            else:
+                self.journal.ensure_artifact_capacity()
+                tx.execute("INSERT INTO jobs VALUES (?,?,?,?,?,?,?,?,?,?,?)", (record.id, record.session_id, record.kind, None, record.state, iso(record.lease_expires_at), iso(record.deadline_at), json_dump(record.evidence_manifest), "{}", iso(now), iso(now)))
+                self.budgets._sync_activity(tx, session.id, session.phase)
+                self.journal.append_event(tx, kind="job.admitted", session_id=record.session_id, subject_id=record.id, data={"kind": record.kind, "deadline_at": iso(record.deadline_at)})
+        if rejection is not None:
+            raise ConflictError(rejection)
         return record
 
     def update_job(self, job_id: str, *, state: str, runtime_id: str | None = None, result: dict[str, Any] | None = None) -> JobRecord:
@@ -921,6 +979,7 @@ class CoreApp:
             self.budgets._sync_activity(
                 tx, row["session_id"], SessionPhase(session_row["phase"])
             )
+            self._enforce_budget_exhaustion_in_tx(tx, row["session_id"])
             self.journal.append_event(tx, kind=f"job.{state}", session_id=row["session_id"], subject_id=job_id, data=result or {})
             updated = tx.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         return self._job_from_row(updated)

@@ -206,7 +206,10 @@ class PushNotifications:
 
     def _budget_alert(self) -> tuple[str, str, str, str] | None:
         budget = self._core.snapshot(self._session_id).budget
-        if budget.tokens_remaining <= 0 or budget.active_seconds_remaining <= 0:
+        if (
+            budget.tokens_used >= budget.token_limit
+            or budget.active_seconds_used >= budget.active_seconds_limit
+        ):
             return (
                 "budget",
                 "Work allowance reached",

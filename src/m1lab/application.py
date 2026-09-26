@@ -216,8 +216,12 @@ class CoordinatorFacade:
             "budgets": {
                 "tokens_used": budget.tokens_used,
                 "tokens_limit": budget.token_limit,
+                "tokens_reserved": budget.tokens_reserved,
+                "tokens_available": budget.tokens_remaining,
                 "active_seconds": round(budget.active_seconds_used, 1),
                 "active_seconds_limit": round(budget.active_seconds_limit, 1),
+                "active_seconds_reserved": round(budget.active_seconds_reserved, 1),
+                "active_seconds_available": round(budget.active_seconds_remaining, 1),
                 "lifetime_tokens": session.lifetime_tokens,
                 "usage_state": "uncertain" if budget.usage_uncertain else "known",
                 "epoch": "current",

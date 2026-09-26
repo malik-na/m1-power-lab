@@ -240,6 +240,12 @@ ambiguous, the job is recorded as `unknown`, its Codex process group is stopped,
 and new Codex work is blocked until `usage-resolve` records a conservative
 upper bound.
 
+Budget reservations close admission for additional jobs but do not by themselves
+interrupt the job that holds the reservation. Reaching the actual token or
+active-time limit moves the session to `budget_exhausted` and interrupts live
+Codex work. After granting tokens or extending/resetting time, explicitly resume
+the session.
+
 An accepted response proves the interruption request reached the runtime. The
 terminal job event and final usage record determine whether it completed. If
 the coordinator cannot confirm either, usage remains uncertain and new model

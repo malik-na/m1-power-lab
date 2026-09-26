@@ -38,6 +38,8 @@ class InvestigationRequest(BaseModel):
     def validate_cwd_and_evidence(self) -> "InvestigationRequest":
         if not self.cwd.is_absolute():
             raise ValueError("investigation cwd must be absolute")
+        if self.deadline_seconds > self.estimated_active_seconds:
+            raise ValueError("investigation deadline must not exceed its reserved active time")
         total = sum(len(item.content) for item in self.evidence)
         if total > 4_000_000:
             raise ValueError("combined evidence exceeds 4,000,000 characters")

@@ -297,6 +297,12 @@ class InvestigationOrchestrator:
                         "last_runtime_sequence": last_sequence,
                     },
                 )
+                if (
+                    not interruption_requested
+                    and self._core.budget_limit_reached(session_id)
+                ):
+                    interruption_requested = True
+                    await self._runtime.interrupt(handle.job_id)
         except BaseException as exc:
             consumption_error = exc
 
@@ -382,8 +388,11 @@ class InvestigationOrchestrator:
                 terminal=False,
             )
         )
-        budget = self._core.snapshot(session_id).budget
-        return observed >= admitted_tokens or not budget.admission_open
+        return (
+            observed >= admitted_tokens
+            or self._core.budget_limit_reached(session_id)
+            or self._core.snapshot(session_id).budget.usage_uncertain
+        )
 
     def _account_usage(self, session_id: str, job_id: str, handle: JobHandle) -> dict[str, Any]:
         try:

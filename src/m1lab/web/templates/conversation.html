@@ -8,6 +8,7 @@
   <div class="progress"><i style="--progress: {{ budgets.tokens_used|percent(budgets.tokens_limit) }}%"></i></div>
   <div class="budget-line"><span>Active time</span><strong>{{ budgets.active_seconds|duration }} / {{ budgets.active_seconds_limit|duration }}</strong></div>
   <div class="progress"><i style="--progress: {{ budgets.active_seconds|percent(budgets.active_seconds_limit) }}%"></i></div>
+  <p class="metadata">Available for new work: {{ budgets.tokens_available|compact_number }} tokens · {{ budgets.active_seconds_available|duration }}. Active jobs hold {{ budgets.tokens_reserved|compact_number }} tokens and {{ budgets.active_seconds_reserved|duration }}.</p>
   <p class="metadata">Epoch {{ budgets.epoch|default('—') }} · Lifetime {{ budgets.lifetime_tokens|compact_number }} tokens · Usage {{ budgets.usage_state|default('unknown') }}</p>
   <div class="budget-actions">
     <form class="command-form inline-fields" data-command-kind="budget.add_tokens"><label>Add tokens<input name="amount" type="number" inputmode="numeric" min="1" step="1000" required></label><button type="submit">Add</button></form>

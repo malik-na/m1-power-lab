@@ -55,6 +55,7 @@
   <div class="progress"><i style="--progress: {{ budgets.tokens_used|percent(budgets.tokens_limit) }}%"></i></div>
   <div class="budget-line"><span>Active time</span><strong>{{ budgets.active_seconds|duration }} / {{ budgets.active_seconds_limit|duration }}</strong></div>
   <div class="progress"><i style="--progress: {{ budgets.active_seconds|percent(budgets.active_seconds_limit) }}%"></i></div>
+  <p class="metadata">Available for new work: {{ budgets.tokens_available|compact_number }} tokens · {{ budgets.active_seconds_available|duration }}. Active jobs hold {{ budgets.tokens_reserved|compact_number }} tokens and {{ budgets.active_seconds_reserved|duration }}.</p>
   {% if budgets.usage_state and budgets.usage_state != 'known' %}<p class="warning-text">Usage state: {{ budgets.usage_state }}</p>{% endif %}
 </article>
 
