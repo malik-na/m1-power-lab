@@ -65,10 +65,13 @@ class TargetSnapshot:
     capabilities: tuple[HardwareCapability, ...]
     observed_at: datetime
     message: str = ""
+    configuration_digest: str | None = None
 
     def __post_init__(self) -> None:
         if self.observed_at.tzinfo is None:
             raise ValueError("observed_at must be timezone-aware")
+        if self.configuration_digest is not None:
+            _require_sha256(self.configuration_digest, "configuration_digest")
 
 
 @dataclass(frozen=True, slots=True)

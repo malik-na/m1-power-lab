@@ -1,9 +1,9 @@
 """Versioned, bounded JSON codec for coordinator-to-hardware-helper messages.
 
-This module opens no device and starts no process. A future helper transport
-can use this codec after physical interface ownership and recovery are
-qualified. Unknown versions, operations, fields, and mismatched replies fail
-closed; callers must treat failures after dispatch as unknown effects.
+This module opens no device and starts no process. The Linux helper IPC layer
+uses this codec, but live device ownership and recovery still require physical
+qualification. Unknown versions, operations, fields, and mismatched replies
+fail closed; callers must treat failures after dispatch as unknown effects.
 """
 
 from __future__ import annotations

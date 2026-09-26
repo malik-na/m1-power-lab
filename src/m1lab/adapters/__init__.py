@@ -85,6 +85,14 @@ from .native_harness import (
     read_native_result_frame_until,
     write_native_result_frame_until,
 )
+from .helper_server import (
+    HelperHardwareAdapter,
+    HelperOwnerError,
+    HelperOwnerLock,
+    HelperServer,
+    close_exclusive_helper,
+    start_exclusive_helper,
+)
 
 __all__ = [
     "AppServerCodexAdapter",
@@ -99,6 +107,10 @@ __all__ = [
     "HardwareUnavailable",
     "HELPER_PROTOCOL_VERSION",
     "HelperProtocolError",
+    "HelperHardwareAdapter",
+    "HelperOwnerError",
+    "HelperOwnerLock",
+    "HelperServer",
     "HardwareOperation",
     "InspectRegister",
     "JobHandle",
@@ -154,6 +166,8 @@ __all__ = [
     "read_helper_result",
     "read_native_result_frame_until",
     "make_native_result_frame",
+    "close_exclusive_helper",
+    "start_exclusive_helper",
     "write_helper_frame",
     "write_helper_frame_until",
     "write_helper_request",

@@ -1,0 +1,340 @@
+"""Linux local IPC boundary for an exclusive hardware-helper process.
+
+The module does not select or open target devices. A deployment constructs its
+fixed, in-package backend only after acquiring ``HelperOwnerLock``. One typed
+request is accepted per same-UID Unix-socket connection; transport ambiguity
+is never retried here.
+"""
+
+from __future__ import annotations
+
+from contextlib import AbstractContextManager
+from datetime import datetime, timezone
+import fcntl
+import os
+from pathlib import Path
+import socket
+import stat
+import struct
+import time
+from typing import Callable
+
+from .hardware import (
+    CaptureMemory,
+    HardwareAdapter,
+    HardwareDispatch,
+    HardwareError,
+    HardwareResult,
+    InspectRegister,
+    TargetSnapshot,
+)
+from .helper_protocol import (
+    MAX_HELPER_REQUEST_BYTES,
+    MAX_HELPER_RESPONSE_BYTES,
+    HelperProtocolError,
+    decode_request,
+    decode_result,
+    encode_request,
+    encode_result,
+    read_helper_frame_until,
+    write_helper_frame_until,
+)
+
+
+MAX_HELPER_HANDSHAKE_SECONDS = 5.0
+MAX_HELPER_SOCKET_PATH_BYTES = 100
+
+
+class HelperOwnerError(RuntimeError):
+    """The exclusive helper owner or its local IPC boundary is unavailable."""
+
+
+class HelperOwnerLock(AbstractContextManager["HelperOwnerLock"]):
+    """Nonblocking advisory lock held for the full lifetime of a helper owner."""
+
+    def __init__(self, path: Path):
+        self.path = path.expanduser().absolute()
+        self._fd: int | None = None
+
+    def __enter__(self) -> "HelperOwnerLock":
+        if self._fd is not None:
+            raise HelperOwnerError("helper owner lock is already held by this object")
+        self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        parent = self.path.parent.stat()
+        if parent.st_uid != os.getuid() or not stat.S_ISDIR(parent.st_mode):
+            raise HelperOwnerError("helper lock directory must be owned by the current user")
+        flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            fd = os.open(self.path, flags, 0o600)
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
+                raise HelperOwnerError("helper lock path must be a user-owned regular file")
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (OSError, HelperOwnerError) as exc:
+            if "fd" in locals():
+                os.close(fd)
+            if isinstance(exc, HelperOwnerError):
+                raise
+            raise HelperOwnerError("another helper owns the target lock") from exc
+        self._fd = fd
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        del exc_type, exc, traceback
+        if self._fd is not None:
+            fd, self._fd = self._fd, None
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+
+
+class HelperHardwareAdapter:
+    """Client for the same-user helper socket; it never opens a device."""
+
+    def __init__(self, socket_path: Path, *, expected_uid: int | None = None):
+        self.socket_path = socket_path.expanduser().absolute()
+        self.expected_uid = os.getuid() if expected_uid is None else expected_uid
+        _validate_socket_path(self.socket_path)
+        if type(self.expected_uid) is not int or self.expected_uid < 0:
+            raise ValueError("helper peer UID must be a non-negative integer")
+
+    def inspect(self) -> TargetSnapshot:
+        return TargetSnapshot(
+            adapter="m1n1-helper-unavailable",
+            available=False,
+            qualified=False,
+            mode="disconnected",
+            target_id=None,
+            boot_epoch=None,
+            capabilities=(),
+            observed_at=datetime.now(timezone.utc),
+            message="The helper has no qualified, read-only identity query yet.",
+        )
+
+    def execute(self, dispatch: HardwareDispatch) -> HardwareResult:
+        remaining = (dispatch.deadline - datetime.now(timezone.utc)).total_seconds()
+        if remaining <= 0:
+            raise HardwareError("helper dispatch deadline expired before connection")
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            client.settimeout(min(MAX_HELPER_HANDSHAKE_SECONDS, remaining))
+            client.connect(str(self.socket_path))
+            _verify_peer_uid(client, self.expected_uid)
+            client.setblocking(False)
+            deadline = time.monotonic() + remaining
+            write_helper_frame_until(
+                client.fileno(),
+                encode_request(dispatch),
+                maximum=MAX_HELPER_REQUEST_BYTES,
+                deadline_monotonic=deadline,
+            )
+            frame = read_helper_frame_until(
+                client.fileno(),
+                maximum=MAX_HELPER_RESPONSE_BYTES,
+                deadline_monotonic=deadline,
+            )
+            result = decode_result(
+                frame[4:], expected_operation_id=dispatch.operation_id
+            )
+            if result.boot_epoch != dispatch.boot_epoch:
+                raise HardwareError("helper result boot epoch differs from the dispatch")
+            return result
+        except (OSError, TimeoutError, HelperProtocolError) as exc:
+            raise HardwareError(
+                f"helper transport ended ambiguously; operation outcome is unknown: {exc}"
+            ) from exc
+        finally:
+            client.close()
+
+
+class HelperServer:
+    """Serve single-operation connections after an exclusive owner lock."""
+
+    def __init__(
+        self,
+        socket_path: Path,
+        adapter: HardwareAdapter,
+        *,
+        expected_uid: int | None = None,
+    ):
+        self.socket_path = socket_path.expanduser().absolute()
+        self.adapter = adapter
+        self.expected_uid = os.getuid() if expected_uid is None else expected_uid
+        _validate_socket_path(self.socket_path)
+        if type(self.expected_uid) is not int or self.expected_uid < 0:
+            raise ValueError("helper peer UID must be a non-negative integer")
+        self._listener: socket.socket | None = None
+
+    def listen(self, *, backlog: int = 8) -> None:
+        if self._listener is not None:
+            raise HelperOwnerError("helper server is already listening")
+        if not 1 <= backlog <= 128:
+            raise ValueError("helper socket backlog must be 1..128")
+        parent = self.socket_path.parent
+        parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        parent_info = parent.stat()
+        if parent_info.st_uid != os.getuid() or not stat.S_ISDIR(parent_info.st_mode):
+            raise HelperOwnerError("helper socket directory must be owned by the current user")
+        _remove_stale_socket(self.socket_path)
+        listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            listener.bind(str(self.socket_path))
+            os.chmod(self.socket_path, 0o600)
+            listener.listen(backlog)
+            self._listener = listener
+        except OSError:
+            listener.close()
+            _remove_stale_socket(self.socket_path, allow_missing=True)
+            raise
+
+    def serve_once(self) -> None:
+        if self._listener is None:
+            raise HelperOwnerError("helper server is not listening")
+        connection, _ = self._listener.accept()
+        with connection:
+            _verify_peer_uid(connection, self.expected_uid)
+            connection.setblocking(False)
+            handshake_deadline = time.monotonic() + MAX_HELPER_HANDSHAKE_SECONDS
+            request_frame = read_helper_frame_until(
+                connection.fileno(),
+                maximum=MAX_HELPER_REQUEST_BYTES,
+                deadline_monotonic=handshake_deadline,
+            )
+            dispatch = decode_request(request_frame[4:])
+            remaining = (dispatch.deadline - datetime.now(timezone.utc)).total_seconds()
+            if remaining <= 0:
+                raise HardwareError("helper rejected an expired dispatch before execution")
+            _validate_dispatch_target(dispatch, self.adapter.inspect())
+            if dispatch.deadline <= datetime.now(timezone.utc):
+                raise HardwareError("helper rejected a dispatch whose deadline elapsed during preflight")
+            operation_deadline = time.monotonic() + remaining
+            result = self.adapter.execute(dispatch)
+            if result.operation_id != dispatch.operation_id:
+                raise HardwareError("device backend returned a mismatched operation ID")
+            if result.boot_epoch != dispatch.boot_epoch:
+                raise HardwareError("device backend returned a mismatched boot epoch")
+            _validate_dispatch_target(dispatch, self.adapter.inspect())
+            write_helper_frame_until(
+                connection.fileno(),
+                encode_result(result),
+                maximum=MAX_HELPER_RESPONSE_BYTES,
+                deadline_monotonic=operation_deadline,
+            )
+
+    def close(self) -> None:
+        listener, self._listener = self._listener, None
+        if listener is not None:
+            listener.close()
+        _remove_stale_socket(self.socket_path, allow_missing=True)
+
+    def __enter__(self) -> "HelperServer":
+        self.listen()
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        del exc_type, exc, traceback
+        self.close()
+
+
+def start_exclusive_helper(
+    lock_path: Path,
+    socket_path: Path,
+    backend_factory: Callable[[], HardwareAdapter],
+) -> tuple[HelperOwnerLock, HelperServer]:
+    """Acquire ownership before constructing a fixed in-process backend.
+
+    The caller must keep the returned lock alive until after the server closes.
+    Production wiring should provide a statically selected backend factory; do
+    not derive an import path, command, or module from remote request data.
+    """
+
+    lock = HelperOwnerLock(lock_path)
+    lock.__enter__()
+    try:
+        backend = backend_factory()
+        server = HelperServer(socket_path, backend)
+        server.listen()
+    except Exception:
+        lock.__exit__(None, None, None)
+        raise
+    return lock, server
+
+
+def close_exclusive_helper(lock: HelperOwnerLock, server: HelperServer) -> None:
+    """Close the endpoint before releasing its device-ownership lease."""
+
+    try:
+        server.close()
+    finally:
+        lock.__exit__(None, None, None)
+
+
+def _verify_peer_uid(connection: socket.socket, expected_uid: int) -> None:
+    if not hasattr(socket, "SO_PEERCRED"):
+        raise HelperOwnerError("Unix peer credentials are unavailable on this platform")
+    try:
+        credentials = connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
+        _pid, uid, _gid = struct.unpack("3i", credentials)
+    except OSError as exc:
+        raise HelperOwnerError("could not verify helper socket peer credentials") from exc
+    if uid != expected_uid:
+        raise HelperOwnerError("helper socket peer UID is not authorized")
+
+
+def _validate_dispatch_target(dispatch: HardwareDispatch, snapshot: TargetSnapshot) -> None:
+    if not snapshot.available or not snapshot.qualified:
+        raise HardwareError("helper target is unavailable or not physically qualified")
+    if snapshot.target_id != dispatch.target_identity:
+        raise HardwareError("helper refused a dispatch for a different target identity")
+    if snapshot.boot_epoch != dispatch.boot_epoch:
+        raise HardwareError("helper refused a dispatch for a stale target boot epoch")
+    if snapshot.configuration_digest != dispatch.configuration_digest:
+        raise HardwareError("helper refused a dispatch for a stale target configuration")
+    capabilities = {
+        capability.name: capability
+        for capability in snapshot.capabilities
+        if capability.version == 1
+    }
+    operation = dispatch.operation
+    if isinstance(operation, InspectRegister):
+        capability = capabilities.get("inspect_register")
+        required_bytes = operation.width_bytes
+    elif isinstance(operation, CaptureMemory):
+        capability = capabilities.get("capture_memory")
+        required_bytes = operation.length
+    else:
+        raise HardwareError("helper rejected an unsupported live operation type")
+    if capability is None or capability.mutating:
+        raise HardwareError("helper target does not advertise this read-only operation")
+    if required_bytes > capability.max_result_bytes:
+        raise HardwareError("helper operation exceeds the advertised capability bound")
+
+
+def _validate_socket_path(path: Path) -> None:
+    if not path.is_absolute() or len(os.fsencode(path)) > MAX_HELPER_SOCKET_PATH_BYTES:
+        raise ValueError("helper socket path must be absolute and fit Linux sockaddr_un")
+
+
+def _remove_stale_socket(path: Path, *, allow_missing: bool = False) -> None:
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        if allow_missing:
+            return
+        return
+    if not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.getuid():
+        raise HelperOwnerError("refusing to replace a non-socket or foreign helper path")
+    probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        probe.settimeout(0.2)
+        probe.connect(str(path))
+    except OSError as exc:
+        import errno
+
+        if exc.errno in {errno.ECONNREFUSED, errno.ENOENT}:
+            path.unlink(missing_ok=True)
+        else:
+            raise HelperOwnerError("could not determine whether helper socket is active") from exc
+    else:
+        raise HelperOwnerError("another helper is already listening on this socket")
+    finally:
+        probe.close()
