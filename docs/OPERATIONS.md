@@ -368,6 +368,18 @@ Pause the session and wait for Codex jobs and operations to reach terminal,
 resolved states. Create and verify a final bundle before removing the service.
 Keep the data root if its evidence or Codex state is still needed.
 
+If this installation uses the dedicated Tailscale HTTPS listener shown above,
+check `tailscale serve status` and remove that proxy before removing the
+application:
+
+```bash
+sudo tailscale serve --https=443 off
+```
+
+This disables the HTTPS listener on port 443. If it also serves other
+applications, preserve their routes and remove only the lab proxy through
+the Tailscale configuration instead.
+
 ```bash
 sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab status
 sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab jobs

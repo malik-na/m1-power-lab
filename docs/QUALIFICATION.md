@@ -25,6 +25,19 @@
 - Live app-server startup, authenticated completion, and terminal usage are
   demonstrated on the T480. Cancellation, sandbox escape checks, and recovery
   from interrupted live turns remain unqualified.
+- A subsequent chat through the deployed `3c49b9e` service failed before a
+  model turn: Bubblewrap reported `Can't mkdir parents for /: Function not
+  implemented` while loading AGENTS.md. A thread-start-only probe in a
+  temporary unit reproduced the same error in 2.497 seconds. Changing only
+  `RestrictSUIDSGID` to `no` passed with active profile `m1lab-read-only` in
+  1.800 seconds. The prepared service fix is `193dd7e`; deployment is pending
+  exact owner approval of this property change.
+  The failed job `job_b9f0d62514ce4f54bf27a583f8d9c005` remains in history.
+  Its usage hold was resolved with a zero additional token bound using the
+  [pinned Codex source](https://github.com/openai/codex/blob/rust-v0.156.0/codex-rs/core/src/session/session.rs#L1391): the AGENTS.md refresh failure aborts before model
+  client construction, prewarming, or submission-loop creation. This
+  evidence applies only to that exact failure; generic internal RPC errors
+  remain uncertain. The session is paused.
 - Opt-in lab mode on release `3c49b9e` acquired a logind block inhibitor for
   `sleep:idle:handle-lid-switch` as `m1lab` while the service was active and
   `/overview` returned HTTP 200. The inhibitor disappeared after service stop;
