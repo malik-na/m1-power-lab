@@ -44,6 +44,13 @@ flowchart LR
 - The helper codec does not open USB or serial devices. The helper process,
   exclusive physical interface ownership, and transport recovery remain
   unqualified until the ThinkPad inventory and recovery path are recorded.
+- Finite native runs have separate immutable image and launch manifests. The
+  result channel binds checksummed, sequenced identity/data/terminal frames to
+  the run, image, target, boot epoch and configuration. Host code preserves
+  partial bytes and classifies missing, malformed, late, or interrupted results
+  as unknown. The framing helpers use caller-owned descriptors and deadlines;
+  they do not build or launch target images, connect to hardware, or establish
+  target return behavior. Those remain physical qualification gates.
 - The browser submits an idempotent command ID and expected session revision.
   It never talks to SQLite, Codex or a device directly.
 

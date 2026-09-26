@@ -19,7 +19,7 @@ This file distinguishes implemented behavior from physical qualification.
 | ThinkPad-to-Mac transport | Unqualified | Identify cable/ports, m1n1 versions, target identity, boot epoch and exclusive helper ownership |
 | Hardware-helper wire protocol | Versioned bounded request/result codec, strict length-prefixed framing, and blocking short-read/write handling implemented | Transport deadlines remain caller-owned; no helper server owns a device yet; physical interface selection and exclusivity await T480 inventory |
 | Live m1n1 adapter | Disabled | Implement only after transport and recovery qualification |
-| Native result channel | Unqualified | Demonstrate finite harness result and return/re-identification |
+| Native run manifests and result channel | Host contract implemented | Immutable image/launch manifests, bounded checksummed frames, target identity binding, and unknown/partial capture handling are implemented; image build, live harness run, return/re-identification, and recovery remain physical gates |
 | Power measurement | Unqualified | Establish sensor provenance, energy boundary, cadence, noise and observer effect |
 | Real investigation | Not started | Requires the live transport and measurement gates |
 
