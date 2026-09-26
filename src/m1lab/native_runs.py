@@ -293,8 +293,12 @@ def _screen_capture_payload(payload: bytes) -> tuple[bytes, str]:
         if not line or len(line) > 1_048_576:
             return b"", "omitted_unknown_record_shape"
         try:
-            record = json.loads(line.decode("utf-8"))
-        except (UnicodeError, json.JSONDecodeError, RecursionError):
+            record = json.loads(
+                line.decode("utf-8"),
+                object_pairs_hook=_reject_duplicate_json_keys,
+                parse_constant=_reject_json_constant,
+            )
+        except (UnicodeError, ValueError, RecursionError):
             return b"", "omitted_unknown_record_shape"
         if not _valid_raw_sample(record):
             return b"", "omitted_unknown_record_shape"
@@ -305,18 +309,43 @@ def _screen_capture_payload(payload: bytes) -> tuple[bytes, str]:
             return b"", "omitted_invalid_sample_sequence"
         screened = scrub_text(line.decode("utf-8")).encode("utf-8")
         try:
-            screened_record = json.loads(screened.decode("utf-8"))
-        except (UnicodeError, json.JSONDecodeError, RecursionError):
+            screened_record = json.loads(
+                screened.decode("utf-8"),
+                object_pairs_hook=_reject_duplicate_json_keys,
+                parse_constant=_reject_json_constant,
+            )
+        except (UnicodeError, ValueError, RecursionError):
             return b"", "omitted_screening_failure"
         if not _valid_raw_sample(screened_record):
             return b"", "omitted_screening_failure"
-        safe_lines.append(screened)
+        safe_lines.append(
+            json.dumps(
+                screened_record,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+                allow_nan=False,
+            ).encode("utf-8")
+        )
         expected_index += 1
         previous_monotonic_ns = record["monotonic_ns"]
     output = b"\n".join(safe_lines) + b"\n"
     if len(output) > MAX_NATIVE_OUTPUT_BYTES:
         return b"", "omitted_screened_output_over_bound"
     return output, "screened_known_collector_records"
+
+
+def _reject_duplicate_json_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("capture record contains a duplicate key")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"capture record contains invalid JSON constant {value}")
 
 
 def _valid_raw_sample(record: object) -> bool:
