@@ -62,8 +62,9 @@ flowchart LR
   worktrees. The runner captures tracked dirty diffs, exact recipe commands,
   tool versions, configuration, declared inputs, and bounded output hashes,
   then publishes every artifact and the image manifest into the current
-  session. Builds consume active-time allowance, stop when the session pauses
-  or disk reserve falls, and never dispatch target artifacts. The M1-specific
+  session using streaming file hashing/copying, including large root filesystems.
+  Builds consume active-time allowance, stop when the session pauses or disk
+  reserve falls, and never dispatch target artifacts. The M1-specific
   recipe and host/target cross-toolchain remain pending T480 inventory.
 - The browser submits an idempotent command ID and expected session revision.
   It never talks to SQLite, Codex or a device directly.

@@ -34,8 +34,10 @@ reached, command output exceeds its bound, or the 512 MiB scratch-disk reserve
 would be crossed. Tracked dirty changes are captured as a binary patch and
 applied to the detached worktree; untracked files and repositories containing
 submodules are rejected because their full source state is not captured.
-Generated tracked-source changes are rejected. Individual output artifacts
-are limited to 256 MiB and total published build data to 512 MiB.
+Generated tracked-source changes are rejected. Artifacts are hashed and
+published by streaming without loading root filesystem images into memory.
+Individual artifacts are limited to 2 GiB and total build data to 4 GiB, with
+the journal and worktree disk reserves checked before and during the build.
 
 Recipes declare kernel, DTB, initramfs, collector, payload, and root filesystem
 artifacts. The runner publishes each input/output and the immutable image

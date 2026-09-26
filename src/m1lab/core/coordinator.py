@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 import hashlib
+from pathlib import Path
 import sqlite3
 from typing import Any
 
@@ -300,6 +301,30 @@ class CoreApp:
             raise ValidationError("artifact provenance requires a session_id")
         self.session(session_id)
         return self.journal.publish_artifact(content, media_type=media_type, provenance=provenance)
+
+    def publish_artifact_file(
+        self,
+        source: Path,
+        *,
+        expected_sha256: str,
+        expected_size: int,
+        max_bytes: int,
+        media_type: str = "application/octet-stream",
+        provenance: dict[str, Any] | None = None,
+    ) -> ArtifactRecord:
+        provenance = provenance or {}
+        session_id = provenance.get("session_id")
+        if not isinstance(session_id, str) or not session_id:
+            raise ValidationError("artifact provenance requires a session_id")
+        self.session(session_id)
+        return self.journal.publish_artifact_file(
+            source,
+            expected_sha256=expected_sha256,
+            expected_size=expected_size,
+            max_bytes=max_bytes,
+            media_type=media_type,
+            provenance=provenance,
+        )
 
     def artifact(self, artifact_id: str) -> ArtifactRecord:
         return self.journal.artifact(artifact_id)

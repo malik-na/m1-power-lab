@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import sqlite3
 import shutil
+import stat
 import threading
 from typing import Any, Iterator, Mapping, Sequence
 from uuid import uuid4
@@ -473,6 +474,132 @@ class Journal:
         assert row is not None
         return self._link_existing_artifact(row, provenance or {}, now, emit_event=False)
 
+    def publish_artifact_file(
+        self,
+        source: Path,
+        *,
+        expected_sha256: str,
+        expected_size: int,
+        max_bytes: int,
+        media_type: str = "application/octet-stream",
+        provenance: Mapping[str, Any] | None = None,
+    ) -> ArtifactRecord:
+        """Stream a verified regular file into the immutable artifact store."""
+
+        if (
+            not isinstance(source, Path)
+            or not isinstance(expected_sha256, str)
+            or len(expected_sha256) != 64
+            or any(char not in "0123456789abcdef" for char in expected_sha256)
+            or type(expected_size) is not int
+            or type(max_bytes) is not int
+            or not 1 <= expected_size <= max_bytes
+        ):
+            raise ValidationError("streamed artifact digest or size bound is invalid")
+        source_path = source.expanduser().absolute()
+        try:
+            source_info = source_path.lstat()
+            if not stat.S_ISREG(source_info.st_mode) or source_info.st_size != expected_size:
+                raise ValidationError("streamed artifact source must be a regular file of the declared size")
+            source_fd = os.open(
+                source_path,
+                os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+            )
+        except OSError as exc:
+            raise ValidationError(f"streamed artifact source is unavailable: {exc}") from exc
+        artifact_id = f"artifact_{expected_sha256}"
+        relative_path = f"{expected_sha256[:2]}/{expected_sha256[2:4]}/{expected_sha256}"
+        destination = self.paths.artifacts / relative_path
+        staging = self.paths.staging / f"{uuid4().hex}.partial"
+        now = utc_now()
+        digest = hashlib.sha256()
+        size = 0
+        try:
+            opened_info = os.fstat(source_fd)
+            if (
+                not stat.S_ISREG(opened_info.st_mode)
+                or opened_info.st_dev != source_info.st_dev
+                or opened_info.st_ino != source_info.st_ino
+                or opened_info.st_size != expected_size
+            ):
+                raise ValidationError("streamed artifact source changed before it could be copied")
+            self.ensure_artifact_capacity(additional_bytes=expected_size)
+            input_stream = os.fdopen(source_fd, "rb", closefd=True)
+            source_fd = -1
+            with input_stream, staging.open("xb") as output_stream:
+                while chunk := input_stream.read(1_048_576):
+                    size += len(chunk)
+                    if size > max_bytes or size > expected_size:
+                        raise ValidationError("streamed artifact exceeded its declared size bound")
+                    digest.update(chunk)
+                    output_stream.write(chunk)
+                output_stream.flush()
+                os.fsync(output_stream.fileno())
+                final_info = os.fstat(input_stream.fileno())
+                if (
+                    final_info.st_dev != opened_info.st_dev
+                    or final_info.st_ino != opened_info.st_ino
+                    or final_info.st_size != opened_info.st_size
+                    or final_info.st_mtime_ns != opened_info.st_mtime_ns
+                ):
+                    raise ValidationError("streamed artifact source changed while being copied")
+            if size != expected_size or digest.hexdigest() != expected_sha256:
+                raise ValidationError("streamed artifact digest or size does not match its manifest")
+            self.ensure_artifact_capacity(staged_bytes=size)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            existing = self.one("SELECT * FROM artifacts WHERE sha256 = ?", (expected_sha256,))
+            if existing is not None:
+                if destination.is_symlink() or not _artifact_file_matches(
+                    destination, expected_size, expected_sha256
+                ):
+                    raise ValidationError(f"artifact {artifact_id} metadata exists but its file is missing or invalid")
+                return self._link_existing_artifact(existing, provenance or {}, now)
+            if destination.is_symlink():
+                raise ValidationError("refusing to replace a symlink at an artifact destination")
+            os.replace(staging, destination)
+            directory_fd = os.open(destination.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+            try:
+                with self.transaction() as tx:
+                    tx.execute(
+                        "INSERT INTO artifacts VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
+                        (
+                            artifact_id,
+                            expected_sha256,
+                            expected_size,
+                            media_type,
+                            relative_path,
+                            json_dump(provenance or {}),
+                            iso(now),
+                        ),
+                    )
+                    self.append_event(
+                        tx,
+                        kind="artifact.published",
+                        session_id=(provenance or {}).get("session_id"),
+                        subject_id=artifact_id,
+                        data={"sha256": expected_sha256, "size_bytes": expected_size, "media_type": media_type},
+                    )
+            except sqlite3.IntegrityError:
+                row = self.one("SELECT * FROM artifacts WHERE sha256 = ?", (expected_sha256,))
+                if row is None or destination.is_symlink() or not _artifact_file_matches(
+                    destination, expected_size, expected_sha256
+                ):
+                    raise
+                return self._link_existing_artifact(row, provenance or {}, now)
+            row = self.one("SELECT * FROM artifacts WHERE id = ?", (artifact_id,))
+            assert row is not None
+            return self._link_existing_artifact(row, provenance or {}, now, emit_event=False)
+        except OSError as exc:
+            raise ValidationError(f"streamed artifact publication failed: {exc}") from exc
+        finally:
+            if source_fd >= 0:
+                os.close(source_fd)
+            staging.unlink(missing_ok=True)
+
     def ensure_artifact_capacity(
         self, additional_bytes: int = 0, *, staged_bytes: int = 0
     ) -> None:
@@ -633,9 +760,10 @@ def _file_sha256(path: Path) -> str:
 
 def _artifact_file_matches(path: Path, size_bytes: int, sha256: str) -> bool:
     try:
+        info = path.lstat()
         return (
-            path.is_file()
-            and path.stat().st_size == size_bytes
+            stat.S_ISREG(info.st_mode)
+            and info.st_size == size_bytes
             and _file_sha256(path) == sha256
         )
     except OSError:

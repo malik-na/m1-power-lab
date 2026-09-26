@@ -16,6 +16,7 @@ import os
 from pathlib import Path, PurePosixPath
 import signal
 import shutil
+import stat
 import subprocess
 import tempfile
 import time
@@ -32,8 +33,8 @@ from m1lab.core.models import ACTIVE_PHASES
 
 
 MAX_BUILD_PATCH_BYTES = 16 * 1_048_576
-MAX_BUILD_ARTIFACT_BYTES = 256 * 1_048_576
-MAX_BUILD_TOTAL_BYTES = 512 * 1_048_576
+MAX_BUILD_ARTIFACT_BYTES = 2 * 1_024 * 1_024 * 1_024
+MAX_BUILD_TOTAL_BYTES = 4 * 1_024 * 1_024 * 1_024
 MAX_BUILD_LOG_BYTES = 2 * 1_048_576
 MAX_BUILD_RECIPE_BYTES = 256 * 1024
 MAX_RECIPE_COMMANDS = 32
@@ -317,11 +318,11 @@ def build_and_publish(
     build_id = f"build_{uuid4().hex}"
     session_inputs: list[ArtifactRecord] = []
     session_outputs: list[ArtifactRecord] = []
-    pending_artifacts: list[tuple[str, str, bytes, str]] = []
+    pending_artifacts: list[tuple[str, str, bytes | Path, str, int, str]] = []
     input_manifest: list[ManifestArtifact] = []
     output_manifest: list[ManifestArtifact] = []
     total_artifact_bytes = 0
-    config_bytes: bytes | None = None
+    config_digest: str | None = None
     collector_digest: str | None = None
     total_deadline = budget_started + maximum_seconds
     with tempfile.TemporaryDirectory(prefix=f"{build_id}_", dir=work_root) as temporary:
@@ -359,35 +360,73 @@ def build_and_publish(
             _require_active_build_session(core, session_id, total_deadline)
             if patch:
                 total_artifact_bytes = _check_build_size(total_artifact_bytes, len(patch))
-                pending_artifacts.append(("source_diff.patch", "source_diff", patch, "application/vnd.git-patch"))
+                pending_artifacts.append((
+                    "source_diff.patch",
+                    "source_diff",
+                    patch,
+                    hashlib.sha256(patch).hexdigest(),
+                    len(patch),
+                    "application/vnd.git-patch",
+                ))
                 input_manifest.append(_manifest_artifact("source_diff.patch", "source_diff", patch))
 
             recipe_bytes = _recipe_bytes(recipe)
             total_artifact_bytes = _check_build_size(total_artifact_bytes, len(recipe_bytes))
-            pending_artifacts.append(("build_recipe.json", "build_recipe", recipe_bytes, "application/json"))
+            pending_artifacts.append((
+                "build_recipe.json",
+                "build_recipe",
+                recipe_bytes,
+                hashlib.sha256(recipe_bytes).hexdigest(),
+                len(recipe_bytes),
+                "application/json",
+            ))
             input_manifest.append(_manifest_artifact("build_recipe.json", "build_recipe", recipe_bytes))
 
             for item in (recipe.configuration, *recipe.inputs):
                 _require_active_build_session(core, session_id, total_deadline)
-                content = _read_build_file(worktree, item.path)
-                total_artifact_bytes = _check_build_size(total_artifact_bytes, len(content))
-                pending_artifacts.append((item.name, item.role, content, item.media_type))
-                entry = _manifest_artifact(item.name, item.role, content)
+                artifact_path, artifact_size, artifact_digest = _describe_build_file(worktree, item.path)
+                total_artifact_bytes = _check_build_size(total_artifact_bytes, artifact_size)
+                pending_artifacts.append((
+                    item.name,
+                    item.role,
+                    artifact_path,
+                    artifact_digest,
+                    artifact_size,
+                    item.media_type,
+                ))
+                entry = ManifestArtifact(
+                    name=item.name,
+                    role=item.role,
+                    sha256=artifact_digest,
+                    size_bytes=artifact_size,
+                )
                 input_manifest.append(entry)
                 if item is recipe.configuration:
-                    config_bytes = content
+                    config_digest = artifact_digest
 
             for item in recipe.outputs:
                 _require_active_build_session(core, session_id, total_deadline)
-                content = _read_build_file(worktree, item.path)
-                total_artifact_bytes = _check_build_size(total_artifact_bytes, len(content))
-                pending_artifacts.append((item.name, item.role, content, item.media_type))
-                entry = _manifest_artifact(item.name, item.role, content)
+                artifact_path, artifact_size, artifact_digest = _describe_build_file(worktree, item.path)
+                total_artifact_bytes = _check_build_size(total_artifact_bytes, artifact_size)
+                pending_artifacts.append((
+                    item.name,
+                    item.role,
+                    artifact_path,
+                    artifact_digest,
+                    artifact_size,
+                    item.media_type,
+                ))
+                entry = ManifestArtifact(
+                    name=item.name,
+                    role=item.role,
+                    sha256=artifact_digest,
+                    size_bytes=artifact_size,
+                )
                 output_manifest.append(entry)
                 if item.role == "collector":
-                    collector_digest = entry.sha256
+                    collector_digest = artifact_digest
 
-            if config_bytes is None or collector_digest is None:
+            if config_digest is None or collector_digest is None:
                 raise BuildError("build recipe did not produce configuration and collector evidence")
             if time.monotonic() > total_deadline:
                 raise BuildError("build exceeded its total runtime bound")
@@ -398,7 +437,7 @@ def build_and_publish(
                 source_diff_sha256=hashlib.sha256(patch).hexdigest() if patch else None,
                 toolchain="; ".join(Path(tool.argv[0]).name for tool in recipe.tools),
                 toolchain_version="\n".join(tool_versions),
-                configuration_sha256=hashlib.sha256(config_bytes).hexdigest(),
+                configuration_sha256=config_digest,
                 firmware_references=recipe.firmware_references,
                 dependencies=tuple((*recipe.dependencies, f"m1lab-recipe:{recipe.recipe_id}")),
                 inputs=tuple(input_manifest),
@@ -410,11 +449,22 @@ def build_and_publish(
             )
             encoded_manifest = encode_native_manifest(manifest)
             _require_active_build_session(core, session_id, total_deadline)
-            for name, role, content, media_type in pending_artifacts:
+            for name, role, content, digest, size_bytes, media_type in pending_artifacts:
                 _require_active_build_session(core, session_id, total_deadline)
-                record = _publish_bytes(
-                    core, session_id, build_id, build_role, role, content, media_type
-                )
+                provenance = _build_provenance(session_id, build_id, build_role, role)
+                if isinstance(content, Path):
+                    record = core.publish_artifact_file(
+                        content,
+                        expected_sha256=digest,
+                        expected_size=size_bytes,
+                        max_bytes=MAX_BUILD_ARTIFACT_BYTES,
+                        media_type=media_type,
+                        provenance=provenance,
+                    )
+                else:
+                    record = _publish_bytes(
+                        core, session_id, build_id, build_role, role, content, media_type
+                    )
                 if role == "source_diff" or any(item.name == name for item in input_manifest):
                     session_inputs.append(record)
                 else:
@@ -532,7 +582,7 @@ def _kill_process_group(process: subprocess.Popen[bytes]) -> None:
     process.wait()
 
 
-def _read_build_file(root: Path, relative: str) -> bytes:
+def _describe_build_file(root: Path, relative: str) -> tuple[Path, int, str]:
     path = _inside(root, relative)
     try:
         info = path.lstat()
@@ -540,13 +590,17 @@ def _read_build_file(root: Path, relative: str) -> bytes:
             raise BuildError(f"build artifact is missing, empty, or not a regular file: {relative}")
         if info.st_size > MAX_BUILD_ARTIFACT_BYTES:
             raise BuildError(f"build artifact exceeds its {MAX_BUILD_ARTIFACT_BYTES}-byte bound")
-        with path.open("rb") as stream:
-            content = stream.read(MAX_BUILD_ARTIFACT_BYTES + 1)
+        digest = _file_sha256(path)
+        after = path.lstat()
     except OSError as exc:
-        raise BuildError(f"could not read build artifact {relative}: {exc}") from exc
-    if len(content) != info.st_size or len(content) > MAX_BUILD_ARTIFACT_BYTES:
+        raise BuildError(f"could not hash build artifact {relative}: {exc}") from exc
+    if (
+        not stat.S_ISREG(after.st_mode)
+        or after.st_size != info.st_size
+        or after.st_mtime_ns != info.st_mtime_ns
+    ):
         raise BuildError(f"build artifact changed while being read: {relative}")
-    return content
+    return path, info.st_size, digest
 
 
 def _resolve_tool(executable: str, search_path: str) -> Path:
@@ -579,14 +633,23 @@ def _publish_bytes(
     return core.publish_artifact(
         content,
         media_type=media_type,
-        provenance={
-            "session_id": session_id,
-            "record_type": "native_build_artifact",
-            "build_id": build_id,
-            "build_role": build_role,
-            "role": role,
-        },
+        provenance=_build_provenance(session_id, build_id, build_role, role),
     )
+
+
+def _build_provenance(
+    session_id: str,
+    build_id: str,
+    build_role: Literal["known_good", "candidate"],
+    role: str,
+) -> dict[str, str]:
+    return {
+        "session_id": session_id,
+        "record_type": "native_build_artifact",
+        "build_id": build_id,
+        "build_role": build_role,
+        "role": role,
+    }
 
 
 def _manifest_artifact(name: str, role: str, content: bytes) -> ManifestArtifact:
