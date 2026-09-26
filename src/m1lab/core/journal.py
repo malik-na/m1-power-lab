@@ -18,7 +18,7 @@ from .errors import NotFoundError, ValidationError
 from .models import ArtifactRecord, EventRecord, new_id, utc_now
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 JOURNAL_DISK_RESERVE_BYTES = 512 * 1024 * 1024
 LARGE_ARTIFACT_THRESHOLD_BYTES = 1 * 1024 * 1024
 LARGE_ARTIFACT_DISK_RESERVE_BYTES = 1024 * 1024 * 1024
@@ -62,6 +62,37 @@ CREATE TABLE IF NOT EXISTS events (
     occurred_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS events_session_cursor ON events(session_id, cursor);
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    owner_login TEXT NOT NULL,
+    endpoint TEXT NOT NULL UNIQUE,
+    p256dh TEXT NOT NULL,
+    auth_secret TEXT NOT NULL,
+    enrolled_after_cursor INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    revoked_at TEXT
+);
+CREATE INDEX IF NOT EXISTS push_subscriptions_active
+    ON push_subscriptions(session_id, revoked_at);
+CREATE TABLE IF NOT EXISTS push_deliveries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    event_cursor INTEGER NOT NULL,
+    subscription_id TEXT NOT NULL,
+    category TEXT NOT NULL,
+    status TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    attempted_at TEXT,
+    completed_at TEXT,
+    UNIQUE(session_id, event_cursor, subscription_id, category)
+);
+CREATE TABLE IF NOT EXISTS push_cursors (
+    session_id TEXT PRIMARY KEY,
+    cursor INTEGER NOT NULL,
+    updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS owner_commands (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,

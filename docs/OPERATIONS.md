@@ -116,6 +116,35 @@ owner. Restrict the tailnet policy to that owner and do not enable Funnel. Test
 the four views, reconnect behavior, and approval handling from the iPhone before
 installing the site on its Home Screen.
 
+## Optional owner notifications
+
+Push delivery is disabled until all three VAPID settings are configured. On
+the ThinkPad, generate a stable key pair in the private service state directory
+and print the public application-server key:
+
+```bash
+sudo install -d -o m1lab -g m1lab -m 0700 /var/lib/m1-power-lab/vapid
+sudo -u m1lab sh -c 'umask 077 && cd /var/lib/m1-power-lab/vapid && \
+  /opt/m1-power-lab/current/.venv/bin/vapid --gen && \
+  chmod 0600 private_key.pem && chmod 0644 public_key.pem && \
+  /opt/m1-power-lab/current/.venv/bin/vapid --applicationServerKey'
+```
+
+Set `M1LAB_VAPID_PUBLIC_KEY` to the printed key,
+`M1LAB_VAPID_PRIVATE_KEY` to
+`/var/lib/m1-power-lab/vapid/private_key.pem`, and
+`M1LAB_VAPID_SUBJECT` to an owner contact such as `mailto:owner@example.com`
+in `/etc/m1-power-lab.env`. Keep the private key readable only by the service
+account and preserve the same pair across releases; rotating it invalidates
+existing browser subscriptions. Restart the service after configuration.
+
+The owner explicitly enables notifications from the interface and can revoke
+them there. Alerts use generic text and fixed private-view paths. Push delivery
+is best effort: denied permissions, offline phones, expired subscriptions, or
+delivery delays never change coordinator state or its approval/recovery queue.
+Actual Home Screen behavior and delivery limitations still need qualification
+on the iPhone 12 mini.
+
 ## Operator recovery commands
 
 The CLI can inspect evidence and repair explicitly uncertain durable state:

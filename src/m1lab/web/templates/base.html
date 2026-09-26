@@ -26,6 +26,11 @@
     <div class="connection-pill is-connecting" id="connection-state" role="status" aria-live="polite">
       <span class="status-dot"></span><span>Connecting</span>
     </div>
+    <div class="push-controls" id="push-controls" hidden>
+      <button class="text-button" id="push-enable" type="button" hidden>Enable notifications</button>
+      <button class="text-button" id="push-disable" type="button" hidden>Turn off notifications</button>
+      <span id="push-status" role="status" aria-live="polite"></span>
+    </div>
   </header>
 
   <div class="update-strip" id="update-strip" hidden>

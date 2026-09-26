@@ -58,6 +58,7 @@ from m1lab.core.journal import JOURNAL_DISK_RESERVE_BYTES
 from m1lab.core.models import new_id, utc_now
 from m1lab.experiment import ExperimentService
 from m1lab.investigator import EvidenceExcerpt, InvestigationOrchestrator, InvestigationRequest
+from m1lab.notifications import PushConfig
 from m1lab.science import (
     ClaimEvidence,
     DecisionRecord,
@@ -284,11 +285,19 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
             investigator=investigator,
             model=settings.model,
             workspace=settings.workspace,
+            push_config=PushConfig(
+                public_key=settings.vapid_public_key,
+                private_key=settings.vapid_private_key,
+                subject=settings.vapid_subject,
+            ),
         )
         web_settings = WebSettings(
             trust_tailscale_headers=settings.trust_tailscale_headers,
             owner_login=settings.owner_login,
             csrf_secret=settings.csrf_secret,
+            vapid_public_key=settings.vapid_public_key,
+            vapid_private_key=settings.vapid_private_key,
+            vapid_subject=settings.vapid_subject,
         )
         with _coordinator_lease(settings.paths.root / "coordinator.lock"):
             core.reconcile()

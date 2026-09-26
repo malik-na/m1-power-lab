@@ -37,6 +37,9 @@ p { line-height: 1.48; }
 .topbar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; min-height: 84px; padding: calc(.8rem + env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) .8rem max(1rem, env(safe-area-inset-left)); background: rgba(8,16,28,.88); border-bottom: 1px solid rgba(41,56,77,.7); backdrop-filter: blur(18px); }
 .eyebrow { margin: 0 0 .2rem; color: var(--cyan); font-size: .68rem; font-weight: 800; letter-spacing: .14em; }
 .connection-pill { display: inline-flex; align-items: center; gap: .45rem; min-height: 34px; padding: .35rem .6rem; border-radius: 999px; font-size: .72rem; }
+.push-controls { display: flex; align-items: center; justify-content: flex-end; gap: .35rem; flex-wrap: wrap; }
+.push-controls[hidden] { display: none; }
+#push-status { max-width: 14rem; color: var(--muted); font-size: .68rem; }
 .status-dot { display: inline-block; flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .connection-pill.is-live .status-dot, .status-line .status-dot, .job-running { background: var(--green); box-shadow: 0 0 0 4px rgba(115,221,161,.12); }
 .connection-pill.is-stale .status-dot, .job-waiting { background: var(--amber); }
@@ -136,6 +139,12 @@ details summary { cursor: pointer; }
   .topbar, main { padding-left: calc(92px + 1.5rem); }
   .update-strip { padding-left: calc(92px + 1.5rem); }
   .chat-composer { bottom: 1rem; }
+}
+
+@media (max-width: 420px) {
+  .topbar { flex-wrap: wrap; gap: .3rem; }
+  .push-controls { width: 100%; justify-content: flex-start; }
+  #push-status { max-width: 100%; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .status-dot { transition: background .2s ease, box-shadow .2s ease; }

@@ -32,6 +32,7 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("push", (event) => {
   let data = { title: "M1 Power Lab", body: "The workbench needs attention.", path: "/overview" };
   try { data = { ...data, ...event.data.json() }; } catch (_) {}
+  if (!["/overview", "/approvals"].includes(data.path)) data.path = "/overview";
   event.waitUntil(self.registration.showNotification(data.title, {
     body: data.body,
     icon: "/static/icon-192.png",
@@ -42,6 +43,7 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const path = event.notification.data?.path || "/overview";
+  const requested = event.notification.data?.path;
+  const path = ["/overview", "/approvals"].includes(requested) ? requested : "/overview";
   event.waitUntil(clients.openWindow(path));
 });

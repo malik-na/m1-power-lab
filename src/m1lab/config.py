@@ -19,6 +19,9 @@ class Settings:
     codex_sha256: str
     workspace: Path
     csrf_secret: str
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = ""
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -36,4 +39,7 @@ class Settings:
             codex_sha256=os.getenv("M1LAB_CODEX_SHA256", ""),
             workspace=Path(os.getenv("M1LAB_WORKSPACE", str(workspace_default))).expanduser().resolve(),
             csrf_secret=os.getenv("M1LAB_CSRF_SECRET", ""),
+            vapid_public_key=os.getenv("M1LAB_VAPID_PUBLIC_KEY", ""),
+            vapid_private_key=os.getenv("M1LAB_VAPID_PRIVATE_KEY", ""),
+            vapid_subject=os.getenv("M1LAB_VAPID_SUBJECT", ""),
         )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import json
 import os
@@ -58,6 +59,9 @@ class WebSettings:
     trust_tailscale_headers: bool = False
     owner_login: str | None = None
     csrf_secret: str = ""
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = ""
 
     @classmethod
     def from_env(cls) -> "WebSettings":
@@ -65,6 +69,9 @@ class WebSettings:
             trust_tailscale_headers=os.getenv("M1LAB_TRUST_TAILSCALE_HEADERS") == "1",
             owner_login=os.getenv("M1LAB_OWNER_LOGIN") or None,
             csrf_secret=os.getenv("M1LAB_CSRF_SECRET", ""),
+            vapid_public_key=os.getenv("M1LAB_VAPID_PUBLIC_KEY", ""),
+            vapid_private_key=os.getenv("M1LAB_VAPID_PRIVATE_KEY", ""),
+            vapid_subject=os.getenv("M1LAB_VAPID_SUBJECT", ""),
         )
 
     @property
@@ -89,6 +96,20 @@ class CommandBody(BaseModel):
         except ValueError as exc:
             raise ValueError("command_id must be a UUID") from exc
         return value
+
+
+class PushKeysBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    p256dh: str = Field(min_length=32, max_length=256)
+    auth: str = Field(min_length=16, max_length=128)
+
+
+class PushSubscriptionBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    endpoint: str = Field(min_length=1, max_length=2_048)
+    keys: PushKeysBody
 
 
 class OwnerAuthMiddleware(BaseHTTPMiddleware):
@@ -204,6 +225,24 @@ def create_app(
     app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
     app.add_middleware(BrowserSafetyMiddleware, secret=csrf_secret)
     app.add_middleware(OwnerAuthMiddleware, settings=settings)
+    push_runner = getattr(facade, "run_push_notifications", None)
+    if push_runner is not None and settings.vapid_public_key and settings.vapid_private_key and settings.vapid_subject:
+        async def start_push_delivery() -> None:
+            app.state.push_delivery_task = asyncio.create_task(push_runner())
+
+        async def stop_push_delivery() -> None:
+            task = getattr(app.state, "push_delivery_task", None)
+            if task is None:
+                return
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+        app.router.add_event_handler("startup", start_push_delivery)
+        app.router.add_event_handler("shutdown", stop_push_delivery)
+
     closer = getattr(facade, "close", None)
     if closer is not None:
         app.router.add_event_handler("shutdown", closer)
@@ -270,6 +309,45 @@ def create_app(
         )
         status_code = 409 if receipt.status == "rejected" else 202
         return JSONResponse(asdict(receipt), status_code=status_code)
+
+    @app.get("/api/push/config")
+    async def push_config(owner: OwnerDependency) -> JSONResponse:
+        status = getattr(facade, "push_status", None)
+        if status is None:
+            return JSONResponse({"enabled": False, "enrolled": False, "public_key": None})
+        try:
+            return JSONResponse(status(owner))
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    @app.post("/api/push/subscription")
+    async def push_subscribe(body: PushSubscriptionBody, owner: OwnerDependency) -> JSONResponse:
+        subscribe = getattr(facade, "subscribe_push", None)
+        if subscribe is None:
+            raise HTTPException(status_code=501, detail="Push enrollment is unavailable.")
+        try:
+            subscribe(
+                owner,
+                endpoint=body.endpoint,
+                p256dh=body.keys.p256dh,
+                auth=body.keys.auth,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except (ValueError, RuntimeError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse({"enrolled": True}, status_code=201)
+
+    @app.delete("/api/push/subscription")
+    async def push_unsubscribe(body: PushSubscriptionBody, owner: OwnerDependency) -> JSONResponse:
+        unsubscribe = getattr(facade, "unsubscribe_push", None)
+        if unsubscribe is None:
+            raise HTTPException(status_code=501, detail="Push enrollment is unavailable.")
+        try:
+            changed = unsubscribe(owner, endpoint=body.endpoint)
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        return JSONResponse({"enrolled": False, "revoked": changed})
 
     @app.get("/api/events")
     async def events(request: Request, owner: OwnerDependency, cursor: str | None = None) -> StreamingResponse:

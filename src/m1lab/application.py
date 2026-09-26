@@ -19,6 +19,7 @@ from m1lab.core.errors import CoreError
 from m1lab.core.journal import json_load
 from m1lab.core.models import utc_now
 from m1lab.investigator import InvestigationOrchestrator, InvestigationRequest
+from m1lab.notifications import PushConfig, PushNotifications
 from m1lab.host import HostAdmissionPolicy, LinuxHostMonitor
 from m1lab.science import (
     EvidenceBrief,
@@ -72,6 +73,7 @@ class CoordinatorFacade:
         model: str = "gpt-6-sol",
         workspace: str | os.PathLike[str] | None = None,
         host_monitor: LinuxHostMonitor | None = None,
+        push_config: PushConfig | None = None,
     ):
         self.core = core
         self.session_id = session_id
@@ -79,6 +81,39 @@ class CoordinatorFacade:
         self.model = model
         self.workspace = os.fspath(workspace or os.getcwd())
         self.host_monitor = host_monitor or LinuxHostMonitor(core.journal.paths.root)
+        self.push_notifications = PushNotifications(
+            core,
+            session_id,
+            push_config or PushConfig(),
+            owner_login=core.session(session_id).owner,
+        )
+
+    def push_status(self, owner: Owner) -> dict[str, Any]:
+        self._require_push_owner(owner)
+        return {
+            "enabled": self.push_notifications.enabled,
+            "enrolled": self.push_notifications.enrolled(),
+            "public_key": self.push_notifications.public_key or None,
+        }
+
+    def subscribe_push(
+        self, owner: Owner, *, endpoint: str, p256dh: str, auth: str
+    ) -> None:
+        self._require_push_owner(owner)
+        if not self.push_notifications.enabled:
+            raise RuntimeError("push delivery is not configured")
+        self.push_notifications.subscribe(endpoint=endpoint, p256dh=p256dh, auth=auth)
+
+    def unsubscribe_push(self, owner: Owner, *, endpoint: str) -> bool:
+        self._require_push_owner(owner)
+        return self.push_notifications.unsubscribe(endpoint=endpoint)
+
+    async def run_push_notifications(self) -> None:
+        await self.push_notifications.run()
+
+    def _require_push_owner(self, owner: Owner) -> None:
+        if owner.login != self.core.session(self.session_id).owner:
+            raise PermissionError("selected session belongs to a different owner")
 
     async def get_view(self, view: ViewName, owner: Owner) -> dict[str, Any]:
         snapshot = self.core.snapshot(self.session_id)

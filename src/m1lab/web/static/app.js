@@ -113,6 +113,93 @@
     };
   }
 
+  function pushKeyBytes(base64Url) {
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+  }
+
+  async function updatePushControls() {
+    const controls = document.querySelector("#push-controls");
+    const enable = document.querySelector("#push-enable");
+    const disable = document.querySelector("#push-disable");
+    const status = document.querySelector("#push-status");
+    if (!controls || !enable || !disable || !status) return;
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
+    try {
+      const response = await fetch("/api/push/config", { credentials: "same-origin", cache: "no-store" });
+      const config = await response.json();
+      if (!response.ok || !config.enabled || !config.public_key) return;
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      controls.hidden = false;
+      enable.hidden = Boolean(subscription && config.enrolled);
+      disable.hidden = !subscription || !config.enrolled;
+      status.textContent = Notification.permission === "denied"
+        ? "Notifications are blocked in browser settings."
+        : (subscription && config.enrolled ? "Notifications are enabled." : "Notifications are off.");
+
+      enable.onclick = async () => {
+        enable.disabled = true;
+        try {
+          const permission = Notification.permission === "granted"
+            ? "granted"
+            : await Notification.requestPermission();
+          if (permission !== "granted") {
+            status.textContent = "Notification permission was not granted.";
+            return;
+          }
+          const active = await registration.pushManager.getSubscription() || await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: pushKeyBytes(config.public_key),
+          });
+          const value = active.toJSON();
+          const result = await fetch("/api/push/subscription", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json", "X-CSRF-Token": cookie("m1lab_csrf") },
+            body: JSON.stringify({ endpoint: value.endpoint, keys: value.keys }),
+          });
+          if (!result.ok) throw new Error("The server could not save this subscription.");
+          enable.hidden = true;
+          disable.hidden = false;
+          status.textContent = "Notifications are enabled.";
+        } catch (error) {
+          status.textContent = error.message || "Could not enable notifications.";
+        } finally {
+          enable.disabled = false;
+        }
+      };
+
+      disable.onclick = async () => {
+        disable.disabled = true;
+        try {
+          const active = await registration.pushManager.getSubscription();
+          if (active) {
+            const value = active.toJSON();
+            const response = await fetch("/api/push/subscription", {
+              method: "DELETE",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json", "X-CSRF-Token": cookie("m1lab_csrf") },
+              body: JSON.stringify({ endpoint: value.endpoint, keys: value.keys }),
+            });
+            if (!response.ok) throw new Error("The server could not revoke this subscription.");
+            await active.unsubscribe();
+          }
+          enable.hidden = false;
+          disable.hidden = true;
+          status.textContent = "Notifications are off.";
+        } catch (error) {
+          status.textContent = error.message || "Could not turn off notifications.";
+        } finally {
+          disable.disabled = false;
+        }
+      };
+    } catch (_) {
+      controls.hidden = true;
+    }
+  }
+
   window.addEventListener("online", () => { setConnection("connecting", "Connecting"); });
   window.addEventListener("offline", () => setConnection("offline", "Offline"));
   setInterval(() => {
@@ -120,7 +207,9 @@
   }, 5000);
 
   if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => navigator.serviceWorker.register("/service-worker.js").catch(() => {}));
+    window.addEventListener("load", () => navigator.serviceWorker.register("/service-worker.js")
+      .then(updatePushControls)
+      .catch(() => {}));
   }
   connectEvents();
 })();
