@@ -26,6 +26,19 @@ The inventory reported `usb_devices_enumerated=false`,
 tests passed and the replay demo completed on 2026-09-26. These results do not
 qualify an M1 connection or power measurement.
 
+Follow-up on 2026-09-26: a local m1n1 source checkout was found at
+`/home/naeem/Projects/m1n1`, detached at clean commit
+`06a4601a351ebfd1abb6abba9a44c34e40d94776`. The host has a separate
+Python 3.14.7 environment at `/home/naeem/Projects/m1n1-venv` and an earlier
+standalone connection script at `/home/naeem/Projects/m1n1-connect.py`. The
+script opens `/dev/ttyACM0` directly for NOP handshakes and proxy identity
+queries; it was inspected but not run. That device path was absent during this
+follow-up check. The Mac's running m1n1 build identity and the compatibility
+of host and target revisions remain unverified. The owner reports the Mac is
+running its normal Asahi/ALARM installation, with m1n1 proxy mode reportedly
+on and a USB cable connected to the ThinkPad. Cable type,
+physical ports, and live USB identity have not yet been recorded.
+
 An isolated `m1lab diagnostics` run on the T480 on 2026-09-26 observed AC power,
 12% battery, 62 °C maximum temperature, and 7.7 GiB free disk space. A second
 sample measured 63 °C and 8,292,458,496 bytes free. The current admission
@@ -106,7 +119,7 @@ and mode qualification require owner-observed entries below.
 | ThinkPad OS, kernel, installed toolchain | Observed above; AArch64 and several build tools missing | Install only tools required by the qualified build path |
 | Cable, adapters, port mapping | Unknown | Owner identifies the actual cable and both physical ports; inspect connection on the T480 |
 | USB permissions and device identity | Unknown | With the Mac connected, opt in to enumeration and permission capture on the T480 |
-| Host/target m1n1 commits | Unknown | Record both checked-out revisions and build identities before proxy qualification |
+| Host/target m1n1 commits | Host checkout `06a4601a351ebfd1abb6abba9a44c34e40d94776` found; target build unknown | Verify the target build and compatibility before proxy qualification |
 | Owner attendance | Required for physical connect, reset, recovery, and mode transitions | Owner must be present for each such operation |
 
 ## Modes and recovery matrix
