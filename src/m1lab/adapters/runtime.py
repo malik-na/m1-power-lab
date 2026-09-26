@@ -871,10 +871,22 @@ def _legacy_sandbox(mode: SandboxMode) -> str:
 
 def _sandbox_policy(request: JobRequest) -> dict[str, Any]:
     if request.sandbox is SandboxMode.READ_ONLY:
-        return {"type": "readOnly"}
+        return {
+            "type": "readOnly",
+            "access": {
+                "type": "restricted",
+                "includePlatformDefaults": True,
+                "readableRoots": [str(request.cwd)],
+            },
+        }
     return {
         "type": "workspaceWrite",
         "writableRoots": [str(path) for path in request.writable_roots],
+        "readOnlyAccess": {
+            "type": "restricted",
+            "includePlatformDefaults": True,
+            "readableRoots": [str(request.cwd)],
+        },
         "networkAccess": False,
     }
 

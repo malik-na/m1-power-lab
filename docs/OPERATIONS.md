@@ -74,6 +74,9 @@ Complete the Codex CLI login flow as the `m1lab` account before setting
 XDG paths, PATH, locale, network bypass/TLS settings, and variables explicitly supplied
 by the coordinator. The web CSRF secret and unrelated host variables are not
 inherited. Explicit child environment overrides are limited to that same allowlist.
+Each Codex turn also receives restricted sandbox read access rooted at the
+configured workspace; `CODEX_HOME` and unrelated host files are outside those
+roots. System-provided compatibility paths remain available for the sandbox.
 The systemd unit also gives the coordinator and its Codex child a private `/dev`,
 so they cannot open host USB/serial devices. A future target helper must run as a
 separate service with only its qualified device access; do not remove this
