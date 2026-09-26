@@ -90,6 +90,8 @@ def restore(bundle: Path, root: Path) -> None:
                         raise SystemExit(f"artifact {item.get('id')} failed digest validation")
 
             _validate_database(database, artifact_root, manifest_artifacts)
+            database.chmod(0o600)
+            artifact_root.chmod(0o700)
             stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             previous = root / f"restore-previous-{stamp}"
             previous.mkdir()
@@ -126,6 +128,7 @@ def _extract_member(archive: zipfile.ZipFile, name: str, destination: Path) -> N
         raise SystemExit(f"backup is missing {name}") from exc
     destination.parent.mkdir(parents=True, exist_ok=True)
     with source, destination.open("xb") as target:
+        os.fchmod(target.fileno(), 0o600)
         shutil.copyfileobj(source, target, length=1024 * 1024)
 
 
@@ -182,7 +185,7 @@ def _validate_manifest_artifacts(items: list[object]) -> None:
         if (
             value.get("id") != expected_id
             or value.get("relative_path") != expected_path
-            or not isinstance(value.get("size_bytes"), int)
+            or type(value.get("size_bytes")) is not int
             or value["size_bytes"] < 0
         ):
             raise SystemExit("backup artifact metadata is inconsistent")

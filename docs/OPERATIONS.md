@@ -237,7 +237,8 @@ coordinator lock, checks that its manifest covers exactly the database's
 artifact rows and publication links, verifies every artifact size and digest,
 runs SQLite `quick_check`, and moves the prior database and artifact tree into
 a timestamped `restore-previous-*` directory. Validation finishes before the
-current data root is replaced.
+current data root is replaced. Restored database and artifact files are mode
+0600, and the artifact directory is mode 0700.
 
 ```bash
 sudo systemctl stop m1-power-lab

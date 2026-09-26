@@ -1121,6 +1121,21 @@ def _backup_bundle(core: CoreApp, destination: Path) -> dict[str, Any]:
                 connection.close()
             if dangling:
                 raise ValueError("backup database has artifact links without artifact metadata")
+            for row in artifacts:
+                digest = str(row["sha256"])
+                expected_id = f"artifact_{digest}"
+                expected_path = f"{digest[:2]}/{digest[2:4]}/{digest}"
+                if (
+                    len(digest) != 64
+                    or any(character not in "0123456789abcdef" for character in digest)
+                    or row["id"] != expected_id
+                    or row["relative_path"] != expected_path
+                    or type(row["size_bytes"]) is not int
+                    or row["size_bytes"] < 0
+                ):
+                    raise ValueError(
+                        f"backup database has inconsistent artifact metadata: {row['id']}"
+                    )
             unavailable = [row["id"] for row in artifacts if not row["available"]]
             if unavailable:
                 raise ValueError(
