@@ -10,6 +10,7 @@
   const cursorKey = `m1lab:event-cursor:${sessionId}:${currentView}`;
   let lastEventAt = Date.now();
   let toastTimer;
+  let eventSource = null;
 
   function cookie(name) {
     const entry = document.cookie.split("; ").find((part) => part.startsWith(`${name}=`));
@@ -85,12 +86,17 @@
   document.querySelector("#refresh-state")?.addEventListener("click", () => window.location.reload());
 
   function connectEvents() {
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
     if (!navigator.onLine) {
       setConnection("offline", "Offline");
       return;
     }
     const cursor = localStorage.getItem(cursorKey);
     const source = new EventSource(`/api/events${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+    eventSource = source;
     setConnection("connecting", "Connecting");
     source.onopen = () => {
       lastEventAt = Date.now();
@@ -200,8 +206,14 @@
     }
   }
 
-  window.addEventListener("online", () => { setConnection("connecting", "Connecting"); });
-  window.addEventListener("offline", () => setConnection("offline", "Offline"));
+  window.addEventListener("online", connectEvents);
+  window.addEventListener("offline", () => {
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
+    setConnection("offline", "Offline");
+  });
   setInterval(() => {
     if (navigator.onLine && Date.now() - lastEventAt > 30000) setConnection("stale", "Stale");
   }, 5000);
