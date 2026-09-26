@@ -74,6 +74,10 @@ Complete the Codex CLI login flow as the `m1lab` account before setting
 XDG paths, PATH, locale, network bypass/TLS settings, and variables explicitly supplied
 by the coordinator. The web CSRF secret and unrelated host variables are not
 inherited. Explicit child environment overrides are limited to that same allowlist.
+The systemd unit also gives the coordinator and its Codex child a private `/dev`,
+so they cannot open host USB/serial devices. A future target helper must run as a
+separate service with only its qualified device access; do not remove this
+boundary to enable hardware dispatch.
 The app-server refuses to start if the configured executable is missing or its
 SHA-256 differs from the configured pin. Calculate it with `sha256sum` after
 installing the Codex CLI.

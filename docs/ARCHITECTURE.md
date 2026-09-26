@@ -41,6 +41,10 @@ flowchart LR
   recording their effects as unknown.
 - The current build accepts only `ReplayHardwareAdapter`. The m1n1 adapter is
   an unavailable object that opens no device.
+- The systemd coordinator service uses a private `/dev`, inherited by the
+  Codex app-server child, so model work cannot open host USB or serial devices.
+  A future physical helper requires a separate service with narrowly granted
+  device access; widening the coordinator service is not the integration path.
 - The helper codec does not open USB or serial devices. The helper process,
   exclusive physical interface ownership, and transport recovery remain
   unqualified until the ThinkPad inventory and recovery path are recorded.

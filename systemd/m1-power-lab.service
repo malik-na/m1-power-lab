@@ -23,6 +23,7 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
+PrivateDevices=yes
 ReadWritePaths=/var/lib/m1-power-lab
 LockPersonality=yes
 RestrictSUIDSGID=yes
