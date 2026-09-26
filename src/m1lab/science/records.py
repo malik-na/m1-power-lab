@@ -652,6 +652,7 @@ class ScientificRecordStore:
             ) or counter,
             limitations=limitations,
             next_action=_compact(decision.next_action) if decision else None,
+            decision_delta=_compact(decision.decision_delta) if decision else None,
             competing_hypotheses=competing,
             strongest_support=tuple(
                 _compact(

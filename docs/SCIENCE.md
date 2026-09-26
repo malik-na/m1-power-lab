@@ -77,7 +77,22 @@ Codex must compare the selected experiment's decision value and total cost
 alternative. These estimates are advisory; coordinator budget and operation
 checks remain authoritative.
 
-Codex returns only a typed procedure draft candidate. To validate the candidate
+When a derived result exists, Codex also returns a typed `scientific_decision`
+bound to its exact hypothesis, protocol, and result IDs. It must cite the result
+in supporting or counterevidence, explain `decision_delta`, and propose a
+`next_action`; the CLI takes the outcome only from the deterministic result.
+The next evidence brief includes the recorded decision and its delta. Publish
+the decision and its linked claim evidence from the completed output:
+
+```bash
+m1lab --session SESSION_ID science decision codex-output.json
+```
+
+The command validates same-session scientific lineage and citations, then
+publishes immutable claim evidence followed by the decision. If there is no
+published derived result, Codex must set `scientific_decision` to `null`.
+
+Codex also returns a typed procedure draft candidate. To validate the candidate
 and freeze it as a content-digested procedure revision, copy the
 `procedure_draft_candidate` object to a JSON file and run:
 

@@ -59,6 +59,10 @@ from m1lab.core.models import new_id, utc_now
 from m1lab.experiment import ExperimentService
 from m1lab.investigator import EvidenceExcerpt, InvestigationOrchestrator, InvestigationRequest
 from m1lab.science import (
+    ClaimEvidence,
+    DecisionRecord,
+    DerivedResultRecord,
+    EvidenceDirection,
     Exclusion,
     HypothesisRecord,
     ProtocolAdherence,
@@ -193,6 +197,10 @@ def parser() -> argparse.ArgumentParser:
     science_commands = science.add_subparsers(dest="science_action", required=True)
     science_publish = science_commands.add_parser("publish", help="validate and publish one record JSON file")
     science_publish.add_argument("path", type=Path)
+    science_decision = science_commands.add_parser(
+        "decision", help="validate and publish the scientific_decision from Codex output"
+    )
+    science_decision.add_argument("path", type=Path, help="completed Codex output JSON")
     science_commands.add_parser("list", help="list validated scientific records")
     science_commands.add_parser("brief", help="build a compact evidence brief")
     science_derive = science_commands.add_parser(
@@ -531,6 +539,8 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
             return store.publish(record).model_dump(mode="json")
         if args.science_action == "derive":
             return _derive_scientific_result(store, session_id, document)
+        if args.science_action == "decision":
+            return _publish_codex_decision(store, session_id, document)
         if args.science_action == "checkpoint":
             checkpoint = document.get("redesign_checkpoint") if isinstance(document, dict) else None
             if not isinstance(checkpoint, dict) or checkpoint.get("required") is not True:
@@ -621,6 +631,89 @@ def _derive_scientific_result(
         analysis_code_refs=tuple(document.get("analysis_code_refs", [])),
     )
     return published.model_dump(mode="json")
+
+
+def _publish_codex_decision(
+    store: ScientificRecordStore, session_id: str, document: Any
+) -> dict[str, Any]:
+    if not isinstance(document, dict) or not isinstance(document.get("scientific_decision"), dict):
+        raise ValueError("Codex output must contain a non-null scientific_decision object")
+    payload = document["scientific_decision"]
+    decision_fields = {
+        "hypothesis_id", "protocol_id", "derived_result_id", "conclusion", "decision_delta",
+        "next_action", "evidence", "counterevidence", "unresolved_uncertainties",
+    }
+    if set(payload) != decision_fields:
+        raise ValueError("scientific_decision has unknown or missing fields")
+    for name in (
+        "hypothesis_id", "protocol_id", "derived_result_id", "conclusion", "decision_delta", "next_action"
+    ):
+        if not isinstance(payload[name], str):
+            raise ValueError(f"scientific_decision.{name} must be a string")
+    uncertainties = payload["unresolved_uncertainties"]
+    if not isinstance(uncertainties, list) or any(not isinstance(item, str) for item in uncertainties):
+        raise ValueError("scientific_decision.unresolved_uncertainties must be a string array")
+    records = {item.record.id: item.record for item in store.list(session_id)}
+    hypothesis_id = payload["hypothesis_id"]
+    protocol_id = payload["protocol_id"]
+    result_id = payload["derived_result_id"]
+    result = records.get(result_id)
+    if not isinstance(result, DerivedResultRecord):
+        raise ValueError("scientific_decision must cite a published derived_result in this session")
+    if result.hypothesis_id != hypothesis_id or result.protocol_id != protocol_id:
+        raise ValueError("scientific_decision hypothesis and protocol must match the derived result")
+
+    claims: dict[str, list[ClaimEvidence]] = {"evidence": [], "counterevidence": []}
+    for collection, direction in (
+        ("evidence", EvidenceDirection.SUPPORTS),
+        ("counterevidence", EvidenceDirection.COUNTERS),
+    ):
+        entries = payload.get(collection, [])
+        if not isinstance(entries, list):
+            raise ValueError(f"scientific_decision.{collection} must be an array")
+        for entry in entries:
+            if not isinstance(entry, dict):
+                raise ValueError(f"scientific_decision.{collection} entries must be objects")
+            claim_fields = {
+                "claim", "strength", "rationale", "record_refs", "artifact_refs", "limitations"
+            }
+            if set(entry) != claim_fields:
+                raise ValueError(f"scientific_decision.{collection} claim has unknown or missing fields")
+            claims[collection].append(
+                ClaimEvidence.model_validate(
+                    {
+                        **entry,
+                        "session_id": session_id,
+                        "hypothesis_id": hypothesis_id,
+                        "mode": result.mode,
+                        "direction": direction,
+                    }
+                )
+            )
+    all_claims = (*claims["evidence"], *claims["counterevidence"])
+    if not any(result_id in claim.record_refs for claim in all_claims):
+        raise ValueError("at least one decision claim must cite the exact derived_result_id")
+
+    decision = DecisionRecord(
+        session_id=session_id,
+        hypothesis_id=hypothesis_id,
+        protocol_id=protocol_id,
+        derived_result_id=result_id,
+        mode=result.mode,
+        outcome=result.outcome,
+        conclusion=payload["conclusion"],
+        decision_delta=payload["decision_delta"],
+        next_action=payload["next_action"],
+        evidence=tuple(claims["evidence"]),
+        counterevidence=tuple(claims["counterevidence"]),
+        unresolved_uncertainties=tuple(uncertainties),
+    )
+    published_claims = store.publish_many(all_claims)
+    published_decision = store.publish(decision)
+    return {
+        "decision": published_decision.model_dump(mode="json"),
+        "claim_evidence": [item.model_dump(mode="json") for item in published_claims],
+    }
 
 
 def _submit(core: CoreApp, session: Any, kind: CommandKind, payload: dict[str, Any], revision: int | None) -> dict[str, Any]:

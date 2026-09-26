@@ -295,6 +295,7 @@ class DecisionRecord(ScientificModel):
     mode: StudyMode
     outcome: OutcomeCategory
     conclusion: str = Field(min_length=1)
+    decision_delta: str = Field(default="No prior-decision delta recorded", min_length=1)
     next_action: str = Field(min_length=1)
     evidence: tuple[ClaimEvidence, ...] = ()
     counterevidence: tuple[ClaimEvidence, ...] = ()
@@ -366,6 +367,7 @@ class EvidenceBrief(ScientificModel):
     counterevidence: tuple[str, ...]
     limitations: tuple[str, ...]
     next_action: str | None
+    decision_delta: str | None = None
     competing_hypotheses: tuple[dict[str, str], ...] = ()
     strongest_support: tuple[str, ...] = ()
     strongest_counterevidence: tuple[str, ...] = ()

@@ -35,7 +35,7 @@ _SECRET_TEXT = (
 OUTPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["summary", "evidence", "hypotheses", "proposed_experiments", "redesign_checkpoint", "procedure_review", "uncertainties"],
+    "required": ["summary", "evidence", "hypotheses", "scientific_decision", "proposed_experiments", "redesign_checkpoint", "procedure_review", "uncertainties"],
     "properties": {
         "summary": {"type": "string"},
         "evidence": {
@@ -63,6 +63,31 @@ OUTPUT_SCHEMA: dict[str, Any] = {
                     "rationale": {"type": "string"},
                 },
             },
+        },
+        "scientific_decision": {
+            "anyOf": [
+                {"type": "null"},
+                {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": [
+                        "hypothesis_id", "protocol_id", "derived_result_id", "conclusion",
+                        "decision_delta", "next_action", "evidence", "counterevidence",
+                        "unresolved_uncertainties",
+                    ],
+                    "properties": {
+                        "hypothesis_id": {"type": "string"},
+                        "protocol_id": {"type": "string"},
+                        "derived_result_id": {"type": "string"},
+                        "conclusion": {"type": "string"},
+                        "decision_delta": {"type": "string"},
+                        "next_action": {"type": "string"},
+                        "evidence": {"type": "array", "items": {"$ref": "#/$defs/decision_claim"}},
+                        "counterevidence": {"type": "array", "items": {"$ref": "#/$defs/decision_claim"}},
+                        "unresolved_uncertainties": {"type": "array", "items": {"type": "string"}},
+                    },
+                },
+            ]
         },
         "proposed_experiments": {
             "type": "array",
@@ -161,6 +186,19 @@ OUTPUT_SCHEMA: dict[str, Any] = {
         "uncertainties": {"type": "array", "items": {"type": "string"}},
     },
     "$defs": {
+        "decision_claim": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["claim", "strength", "rationale", "record_refs", "artifact_refs", "limitations"],
+            "properties": {
+                "claim": {"type": "string"},
+                "strength": {"type": "string", "enum": ["weak", "moderate", "strong"]},
+                "rationale": {"type": "string"},
+                "record_refs": {"type": "array", "items": {"type": "string"}},
+                "artifact_refs": {"type": "array", "items": {"type": "string"}},
+                "limitations": {"type": "array", "items": {"type": "string"}},
+            },
+        },
         "cost": {
             "type": "object",
             "additionalProperties": False,
@@ -415,7 +453,8 @@ def build_prompt(request: InvestigationRequest, manifest: Mapping[str, Any]) -> 
     role_instructions = (
         "Review only the exact registered procedure revision and digest in the manifest. Populate "
         "procedure_review with an evidence-backed accepted, changes_required, or rejected disposition. "
-        "Do not rewrite or register a procedure. Set proposed_experiments to an empty array. Set "
+        "Do not rewrite or register a procedure. Set proposed_experiments to an empty array and "
+        "scientific_decision to null. Set "
         "redesign_checkpoint.required only when the scientific brief explicitly requires one; never "
         "treat review of an existing procedure as permission to bypass it."
         if request.kind == "review"
@@ -427,7 +466,12 @@ def build_prompt(request: InvestigationRequest, manifest: Mapping[str, Any]) -> 
         "separate completed review job on that exact immutable revision before approval. If the brief "
         "requires a redesign checkpoint, set required=true, cite the exact two inconclusive derived "
         "result IDs in chronological order, explain the design findings, and state a concrete redesign "
-        "before recommending another experiment for that hypothesis. Set procedure_review to null."
+        "before recommending another experiment for that hypothesis. Set procedure_review to null. If the "
+        "manifest contains a published derived result, return scientific_decision bound to its exact published "
+        "hypothesis, protocol, and result IDs; never supply or reinterpret the deterministic outcome. Cite that "
+        "result ID in record_refs for at least one supporting or counterevidence claim. Explain in decision_delta "
+        "how this result changes or strengthens the previous decision, or state that this is the initial decision. "
+        "If no derived result is available, set scientific_decision to null."
     )
     prompt = f"""You are the evidence analyst for an M1 power-management laboratory.
 
