@@ -38,8 +38,11 @@ with replay hardware and Codex runtime disabled. The service ran as `m1lab`
 and listened only on `127.0.0.1:8765`. The `f58395f` update, rollback to
 `e6fc7ba`, and return to `f58395f` each started and returned HTTP 200 for
 `/overview` with zero restarts during the check. The original session survived
-the update with its budget unchanged. This does not establish remote access,
-a live model turn, or long-term host availability.
+the update with its budget unchanged. Release `97363a8` fixed restoration
+staging for the service account; a fresh bundle was restored over the stopped
+live data root, and the service restarted with HTTP 200, zero restarts, and
+the same session and full budget. This does not establish remote access, a
+live model turn, or long-term host availability.
 
 ## Observed execution machine
 

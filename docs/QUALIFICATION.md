@@ -9,8 +9,10 @@
   check. The original session survived the update with its budget unchanged.
   The pre-update bundle restored into isolated `/tmp` state on the T480 and
   its CLI reported the same session with the full 3-hour / 100-million-token
-  budget. Replacing the live data root and running the authenticated Codex
-  runtime remain unqualified.
+  budget. Release `97363a8` also restored a fresh verified bundle over the
+  stopped live data root as `m1lab`; after restart the CLI reported the same
+  session and full budget, and the service returned HTTP 200 with zero
+  restarts. The authenticated Codex runtime remains unqualified.
 - The configured Codex executable SHA-256 is verified before app-server startup.
 - Live app-server startup, authenticated job lifecycle, cancellation and usage remain unqualified until a bounded turn completes on the deployment host.
 - Replay operations preserve intent, completion and unknown-effect outcomes.
