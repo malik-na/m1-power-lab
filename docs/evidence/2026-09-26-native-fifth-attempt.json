@@ -1,0 +1,59 @@
+{
+  "date_utc": "2026-09-26",
+  "host_head_at_attempt": "17b0d9a8d9f50c4a017b01f553f3581f42aed06a",
+  "candidate_source": "350819d20b19187951ab27ac0f7e4e0936e6c6b7",
+  "build_id": "build_7307a7fbd37d412681afe9a3a4259fbb",
+  "procedure_digest": "d16b1906bb7dfd27447d18f59f52a8405ad5b13f42be237dae7d5a737e21ccef",
+  "operation_id": "operation_f59e819396ed4ddb87297199a7f43a98",
+  "owner_approval": "Explicit single-use approval with current attendance; consumed.",
+  "dispatched_at": "2026-09-26T18:46:15.258959Z",
+  "finished_at": "2026-09-26T18:46:15.427351Z",
+  "initial_outcome": "unknown_effect",
+  "reconciled_outcome": "failed",
+  "native_samples_captured": 0,
+  "native_boot_demonstrated": false,
+  "new_proxy_return_demonstrated": false,
+  "same_proxy_connection_before_after": true,
+  "boot_log_created": false,
+  "host_diagnosis": "Code inspection: persistent backend from fourth attempt has _used=True permanently. inspect still advertises run_native_candidate; execute rejects _used before boot log creation or launcher entry. Worker suppresses this exception and closes response socket. This path explains observed 168ms completion, unchanged epoch, no boot log and live worker. The exception itself was not logged.",
+  "webcam": {
+    "armed_before_dispatch": true,
+    "fresh_frames_at_arm": 5,
+    "duration_seconds": 5.933,
+    "bytes": 6209875,
+    "sha256": "c01297fd1e47816fbdd2be2ddcc993dcadfb7ce1d3a91fbf866f8448f9a69260",
+    "camera_exit": 0,
+    "private": true,
+    "observation": "Retained 5.933-second recording; sampled frames show the existing proxy console. No native boot output was captured."
+  },
+  "evidence_artifacts": {
+    "execution": "artifact_663594bf76cf8d2ff2ecf8e9bb4bff8fb09cf25571cd071210be5a8b789dc861",
+    "camera_metadata": "artifact_03afdc3bbbe6fafa2129133053732a4a00d2be7370a3ba3a9a717806433b7d43",
+    "owner_approval": "artifact_a7960bdbb7c60b51a0f9b1f154898ccba6c1f9093e7f2f51e4c7971f16e7a054",
+    "followup_proxy": "artifact_a1138fc3454470125d9385c9f16f7c004876f33433b2762b16bc07799b1ed69c",
+    "observation": "artifact_d9930c996279ce535ece275f32cf071e0cd3acb9fe7b20e0b2d43b0ad32ba56a",
+    "operation_original": "artifact_98b8f498418dcf8e61622eb8cfe6a08a9d1fc2a87aed621ad56d1d240b5127fb",
+    "post_attempt_proxy": "artifact_c2f9b42419e76b8487c8483e6adc8c48f620fb3dead2912e8e0f047efb1ab248",
+    "private_video": "artifact_c01297fd1e47816fbdd2be2ddcc993dcadfb7ce1d3a91fbf866f8448f9a69260"
+  },
+  "known_good": false,
+  "live_lab": {
+    "release": "f560929",
+    "phase": "paused",
+    "usage_uncertain": true,
+    "service": "active/running",
+    "restarts": 0
+  },
+  "remaining_gate": "Fresh helper capability, exact reviewed launch and new attended approval; actual native failure stage and complete capture/return still pending.",
+  "host_fix": {
+    "change": "Spent backend inspection withdraws native launch capability but preserves returned proxy availability/identity; one-shot execute and deny guard unchanged.",
+    "base_commit": "17b0d9a8d9f50c4a017b01f553f3581f42aed06a",
+    "regression_before_fix": "Returned-proxy capability assertion failed.",
+    "command": ".venv/bin/pytest -q tests/integration/test_native_candidate_backend.py tests/integration/test_native_qualification_service.py",
+    "result": "35 passed in 2.95s",
+    "scope": "Synthetic host tests; service gate refuses before adapter execute or approval consumption. No new native test.",
+    "model": "gpt-6-sol",
+    "reasoning_effort": "medium",
+    "review": "Root integration review accepted the minimal source/test patch."
+  }
+}

@@ -1,5 +1,36 @@
 # Qualification gates
 
+## Fifth attended attempt: spent helper refused before launch
+
+The owner approved exact procedure `d16b1906…e21ccef` and confirmed attendance.
+The webcam captured fresh frames before dispatch. Operation
+`operation_f59e819396ed4ddb87297199a7f43a98` ran from 18:46:15.258959 to
+18:46:15.427351 UTC and reported an ambiguous helper EOF. It captured zero
+native samples and created no boot log. Fixed proxy observations before and
+after retained the same connection generation; follow-up at 18:49:36 confirmed
+responsive proxy. The 5.933-second private video shows the existing proxy console.
+The camera exited cleanly; no fifth native boot or new return is established.
+
+Code inspection identifies a spent one-shot backend: the fourth execution set
+`_used`, while later inspection still advertised `run_native_candidate`. The
+fifth call therefore refused before launcher entry; the worker's exception
+handling closed the socket without a result. The exact exception was not logged,
+so this diagnosis combines source behavior with the observed timing and state.
+The original unknown outcome is preserved and reconciled as failed with private
+execution, approval, proxy and camera evidence. All five single-use approvals
+are consumed. The next run needs a fresh helper, launch, exact review and
+attended approval. See [evidence](evidence/2026-09-26-native-fifth-attempt.json).
+
+The minimal host correction removes `run_native_candidate` from spent backend
+snapshots while retaining proxy availability and identity for reconciliation.
+It does not reset the one-launch guard or clear the denial journal. The backend
+regression failed before the change. Afterward,
+`.venv/bin/pytest -q tests/integration/test_native_candidate_backend.py tests/integration/test_native_qualification_service.py`
+passed **35 tests in 2.95 seconds** on the ThinkPad. The public service regression
+confirms that a stale stored snapshot followed by a fresh spent snapshot records
+`no_effect` before adapter execution or approval consumption. Root reviewed the
+patch; no broader test run or physical retry was needed to verify this fix.
+
 ## Fourth attended attempt: proxy return caught, capture absent
 
 The fresh accepted review of `056724af…0f3546`, explicit owner approval/current
@@ -24,7 +55,7 @@ no concrete missing interpreter, loader, direct library, kernel initrd support,
 mountpoint or matching module index. No speculative USB or pySerial patch is
 justified. The next discriminating evidence is a video of the existing target
 failure markers under a new exact review and attended approval. This approval
-is consumed; no fifth dispatch is authorized. See
+was consumed; the separately approved fifth attempt is recorded above. See
 [fourth-attempt evidence](evidence/2026-09-26-native-fourth-attempt.json).
 
 For the next observation the owner requested the ThinkPad webcam. A 720p preview
@@ -35,8 +66,9 @@ frames before any native dispatch, imposes a 510-second/1-GiB recording bound
 and stops/reaps the camera on normal/error paths. The two preceding rejected
 reviews remain in history. Final review reported 97,999 tokens; isolated harness
 lifetime is 544,549 with no usage uncertainty. The launch expires at
-2026-09-26 18:49:38 UTC. Fresh attended approval remains pending; camera footage
-can diagnose startup but cannot substitute for native result frames. See
+2026-09-26 18:49:38 UTC. The owner subsequently approved the fifth attempt above;
+its approval is consumed. Camera footage can diagnose startup but cannot
+substitute for native result frames. See
 [preparation evidence](evidence/2026-09-26-native-webcam-preparation.json).
 
 ## Native failure diagnostics

@@ -142,7 +142,9 @@ class NativeCandidateBackend:
             mode="proxy", target_id=self.target_identity,
             boot_epoch=self._connection_epoch,
             configuration_digest=self.configuration_digest,
-            capabilities=(HardwareCapability("run_native_candidate", 1, True, MAX_RESULT_BYTES),),
+            capabilities=() if self._used else (
+                HardwareCapability("run_native_candidate", 1, True, MAX_RESULT_BYTES),
+            ),
             observed_at=observed.observed_at,
             message="Owned proxy connection generation; not independent boot attestation.",
         )

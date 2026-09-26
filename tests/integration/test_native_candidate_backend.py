@@ -213,7 +213,10 @@ def test_complete_synthetic_round_trip_closes_proxy_before_launch(tmp_path, monk
         assert result.payload == b"fixed frame bytes"
         assert result.boot_epoch == dispatch.boot_epoch
         assert result.values["return_boot_epoch"] != dispatch.boot_epoch
-        assert backend.inspect().boot_epoch == result.values["return_boot_epoch"]
+        returned = backend.inspect()
+        assert returned.boot_epoch == result.values["return_boot_epoch"]
+        assert returned.available and returned.mode == "proxy"
+        assert returned.capabilities == ()
     assert events.index("observer_close") < events.index("launch") < events.index("native_open")
     assert events.count("observer_open") == 2
     assert backend.inspect().available is False

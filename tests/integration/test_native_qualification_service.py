@@ -238,6 +238,19 @@ def test_preflight_epoch_change_finishes_no_effect_without_adapter_call(enabled_
     assert enabled_core.list_records(session_id, "operations")[0].state is OperationState.NO_EFFECT
 
 
+def test_spent_proxy_capability_is_refused_before_dispatch_or_approval_use(enabled_core, tmp_path):
+    session_id, service, adapter, request, _ = _reviewed_attempt(enabled_core, tmp_path)
+    # The stored target was eligible, but a one-shot helper is now spent.
+    adapter.snapshot = replace(adapter.snapshot, capabilities=())
+
+    report = service.authorize_and_run(request)
+
+    assert report.state is OperationState.NO_EFFECT
+    assert adapter.calls == []
+    assert enabled_core.list_records(session_id, "operations")[0].state is OperationState.NO_EFFECT
+    assert enabled_core.list_records(session_id, "approvals")[0].uses == 0
+
+
 def test_forged_authorization_cannot_cancel_durable_intent(enabled_core, tmp_path):
     session_id, service, adapter, request, _ = _reviewed_attempt(enabled_core, tmp_path)
     authorization = enabled_core.authorize_operation(request)

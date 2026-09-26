@@ -149,6 +149,13 @@ session; existing accounting and unresolved-operation gates still apply.
    SOCKET --procedure-id PROCEDURE --procedure-revision REVISION
    --target-snapshot SNAPSHOT` once.
 
+Each helper backend permits one launch. After an attempt it can retain the
+returned proxy for observation, but it no longer advertises launch capability.
+Reconcile the outcome, stop the owned helper cleanly, and explicitly start a
+fresh helper before preparing another launch. Keep the same private state
+directory and denial journal. The new connection needs a new launch manifest,
+exact review and attended approval; restarting never retries an old operation.
+
 The helper stages only the three verified boot files, closes the proxy
 descriptor, invokes the pinned tethered boot tool once, receives the bounded
 native stream, and observes the same proxy USB identity again. A watcher in that

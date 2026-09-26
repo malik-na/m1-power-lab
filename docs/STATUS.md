@@ -7,6 +7,21 @@ Owner-selected coordination uses the installed Agents Orchestrator on
 `gpt-6-sol` with medium reasoning. One integration owner controls commits and
 physical dispatch; the orchestrator assigns bounded tasks against the existing plan.
 
+The fifth approved attended attempt stopped at the host helper before any boot
+log was created. The helper from the fourth attempt had spent its one launch,
+but still advertised the launch capability; its refusal surfaced as a transport
+EOF. The 168 ms dispatch, unchanged proxy connection and private webcam recording
+support this diagnosis. Zero native samples were captured. The original unknown
+outcome is retained and reconciled as failed. The camera armed before dispatch
+and stopped cleanly. All five approvals are consumed. See
+[fifth-attempt evidence](evidence/2026-09-26-native-fifth-attempt.json).
+
+Spent helpers now stop advertising native execution while keeping the returned
+proxy available for observation. The one-launch guard is unchanged. A regression
+reproduced the defect before the fix; 35 focused host checks passed afterward,
+including refusal before adapter execution or approval consumption. The next
+test requires a fresh helper and newly reviewed attended approval.
+
 The fourth attended test failed to capture native samples, but the continuous
 watcher caught and held the returning proxy at 18:05:39 UTC. The owner confirmed
 it returned by itself, without a manual reboot, and reported Linux penguins/logs
@@ -23,8 +38,8 @@ Its preview now contains the full console. The same candidate has a freshly
 accepted exact proposal `d16b1906…e21ccef`: host camera frames must be captured
 before dispatch, recording is bounded to 510 seconds/1 GiB, and explicit host
 cleanup stops/reaps it. Two rejected preparation reviews remain recorded;
-the corrected script bytes and procedure now match. Fresh owner approval and
-attendance are pending; no fifth boot has run. See
+the corrected script bytes and procedure matched. The owner subsequently approved
+one test and confirmed attendance; its fifth-attempt outcome is recorded above. See
 [webcam preparation](evidence/2026-09-26-native-webcam-preparation.json).
 
 The next candidate adds diagnostics for the demonstrated missing-evidence gap:
