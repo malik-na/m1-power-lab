@@ -1,5 +1,26 @@
 # Qualification gates
 
+## Seventh attempt and concrete configfs fix
+
+The separately reviewed and owner-approved font-configured attempt ran once at
+19:27:34–19:27:59 UTC. It captured zero native samples; boot client exited zero,
+and the watcher caught the returned proxy. The owner confirmed automatic return.
+A 24,000-byte boot log and 30.933-second private video are retained. Exact visual
+failure text remains unverified. Original `unknown_effect` is preserved and
+reconciled as failed; all seven approvals are consumed.
+
+Independent source inspection found the target's configfs link error. Linux
+[configfs resolves the target at link creation](https://github.com/torvalds/linux/blob/master/fs/configfs/symlink.c)
+using the current working directory. The target ran from `/` but supplied
+`../../functions/acm.usb0`, so lookup reached `/functions/acm.usb0`. The absolute
+gadget function path fixes this defect without changing USB roles or bounds.
+A host regression running the actual gadget setup with configfs lookup semantics
+failed before the fix with `FileNotFoundError`; afterward
+`.venv/bin/pytest -q tests/integration/test_native_boot.py` passed **8 tests in
+0.31 seconds**. Root inspected the minimal patch. This proves the source defect
+and host correction; physical capture/return with the rebuilt image remains the
+next gate. See [evidence](evidence/2026-09-26-native-seventh-attempt.json).
+
 ## Sixth attended attempt: recorded Linux startup, failure text unreadable
 
 Fresh exact review, explicit owner approval/current attendance, armed webcam
@@ -29,6 +50,15 @@ digest changes with this option. Existing backend/launcher tests passed **30 in
 is needed. The previous selected font is unknown and improved camera readability
 is not yet proven. Fresh helper, exact review and attended approval precede use.
 See [font inventory and host evidence](evidence/2026-09-26-native-console-font.json).
+
+Fresh registered font proposal `8acb0a44…e50ad30c` has accepted exact review and
+expires at 19:36:52 UTC. Its review reported 90,367 tokens; isolated harness
+lifetime is 914,172 with no usage uncertainty. An earlier review's local-versus-UTC
+expiry error is preserved. A subsequent correction was accepted by the model but
+could not be recorded because the operator had not re-registered after rejection;
+it remains advisory history. The current proposal followed normal registration
+and review; its new owner approval/current attendance were consumed by the seventh
+attempt above. See [review history](evidence/2026-09-26-native-font-review.json).
 
 ## Fifth attended attempt: spent helper refused before launch
 

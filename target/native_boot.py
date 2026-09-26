@@ -95,7 +95,7 @@ def _configure_gadget(deadline: float, mark: Callable[[str], None]) -> Path:
     configuration.mkdir()
     (configuration / "MaxPower").write_text("2\n")
     (GADGET / "functions/acm.usb0").mkdir()
-    (configuration / "acm.usb0").symlink_to("../../functions/acm.usb0")
+    (configuration / "acm.usb0").symlink_to(GADGET / "functions/acm.usb0")
     (GADGET / "UDC").write_text(controller.name + "\n")
     mark("tty_wait")
     while not Path("/dev/ttyGS0").exists():

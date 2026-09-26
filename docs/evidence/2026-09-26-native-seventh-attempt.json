@@ -1,0 +1,53 @@
+{
+  "date_utc": "2026-09-26",
+  "host_source": "8003b9b78bb6421f578a0cffb8ba1901ea544e7b",
+  "candidate_source": "350819d20b19187951ab27ac0f7e4e0936e6c6b7",
+  "procedure_digest": "8acb0a44b1fccbc574c9d86e00f01542d6c2e222be1d1682f13525c9e50ad30c",
+  "started_at": "2026-09-26T19:27:34.915336Z",
+  "finished_at": "2026-09-26T19:27:59.489691Z",
+  "owner_approval": "Fresh exact review and explicit attended one-test approval; consumed.",
+  "camera_bytes": 28533771,
+  "camera_sha256": "c7bae2c5c2edcd9fc9f09df41d31fadb5f65084b903334d3eba4cfbde8ec1fb4",
+  "camera_exit": 0,
+  "operation_id": "operation_d7c6d8e4927d435a980a15b159865918",
+  "resolved_state": "failed",
+  "original_outcome": "unknown_effect",
+  "artifacts": {
+    "helper_result": "artifact_967f8dd75d0234fa3dcb13f820691c6d50fd8159f203b79e29c359e1a433a05f",
+    "boot_log": "artifact_7e28870bd38bfcf9e7b4db5d0a59acf45f6890115e8c5b638e6ffe2325d19e36",
+    "execution": "artifact_2500ab4251ee4be896f38b5aad7562e6b36cf5acbe3f530a6c05bc3b9454baac",
+    "camera_metadata": "artifact_6ce576891d33e92d1a3123e6d408b4d5eda95b43a3f132a5490332e812303378",
+    "followup_proxy": "artifact_a11816479a9000568304017625a33609033ff5ec776d85f7b9fbf43e22b2901d",
+    "owner_return": "artifact_f6e0bf99012a4ebf63ef3227f45ee03c5ee0af930e5b03b413dd367db9b67bb6",
+    "observation": "artifact_6282fb0a456e2073e3b36d19894620606c0b6fe02c210b6f99cae66f09ae83ec",
+    "private_video": "artifact_c7bae2c5c2edcd9fc9f09df41d31fadb5f65084b903334d3eba4cfbde8ec1fb4"
+  },
+  "observation": {
+    "operation_id": "operation_d7c6d8e4927d435a980a15b159865918",
+    "native_samples_captured": 0,
+    "boot_client_exit": 0,
+    "proxy_return_caught": true,
+    "return_connection_epoch": "82b8f75f35c3442ca5738969c246e891",
+    "owner_confirms_automatic_return": true,
+    "video_duration_seconds": 30.933,
+    "video_observation": "Linux and diagnostic marker lines visible; exact stage/type remain unverified after independent read. Explicit font selection did not establish legibility.",
+    "boot_log_bytes": 24000,
+    "source_defect_separately_identified": "Configfs resolves symlink target immediately relative to process cwd; native_boot uses ../../functions/acm.usb0 while init never changes cwd from root. This resolves to /functions/acm.usb0 instead of the gadget function. Kernel source/doc verification establishes the code defect independently of unverified image transcription.",
+    "known_good": false,
+    "live_pause_hold": "Preserved; no scientific investigation or deployment."
+  },
+  "host_fix": {
+    "change": "Use the absolute gadget function path for the configfs symlink; no chdir or USB role changes.",
+    "primary_sources": [
+      "https://github.com/torvalds/linux/blob/master/fs/configfs/symlink.c",
+      "https://docs.kernel.org/usb/gadget_configfs.html#associating-the-functions-with-their-configurations"
+    ],
+    "regression_before": "FileNotFoundError for ../../functions/acm.usb0 under immediate cwd-based target lookup.",
+    "command": ".venv/bin/pytest -q tests/integration/test_native_boot.py",
+    "result": "8 passed in 0.31s",
+    "review": "Root inspected the one-line target fix and focused behavior regression.",
+    "model": "gpt-6-sol",
+    "reasoning_effort": "medium",
+    "physical_fix_verification": "pending rebuilt candidate"
+  }
+}

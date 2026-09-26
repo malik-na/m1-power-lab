@@ -1,0 +1,59 @@
+{
+  "date_utc": "2026-09-26",
+  "host_source": "8003b9b78bb6421f578a0cffb8ba1901ea544e7b",
+  "candidate_source": "350819d20b19187951ab27ac0f7e4e0936e6c6b7",
+  "build_id": "build_7307a7fbd37d412681afe9a3a4259fbb",
+  "procedure_id": "procedure_2502658e9cd740beb043a0e088435669",
+  "procedure_digest": "8acb0a44b1fccbc574c9d86e00f01542d6c2e222be1d1682f13525c9e50ad30c",
+  "review_id": "review_0b52953982924f3a949f1242035af061",
+  "reviewer_job_id": "job_11650e4067e6445d990db7be7a42d8f2",
+  "disposition": "accepted",
+  "reported_tokens": 90367,
+  "harness_lifetime_tokens": 914172,
+  "usage_uncertain": false,
+  "model": "gpt-6-sol",
+  "reasoning_effort": "medium",
+  "fixed_bootargs": "console=tty0 earlycon rdinit=/init panic=10 fbcon=font:TER16x32",
+  "launch_deadline_utc": "2026-09-26T19:36:52.363470+00:00",
+  "script_checks": {
+    "run-webcam-native-attempt.py": {
+      "sha256": "f61b5ceebe5871779593e64e7f7029b970096610918dd0a3a2f2533bfeec7688",
+      "bound": true
+    },
+    "run-approved-native-attempt.py": {
+      "sha256": "eb4c4e9ded28f34f701e466888478e02f05f2d2561ad371baba04a0b5e004522",
+      "bound": true
+    }
+  },
+  "native_limits": {
+    "samples": 3,
+    "sample_period_ms": 1000,
+    "overall_seconds": 480
+  },
+  "camera_limits": {
+    "seconds": 510,
+    "bytes": 1073741824,
+    "arm_seconds": 10
+  },
+  "prior_review_history": [
+    {
+      "reviewer_job_id": "job_345aef462c724d649976ea6a59b4ebae",
+      "disposition": "changes_required",
+      "tokens": 89623,
+      "reason": "Date-only expiry finding incorrectly compared local September27 to UTC September26 deadline; original review retained."
+    },
+    {
+      "reviewer_job_id": "job_3590d090884e4355b68d3d4445d58939",
+      "disposition": "accepted",
+      "tokens": 92709,
+      "promoted": false,
+      "reason": "Operator requested correction before re-registering after changes_required; coordinator refused record_review outside awaiting_review. Output retained as advisory only."
+    }
+  ],
+  "owner_approval": "pending",
+  "physical_attendance": "pending",
+  "seventh_dispatch": false,
+  "prior_approvals_consumed": 6,
+  "qualification": "Current font selection and actual failure-marker legibility remain unverified; same immutable target image, no native source fix claimed.",
+  "live_lab": "Paused f560929 investigation and unresolved usage hold preserved; no science/deployment."
+}

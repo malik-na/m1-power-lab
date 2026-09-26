@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import errno
 import os
 from pathlib import Path
 import threading
@@ -93,6 +94,50 @@ def test_udc_timeout_identifies_stage_before_native_launch(monkeypatch, capsys):
     assert "M1Lab stage=udc_wait\n" in output
     assert "M1Lab failure stage=udc_wait type=TimeoutError\n" in output
     assert "launch_wait" not in output
+
+
+def test_configfs_acm_link_resolves_function_from_process_cwd(monkeypatch, tmp_path):
+    gadget = tmp_path / "sys/kernel/config/usb_gadget/m1lab"
+    gadget.parent.mkdir(parents=True)
+    udc = tmp_path / "sys/class/udc"
+    (udc / "synthetic-udc").mkdir(parents=True)
+    channel = tmp_path / "dev/ttyGS0"
+    channel.parent.mkdir()
+    channel.touch()
+    monkeypatch.setattr(native_boot, "GADGET", gadget)
+    monkeypatch.setattr(native_boot, "_command", lambda *_args: None)
+    original_path = native_boot.Path
+    original_mkdir = original_path.mkdir
+
+    def configfs_mkdir(path, *args, **kwargs):
+        result = original_mkdir(path, *args, **kwargs)
+        if path == gadget:
+            for directory in ("strings", "configs", "functions"):
+                original_mkdir(gadget / directory)
+        return result
+
+    monkeypatch.setattr(original_path, "mkdir", configfs_mkdir)
+    monkeypatch.setattr(
+        native_boot, "Path",
+        lambda path: udc if path == "/sys/class/udc" else (
+            channel if path == "/dev/ttyGS0" else original_path(path)
+        ),
+    )
+    original_symlink_to = original_path.symlink_to
+
+    def configfs_symlink_to(link, target, *args, **kwargs):
+        # Configfs resolves function targets from the process cwd, unlike a
+        # regular filesystem symlink whose relative target uses the link parent.
+        resolved = original_path(target).resolve()
+        if resolved != gadget / "functions/acm.usb0" or not resolved.is_dir():
+            raise FileNotFoundError(errno.ENOENT, "configfs function target", str(target))
+        return original_symlink_to(link, target, *args, **kwargs)
+
+    monkeypatch.setattr(original_path, "symlink_to", configfs_symlink_to)
+    stages = []
+    assert native_boot._configure_gadget(time.monotonic() + 1, stages.append) == channel
+    assert (gadget / "configs/c.1/acm.usb0").readlink() == gadget / "functions/acm.usb0"
+    assert stages[-2:] == ["acm_bind", "tty_wait"]
 
 
 @pytest.mark.parametrize("wire", [b"{}\n{}\n", b"x" * 32 + b"\n"])

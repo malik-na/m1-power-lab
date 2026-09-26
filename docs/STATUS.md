@@ -7,6 +7,15 @@ Owner-selected coordination uses the installed Agents Orchestrator on
 `gpt-6-sol` with medium reasoning. One integration owner controls commits and
 physical dispatch; the orchestrator assigns bounded tasks against the existing plan.
 
+The seventh attended attempt again returned automatically to the caught proxy,
+with no native samples. Its log/video are retained and the original unknown is
+reconciled as failed. Independent Linux source inspection identified a concrete
+gadget bug: configfs resolves symlink targets from process cwd, while the target
+used a path relative to the link's parent. The function link now uses its absolute
+path. A regression reproduced the old `ENOENT`; all eight native boot tests pass.
+The next delivery step is rebuilding this fix and verifying capture/return on M1.
+See [seventh-attempt evidence](evidence/2026-09-26-native-seventh-attempt.json).
+
 The sixth separately approved attended attempt booted Linux and returned to
 proxy; the watcher caught it and the owner confirmed no manual reboot. No native
 samples were captured. Its 23,960-byte boot log and 30.937-second private webcam
@@ -21,6 +30,11 @@ that font to address the unreadable console evidence; 30 backend/launcher checks
 passed. The target image is unchanged. Prior font selection and actual readability
 remain unverified; the changed helper configuration needs fresh exact review and
 attended approval. See [font evidence](evidence/2026-09-26-native-console-font.json).
+
+Fresh exact review has now accepted font proposal `8acb0a44…e50ad30c`, with a
+fresh owned helper and unchanged target image. Its subsequent attended approval
+was consumed by the seventh attempt above. Earlier clock/recording-sequence review issues
+are retained as history. See [review evidence](evidence/2026-09-26-native-font-review.json).
 
 The fifth approved attended attempt stopped at the host helper before any boot
 log was created. The helper from the fourth attempt had spent its one launch,
