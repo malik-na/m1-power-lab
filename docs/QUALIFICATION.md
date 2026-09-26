@@ -2,6 +2,25 @@
 
 ## Host-only gate
 
+- At source `dae67b6` on 2026-09-26, the ThinkPad full suite passed
+  **194 tests in 23.69 seconds**, no warnings reported, using
+  `.venv/bin/python -m pytest -q` with host socket permissions through Codex
+  `gpt-6-sol` medium. Fourteen new native capture cases run the standalone
+  collector in a child process with synthetic snapshots, receive its actual
+  framed stdout through a pipe, and publish/import real coordinator artifacts.
+  They cover complete captures, payload-bound partial captures, retained
+  damaged streams, mismatched run/boot echoes, missing samples, expired offline
+  launches with live deadline refusal, ten-sample scheduling, startup headroom,
+  and malformed saved collector parameters. This exposed and fixed the missing
+  screening import, historical launch decoding, and a terminal reserve that
+  systematically omitted final samples as the requested count grew.
+  The first full-suite invocation did not start because automatic approval
+  review timed out; the permitted retry produced the result above.
+  No target data was collected and no physical channel or image is qualified.
+  The installed service remains `f560929`, active with zero observed restarts;
+  a read-only SQLite check confirmed the session is paused, lifetime tokens
+  remain 0, and usage uncertainty remains set. That zero does not reconcile
+  the interrupted provider turn's missing usage.
 - At source `2032eee` on 2026-09-26, the ThinkPad full suite passed
   **180 tests in 17.73 seconds**, no warnings reported, using
   `.venv/bin/python -m pytest -q` with host socket permissions through Codex
