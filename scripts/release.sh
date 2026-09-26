@@ -60,8 +60,15 @@ fi
   echo "release already exists; release directories are immutable: $release_path" >&2
   exit 1
 }
-source_root=$(git -C "$(dirname "${BASH_SOURCE[0]}")/.." rev-parse --show-toplevel)
-git -C "$source_root" diff --quiet && git -C "$source_root" diff --cached --quiet || {
+source_root=$(cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
+git_repo() {
+  git -c "safe.directory=$source_root" -C "$source_root" "$@"
+}
+git_repo rev-parse --verify HEAD >/dev/null || {
+  echo "release source is not a Git checkout" >&2
+  exit 1
+}
+git_repo diff --quiet && git_repo diff --cached --quiet || {
   echo "working tree has tracked changes; commit the release source before installing" >&2
   exit 1
 }
@@ -71,7 +78,7 @@ cleanup() {
   if [[ -n ${staging:-} && -d $staging ]]; then rm -rf -- "$staging"; fi
 }
 trap cleanup EXIT
-git -C "$source_root" archive --format=tar HEAD | tar -xf - -C "$staging"
+git_repo archive --format=tar HEAD | tar -xf - -C "$staging"
 
 if ! id "$SERVICE_USER" >/dev/null 2>&1; then
   useradd --system --home-dir "$STATE_ROOT" --create-home \
