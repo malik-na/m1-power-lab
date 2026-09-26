@@ -10,7 +10,7 @@ This file distinguishes implemented behavior from physical qualification.
 | Codex scientific decision loop | Advisory brief, cost comparison, typed decision publication, draft/review boundary, redesign checkpoint gates, and bounded/redacted CLI evidence imports implemented | Live model turn and evidence-to-next-decision cycle remain unqualified until a bounded authenticated turn runs on the ThinkPad |
 | Codex runtime | Implemented, opt in | SHA-256 pinned, read-only app-server adapter and budgeted job supervisor; systemd service gives workers a private `/dev`; authenticated live turn and host sandbox behavior still need T480 qualification |
 | Owner CLI | Host implemented | Lifecycle, budgets, approvals, events, artifacts, jobs, operation and usage recovery, export, backup, replay and diagnostics |
-| Owner web UI | Host rendered | Four responsive views, revisioned commands, SSE and local/Tailscale identity modes |
+| Owner web UI | Host rendered | Four responsive views, revisioned commands, SSE and local/Tailscale identity modes; approval cards expose recovery steps and risk rationale |
 | Owner push notifications | Explicit subscription management and generic deduplicated delivery implemented | VAPID configuration and actual iPhone delivery remain unqualified |
 | ThinkPad service deployment | Guarded immutable release install and rollback implemented; host deployment pending | [Operations guide](OPERATIONS.md); install, service readiness, release rollback, restore, and uninstall are not yet qualified on the T480 |
 | ThinkPad host inventory | Read-only host/software inventory implemented; T480 observation pending | USB enumeration is opt-in and remains deferred with physical connection inventory |

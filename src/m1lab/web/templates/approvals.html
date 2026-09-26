@@ -18,8 +18,18 @@
       <div><dt>Failure severity</dt><dd>{{ approval.failure_severity|default('—') }}</dd></div>
       <div><dt>Attendance</dt><dd>{{ approval.attendance|default('—') }}</dd></div>
       <div><dt>Recovery</dt><dd>{{ approval.recovery|default('—') }}</dd></div>
+      <div><dt>Recovery status</dt><dd>{{ approval.recovery_status|default('not recorded') }}</dd></div>
       <div><dt>Expires</dt><dd>{{ approval.expires_at|default('—') }}</dd></div>
     </dl>
+    {% if approval.risk_rationale %}
+      <details open><summary>Why this risk category</summary><ul>{% for reason in approval.risk_rationale %}<li>{{ reason }}</li>{% endfor %}</ul></details>
+    {% endif %}
+    {% if approval.recovery_steps %}
+      <details open><summary>Recovery steps</summary><ol>{% for step in approval.recovery_steps %}<li>{{ step }}</li>{% endfor %}</ol></details>
+    {% endif %}
+    {% if approval.recovery_evidence %}
+      <p class="muted">Recovery evidence references: {{ approval.recovery_evidence|join(', ') }}</p>
+    {% endif %}
     {% if approval.review_findings %}
       <details><summary>Review findings</summary><p>{{ approval.review_findings }}</p></details>
     {% endif %}

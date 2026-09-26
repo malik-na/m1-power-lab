@@ -597,6 +597,7 @@ class CoordinatorFacade:
             if self._has_valid_approval(row, target, record):
                 continue
             recovery = record.get("recovery", {})
+            recovery_steps = _recovery_steps(recovery)
             review_row = self.core.journal.one(
                 "SELECT record_json FROM reviews WHERE procedure_id=? AND procedure_revision=? "
                 "AND procedure_digest=? AND disposition='accepted' ORDER BY created_at DESC LIMIT 1",
@@ -611,12 +612,16 @@ class CoordinatorFacade:
                     "digest": row["digest"][:12],
                     "title": record.get("title", "Procedure approval"),
                     "summary": f"Exact procedure revision {row['revision']} · {row['digest'][:12]}",
-                    "risk_level": _risk_level(record),
+                    "risk_level": _risk_level(record, recovery_steps=recovery_steps),
+                    "risk_rationale": _risk_rationale(record, recovery_steps=recovery_steps),
                     "operations": ", ".join(op.get("kind", "") for op in operations),
                     "benefit": record.get("expected_benefit", "—"),
                     "failure_severity": record.get("failure_severity", "unknown"),
                     "attendance": record.get("physical_attendance", "not_required"),
                     "recovery": recovery.get("summary", json.dumps(recovery) if recovery else "not recorded"),
+                    "recovery_status": recovery.get("status", "not recorded"),
+                    "recovery_steps": recovery_steps,
+                    "recovery_evidence": _recovery_evidence_refs(recovery),
                     "expires_at": "15 minutes after approval",
                     "review_findings": "; ".join(
                         [*review.get("blocking_findings", []), *review.get("concerns", [])]
@@ -863,13 +868,68 @@ def _recovery_view(target: Any) -> dict[str, str]:
     }
 
 
-def _risk_level(record: dict[str, Any]) -> str:
+def _recovery_steps(recovery: Any) -> list[str]:
+    if not isinstance(recovery, dict):
+        return []
+    steps = recovery.get("steps", [])
+    if not isinstance(steps, list):
+        return []
+    return [step.strip() for step in steps if isinstance(step, str) and step.strip()]
+
+
+def _recovery_evidence_refs(recovery: Any) -> list[str]:
+    if not isinstance(recovery, dict):
+        return []
+    references = recovery.get("evidence_refs", [])
+    if not isinstance(references, list):
+        return []
+    return [reference for reference in references if isinstance(reference, str) and reference]
+
+
+def _risk_level(record: dict[str, Any], *, recovery_steps: list[str] | None = None) -> str:
     severity = str(record.get("failure_severity", "unknown")).lower()
     if severity in {"critical", "high", "severe"}:
         return "high"
-    if any(op.get("mutates_target") for op in record.get("operations", [])):
+    operations = record.get("operations", [])
+    mutates = isinstance(operations, list) and any(
+        isinstance(operation, dict) and operation.get("mutates_target") is True
+        for operation in operations
+    )
+    recovery = record.get("recovery", {})
+    status = str(recovery.get("status", "")).lower() if isinstance(recovery, dict) else ""
+    steps = _recovery_steps(recovery) if recovery_steps is None else recovery_steps
+    if mutates and (
+        not steps
+        or status in {"unavailable", "unqualified", "invalidated"}
+    ):
+        return "high"
+    if mutates:
         return "medium"
     return "low"
+
+
+def _risk_rationale(record: dict[str, Any], *, recovery_steps: list[str]) -> list[str]:
+    rationale: list[str] = []
+    severity = str(record.get("failure_severity", "unknown")).lower()
+    if severity in {"critical", "high", "severe"}:
+        rationale.append(f"Declared failure severity is {severity}.")
+    operations = record.get("operations", [])
+    mutating = [
+        operation.get("kind", "unknown operation")
+        for operation in operations
+        if isinstance(operation, dict) and operation.get("mutates_target") is True
+    ] if isinstance(operations, list) else []
+    if mutating:
+        rationale.append("State-changing operations require exact owner approval: " + ", ".join(mutating) + ".")
+        recovery = record.get("recovery", {})
+        status = str(recovery.get("status", "not recorded")) if isinstance(recovery, dict) else "not recorded"
+        if not recovery_steps:
+            rationale.append("No recovery steps are recorded.")
+        elif status.lower() in {"unavailable", "unqualified", "invalidated"}:
+            rationale.append(f"Recovery is marked {status}.")
+        else:
+            rationale.append(f"{len(recovery_steps)} recovery step(s) are recorded; this does not establish they were demonstrated.")
+    return rationale or ["No state-changing operations are recorded."]
 
 
 def _event_summary(kind: str) -> str:

@@ -153,6 +153,13 @@ evidence text and labels. Review
 selected material for other personal data or unrelated private contents before
 starting the turn; automated scrubbing cannot identify every such case.
 
+Approval cards show the recorded recovery steps, status and evidence references
+alongside the reasons for their risk category. High declared failure severity
+is high risk; a mutating procedure with no recovery steps or explicitly
+unqualified recovery is also high risk. Other mutating procedures remain medium
+risk. These are conservative categories from recorded fields, not recovery
+probabilities or proof that recovery was demonstrated.
+
 ## Tailscale access
 
 Keep the application on loopback and proxy private HTTPS with Tailscale Serve:
