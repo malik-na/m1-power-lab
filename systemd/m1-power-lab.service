@@ -15,7 +15,7 @@ Environment=M1LAB_CODEX_EXECUTABLE=/usr/local/bin/codex
 EnvironmentFile=-/etc/m1-power-lab.env
 WorkingDirectory=/var/lib/m1-power-lab
 StateDirectory=m1-power-lab
-ExecStart=/opt/m1-power-lab/current/.venv/bin/m1lab serve --host 127.0.0.1 --port 8765
+ExecStart=/usr/bin/bash /opt/m1-power-lab/current/scripts/service-entrypoint.sh /opt/m1-power-lab/current/.venv/bin/m1lab serve --host 127.0.0.1 --port 8765
 Restart=on-failure
 RestartSec=3
 UMask=0077

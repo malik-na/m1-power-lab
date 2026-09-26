@@ -473,6 +473,7 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
             "app_version": "0.1.0",
             "python": platform.python_version(),
             "platform": platform.platform(),
+            "host_availability": LinuxHostMonitor(settings.paths.root).sample().as_view(),
             "data_root": str(settings.paths.root),
             "database": str(settings.paths.database),
             "session_id": session_id,

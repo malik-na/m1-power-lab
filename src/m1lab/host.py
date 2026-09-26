@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import os
 from pathlib import Path
 import shutil
 from typing import Iterable
@@ -92,7 +93,18 @@ class LinuxHostMonitor:
             thermal_state=_thermal_state(maximum_temperature),
             disk_free_bytes=disk.free,
             disk_total_bytes=disk.total,
+            lab_mode=_lab_mode(),
         )
+
+
+def _lab_mode() -> str:
+    configured = os.environ.get("M1LAB_INHIBIT_SLEEP", "0")
+    held = os.environ.get("M1LAB_SLEEP_LID_INHIBITOR_HELD") == "1"
+    if configured == "1" and held:
+        return "sleep/lid inhibitor held; host behavior unqualified"
+    if configured == "1":
+        return "sleep/lid inhibitor requested but not confirmed"
+    return "sleep/lid inhibitor not requested"
 
 
 def _power(root: Path) -> tuple[str, float | None]:

@@ -104,6 +104,20 @@ record is created leaves a failed job record and releases its reservation; it
 does not start Codex. These checks do not qualify sleep inhibition, lid
 behavior, shutdown handling, or the correctness of the T480's sensors.
 
+Sleep and lid inhibition is opt-in. Set `M1LAB_INHIBIT_SLEEP=1` in the
+root-owned environment file to run the service under `systemd-inhibit` with
+sleep, idle, and lid-switch handling locks. The locks exist only while the
+service process is alive and are released automatically when it exits; no
+logind settings are edited. If logind denies the lock or the command is
+missing, the service fails to start rather than claiming inhibition. Leave
+the setting unset until this behavior has been checked on the T480. The lock
+does not block explicit shutdown requests.
+
+The overview and `m1lab diagnostics` report whether inhibition was not
+requested, requested but unconfirmed, or held by the service wrapper. A held
+lock confirms the logind request succeeded; it does not prove how this T480's
+firmware or lid sensor behaves.
+
 ## Tailscale access
 
 Keep the application on loopback and proxy private HTTPS with Tailscale Serve:
