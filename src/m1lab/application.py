@@ -10,6 +10,7 @@ import os
 from typing import Any
 
 from m1lab.core import (
+    ACTIVE_PHASES,
     ApprovalScope,
     CommandKind,
     CoreApp,
@@ -119,6 +120,7 @@ class CoordinatorFacade:
 
         if self.investigator is None:
             return
+        handled_jobs: set[str] = set()
         while True:
             try:
                 blockers = HostAdmissionPolicy().blockers(self.host_monitor.sample())
@@ -126,14 +128,29 @@ class CoordinatorFacade:
                 _LOG.exception("host readiness sample failed")
                 blockers = ["host readiness could not be sampled"]
             try:
-                if blockers and self.core.pause_for_host_safety(self.session_id, blockers):
-                    interrupted, failures = await self._interrupt_active_jobs()
-                    _LOG.warning(
-                        "host readiness paused session %s; interruption requested for %s job(s), %s failed",
-                        self.session_id,
-                        interrupted,
-                        failures,
-                    )
+                if not blockers:
+                    handled_jobs.clear()
+                else:
+                    session = self.core.session(self.session_id)
+                    live_jobs = {
+                        job.id
+                        for job in self.core.list_records(self.session_id, "jobs")
+                        if job.state in {"admitted", "running"}
+                    }
+                    should_pause = session.phase in ACTIVE_PHASES
+                    new_jobs = live_jobs - handled_jobs
+                    if should_pause or new_jobs:
+                        changed = self.core.pause_for_host_safety(self.session_id, blockers)
+                        targets = new_jobs
+                        interrupted, failures = await self._interrupt_active_jobs(targets)
+                        handled_jobs.update(targets)
+                        if changed or targets:
+                            _LOG.warning(
+                                "host readiness paused or guarded session %s; interruption requested for %s job(s), %s failed",
+                                self.session_id,
+                                interrupted,
+                                failures,
+                            )
             except Exception:
                 _LOG.exception("host readiness safety action failed")
             await asyncio.sleep(5)
@@ -647,13 +664,17 @@ class CoordinatorFacade:
             return True
         return False
 
-    async def _interrupt_active_jobs(self) -> tuple[int, int]:
+    async def _interrupt_active_jobs(
+        self, only_job_ids: set[str] | None = None
+    ) -> tuple[int, int]:
         if self.investigator is None:
             return 0, 0
         interrupted = 0
         failures = 0
         for job in self.core.list_records(self.session_id, "jobs"):
             if job.state not in {"admitted", "running"}:
+                continue
+            if only_job_ids is not None and job.id not in only_job_ids:
                 continue
             try:
                 await self.investigator.interrupt(job.id)

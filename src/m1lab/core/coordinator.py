@@ -805,18 +805,12 @@ class CoreApp:
             if row is None:
                 raise NotFoundError(f"session {session_id} does not exist")
             session = self._session_from_row(row)
-            if session.phase in {
-                SessionPhase.PAUSED,
-                SessionPhase.COMPLETED,
-                SessionPhase.STOPPED,
-            }:
-                return False
             live_job = tx.execute(
                 "SELECT 1 FROM jobs WHERE session_id=? AND state IN ('admitted','running') LIMIT 1",
                 (session_id,),
             ).fetchone()
-            active_work = session.phase in ACTIVE_PHASES or live_job is not None
-            if not active_work:
+            pause_phase = session.phase in ACTIVE_PHASES
+            if not pause_phase and live_job is None:
                 return False
             self.journal.append_event(
                 tx,
@@ -825,12 +819,13 @@ class CoreApp:
                 subject_id=session_id,
                 data={"blockers": reasons},
             )
-            self._transition_phase_in_tx(
-                tx,
-                session_id,
-                SessionPhase.PAUSED,
-                "host readiness guard: " + "; ".join(reasons),
-            )
+            if pause_phase:
+                self._transition_phase_in_tx(
+                    tx,
+                    session_id,
+                    SessionPhase.PAUSED,
+                    "host readiness guard: " + "; ".join(reasons),
+                )
             return True
 
     def report_usage(self, update: UsageUpdate) -> UsageResult:
