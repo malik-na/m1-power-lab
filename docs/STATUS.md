@@ -2,6 +2,11 @@
 
 This file distinguishes implemented behavior from physical qualification.
 
+The first attended native attempt failed in the host launcher before opening
+its default device path. The documented device-environment fix passes 17
+focused tests; no native capture or return is qualified yet. The failed attempt
+and responsive proxy check are retained in [evidence](evidence/2026-09-26-native-first-attempt.json).
+
 Current owner scope: build and verify the harness end to end using the m1n1
 connection. Scientific investigation remains stopped. Source `520d05b` produced
 a pinned J313 candidate through the session-linked builder; an independent

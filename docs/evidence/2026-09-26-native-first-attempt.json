@@ -1,0 +1,34 @@
+{
+  "date": "2026-09-26",
+  "model": "gpt-6-sol",
+  "reasoning_effort": "medium",
+  "session_id": "session_41cb4dc4c29f4936ad31671ceebe77fe",
+  "procedure_id": "procedure_4207ef085b004e5fb2207179c8c0d8ee",
+  "procedure_digest": "1143bc600c41b913384e7a6591b10dcce8790ce70cfdcbcc592be2bee7d1ea66",
+  "review_job_id": "job_0831ad90215d43ebaa9687868b6b52d6",
+  "review_tokens": 45845,
+  "review_usage_uncertain": false,
+  "owner_test_approved": true,
+  "owner_attendance_confirmed": true,
+  "operation_id": "operation_504292e0ac6b45beb6dceab15eea273d",
+  "initial_outcome": "unknown_effect",
+  "reconciliation": "failed",
+  "failure": "Boot client attempted nonexistent /dev/m1n1 because launcher supplied PORT instead of documented M1N1DEVICE. No native result was received.",
+  "cleanup": "Exited boot client observed; waiting helper stopped without retry; temporary boot log preserved.",
+  "recovery_observation": "Same configured USB identity responded to five fixed read-only proxy requests; remains unqualified.",
+  "failure_log_artifact": "artifact_49a925847a821b79d9033a84c3be604b0873579aaa814398df2b64213a25962c",
+  "postfailure_proxy_artifact": "artifact_4b60b1f69142682704d26126ceea09f8833d1a71adfcff018d92a00c9c172ebf",
+  "fix": "Use M1N1DEVICE for owned tty, include the variable key in helper configuration digest, and retain bounded boot-log tail/count/hash in results.",
+  "fix_tests": {
+    "command": ".venv/bin/pytest -q tests/integration/test_native_candidate_backend.py",
+    "passed": 17,
+    "scope": "Synthetic host checks only; corrected launcher has not booted the Mac."
+  },
+  "limitations": [
+    "No native channel or recovery qualification",
+    "Connection generation is not independent boot attestation",
+    "No automatic repeat; a changed helper configuration needs new review/approval",
+    "Live lab pause/usage hold and stopped scientific investigation retained"
+  ],
+  "source_reference": "https://asahilinux.org/docs/sw/m1n1-user-guide/"
+}

@@ -123,8 +123,8 @@ session; existing accounting and unresolved-operation gates still apply.
 2. Create a private configuration JSON with exactly these string fields:
    `artifact_root`, `usb_topology`, `expected_proxy_serial_sha256`,
    `python_path`, `python_sha256`, `boot_script_path`, `boot_script_sha256`,
-   `proxyclient_path`, `proxyclient_sha256`. Paths must be absolute. The fixed boot command accepts
-   no command text from a procedure. Keep the serial digest in private setup
+   `proxyclient_path`, `proxyclient_sha256`. Paths must be absolute. The fixed boot command selects the owned tty through `M1N1DEVICE` and
+   accepts no command text from a procedure. Keep the serial digest in private setup
    evidence. Publish the reviewed configuration/tool provenance with the
    procedure's artifacts.
 3. From an operator process with the required device access, launch

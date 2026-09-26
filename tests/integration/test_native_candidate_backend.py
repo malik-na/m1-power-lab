@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from dataclasses import replace
 from functools import partial
 import hashlib
+import json
 import os
 from pathlib import Path
 import signal
@@ -68,7 +69,8 @@ def _dispatch(backend, *, seconds=30):
 
 def _synthetic_environment(monkeypatch, backend, events, *, raw=b"fixed frame bytes",
                            status="complete", observed=True, return_proxy=True,
-                           capture_error=False, tool_exit=0, launch_seconds=20):
+                           capture_error=False, tool_exit=0, launch_seconds=20,
+                           boot_log=b""):
     monkeypatch.setattr(backend, "_verify_tools", lambda: events.append("verify_tools"))
 
     def tty(vid, _pid, _deadline, *, proxy):
@@ -161,10 +163,12 @@ def _synthetic_environment(monkeypatch, backend, events, *, raw=b"fixed frame by
         assert argv[4:] == [str(backend.artifact_root / "Image.gz"),
                             str(backend.artifact_root / "j313.dtb"),
                             str(backend.artifact_root / "initramfs.cpio.gz")]
-        assert kwargs["env"]["PORT"] == str(backend.device_root / "ttyACM0")
+        assert kwargs["env"]["M1N1DEVICE"] == str(backend.device_root / "ttyACM0")
+        assert "PORT" not in kwargs["env"]
         assert kwargs["env"]["PYTHONPATH"] == str(backend.proxyclient_path)
         assert kwargs["start_new_session"] is True
         assert isinstance(kwargs["preexec_fn"], partial)
+        kwargs["stdout"].write(boot_log)
         return Process()
 
     monkeypatch.setattr(module, "M1N1Observer", Observer)
@@ -193,6 +197,29 @@ def test_complete_synthetic_round_trip_closes_proxy_before_launch(tmp_path, monk
     assert backend.inspect().available is False
 
 
+def test_device_environment_key_changes_configuration_digest(tmp_path):
+    backend = _backend(tmp_path)
+    old_configuration = {
+        "usb_topology": backend.usb_topology,
+        "proxy_serial_sha256": backend.expected_proxy_serial_sha256,
+        "python_sha256": backend.python_sha256,
+        "python_path": str(backend.python_path),
+        "boot_script_sha256": backend.boot_script_sha256,
+        "boot_script_path": str(backend.boot_script_path),
+        "proxyclient_path": str(backend.proxyclient_path),
+        "proxyclient_sha256": backend.proxyclient_sha256,
+        "bootargs": "console=tty0 earlycon rdinit=/init panic=10",
+    }
+    old_digest = hashlib.sha256(json.dumps(
+        old_configuration, sort_keys=True, separators=(",", ":"),
+    ).encode()).hexdigest()
+    assert backend.configuration_digest != old_digest
+    old_configuration["device_env_key"] = "M1N1DEVICE"
+    assert backend.configuration_digest == hashlib.sha256(json.dumps(
+        old_configuration, sort_keys=True, separators=(",", ":"),
+    ).encode()).hexdigest()
+
+
 def test_backend_refuses_inexact_approval_before_tool_entry(tmp_path, monkeypatch):
     backend = _backend(tmp_path)
     events = []
@@ -215,6 +242,22 @@ def test_additional_reviewed_artifact_digest_does_not_block_fixed_bundle(tmp_pat
         dispatch = replace(dispatch, artifact_digests=dispatch.artifact_digests + ("3" * 64,))
         result = backend.execute(dispatch)
     assert result.status is HardwareResultStatus.COMPLETED
+    assert events.count("launch") == 1
+
+
+def test_failed_boot_tool_retains_bounded_log_evidence_in_unknown_result(tmp_path, monkeypatch):
+    backend = _backend(tmp_path)
+    events = []
+    log = b"synthetic traceback: missing proxy device\n" + b"x" * 6000
+    _synthetic_environment(monkeypatch, backend, events, tool_exit=2, boot_log=log)
+    with backend:
+        result = backend.execute(_dispatch(backend))
+    assert result.status is HardwareResultStatus.UNKNOWN
+    assert result.values["boot_tool_exit_code"] == 2
+    assert result.values["boot_log_bytes"] == len(log)
+    assert result.values["boot_log_sha256"] == hashlib.sha256(log).hexdigest()
+    assert result.values["boot_log_tail"] == log.decode()[-4096:]
+    assert len(result.values["boot_log_tail"]) == 4096
     assert events.count("launch") == 1
 
 

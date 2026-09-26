@@ -1,5 +1,18 @@
 # Qualification gates
 
+## First attended native attempt
+
+The owner-approved three-sample attempt reached coordinator/helper dispatch.
+The boot client failed opening nonexistent `/dev/m1n1`: the launcher supplied
+`PORT`, while the documented m1n1 interface uses `M1N1DEVICE`. No native result
+was received. The waiting helper was stopped; the initial `unknown_effect`
+record was preserved and reconciled as **failed** using the saved traceback
+and a successful same-device, five-request read-only proxy observation.
+The corrected launcher binds `M1N1DEVICE` into its configuration digest and
+retains a bounded boot-log tail/count/hash. Seventeen focused host tests pass.
+The corrected physical attempt remains pending; this failure does not qualify
+native USB, reboot or recovery. See [attempt evidence](evidence/2026-09-26-native-first-attempt.json).
+
 ## Host-only gate
 
 - The attended native path now connects coordinator admission, typed helper

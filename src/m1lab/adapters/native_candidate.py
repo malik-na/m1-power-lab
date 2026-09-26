@@ -36,6 +36,7 @@ _TOPOLOGY = re.compile(r"[0-9]+-[0-9]+(?:\.[0-9]+)*\Z")
 _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 _TTY = re.compile(r"ttyACM[0-9]+\Z")
 _BOOTARGS = "console=tty0 earlycon rdinit=/init panic=10"
+_DEVICE_ENV_KEY = "M1N1DEVICE"
 _MAX_TOOL_BYTES = 128 << 20
 _MAX_PROXYCLIENT_FILES = 4096
 _MAX_PROXYCLIENT_BYTES = 256 << 20
@@ -92,6 +93,7 @@ class NativeCandidateBackend:
             "boot_script_path": str(boot_script_path),
             "proxyclient_path": str(proxyclient_path),
             "proxyclient_sha256": proxyclient_sha256,
+            "device_env_key": _DEVICE_ENV_KEY,
             "bootargs": _BOOTARGS,
         }
         self.configuration_digest = hashlib.sha256(json.dumps(
@@ -161,6 +163,7 @@ class NativeCandidateBackend:
         complete = False
         tool_started = False
         tool_exit: int | None = None
+        boot_log = b""
         return_epoch: str | None = None
         reason = "native candidate did not complete"
         try:
@@ -191,7 +194,7 @@ class NativeCandidateBackend:
                         stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
                         cwd=self.proxyclient_path,
                         env={"PATH": "/usr/bin:/bin", "PYTHONPATH": str(self.proxyclient_path),
-                             "PORT": str(proxy_device), "PYTHONDONTWRITEBYTECODE": "1"},
+                             _DEVICE_ENV_KEY: str(proxy_device), "PYTHONDONTWRITEBYTECODE": "1"},
                         start_new_session=True,
                         preexec_fn=partial(_bind_child_to_worker, os.getpid()),
                     )
@@ -217,8 +220,12 @@ class NativeCandidateBackend:
                     except Exception as exc:
                         stop_reason = f"capture_{type(exc).__name__}"[:80]
                     finally:
-                        tool_exit = _finish_process(process, total_deadline)
-                    if os.fstat(log.fileno()).st_size > _MAX_LOG_BYTES:
+                        try:
+                            tool_exit = _finish_process(process, total_deadline)
+                        finally:
+                            log.seek(0)
+                            boot_log = log.read(_MAX_LOG_BYTES + 1)
+                    if len(boot_log) > _MAX_LOG_BYTES:
                         reason = "boot tool log exceeded its fixed bound"
                         complete = False
                 # The proxy USB connection must re-enumerate and pass five
@@ -247,6 +254,9 @@ class NativeCandidateBackend:
             "return_boot_epoch": return_epoch,
             "native_stop_reason": stop_reason,
             "boot_tool_exit_code": tool_exit,
+            "boot_log_bytes": len(boot_log),
+            "boot_log_sha256": hashlib.sha256(boot_log).hexdigest(),
+            "boot_log_tail": boot_log.decode("utf-8", errors="replace")[-4096:],
             "connection_generation_only": True,
         }
         return HardwareResult(
