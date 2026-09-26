@@ -147,8 +147,9 @@ service or another coordinator owns the data directory; submit jobs through the
 owner interface while the service is running.
 
 For standalone evidence input, `--evidence` accepts only UTF-8 regular files up
-to 1 MB and does not follow symlinks. Common credential forms, email addresses,
-and home-directory prefixes are scrubbed from evidence text and labels. Review
+to 1 MB and does not follow symlinks. Common credential forms, credential-named
+JSON fields, email addresses, and home-directory prefixes are scrubbed from
+evidence text and labels. Review
 selected material for other personal data or unrelated private contents before
 starting the turn; automated scrubbing cannot identify every such case.
 

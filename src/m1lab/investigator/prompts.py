@@ -264,7 +264,48 @@ def scrub_text(value: str) -> str:
         cleaned = pattern.sub(lambda match: (match.group(1) if match.lastindex else "") + "[REDACTED]", cleaned)
     for pattern in _PERSONAL_TEXT:
         cleaned = pattern.sub("[PERSONAL_DATA_REDACTED]", cleaned)
+    try:
+        document = json.loads(value)
+        scrubbed, changed = _scrub_json(document)
+    except (json.JSONDecodeError, RecursionError, TypeError, ValueError):
+        pass
+    else:
+        if changed:
+            cleaned = json.dumps(scrubbed, ensure_ascii=False)
     return cleaned
+
+
+def _scrub_json(value: Any) -> tuple[Any, bool]:
+    if isinstance(value, dict):
+        result: dict[str, Any] = {}
+        changed = False
+        for key, item in value.items():
+            if _SECRET_KEY.search(str(key)):
+                result[key] = "[REDACTED]"
+                changed = True
+            else:
+                result[key], child_changed = _scrub_json(item)
+                changed |= child_changed
+        return result, changed
+    if isinstance(value, list):
+        result = []
+        changed = False
+        for item in value:
+            scrubbed, child_changed = _scrub_json(item)
+            result.append(scrubbed)
+            changed |= child_changed
+        return result, changed
+    if isinstance(value, str):
+        scrubbed = value
+        for pattern in _SECRET_TEXT:
+            scrubbed = pattern.sub(
+                lambda match: (match.group(1) if match.lastindex else "") + "[REDACTED]",
+                scrubbed,
+            )
+        for pattern in _PERSONAL_TEXT:
+            scrubbed = pattern.sub("[PERSONAL_DATA_REDACTED]", scrubbed)
+        return scrubbed, scrubbed != value
+    return value, False
 
 
 def bounded(value: Any, *, depth: int = 0) -> Any:
