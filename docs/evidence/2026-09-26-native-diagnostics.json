@@ -1,0 +1,27 @@
+{
+  "date": "2026-09-26",
+  "base_source": "f7d1ebfb9a0792f391feea76fc2c9ce5a3ff558e",
+  "coordination": {"model": "gpt-6-astra", "reasoning_effort": "xhigh"},
+  "implementation_and_review": {"model": "gpt-6-sol", "reasoning_effort": "medium"},
+  "demonstrated_failures": [
+    "Third physical attempt's unnamed boot log was lost after interrupted extraction and helper cleanup.",
+    "Old target main path with absent UDC reported generic TimeoutError without identifying the failed startup stage."
+  ],
+  "changes": [
+    "Private, exclusive operation-SHA256-named boot log; unbuffered child output; existing 64 KiB process file-size bound retained; policy and directory bound into configuration digest.",
+    "Fixed target startup/failure stage markers and a five-second failure-only display hold; existing startup, watchdog and capture behavior retained."
+  ],
+  "tests": [
+    {"command": ".venv/bin/pytest -q tests/integration/test_native_candidate_backend.py tests/integration/test_native_helper_launcher.py", "passed": 30, "seconds": 1.08, "scope": "Includes real synthetic child output retained after worker SIGKILL and no-overwrite check."},
+    {"command": ".venv/bin/pytest -q tests/integration/test_native_boot.py tests/integration/test_native_capture.py tests/integration/test_native_identity.py", "passed": 31, "seconds": 8.40, "scope": "Includes actual native_boot.main path with no UDC reporting stage=udc_wait."},
+    {"command": "sh -n target/native-init", "result": "passed"},
+    {"command": "git diff --check", "result": "passed"}
+  ],
+  "review": "Independent host and target crossreviews passed with no blocking finding.",
+  "limitations": [
+    "No fourth physical attempt is approved or dispatched.",
+    "Host boot-client logs cannot observe native /init after USB handoff; physical console visibility remains unverified.",
+    "Native capture and automatic return remain unqualified; no USB role-change hypothesis is treated as fact.",
+    "Live investigation remains paused with its usage hold intact; scientific investigation remains stopped."
+  ]
+}

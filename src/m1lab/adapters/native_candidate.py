@@ -21,11 +21,11 @@ import signal
 import stat
 import subprocess
 import termios
-from tempfile import TemporaryFile
 from threading import Event, Thread
 import time
 import tty
 from uuid import uuid4
+from typing import BinaryIO
 
 from .hardware import (
     HardwareCapability, HardwareDispatch, HardwareError, HardwareResult,
@@ -43,6 +43,7 @@ _BOOTARGS = "console=tty0 earlycon rdinit=/init panic=10"
 _DEVICE_ENV_KEY = "M1N1DEVICE"
 _CONSOLE_CONTROL = "pty-stdin-miniterm-ctrl-]"
 _RETURN_WATCH = "same-topology-proxy-generation-v1"
+_BOOT_LOG_RETENTION = "private-operation-sha256-log-v1"
 _MAX_TOOL_BYTES = 128 << 20
 _MAX_PROXYCLIENT_FILES = 4096
 _MAX_PROXYCLIENT_BYTES = 256 << 20
@@ -62,7 +63,7 @@ class NativeCandidateBackend:
         self, *, artifact_root: Path, usb_topology: str,
         expected_proxy_serial_sha256: str, python_path: Path, python_sha256: str,
         boot_script_path: Path, boot_script_sha256: str, proxyclient_path: Path,
-        proxyclient_sha256: str,
+        proxyclient_sha256: str, diagnostic_dir: Path,
         sysfs_root: Path = Path("/sys/class/tty"), device_root: Path = Path("/dev"),
     ) -> None:
         if not _TOPOLOGY.fullmatch(usb_topology):
@@ -74,6 +75,7 @@ class NativeCandidateBackend:
             if not _DIGEST.fullmatch(digest):
                 raise ValueError("native candidate digest must be lowercase SHA-256")
         for path in (artifact_root, python_path, boot_script_path, proxyclient_path,
+                     diagnostic_dir,
                      sysfs_root, device_root):
             if not Path(path).is_absolute():
                 raise ValueError("native candidate paths must be absolute")
@@ -88,6 +90,7 @@ class NativeCandidateBackend:
         self.boot_script_sha256 = boot_script_sha256
         self.proxyclient_path = Path(proxyclient_path)
         self.proxyclient_sha256 = proxyclient_sha256
+        self.diagnostic_dir = Path(diagnostic_dir)
         self.sysfs_root = Path(sysfs_root)
         self.device_root = Path(device_root)
         fixed = {
@@ -102,6 +105,8 @@ class NativeCandidateBackend:
             "device_env_key": _DEVICE_ENV_KEY,
             "console_control": _CONSOLE_CONTROL,
             "return_watch": _RETURN_WATCH,
+            "boot_log_retention": _BOOT_LOG_RETENTION,
+            "diagnostic_dir": str(diagnostic_dir),
             "bootargs": _BOOTARGS,
         }
         self.configuration_digest = hashlib.sha256(json.dumps(
@@ -198,7 +203,7 @@ class NativeCandidateBackend:
                     raise NativeCandidateError("original owned proxy enumeration is unavailable")
                 proxy_device = self._observer.device
                 self._close_observer()
-                with TemporaryFile(mode="w+b") as log:
+                with self._open_boot_log(dispatch.coordinator_operation_id) as log:
                     console_master, console_slave = pty.openpty()
                     try:
                         tty.setraw(console_slave, termios.TCSANOW)
@@ -209,7 +214,8 @@ class NativeCandidateBackend:
                             stdin=console_slave, stdout=log, stderr=subprocess.STDOUT,
                             cwd=self.proxyclient_path,
                             env={"PATH": "/usr/bin:/bin", "PYTHONPATH": str(self.proxyclient_path),
-                                 _DEVICE_ENV_KEY: str(proxy_device), "PYTHONDONTWRITEBYTECODE": "1"},
+                                 _DEVICE_ENV_KEY: str(proxy_device), "PYTHONDONTWRITEBYTECODE": "1",
+                                 "PYTHONUNBUFFERED": "1"},
                             start_new_session=True,
                             preexec_fn=partial(_bind_child_to_worker, os.getpid()),
                         )
@@ -295,6 +301,37 @@ class NativeCandidateBackend:
             started_at=started_at, finished_at=datetime.now(timezone.utc),
             boot_epoch=dispatch.boot_epoch, values=values, payload=raw, message=reason,
         )
+
+    def _boot_log_path(self, coordinator_operation_id: str) -> Path:
+        digest = hashlib.sha256(coordinator_operation_id.encode("utf-8")).hexdigest()
+        return self.diagnostic_dir / f"{digest}.boot.log"
+
+    def _open_boot_log(self, coordinator_operation_id: str) -> BinaryIO:
+        """Retain one private, bounded child log even if the worker dies."""
+
+        parent = self.diagnostic_dir.parent
+        info = parent.lstat()
+        if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid()
+                or info.st_mode & 0o077):
+            raise NativeCandidateError("native helper state directory is not private")
+        try:
+            self.diagnostic_dir.mkdir(mode=0o700)
+        except FileExistsError:
+            pass
+        info = self.diagnostic_dir.lstat()
+        if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid()
+                or info.st_mode & 0o077):
+            raise NativeCandidateError("native boot log directory is not private")
+        flags = os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            fd = os.open(self._boot_log_path(coordinator_operation_id), flags, 0o600)
+        except FileExistsError as exc:
+            raise NativeCandidateError("boot log for this operation already exists") from exc
+        try:
+            return os.fdopen(fd, "w+b", buffering=0)
+        except BaseException:
+            os.close(fd)
+            raise
 
     def _verify_tools(self) -> None:
         _verify_file_hash(self.python_path, self.python_sha256)

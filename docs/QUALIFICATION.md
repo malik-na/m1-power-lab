@@ -1,5 +1,26 @@
 # Qualification gates
 
+## Native failure diagnostics
+
+The third attempt lost its unnamed boot log when the helper was stopped.
+The host now retains one private, at most 64 KiB log per operation in the
+helper state directory. A real synthetic worker-kill regression verifies that
+the child's output remains readable; duplicate operations cannot overwrite it.
+Explicit post-operation readback can publish the log as private evidence.
+Target startup now prints fixed stage markers; an actual `main` path with no
+UDC reports `stage=udc_wait` instead of only a generic timeout. Failed startup
+holds the display for five seconds before the existing reboot request. The
+150-second startup deadline and 180-second userspace watchdog are unchanged.
+
+The host backend/helper-launcher run passed **30 tests in 1.08 seconds**;
+the target boot/capture/identity run passed **31 tests in 8.40 seconds**.
+Both independent crossreviews found no blocker. These checks use synthetic
+devices, not the Mac. Host boot logs stop at the USB handoff; the new target
+markers need an available console, whose actual visibility remains unqualified.
+This change does not establish why native USB failed or qualify a round trip.
+A new immutable candidate, exact review and fresh attended approval are required.
+See [diagnostic evidence](evidence/2026-09-26-native-diagnostics.json).
+
 ## Third attended attempt: missed proxy window
 
 At `083646a`, a fresh exact review accepted procedure `b50f8488…e17e3a`
@@ -448,7 +469,9 @@ stopped. See [retry evidence](evidence/2026-09-26-native-retry.json).
 ## Native measurement gate
 
 - A finite image plus launch manifest returns attributable results.
-- The standalone target collector source emits framed raw sysfs observations; it has not been integrated into or run from an M1 image.
+- The standalone target collector emits framed raw sysfs observations and is
+  integrated into the pinned RAM-only candidate. Execution and result capture
+  from that image on the physical M1 remain unproven.
 - Offline `m1lab native-import` validates framing and lineage but leaves physical source and capture timing unverified; it does not satisfy the live-result gate.
 - Return or physical recovery is demonstrated for the selected mode.
 - Sensor provenance, cadence, energy boundary and observer effect are known.

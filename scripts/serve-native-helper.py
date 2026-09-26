@@ -66,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         if os.getppid() != args.owner_pid:
             raise HelperSupervisorError("qualification owner changed during startup")
         config = _read_config(args.config)
+        config["diagnostic_dir"] = args.state_dir.absolute() / "boot-logs"
         # Construction validates fixed parameters but never enters a backend.
         NativeCandidateBackend(**config)
         backend_factory = partial(NativeCandidateBackend, **config)

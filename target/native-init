@@ -3,19 +3,32 @@
 [ "$$" -eq 1 ] || exit 2
 export PATH=/usr/bin:/usr/sbin
 bb=/usr/bin/busybox
+echo 'M1Lab stage=init_entry'
 finish() {
+    status=$?
+    if [ "$status" -ne 0 ]; then
+        echo "M1Lab failure stage=init_exit status=$status" >&2
+        # Leave the fixed failure markers visible before the existing reboot.
+        $bb sleep 5
+    fi
     echo 'M1Lab: reboot requested; host must independently observe recovery.' >&2
     $bb reboot -f
     # If reboot returns, remain quiescent for owner recovery, never rerun capture.
     while :; do $bb sleep 60; done
 }
 trap finish EXIT
+echo 'M1Lab stage=mount_dev'
 $bb mount -t devtmpfs devtmpfs /dev || exit 1
+echo 'M1Lab stage=mount_proc'
 $bb mount -t proc proc /proc || exit 1
+echo 'M1Lab stage=mount_sys'
 $bb mount -t sysfs sysfs /sys || exit 1
+echo 'M1Lab stage=mount_run'
 $bb mount -t tmpfs -o mode=0755 tmpfs /run || exit 1
+echo 'M1Lab stage=mounts_ready'
 # Independent userspace watchdog also covers module/channel setup. A kernel
 # hang can defeat it: the host deadline and physical recovery remain required.
 ( $bb sleep 180; $bb reboot -f ) &
+echo 'M1Lab stage=python_start'
 /usr/bin/python3 -I /usr/lib/m1lab/native_boot.py
 exit $?

@@ -75,6 +75,26 @@ def test_empty_eof_waits_only_until_fixed_deadline():
     assert 0.10 <= elapsed < 0.75
 
 
+def test_udc_timeout_identifies_stage_before_native_launch(monkeypatch, capsys):
+    monkeypatch.setattr(native_boot, "_command", lambda *_args: None)
+    monkeypatch.setattr(native_boot, "BOOT_SECONDS", 0.12)
+
+    class NoUdc:
+        def glob(self, _pattern):
+            return iter(())
+
+    original_path = native_boot.Path
+    monkeypatch.setattr(
+        native_boot, "Path",
+        lambda path: NoUdc() if path == "/sys/class/udc" else original_path(path),
+    )
+    assert native_boot.main() == 2
+    output = capsys.readouterr().out
+    assert "M1Lab stage=udc_wait\n" in output
+    assert "M1Lab failure stage=udc_wait type=TimeoutError\n" in output
+    assert "launch_wait" not in output
+
+
 @pytest.mark.parametrize("wire", [b"{}\n{}\n", b"x" * 32 + b"\n"])
 def test_multiple_or_oversized_launch_line_is_rejected(monkeypatch, wire):
     monkeypatch.setattr(native_boot, "MAX_LAUNCH_BYTES", 32)

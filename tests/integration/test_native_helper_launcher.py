@@ -65,6 +65,7 @@ def test_valid_config_passes_fixed_backend_factory_and_parent_lease(tmp_path, mo
     assert factory.func is launcher.NativeCandidateBackend
     assert factory.keywords["boot_script_path"] == tmp_path / "linux.py"
     assert factory.keywords["proxyclient_sha256"] == "d" * 64
+    assert factory.keywords["diagnostic_dir"] == tmp_path / "state" / "boot-logs"
     with pytest.raises(OSError):
         os.fstat(read_fd)  # launcher closed its owner lease
 

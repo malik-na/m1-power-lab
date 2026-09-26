@@ -2,6 +2,19 @@
 
 This file distinguishes implemented behavior from physical qualification.
 
+Owner-selected coordination uses the installed Agents Orchestrator on
+`gpt-6-astra` with `xhigh` reasoning. All other development and review agents use
+`gpt-6-sol` with medium reasoning. One integration owner controls commits and
+physical dispatch; the orchestrator assigns bounded tasks against the existing plan.
+
+The next candidate adds diagnostics for the demonstrated missing-evidence gap:
+private boot logs survive helper death, and target startup emits fixed stage
+markers with a five-second failure-only hold before its existing reboot request.
+Thirty host backend/launcher checks and 31 target boot/capture/identity checks
+passed; both independent crossreviews are clear. Console visibility on the Mac
+is still unverified. Rebuild, exact review and fresh attended approval precede
+another physical attempt. See [diagnostic evidence](evidence/2026-09-26-native-diagnostics.json).
+
 The third attended native attempt exposed a return-watching gap: proxy USB
 appeared for about five seconds while the helper was still waiting for the
 native channel. No samples were captured. The host wait was stopped; a bounded

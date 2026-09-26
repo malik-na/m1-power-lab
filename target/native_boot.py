@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+from collections.abc import Callable
 import errno
 import hashlib
 import os
@@ -63,12 +64,15 @@ def _launch_line(fd: int, deadline: float) -> bytes:
     raise ValueError("native launch exceeds size bound")
 
 
-def _configure_gadget(deadline: float) -> Path:
+def _configure_gadget(deadline: float, mark: Callable[[str], None]) -> Path:
     for module in ("phy_apple_atc", "tps6598x", "dwc3_apple", "libcomposite", "usb_f_acm"):
+        mark(f"module_{module}")
         _command(deadline, "/usr/bin/modprobe", module)
+    mark("configfs_mount")
     _command(deadline, "/usr/bin/busybox", "mount", "-t", "configfs", "configfs", "/sys/kernel/config")
     # The connected port must enter peripheral mode through the kernel's role
     # switch. Do not guess a port or force a controller role on this candidate.
+    mark("udc_wait")
     while True:
         controllers = sorted(Path("/sys/class/udc").glob("*"))
         if len(controllers) > 1:
@@ -77,6 +81,7 @@ def _configure_gadget(deadline: float) -> Path:
             controller = controllers[0]
             break
         time.sleep(min(0.1, _remaining(deadline)))
+    mark("acm_bind")
     GADGET.mkdir()
     (GADGET / "idVendor").write_text("0x1d6b\n")
     (GADGET / "idProduct").write_text("0x0104\n")
@@ -92,6 +97,7 @@ def _configure_gadget(deadline: float) -> Path:
     (GADGET / "functions/acm.usb0").mkdir()
     (configuration / "acm.usb0").symlink_to("../../functions/acm.usb0")
     (GADGET / "UDC").write_text(controller.name + "\n")
+    mark("tty_wait")
     while not Path("/dev/ttyGS0").exists():
         time.sleep(min(0.1, _remaining(deadline)))
     return Path("/dev/ttyGS0")
@@ -134,11 +140,21 @@ def _observe_linux(launch: dict, collector: object) -> dict[str, str]:
 def main() -> int:
     deadline = time.monotonic() + BOOT_SECONDS
     fd = None
+    stage = "python_entry"
+
+    def mark(value: str) -> None:
+        nonlocal stage
+        stage = value
+        print(f"M1Lab stage={value}", flush=True)
+
     try:
-        channel = _configure_gadget(deadline)
+        mark("python_entry")
+        channel = _configure_gadget(deadline, mark)
         fd = os.open(channel, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
         tty.setraw(fd, termios.TCSANOW)
+        mark("launch_wait")
         raw = _launch_line(fd, deadline)
+        mark("launch_received")
         launch_path = Path("/run/m1lab-launch.json")
         launch_path.write_bytes(raw)
         # -I excludes the script directory; load only this image's exact source.
@@ -152,13 +168,15 @@ def main() -> int:
         # expiry, so bound the requested duration here, not approval headroom.
         _check_capture_window(launch, deadline)
         observed_linux = _observe_linux(launch, collector)
+        mark("capture")
         collector._emit(fd, launch, observed_linux=observed_linux)
+        mark("capture_done")
         # Let queued result bytes reach the host before the reboot attempt.
         # No tcdrain: an absent host must not extend the finite window.
         time.sleep(min(2, _remaining(deadline)))
         return 0
     except Exception as exc:
-        print(f"M1Lab native capture stopped ({type(exc).__name__})", flush=True)
+        print(f"M1Lab failure stage={stage} type={type(exc).__name__}", flush=True)
         return 2
     finally:
         if fd is not None:

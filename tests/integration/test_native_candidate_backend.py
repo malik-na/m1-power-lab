@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import select
 import signal
 import subprocess
 import sys
@@ -36,7 +37,7 @@ def _backend(tmp_path):
     script = tmp_path / "linux.py"
     script.write_bytes(b"synthetic boot script\n")
     return module.NativeCandidateBackend(
-        artifact_root=tmp_path, usb_topology="1-1",
+        artifact_root=tmp_path, diagnostic_dir=tmp_path / "boot-logs", usb_topology="1-1",
         expected_proxy_serial_sha256=SERIAL,
         python_path=python, python_sha256=hashlib.sha256(python.read_bytes()).hexdigest(),
         boot_script_path=script,
@@ -185,6 +186,7 @@ def _synthetic_environment(monkeypatch, backend, events, *, raw=b"fixed frame by
         assert kwargs["env"]["M1N1DEVICE"] == str(backend.device_root / "ttyACM0")
         assert "PORT" not in kwargs["env"]
         assert kwargs["env"]["PYTHONPATH"] == str(backend.proxyclient_path)
+        assert kwargs["env"]["PYTHONUNBUFFERED"] == "1"
         assert kwargs["start_new_session"] is True
         assert isinstance(kwargs["preexec_fn"], partial)
         assert os.isatty(kwargs["stdin"])
@@ -243,6 +245,11 @@ def test_device_environment_key_changes_configuration_digest(tmp_path):
         old_configuration, sort_keys=True, separators=(",", ":"),
     ).encode()).hexdigest()
     old_configuration["return_watch"] = "same-topology-proxy-generation-v1"
+    assert backend.configuration_digest != hashlib.sha256(json.dumps(
+        old_configuration, sort_keys=True, separators=(",", ":"),
+    ).encode()).hexdigest()
+    old_configuration["boot_log_retention"] = "private-operation-sha256-log-v1"
+    old_configuration["diagnostic_dir"] = str(backend.diagnostic_dir)
     assert backend.configuration_digest == hashlib.sha256(json.dumps(
         old_configuration, sort_keys=True, separators=(",", ":"),
     ).encode()).hexdigest()
@@ -289,6 +296,72 @@ def test_failed_boot_tool_retains_bounded_log_evidence_in_unknown_result(tmp_pat
     assert events.count("launch") == 1
 
 
+def test_private_boot_log_survives_worker_kill(tmp_path):
+    """A real child writes while its synthetic helper worker is killed mid-wait."""
+
+    read_fd, write_fd = os.pipe()
+    worker = os.fork()
+    if worker == 0:
+        os.close(read_fd)
+        try:
+            patch = pytest.MonkeyPatch()
+            backend = _backend(tmp_path)
+            events = []
+            actual_popen = subprocess.Popen
+            _synthetic_environment(patch, backend, events)
+            boot_script = tmp_path / "linux.py"
+            boot_script.write_text(
+                "import time\nprint('Preparing to boot kernel')\ntime.sleep(30)\n"
+            )
+            backend.python_path = Path(sys.executable).resolve()
+            backend.boot_script_path = boot_script
+
+            def launched(argv, **kwargs):
+                process = actual_popen(argv, **kwargs)
+                deadline = time.monotonic() + 2
+                while os.fstat(kwargs["stdout"].fileno()).st_size == 0 and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                assert os.fstat(kwargs["stdout"].fileno()).st_size > 0
+                os.write(write_fd, b"boot-log-ready\n")
+                return process
+
+            patch.setattr(module.subprocess, "Popen", launched)
+            with backend:
+                def blocked_native(vid, _pid, _deadline, *, proxy, cancel=None):
+                    if not proxy:
+                        time.sleep(30)
+                    return backend.device_root / "ttyACM0"
+
+                patch.setattr(backend, "_wait_for_tty", blocked_native)
+                backend.execute(_dispatch(backend))
+            os.write(write_fd, b"result-returned\n")
+        finally:
+            os._exit(0)
+
+    os.close(write_fd)
+    try:
+        assert select.select([read_fd], [], [], 3)[0], "synthetic boot log was not written"
+        assert os.read(read_fd, 256) == b"boot-log-ready\n"
+    finally:
+        os.kill(worker, signal.SIGKILL)
+        os.waitpid(worker, 0)
+    assert os.read(read_fd, 256) == b""
+    os.close(read_fd)
+    log_path = tmp_path / "boot-logs" / (hashlib.sha256(b"coordinator-op").hexdigest() + ".boot.log")
+    assert log_path.read_bytes() == b"Preparing to boot kernel\n"
+    assert log_path.stat().st_mode & 0o077 == 0
+    assert log_path.parent.stat().st_mode & 0o077 == 0
+
+
+def test_private_boot_log_never_overwrites_previous_attempt(tmp_path):
+    backend = _backend(tmp_path)
+    with backend._open_boot_log("coordinator-op") as stream:
+        stream.write(b"first attempt evidence\n")
+    with pytest.raises(module.NativeCandidateError, match="already exists"):
+        backend._open_boot_log("coordinator-op")
+    assert backend._boot_log_path("coordinator-op").read_bytes() == b"first attempt evidence\n"
+
+
 def test_real_child_needs_tty_stdin_and_graceful_miniterm_exit(tmp_path, monkeypatch):
     """The fixed launcher reaches a console that calls tcgetattr and waits for Ctrl+]."""
 
@@ -310,7 +383,7 @@ def test_real_child_needs_tty_stdin_and_graceful_miniterm_exit(tmp_path, monkeyp
     (library / "module.py").write_text("# synthetic fixed import\n")
     python = Path(sys.executable).resolve()
     backend = module.NativeCandidateBackend(
-        artifact_root=tmp_path, usb_topology="1-1",
+        artifact_root=tmp_path, diagnostic_dir=tmp_path / "boot-logs", usb_topology="1-1",
         expected_proxy_serial_sha256=SERIAL,
         python_path=python, python_sha256=hashlib.sha256(python.read_bytes()).hexdigest(),
         boot_script_path=boot_script,
@@ -362,7 +435,7 @@ def test_installed_pyserial_miniterm_exits_over_owned_pty(tmp_path, monkeypatch)
     library.mkdir()
     (library / "module.py").write_text("# synthetic fixed import\n")
     backend = module.NativeCandidateBackend(
-        artifact_root=tmp_path, usb_topology="1-1",
+        artifact_root=tmp_path, diagnostic_dir=tmp_path / "boot-logs", usb_topology="1-1",
         expected_proxy_serial_sha256=SERIAL,
         python_path=python, python_sha256=hashlib.sha256(python.read_bytes()).hexdigest(),
         boot_script_path=boot_script,
