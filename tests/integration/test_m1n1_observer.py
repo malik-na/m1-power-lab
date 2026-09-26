@@ -226,13 +226,18 @@ def test_probe_closes_socket_then_tty_then_owner_lock():
     ]
 
 
-@pytest.mark.parametrize("forced", [False, True], ids=["nonzero-exit", "forced-termination"])
-def test_probe_rejects_available_snapshot_when_helper_exits_abnormally(capsys, monkeypatch, forced):
+@pytest.mark.parametrize(
+    ("forced", "child_error"),
+    [(False, False), (True, False), (False, True)],
+    ids=["nonzero-exit", "forced-termination", "clean-exit-child-error"],
+)
+def test_probe_rejects_available_snapshot_when_helper_fails(capsys, monkeypatch, forced, child_error):
     module = _probe_module()
     main = module["main"]
     messages = [
         {"event": "ready"},
-        {"event": "done", "proxy_identity": {"chip_id": 0x8103, "base": 1, "bootargs_address": 2}},
+        ({"event": "error", "error_type": "SyntheticFailure"} if child_error else
+         {"event": "done", "proxy_identity": {"chip_id": 0x8103, "base": 1, "bootargs_address": 2}}),
     ]
 
     class Connection:
@@ -247,7 +252,7 @@ def test_probe_rejects_available_snapshot_when_helper_exits_abnormally(capsys, m
 
     class Process:
         def __init__(self, **_kwargs):
-            self.exitcode = 0 if forced else 9
+            self.exitcode = 0 if forced or child_error else 9
             self.alive = forced
 
         def start(self):
@@ -286,5 +291,9 @@ def test_probe_rejects_available_snapshot_when_helper_exits_abnormally(capsys, m
     assert main(["--device", "/dev/ttyACM0", "--expected-serial-sha256", "a" * 64]) == 1
     output = json.loads(capsys.readouterr().out)
     assert output["available"] is False
+    assert output["mode"] == "disconnected"
+    assert output["qualified"] is False
     assert output["proxy_identity"] is None
-    assert "cleanup" in output["error"]
+    assert "observed_at" not in output
+    assert "message" not in output
+    assert ("observation" if child_error else "cleanup") in output["error"]

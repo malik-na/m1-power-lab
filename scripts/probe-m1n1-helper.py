@@ -83,6 +83,20 @@ def _receive(connection, deadline: float) -> dict:
         raise RuntimeError("helper process ended without evidence") from exc
 
 
+def _mark_unavailable(output: dict, error: str) -> None:
+    output.update(
+        available=False,
+        qualified=False,
+        mode="disconnected",
+        boot_epoch=None,
+        capabilities=[],
+        proxy_identity=None,
+        error=error,
+    )
+    output.pop("observed_at", None)
+    output.pop("message", None)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", type=Path, required=True)
@@ -145,8 +159,8 @@ def main(argv: list[str] | None = None) -> int:
                 raise RuntimeError(f"helper observation failed: {done.get('error_type', 'unknown')}")
             if snapshot.available:
                 output["proxy_identity"] = done["proxy_identity"]
-        except (RuntimeError, TimeoutError) as exc:
-            output["error"] = str(exc)
+        except Exception as exc:
+            _mark_unavailable(output, str(exc))
         finally:
             parent.close()
             process.join(timeout=max(0.0, deadline - time.monotonic()))
@@ -158,15 +172,7 @@ def main(argv: list[str] | None = None) -> int:
                 process.kill()
                 process.join(timeout=1.0)
             if forced_termination or process.exitcode != 0:
-                output.update(
-                    available=False,
-                    qualified=False,
-                    mode="disconnected",
-                    boot_epoch=None,
-                    capabilities=[],
-                    proxy_identity=None,
-                    error="helper cleanup did not exit normally",
-                )
+                _mark_unavailable(output, "helper cleanup did not exit normally")
     print(json.dumps(output, sort_keys=True))
     return 0 if output["available"] and output["proxy_identity"] is not None else 1
 
