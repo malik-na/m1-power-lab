@@ -40,6 +40,13 @@
   Serve status showed the proxy and no public Funnel entry. Actual iPhone
   access, mobile layout, reconnection, push delivery, and tailnet policy remain
   unqualified.
+- The T480 has a stable VAPID key pair in the private service state directory:
+  the private key is owned by `m1lab` with mode 0600, and the service
+  environment is root-owned with mode 0600. After restart, the HTTPS push
+  config endpoint returned HTTP 200 with `enabled=true`, `enrolled=false`,
+  and a valid 87-character base64url public key. The service remained active
+  and HTTPS `/overview` returned HTTP 200. No browser subscription or actual
+  delivery has been qualified.
 - Replay operations preserve intent, completion and unknown-effect outcomes.
 - Stale revisions, revoked approvals and exhausted budgets fail closed.
 - Coordinator restart reconciles incomplete jobs, operations and artifacts.

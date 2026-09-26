@@ -56,6 +56,9 @@ T480, HTTPS `/overview` returned HTTP 200, exact owner identity was required
 for direct loopback requests, and no public Funnel entry was enabled. The
 owner-matched investigation session remains paused. Access from the iPhone
 12 mini and tailnet policy have not been checked.
+The T480 also has a stable service-owned VAPID key pair, and the enabled push
+config endpoint responds over Serve. No phone is enrolled, so notification
+delivery remains unqualified.
 
 ## Observed execution machine
 
