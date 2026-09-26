@@ -128,6 +128,7 @@ class CoordinatorFacade:
             "session": {
                 "id": session.id,
                 "state": _ui_phase(session.phase),
+                "phase": session.phase.value,
                 "objective": session.objective,
                 "updated_at": session.updated_at.isoformat(),
             },
@@ -239,7 +240,7 @@ class CoordinatorFacade:
                 instruction=payload["message"],
                 cwd=self.workspace,
                 model=self.model,
-                kind="investigate",
+                kind="chat",
                 estimated_tokens=100_000,
                 estimated_active_seconds=900,
                 deadline_seconds=900,
@@ -479,6 +480,8 @@ class CoordinatorFacade:
         return len(self._pending_approvals(self.core.session(self.session_id).revision, self.core.snapshot(self.session_id).latest_target))
 
     def _pending_approvals(self, session_revision: int, target: Any) -> list[dict[str, Any]]:
+        if self.core.session(self.session_id).phase is not SessionPhase.AWAITING_APPROVAL:
+            return []
         if target is None:
             return []
         rows = self.core.journal.all(
@@ -746,17 +749,7 @@ def _scope_is_current(scope: dict[str, Any], uses: int, target: Any) -> bool:
 
 
 def _ui_phase(phase: SessionPhase) -> str:
-    if phase is SessionPhase.PREPARING:
-        return "ready"
-    if phase is SessionPhase.PAUSED:
-        return "paused"
-    if phase in {SessionPhase.COMPLETED, SessionPhase.STOPPED}:
-        return phase.value
-    if phase in {SessionPhase.AWAITING_APPROVAL, SessionPhase.AWAITING_REVIEW}:
-        return "waiting"
-    if phase is SessionPhase.BUDGET_EXHAUSTED:
-        return "paused"
-    return "running"
+    return phase.value
 
 
 def _target_view(target: Any) -> dict[str, Any]:

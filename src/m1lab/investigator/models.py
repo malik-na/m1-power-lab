@@ -25,7 +25,7 @@ class InvestigationRequest(BaseModel):
     instruction: str = Field(min_length=1, max_length=40_000)
     cwd: Path
     model: str = Field(min_length=1, max_length=128)
-    kind: Literal["investigate", "analyze", "review", "conclude"] = "investigate"
+    kind: Literal["investigate", "implement", "analyze", "review", "conclude", "chat"] = "investigate"
     estimated_tokens: int = Field(default=100_000, gt=0, le=100_000_000)
     estimated_active_seconds: int = Field(default=900, gt=0, le=86_400)
     deadline_seconds: int = Field(default=900, gt=0, le=86_400)

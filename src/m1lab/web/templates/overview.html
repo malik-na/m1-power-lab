@@ -16,9 +16,9 @@
   <div class="control-row" aria-label="Session controls">
     {% if session.state == 'paused' %}
       <form class="command-form" data-command-kind="session.resume"><input type="hidden" name="reason" value="owner control"><button class="primary" type="submit">Resume</button></form>
-    {% elif session.state == 'ready' %}
+    {% elif session.state == 'preparing' %}
       <form class="command-form" data-command-kind="session.start"><button class="primary" type="submit">Start session</button></form>
-    {% elif session.state in ['running', 'waiting', 'stopping'] %}
+    {% elif session.state in ['investigating', 'awaiting_review', 'awaiting_approval', 'executing', 'interpreting', 'recovering'] %}
       <form class="command-form" data-command-kind="session.pause"><input type="hidden" name="reason" value="owner control"><button type="submit">Pause</button></form>
     {% endif %}
     {% if session.state not in ['completed', 'stopped'] %}<form class="command-form" data-command-kind="session.stop" data-confirm="Stop new work and request interruption of active jobs?"><button class="danger-quiet" type="submit">Stop</button></form>{% endif %}

@@ -169,11 +169,8 @@ class CoreApp:
             session.revision += 1
             session.updated_at = utc_now()
             self._update_session(tx, session)
-            if (old_phase in ACTIVE_PHASES) != (session.phase in ACTIVE_PHASES):
-                if session.phase in ACTIVE_PHASES:
-                    self.budgets._open_segment(tx, session.id)
-                else:
-                    self.budgets._close_segment(tx, session.id)
+            if old_phase != session.phase:
+                self.budgets._sync_activity(tx, session.id, session.phase)
                 session = self._session_from_row(tx.execute("SELECT * FROM sessions WHERE id=?", (session.id,)).fetchone())
             self._history(tx, session, f"owner_command:{command.kind}")
             result = self._store_command(tx, command, CommandStatus.APPLIED, session.revision, outcome)
@@ -231,7 +228,10 @@ class CoreApp:
                 (session.id, kind, value, iso(), command.id, str(payload.get("note", ""))),
             )
         elif command.kind == CommandKind.APPROVE:
+            if session.phase is not SessionPhase.AWAITING_APPROVAL:
+                raise ConflictError("approval requires a session awaiting approval")
             self._approve_in_tx(tx, session, command)
+            session.phase = SessionPhase.INVESTIGATING
         elif command.kind == CommandKind.REVOKE:
             approval_id = str(payload.get("approval_id", ""))
             changed = tx.execute(
@@ -241,17 +241,22 @@ class CoreApp:
             if not changed.rowcount:
                 raise NotFoundError(f"active approval {approval_id} does not exist")
         elif command.kind == CommandKind.DENY:
-            if not payload.get("procedure_id"):
-                raise ValidationError("denial requires procedure_id")
-            if payload.get("procedure_revision") is not None:
-                procedure = self._procedure_in_tx(
-                    tx, str(payload["procedure_id"]), int(payload["procedure_revision"])
-                )
-                if (
-                    procedure.session_id != session.id
-                    or payload.get("procedure_digest") != procedure.digest
-                ):
-                    raise ValidationError("denial does not match the exact procedure revision")
+            if session.phase is not SessionPhase.AWAITING_APPROVAL:
+                raise ConflictError("denial requires a session awaiting approval")
+            if not all(payload.get(key) is not None for key in (
+                "procedure_id", "procedure_revision", "procedure_digest"
+            )):
+                raise ValidationError("denial requires exact procedure id, revision, and digest")
+            procedure = self._procedure_in_tx(
+                tx, str(payload["procedure_id"]), int(payload["procedure_revision"])
+            )
+            if (
+                procedure.session_id != session.id
+                or payload["procedure_digest"] != procedure.digest
+            ):
+                raise ValidationError("denial does not match the exact procedure revision")
+            self._require_current_pending_approval(tx, session, procedure)
+            session.phase = SessionPhase.INVESTIGATING
         return {"phase": session.phase}
 
     def _approve_in_tx(self, tx: sqlite3.Connection, session: SessionRecord, command: OwnerCommand) -> ApprovalRecord:
@@ -259,13 +264,7 @@ class CoreApp:
         procedure = self._procedure_in_tx(tx, str(payload.get("procedure_id", "")), int(payload.get("procedure_revision", 0)))
         if procedure.session_id != session.id:
             raise ValidationError("procedure belongs to another session")
-        accepted_review = tx.execute(
-            "SELECT id FROM reviews WHERE procedure_id=? AND procedure_revision=? "
-            "AND procedure_digest=? AND disposition='accepted' ORDER BY created_at DESC LIMIT 1",
-            (procedure.procedure_id, procedure.revision, procedure.digest),
-        ).fetchone()
-        if accepted_review is None:
-            raise ValidationError("exact procedure revision lacks an accepted review")
+        self._require_current_pending_approval(tx, session, procedure)
         scope = ApprovalScope.model_validate(payload.get("scope", {}))
         approval = ApprovalRecord(
             id=new_id("approval"),
@@ -358,19 +357,41 @@ class CoreApp:
         return snapshot
 
     def register_procedure(self, draft: ProcedureDraft) -> ProcedureRecord:
-        self.session(draft.session_id)
         canonical = draft.model_dump(mode="json")
         digest = hashlib.sha256(json_dump(canonical).encode()).hexdigest()
         with self.journal.transaction() as tx:
+            session_row = tx.execute(
+                "SELECT phase FROM sessions WHERE id=?", (draft.session_id,)
+            ).fetchone()
+            if session_row is None:
+                raise NotFoundError(f"session {draft.session_id} does not exist")
+            if SessionPhase(session_row["phase"]) not in {
+                SessionPhase.INVESTIGATING,
+                SessionPhase.INTERPRETING,
+            }:
+                raise ConflictError("procedure registration requires investigation or interpretation")
             prior = tx.execute("SELECT MAX(revision) AS revision FROM procedures WHERE procedure_id=?", (draft.procedure_id,)).fetchone()
             revision = (prior["revision"] or 0) + 1
             record = ProcedureRecord(**draft.model_dump(), revision=revision, digest=digest, created_at=utc_now())
             tx.execute("INSERT INTO procedures VALUES (?,?,?,?,?,?)", (record.procedure_id, revision, record.session_id, digest, record.model_dump_json(), iso(record.created_at)))
             self.journal.append_event(tx, kind="procedure.registered", session_id=record.session_id, subject_id=record.procedure_id, data={"revision": revision, "digest": digest})
+            self._transition_phase_in_tx(
+                tx,
+                record.session_id,
+                SessionPhase.AWAITING_REVIEW,
+                "procedure awaiting independent review",
+            )
         return record
 
     def record_review(self, review: ReviewRecord) -> ReviewRecord:
         with self.journal.transaction() as tx:
+            session_row = tx.execute(
+                "SELECT phase FROM sessions WHERE id=?", (review.session_id,)
+            ).fetchone()
+            if session_row is None:
+                raise NotFoundError(f"session {review.session_id} does not exist")
+            if SessionPhase(session_row["phase"]) is not SessionPhase.AWAITING_REVIEW:
+                raise ConflictError("review recording requires a session awaiting review")
             procedure = self._procedure_in_tx(tx, review.procedure_id, review.procedure_revision)
             if procedure.session_id != review.session_id or procedure.digest != review.procedure_digest:
                 raise ValidationError("review does not match the exact procedure revision")
@@ -388,6 +409,18 @@ class CoreApp:
                 raise ValidationError("reviewer job must be a completed review job in this session")
             tx.execute("INSERT INTO reviews VALUES (?,?,?,?,?,?,?,?)", (review.id, review.session_id, review.procedure_id, review.procedure_revision, review.procedure_digest, review.disposition, review.model_dump_json(), iso(review.created_at)))
             self.journal.append_event(tx, kind="procedure.reviewed", session_id=review.session_id, subject_id=review.id, data={"procedure_id": review.procedure_id, "revision": review.procedure_revision, "disposition": review.disposition})
+            next_phase = (
+                SessionPhase.AWAITING_APPROVAL
+                if review.disposition is ReviewDisposition.ACCEPTED
+                and any(operation.mutates_target for operation in procedure.operations)
+                else SessionPhase.INVESTIGATING
+            )
+            self._transition_phase_in_tx(
+                tx,
+                review.session_id,
+                next_phase,
+                f"procedure review {review.disposition.value}",
+            )
         return review
 
     def authorize_operation(self, request: DispatchRequest) -> OperationAuthorization:
@@ -547,6 +580,9 @@ class CoreApp:
                 if consumed.rowcount != 1:
                     raise ConflictError("approval was concurrently changed before dispatch")
             self.journal.append_event(tx, kind="operation.dispatched", session_id=row["session_id"], subject_id=operation_id, data={"boot_epoch": row["boot_epoch"]})
+            self._transition_phase_in_tx(
+                tx, row["session_id"], SessionPhase.EXECUTING, "target operation dispatched"
+            )
 
     def finish_operation(self, operation_id: str, outcome: OperationOutcome) -> None:
         with self.journal.transaction() as tx:
@@ -570,6 +606,14 @@ class CoreApp:
                     ) from exc
             tx.execute("UPDATE operations SET state=?, result_json=?, completed_at=? WHERE id=?", (outcome.state, outcome.model_dump_json(), iso(), operation_id))
             self.journal.append_event(tx, kind="operation.finished", session_id=row["session_id"], subject_id=operation_id, data=outcome.model_dump(mode="json"))
+            self._transition_phase_in_tx(
+                tx,
+                row["session_id"],
+                SessionPhase.RECOVERING
+                if outcome.state is OperationState.UNKNOWN_EFFECT
+                else SessionPhase.INTERPRETING,
+                f"operation finished as {outcome.state.value}",
+            )
 
     def reconcile_operation(
         self,
@@ -615,6 +659,12 @@ class CoreApp:
                 session_id=row["session_id"],
                 subject_id=operation_id,
                 data=result,
+            )
+            self._transition_phase_in_tx(
+                tx,
+                row["session_id"],
+                SessionPhase.INTERPRETING,
+                f"unknown operation reconciled as {resolved_state.value}",
             )
     def reconcile(self) -> ReconciliationReport:
         report = ReconciliationReport(active_clock_uncertain_sessions=self.budgets.reconcile_clock())
@@ -683,9 +733,17 @@ class CoreApp:
             if session_row is None:
                 raise NotFoundError(f"session {request.session_id} does not exist")
             session = self._session_from_row(session_row)
-            if session.phase not in ACTIVE_PHASES or not self.budgets.snapshot(session.id).admission_open:
+            wait_kinds = {
+                SessionPhase.AWAITING_REVIEW: {"review", "chat"},
+                SessionPhase.AWAITING_APPROVAL: {"chat"},
+            }
+            phase_admits = session.phase in ACTIVE_PHASES or request.kind in wait_kinds.get(
+                session.phase, set()
+            )
+            if not phase_admits or not self.budgets.snapshot(session.id).admission_open:
                 raise ConflictError("session state or budget does not admit a new job")
             tx.execute("INSERT INTO jobs VALUES (?,?,?,?,?,?,?,?,?,?,?)", (record.id, record.session_id, record.kind, None, record.state, iso(record.lease_expires_at), iso(record.deadline_at), json_dump(record.evidence_manifest), "{}", iso(now), iso(now)))
+            self.budgets._sync_activity(tx, session.id, session.phase)
             self.journal.append_event(tx, kind="job.admitted", session_id=record.session_id, subject_id=record.id, data={"kind": record.kind, "deadline_at": iso(record.deadline_at)})
         return record
 
@@ -707,6 +765,14 @@ class CoreApp:
             if state not in transitions.get(row["state"], set()):
                 raise ConflictError(f"job transition {row['state']} -> {state} is invalid")
             tx.execute("UPDATE jobs SET state=?, runtime_id=COALESCE(?,runtime_id), result_json=?, updated_at=? WHERE id=?", (state, runtime_id, json_dump(result or {}), iso(), job_id))
+            session_row = tx.execute(
+                "SELECT phase FROM sessions WHERE id=?", (row["session_id"],)
+            ).fetchone()
+            if session_row is None:
+                raise NotFoundError(f"session {row['session_id']} does not exist")
+            self.budgets._sync_activity(
+                tx, row["session_id"], SessionPhase(session_row["phase"])
+            )
             self.journal.append_event(tx, kind=f"job.{state}", session_id=row["session_id"], subject_id=job_id, data=result or {})
             updated = tx.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         return self._job_from_row(updated)
@@ -813,6 +879,68 @@ class CoreApp:
                     )
                 },
             )
+
+    def _transition_phase_in_tx(
+        self,
+        tx: sqlite3.Connection,
+        session_id: str,
+        phase: SessionPhase,
+        reason: str,
+    ) -> SessionRecord:
+        """Atomically advance a worker-driven lifecycle transition."""
+        row = tx.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
+        if row is None:
+            raise NotFoundError(f"session {session_id} does not exist")
+        session = self._session_from_row(row)
+        previous = session.phase
+        if previous is phase:
+            self.budgets._sync_activity(tx, session.id, session.phase)
+            return session
+        if previous in {SessionPhase.COMPLETED, SessionPhase.STOPPED}:
+            raise ConflictError(f"terminal session cannot transition from {previous.value}")
+        session.phase = phase
+        session.revision += 1
+        session.updated_at = utc_now()
+        self._update_session(tx, session)
+        self.budgets._sync_activity(tx, session.id, session.phase)
+        refreshed = self._session_from_row(
+            tx.execute("SELECT * FROM sessions WHERE id=?", (session.id,)).fetchone()
+        )
+        self._history(tx, refreshed, reason)
+        self.journal.append_event(
+            tx,
+            kind="session.phase_changed",
+            session_id=session.id,
+            subject_id=session.id,
+            data={
+                "from_phase": previous.value,
+                "phase": phase.value,
+                "revision": refreshed.revision,
+                "reason": reason,
+            },
+        )
+        return refreshed
+
+    def _require_current_pending_approval(
+        self,
+        tx: sqlite3.Connection,
+        session: SessionRecord,
+        procedure: ProcedureRecord,
+    ) -> None:
+        latest = tx.execute(
+            "SELECT procedure_id, procedure_revision, procedure_digest, disposition "
+            "FROM reviews WHERE session_id=? ORDER BY created_at DESC, rowid DESC LIMIT 1",
+            (session.id,),
+        ).fetchone()
+        if (
+            latest is None
+            or latest["procedure_id"] != procedure.procedure_id
+            or latest["procedure_revision"] != procedure.revision
+            or latest["procedure_digest"] != procedure.digest
+            or latest["disposition"] != ReviewDisposition.ACCEPTED
+            or not any(operation.mutates_target for operation in procedure.operations)
+        ):
+            raise ValidationError("procedure is not the current accepted mutating review")
 
     def _procedure_in_tx(self, tx, procedure_id: str, revision: int) -> ProcedureRecord:
         row = tx.execute("SELECT record_json FROM procedures WHERE procedure_id=? AND revision=?", (procedure_id, revision)).fetchone()

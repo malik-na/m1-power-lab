@@ -52,6 +52,18 @@ class BudgetLedger:
             else:
                 self._close_segment(tx, session_id)
 
+    def _sync_activity(self, tx, session_id: str, phase: SessionPhase) -> None:
+        """Keep one active clock open while the phase or a bounded job is active."""
+        live_job = tx.execute(
+            "SELECT 1 FROM jobs WHERE session_id=? "
+            "AND state IN ('admitted','running') LIMIT 1",
+            (session_id,),
+        ).fetchone()
+        if phase in ACTIVE_PHASES or live_job is not None:
+            self._open_segment(tx, session_id)
+        else:
+            self._close_segment(tx, session_id)
+
     def grant_tokens(self, session_id: str, amount: int, command_id: str, note: str = "") -> None:
         if amount <= 0:
             raise ValidationError("token increment must be positive")
