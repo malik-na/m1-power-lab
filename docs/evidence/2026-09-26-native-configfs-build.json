@@ -1,0 +1,84 @@
+{
+  "date_utc": "2026-09-26",
+  "source_commit": "4c2855bdd89d74bdae5cdaa6a4870d1b1cdf52a3",
+  "build_id": "build_2c9d5eff9bd947a1ac8c575b8b993a9a",
+  "build_role": "candidate",
+  "manifest_sha256": "1867f483f564530a53490f79d95636eb19f6c6c63bfd7a0bba356c0066701a20",
+  "outputs": [
+    {
+      "name": "Image.gz",
+      "role": "kernel",
+      "sha256": "a6df2b981733d0ed784c9eef2a91b6577accf35c185f40494995ce5385cb20f7",
+      "size_bytes": 13295503
+    },
+    {
+      "name": "j313.dtb",
+      "role": "dtb",
+      "sha256": "596420449c9b8d30a29392a344398026b5977877caebeecce1c54ac869ba7848",
+      "size_bytes": 65432
+    },
+    {
+      "name": "initramfs.cpio.gz",
+      "role": "initramfs",
+      "sha256": "33adac0f8ce6a5d32b8adc6545ec090280cda97dec0278f6a0746dfbecd787bf",
+      "size_bytes": 130461394
+    },
+    {
+      "name": "collector.py",
+      "role": "collector",
+      "sha256": "7f17b2739f8096e99f61e923600ed90f3c498c6b08143450674881c0b9d5e9f7",
+      "size_bytes": 14904
+    },
+    {
+      "name": "payload.tar",
+      "role": "payload",
+      "sha256": "26945342b640957c1e3306dfa8ba5e261199a05e12e442e8e4b9ad618f0b87d7",
+      "size_bytes": 179701760
+    },
+    {
+      "name": "rootfs.cpio.gz",
+      "role": "rootfs",
+      "sha256": "33adac0f8ce6a5d32b8adc6545ec090280cda97dec0278f6a0746dfbecd787bf",
+      "size_bytes": 130461394
+    },
+    {
+      "name": "bundle-metadata.json",
+      "role": "bundle_metadata",
+      "sha256": "39232d20097e233342e45c3035aa466b49886b4fcfcf1d5220c11cd36438adbd",
+      "size_bytes": 7262
+    }
+  ],
+  "build_result": "completed",
+  "verification": {
+    "stored_artifacts_hash_size_checked": 52,
+    "packaged_bootstrap_matches_committed_fix": true,
+    "kernel_dtb_collector_unchanged": true,
+    "regression": "Old relative configfs target reproduces FileNotFoundError; fixed actual bootstrap path passes all eight native boot tests in0.31s."
+  },
+  "physical_capture_return": "pending; seven preceding attempts remain failed with original unknown outcomes retained",
+  "known_good": false,
+  "procedure_id": "procedure_726c19fda252448e834fe535825474d9",
+  "procedure_digest": "1b751de3f64a077449ce9d2d5b7e51b11cfd879c355ad22ff4d14f7e353c8671",
+  "exact_review": {
+    "id": "review_d1e6bcbb474647d7bd032a85edb7ce2c",
+    "reviewer_job_id": "job_08ae43e26126449e9d3729ff921e4ea2",
+    "model": "gpt-6-sol",
+    "reasoning_effort": "medium",
+    "disposition": "accepted",
+    "blocking_findings": [],
+    "reported_tokens": 91900,
+    "harness_lifetime_tokens": 1006072,
+    "usage_uncertain": false,
+    "launch_deadline": "2026-09-26T19:57:26.918915Z"
+  },
+  "owner_approval": "pending for changed image; prior seven consumed",
+  "installed_live_observation": {
+    "release": "f560929",
+    "service_active": true,
+    "restarts": 0,
+    "phase": "paused",
+    "lifetime_tokens": 0,
+    "usage_uncertain": true
+  },
+  "limits": "RAM-only; three samples1000ms;480s overall; continuous return watcher; owner attendance required; no scientific investigation"
+}

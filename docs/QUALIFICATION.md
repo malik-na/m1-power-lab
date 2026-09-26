@@ -21,6 +21,17 @@ failed before the fix with `FileNotFoundError`; afterward
 and host correction; physical capture/return with the rebuilt image remains the
 next gate. See [evidence](evidence/2026-09-26-native-seventh-attempt.json).
 
+The fixed candidate is built from clean `4c2855b` as
+`build_2c9d5eff9bd947a1ac8c575b8b993a9a`. Stored manifest/artifact hashes and sizes
+match; the initramfs contains the exact committed fixed bootstrap. Kernel, DTB
+and collector outputs are unchanged. This verifies packaging only. The next
+acceptance check is the bounded three-sample native capture plus caught proxy
+return. Exact sol/medium review accepted `1b751de3…353c8671` with no blocking
+findings; new attended single-use owner approval remains pending. The review
+reported 91,900 tokens, with no uncertainty in the isolated harness accounting.
+Installed release `f560929` is active with zero restarts; its live session remains
+paused with `usage_uncertain=true`. See [build evidence](evidence/2026-09-26-native-configfs-build.json).
+
 ## Sixth attended attempt: recorded Linux startup, failure text unreadable
 
 Fresh exact review, explicit owner approval/current attendance, armed webcam
