@@ -629,7 +629,9 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
             deadline_seconds=args.deadline_minutes * 60,
             evidence=evidence,
         )
-        return asyncio.run(_run_investigation(core, request, settings))
+        with _coordinator_lease(settings.paths.root / "coordinator.lock"):
+            core.reconcile()
+            return asyncio.run(_run_investigation(core, request, settings))
     raise AssertionError(args.action)
 
 

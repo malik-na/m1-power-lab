@@ -4,7 +4,7 @@ This file distinguishes implemented behavior from physical qualification.
 
 | Area | State | Evidence or next gate |
 |---|---|---|
-| Durable coordinator | Host implemented | SQLite journal, revisions, budgets, exact approvals, reconciliation |
+| Durable coordinator | Host implemented | SQLite journal, revisions, budgets, exact approvals, reconciliation, and exclusive lease for standalone Codex turns |
 | Replay experiment cycle | Host demonstrated | `m1lab replay-demo` records read-only and approved mutating paths, immutable scientific evidence and matching operator readback |
 | Scientific records | Host implemented | Versioned immutable records and frozen paired 10% / 95% decision rule |
 | Codex scientific decision loop | Advisory brief, cost comparison, typed decision publication, draft/review boundary, and redesign checkpoint gates implemented | Live model turn and evidence-to-next-decision cycle remain unqualified until a bounded authenticated turn runs on the ThinkPad |

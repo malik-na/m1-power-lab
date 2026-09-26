@@ -141,6 +141,11 @@ firmware or lid sensor behaves. If inhibition is explicitly requested but not
 confirmed, Codex admission is closed even when `m1lab serve` is launched
 outside the systemd wrapper.
 
+The standalone `m1lab investigate` command also takes the coordinator lease and
+reconciles the journal before starting a turn. It refuses to run while the
+service or another coordinator owns the data directory; submit jobs through the
+owner interface while the service is running.
+
 ## Tailscale access
 
 Keep the application on loopback and proxy private HTTPS with Tailscale Serve:
