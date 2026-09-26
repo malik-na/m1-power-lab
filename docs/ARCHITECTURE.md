@@ -47,10 +47,11 @@ flowchart LR
 - The Linux helper IPC boundary now uses a same-UID Unix socket, a single
   nonblocking owner lock, one bounded typed dispatch per connection, and fresh
   target, boot-epoch, configuration, and read-only capability checks before
-  execution. The helper client never opens a device and never retries an
-  ambiguous operation. Device selection, a fixed physical backend, live
-  configuration observation, service wiring, and recovery remain gated on the
-  physical inventory and qualification.
+  execution. Its stoppable server loop isolates a malformed or failed client
+  connection and continues serving subsequent clients. The helper client never
+  opens a device and never retries an ambiguous operation. Device selection, a
+  fixed physical backend, live configuration observation, production service
+  wiring, and recovery remain gated on the physical inventory and qualification.
 - Finite native runs have separate immutable image and launch manifests. The
   result channel binds checksummed, sequenced identity/data/terminal frames to
   the run, image, target, boot epoch and configuration. Host code preserves

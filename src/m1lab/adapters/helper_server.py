@@ -11,12 +11,14 @@ from __future__ import annotations
 from contextlib import AbstractContextManager
 from datetime import datetime, timezone
 import fcntl
+import logging
 import os
 from pathlib import Path
 import socket
 import stat
 import struct
 import time
+from threading import Event
 from typing import Callable
 
 from .hardware import (
@@ -43,6 +45,7 @@ from .helper_protocol import (
 
 MAX_HELPER_HANDSHAKE_SECONDS = 5.0
 MAX_HELPER_SOCKET_PATH_BYTES = 100
+_LOG = logging.getLogger(__name__)
 
 
 class HelperOwnerError(RuntimeError):
@@ -218,6 +221,60 @@ class HelperServer:
                 encode_result(result),
                 maximum=MAX_HELPER_RESPONSE_BYTES,
                 deadline_monotonic=operation_deadline,
+            )
+
+    def serve_forever(
+        self,
+        stop_event: Event,
+        *,
+        poll_interval_seconds: float = 0.5,
+        on_error: Callable[[Exception], None] | None = None,
+    ) -> None:
+        """Accept bounded one-operation connections until shutdown is requested.
+
+        A malformed client or failed operation closes only that connection.
+        The error callback receives the exception after the connection has
+        closed; without one, failures are logged and the next client is served.
+        Backend construction and device ownership remain the caller's job.
+        """
+
+        if self._listener is None:
+            raise HelperOwnerError("helper server is not listening")
+        if not isinstance(stop_event, Event):
+            raise TypeError("helper stop_event must be a threading.Event")
+        if not 0.05 <= poll_interval_seconds <= 10:
+            raise ValueError("helper poll interval must be between 0.05 and 10 seconds")
+
+        self._listener.settimeout(poll_interval_seconds)
+        try:
+            while not stop_event.is_set():
+                try:
+                    self.serve_once()
+                except TimeoutError:
+                    # A frame timeout belongs to its client; keep the owner
+                    # process available for subsequent connections.
+                    continue
+                except OSError as exc:
+                    if self._listener is None:
+                        break
+                    self._report_server_error(exc, on_error)
+                except Exception as exc:
+                    self._report_server_error(exc, on_error)
+        finally:
+            if self._listener is not None:
+                self._listener.settimeout(None)
+
+    @staticmethod
+    def _report_server_error(
+        error: Exception, callback: Callable[[Exception], None] | None
+    ) -> None:
+        if callback is not None:
+            callback(error)
+        else:
+            _LOG.warning(
+                "helper connection failed; any dispatched operation may have an unknown effect: %s",
+                error,
+                exc_info=error,
             )
 
     def close(self) -> None:
