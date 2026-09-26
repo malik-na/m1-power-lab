@@ -52,7 +52,15 @@ Run:
 m1lab --session SESSION_ID science derive derivation.json
 m1lab --session SESSION_ID science list
 m1lab --session SESSION_ID science brief
+m1lab --session SESSION_ID science report research-report.md
 ```
+
+The Markdown report contains recorded hypotheses, reproducible protocol fields,
+derived outcomes and uncertainty, regression checks, observations and their raw
+artifact digests, claim evidence, redesign history, next actions, and an
+immutable record manifest. It is generated only from validated records and
+labels the limits of the evidence; it does not independently qualify a
+measurement or convert replay evidence into an M1 result.
 
 Derivation reads the primary metric from the cited observations. It does not
 accept caller supplied power values. Every pair must contain one baseline and

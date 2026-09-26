@@ -76,6 +76,7 @@ from m1lab.science import (
     ScientificRecordStore,
     StudyMode,
 )
+from m1lab.science.report import render_scientific_report
 from m1lab.web import WebSettings, create_app
 
 
@@ -222,6 +223,10 @@ def parser() -> argparse.ArgumentParser:
     science_hypotheses.add_argument("--job-id", required=True)
     science_commands.add_parser("list", help="list validated scientific records")
     science_commands.add_parser("brief", help="build a compact evidence brief")
+    science_report = science_commands.add_parser(
+        "report", help="write a Markdown research report from validated scientific records"
+    )
+    science_report.add_argument("path", type=Path, help="output Markdown path")
     science_derive = science_commands.add_parser(
         "derive", help="derive and publish a power result from published observations"
     )
@@ -583,6 +588,14 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
             if not published:
                 raise ValueError("no scientific records are published for this session")
             return store.brief(published).model_dump(mode="json")
+        if args.science_action == "report":
+            published = store.list(session_id)
+            if not published:
+                raise ValueError("no scientific records are published for this session")
+            report = render_scientific_report(session_id, published)
+            args.path.parent.mkdir(parents=True, exist_ok=True)
+            args.path.write_text(report, encoding="utf-8")
+            return {"path": str(args.path), "records": len(published)}
         document = (
             _completed_codex_output(
                 core,

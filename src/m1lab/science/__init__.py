@@ -33,6 +33,7 @@ from .power import (
     evaluate_ten_percent_threshold,
 )
 from .records import ScientificCore, ScientificRecordStore, derive_power_result
+from .report import render_scientific_report
 
 __all__ = [
     "PairedBlock",
@@ -65,4 +66,5 @@ __all__ = [
     "ScientificRecordStore",
     "StudyMode",
     "derive_power_result",
+    "render_scientific_report",
 ]
