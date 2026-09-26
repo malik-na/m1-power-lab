@@ -184,10 +184,12 @@ owner interface while the service is running.
 
 For standalone evidence input, `--evidence` accepts only UTF-8 regular files up
 to 1 MB and does not follow symlinks. Common credential forms and recognized
-provider token formats, credential-named JSON fields, email addresses, and
-home-directory prefixes are scrubbed from evidence text and labels. Review
-selected material for other personal data or unrelated private contents before
-starting the turn; automated scrubbing cannot identify every such case.
+provider token formats, credential-named JSON fields (including short values
+under token, authorization, and private-key names), email addresses, and
+home-directory prefixes are scrubbed from evidence text and labels. Ordinary
+usage fields such as `codex_tokens` are retained. Review selected material for
+other personal data or unrelated private contents before starting the turn;
+automated scrubbing cannot identify every such case.
 
 Approval cards show the recorded recovery steps, status and evidence references
 alongside the reasons for their risk category. High declared failure severity

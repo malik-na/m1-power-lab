@@ -22,12 +22,18 @@ MAX_TEXT_FIELD = 8_000
 MAX_AUTOMATIC_ARTIFACTS = 32
 MAX_AUTOMATIC_EXCERPT_CHARS = 64_000
 
-_SECRET_KEY = re.compile(
-    r"(?i)(?:api[_-]?key|authorization|cookie|credential|password|passwd|secret|session[_-]?token|access[_-]?token|refresh[_-]?token)"
+_SECRET_KEY_SUFFIXES = (
+    "apikey", "authorization", "authentication", "auth", "cookie", "credential",
+    "credentials", "password", "passwd", "passphrase", "secret", "clientsecret",
+    "privatekey", "sessiontoken", "accesstoken", "refreshtoken", "idtoken", "token", "jwt",
 )
 _SECRET_TEXT = (
     re.compile(r"(?i)\b(bearer\s+)[A-Za-z0-9._~+/=-]{12,}"),
-    re.compile(r"(?i)\b((?:api[_-]?key|token|password|secret)\s*[:=]\s*)[^\s,;]{8,}"),
+    re.compile(
+        r"(?i)(?<![A-Za-z0-9])((?:api[_-]?key|authorization|auth|cookie|credential|password|passwd|"
+        r"passphrase|secret|client[_-]?secret|private[_-]?key|(?:session|access|refresh|id)[_-]?token|token|jwt)"
+        r"\s*[:=]\s*)[^\s,;]+"
+    ),
     re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
     re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,})\b"),
     re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"),
@@ -289,12 +295,17 @@ def scrub_text(value: str) -> str:
     return cleaned
 
 
+def _is_secret_key(value: object) -> bool:
+    normalized = re.sub(r"[^a-z0-9]", "", str(value).lower())
+    return any(normalized.endswith(suffix) for suffix in _SECRET_KEY_SUFFIXES)
+
+
 def _scrub_json(value: Any) -> tuple[Any, bool]:
     if isinstance(value, dict):
         result: dict[str, Any] = {}
         changed = False
         for key, item in value.items():
-            if _SECRET_KEY.search(str(key)):
+            if _is_secret_key(key):
                 result[key] = "[REDACTED]"
                 changed = True
             else:
@@ -343,7 +354,7 @@ def bounded(value: Any, *, depth: int = 0) -> Any:
                 result["_truncated"] = True
                 break
             name = str(key)[:160]
-            result[name] = "[REDACTED]" if _SECRET_KEY.search(name) else bounded(item, depth=depth + 1)
+            result[name] = "[REDACTED]" if _is_secret_key(name) else bounded(item, depth=depth + 1)
         return result
     if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
         items = list(value)
