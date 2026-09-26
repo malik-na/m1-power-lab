@@ -45,6 +45,7 @@ from m1lab.core import (
     JobCreate,
     OwnerCommand,
     ProcedureDraft,
+    ProcedureRecord,
     ReviewDisposition,
     ReviewRecord,
     SessionCreate,
@@ -513,6 +514,53 @@ def _procedure(core: CoreApp, session_id: str, procedure_id: str, revision: int)
     raise ValueError(f"procedure {procedure_id} revision {revision} does not exist")
 
 
+def _record_replay_review(
+    core: CoreApp,
+    procedure: ProcedureRecord,
+    *,
+    scope: str,
+    concerns: list[str],
+) -> ReviewRecord:
+    now = utc_now()
+    reviewer = core.create_job(
+        JobCreate(
+            session_id=procedure.session_id,
+            kind="review",
+            evidence_manifest={
+                "procedure_id": procedure.procedure_id,
+                "procedure_revision": procedure.revision,
+                "procedure_digest": procedure.digest,
+                "mode": "deterministic-host-review",
+            },
+            lease_expires_at=now + timedelta(minutes=1),
+            deadline_at=now + timedelta(minutes=2),
+        )
+    )
+    core.update_job(
+        reviewer.id,
+        state="running",
+        runtime_id="host-review",
+        result={"scope": scope},
+    )
+    core.update_job(
+        reviewer.id,
+        state="completed",
+        runtime_id="host-review",
+        result={"disposition": "accepted", "scope": scope},
+    )
+    return core.record_review(
+        ReviewRecord(
+            session_id=procedure.session_id,
+            procedure_id=procedure.procedure_id,
+            procedure_revision=procedure.revision,
+            procedure_digest=procedure.digest,
+            reviewer_job_id=reviewer.id,
+            disposition=ReviewDisposition.ACCEPTED,
+            concerns=concerns,
+        )
+    )
+
+
 def _replay_demo(core: CoreApp, session_id: str) -> dict[str, Any]:
     """Exercise observe, review, authorization, execution and evidence storage."""
 
@@ -563,43 +611,11 @@ def _replay_demo(core: CoreApp, session_id: str) -> dict[str, Any]:
             failure_severity="low",
         )
     )
-    now = utc_now()
-    reviewer = core.create_job(
-        JobCreate(
-            session_id=session_id,
-            kind="review",
-            evidence_manifest={
-                "procedure_id": procedure.procedure_id,
-                "procedure_revision": procedure.revision,
-                "procedure_digest": procedure.digest,
-                "mode": "deterministic-host-review",
-            },
-            lease_expires_at=now + timedelta(minutes=1),
-            deadline_at=now + timedelta(minutes=2),
-        )
-    )
-    core.update_job(
-        reviewer.id,
-        state="running",
-        runtime_id="host-review",
-        result={"scope": "replay-only structural review"},
-    )
-    core.update_job(
-        reviewer.id,
-        state="completed",
-        runtime_id="host-review",
-        result={"disposition": "accepted", "scope": "replay-only structural review"},
-    )
-    review = core.record_review(
-        ReviewRecord(
-            session_id=session_id,
-            procedure_id=procedure.procedure_id,
-            procedure_revision=procedure.revision,
-            procedure_digest=procedure.digest,
-            reviewer_job_id=reviewer.id,
-            disposition=ReviewDisposition.ACCEPTED,
-            concerns=["Replay results cannot establish physical power behavior."],
-        )
+    review = _record_replay_review(
+        core,
+        procedure,
+        scope="replay-only structural review",
+        concerns=["Replay results cannot establish physical power behavior."],
     )
     report = experiments.authorize_and_run(
         DispatchRequest(
@@ -631,38 +647,11 @@ def _replay_demo(core: CoreApp, session_id: str) -> dict[str, Any]:
             failure_severity="low",
         )
     )
-    review_time = utc_now()
-    mutating_reviewer = core.create_job(
-        JobCreate(
-            session_id=session_id,
-            kind="review",
-            evidence_manifest={
-                "procedure_id": mutating.procedure_id,
-                "procedure_revision": mutating.revision,
-                "procedure_digest": mutating.digest,
-                "mode": "deterministic-host-review",
-            },
-            lease_expires_at=review_time + timedelta(minutes=1),
-            deadline_at=review_time + timedelta(minutes=2),
-        )
-    )
-    core.update_job(mutating_reviewer.id, state="running", runtime_id="host-review")
-    core.update_job(
-        mutating_reviewer.id,
-        state="completed",
-        runtime_id="host-review",
-        result={"disposition": "accepted", "scope": "replay-only mutation review"},
-    )
-    mutating_review = core.record_review(
-        ReviewRecord(
-            session_id=session_id,
-            procedure_id=mutating.procedure_id,
-            procedure_revision=mutating.revision,
-            procedure_digest=mutating.digest,
-            reviewer_job_id=mutating_reviewer.id,
-            disposition=ReviewDisposition.ACCEPTED,
-            concerns=["The simulated boot is host replay and cannot establish M1 behavior."],
-        )
+    mutating_review = _record_replay_review(
+        core,
+        mutating,
+        scope="replay-only mutation review",
+        concerns=["The simulated boot is host replay and cannot establish M1 behavior."],
     )
     approval_target = core.snapshot(session_id).latest_target
     if approval_target is None:
