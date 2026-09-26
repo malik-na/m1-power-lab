@@ -53,3 +53,12 @@ creates and records artifacts; it does not load or execute them on the target.
 The M1-specific recipe cannot be selected until the ThinkPad toolchain and
 source inventory are recorded. Native execution and return behavior remain
 physical qualification gates.
+
+The standalone [`native_capture.py`](../target/native_capture.py) source is a
+bounded Linux collector for a future native image. It emits the host's native
+result protocol and preserves allowlisted power-supply and thermal sysfs values
+as raw strings. It performs no unit conversion or whole-device power
+calculation. A recipe must include Python 3, hash the exact collector source,
+and install it in the target root filesystem. This source does not qualify the
+M1 sensors, channel, return path, or recovery behavior; see the
+[collector notes](../target/README.md).

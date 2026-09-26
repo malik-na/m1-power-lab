@@ -22,6 +22,7 @@
 ## Native measurement gate
 
 - A finite image plus launch manifest returns attributable results.
+- The standalone target collector source emits framed raw sysfs observations; it has not been integrated into or run from an M1 image.
 - Return or physical recovery is demonstrated for the selected mode.
 - Sensor provenance, cadence, energy boundary and observer effect are known.
 - The native desktop fixture can resolve the intended improvement with a predeclared method.
