@@ -67,3 +67,5 @@ flows, preserving partial wire bytes on channel failure and applying the same
 sample screening before publishing a capture. This is a host acquisition
 primitive for future qualified channel wiring. Its receive deadline bounds
 host waiting; it cannot stop a stuck target or demonstrate recovery.
+The owner CLI exposes it as `native-receive`, consuming the channel owner's
+stdin pipe and publishing raw and screened artifacts for the selected launch.

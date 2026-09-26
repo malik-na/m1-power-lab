@@ -112,8 +112,25 @@ stopped and whether a terminal frame arrived before the host deadline.
 `target_stop_verified` remains false, including after a timeout or complete
 frame. Target identity, physical source and target capture timing remain
 unverified. Real channel ownership, independent identity, supervisor wiring,
-mode transitions and recovery still require qualification; this library
-function is not enabled as a live hardware dispatch route or CLI command.
+mode transitions and recovery still require qualification. Acquisition does
+not enable a live hardware dispatch route.
+
+`native-receive` exposes this receiver through the owner CLI. Connect the
+channel owner's result pipe to stdin and select the prepared launch artifacts:
+
+```bash
+M1LAB_DATA_DIR=/path/to/harness-state m1lab --session SESSION_ID native-receive \
+  --launch-artifact LAUNCH_ARTIFACT_ID \
+  --image-manifest-artifact IMAGE_MANIFEST_ID
+```
+
+This command requires a pipe or socket on stdin and opens no target device.
+It prints the capture status and stored artifact IDs as JSON. Channel loss or
+deadline expiry publishes an unknown capture with retained raw bytes. Inspect
+the returned capture status even when the command itself succeeds in storing
+evidence. A terminal frame does not prove target stop or recovery. Use
+`native-import` below for a saved regular file. Keep setup captures in a
+separate state directory while the live lab has an unresolved usage hold.
 
 ```bash
 m1lab --session SESSION_ID native-import \

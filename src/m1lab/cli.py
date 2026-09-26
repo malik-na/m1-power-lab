@@ -61,7 +61,7 @@ from m1lab.core.models import new_id, utc_now
 from m1lab.experiment import ExperimentService
 from m1lab.investigator import EvidenceExcerpt, InvestigationOrchestrator, InvestigationRequest
 from m1lab.host import HostAdmissionPolicy, LinuxHostMonitor
-from m1lab.native_runs import import_native_capture, prepare_native_launch
+from m1lab.native_runs import import_native_capture, prepare_native_launch, receive_native_capture
 from m1lab.notifications import PushConfig
 from m1lab.science import (
     ClaimEvidence,
@@ -218,6 +218,12 @@ def parser() -> argparse.ArgumentParser:
     native_import.add_argument("--image-manifest-artifact", required=True)
     native_import.add_argument("stream", type=Path)
 
+    native_receive = commands.add_parser(
+        "native-receive", help="receive bounded native result frames from a caller-owned stdin pipe"
+    )
+    native_receive.add_argument("--launch-artifact", required=True)
+    native_receive.add_argument("--image-manifest-artifact", required=True)
+
     procedure_register = commands.add_parser(
         "procedure-register", help="validate and freeze an explicit typed procedure draft"
     )
@@ -362,20 +368,37 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
             "launch_artifact": artifact.model_dump(mode="json"),
             "physical_dispatch_performed": False,
         }
-    if args.action == "native-import":
-        capture, raw_artifact, normalized_artifact = import_native_capture(
-            core,
-            session_id,
-            launch_artifact_id=args.launch_artifact,
-            image_manifest_artifact_id=args.image_manifest_artifact,
-            stream_path=args.stream,
-        )
+    if args.action in {"native-import", "native-receive"}:
+        if args.action == "native-import":
+            capture, raw_artifact, normalized_artifact = import_native_capture(
+                core, session_id,
+                launch_artifact_id=args.launch_artifact,
+                image_manifest_artifact_id=args.image_manifest_artifact,
+                stream_path=args.stream,
+            )
+        else:
+            fd = sys.stdin.fileno()
+            mode = os.fstat(fd).st_mode
+            if not (stat.S_ISFIFO(mode) or stat.S_ISSOCK(mode)):
+                raise ValueError("native-receive requires a stdin pipe or socket; use native-import for saved files")
+            was_blocking = os.get_blocking(fd)
+            try:
+                os.set_blocking(fd, False)
+                capture, raw_artifact, normalized_artifact = receive_native_capture(
+                    core, session_id,
+                    launch_artifact_id=args.launch_artifact,
+                    image_manifest_artifact_id=args.image_manifest_artifact,
+                    fd=fd,
+                )
+            finally:
+                os.set_blocking(fd, was_blocking)
         return {
             "capture": capture.model_dump(mode="json"),
             "raw_stream_artifact": raw_artifact.model_dump(mode="json"),
             "capture_artifact": normalized_artifact.model_dump(mode="json"),
             "physical_source_verified": False,
             "capture_timing_verified": False,
+            "target_stop_verified": False,
         }
     if args.action == "serve":
         if args.host not in {"127.0.0.1", "::1", "localhost"}:
