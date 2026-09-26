@@ -5,9 +5,7 @@
   const updateStrip = document.querySelector("#update-strip");
   const updateMessage = document.querySelector("#update-message");
   const toast = document.querySelector("#command-toast");
-  const currentView = document.body.dataset.view || "overview";
-  const sessionId = document.body.dataset.sessionId || "none";
-  const cursorKey = `m1lab:event-cursor:${sessionId}:${currentView}`;
+  let eventCursor = document.querySelector('meta[name="m1lab-event-cursor"]').content;
   let lastEventAt = Date.now();
   let toastTimer;
   let eventSource = null;
@@ -94,8 +92,7 @@
       setConnection("offline", "Offline");
       return;
     }
-    const cursor = localStorage.getItem(cursorKey);
-    const source = new EventSource(`/api/events${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+    const source = new EventSource(`/api/events${eventCursor ? `?cursor=${encodeURIComponent(eventCursor)}` : ""}`);
     eventSource = source;
     setConnection("connecting", "Connecting");
     source.onopen = () => {
@@ -105,14 +102,19 @@
     source.onmessage = (event) => {
       lastEventAt = Date.now();
       setConnection("live", "Live");
-      if (event.lastEventId) localStorage.setItem(cursorKey, event.lastEventId);
+      if (event.lastEventId) eventCursor = event.lastEventId;
       let data = {};
       try { data = JSON.parse(event.data); } catch (_) { return; }
       if (data.kind === "heartbeat") return;
+      if (data.kind === "snapshot_required") {
+        source.close();
+        if (eventSource === source) eventSource = null;
+        eventCursor = "";
+        window.location.reload();
+        return;
+      }
       updateStrip.hidden = false;
-      updateMessage.textContent = data.kind === "snapshot_required"
-        ? "Live history has a gap. Refresh the current snapshot."
-        : (data.payload?.summary || "New coordinator state is available.");
+      updateMessage.textContent = data.payload?.summary || "New coordinator state is available.";
     };
     source.onerror = () => {
       setConnection(navigator.onLine ? "stale" : "offline", navigator.onLine ? "Reconnecting" : "Offline");

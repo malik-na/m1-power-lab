@@ -205,6 +205,7 @@ class CoordinatorFacade:
 
         common: dict[str, Any] = {
             "revision": str(session.revision),
+            "event_cursor": str(snapshot.last_event_cursor),
             "session": {
                 "id": session.id,
                 "state": _ui_phase(session.phase),
