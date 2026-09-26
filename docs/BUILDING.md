@@ -86,6 +86,9 @@ view rejects duplicate JSON keys and is rebuilt from the recognized fields.
 It also checks that a protocol-complete capture contains the requested number
 of samples; a mismatch is reported as an unknown capture while preserving the
 separate protocol status.
+Frame identity and boot-epoch values are echoes from the launch manifest. The
+host records their match as `launch_binding_verified`; it leaves
+`identity_verified=false` until an independent live-target observation exists.
 Raw binary frames are not inserted into Codex context; use the screened
 decoded artifact for analysis. Offline import explicitly records
 `physical_source_verified=false` and

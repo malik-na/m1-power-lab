@@ -7,6 +7,12 @@ future native Linux image. It consumes an immutable
 to stdout. The host owns and configures that descriptor; this program does not
 open USB, serial, or network devices.
 
+The identity frame repeats identity and boot-epoch values from the launch
+manifest. This binds frames to the requested launch, but does not independently
+observe or authenticate the physical target. The host assembler reports this
+as `launch_binding_verified`; `identity_verified` remains false until a live
+adapter verifies the target through an independent qualified observation.
+
 The launch `parameters` object must contain only `sample_count` and
 `sample_period_ms`. The program limits the run to one hour, the protocol frame
 limit, the launch output limit, and the launch deadline. Its monotonic deadline
@@ -30,8 +36,8 @@ target image, hash the exact collector source, and bind the launch manifest to
 that image. `m1lab native-launch` prepares the manifest as a session artifact;
 `m1lab native-import` preserves a returned byte stream and publishes a
 credential-screened view of recognized collector records. Raw binary frames
-are not inserted into Codex context. Offline
-import deliberately marks physical source and capture timing as unverified,
+are not inserted into Codex context. Offline import deliberately marks target
+identity, physical source, and capture timing as unverified,
 even when frame checksums and sequence are valid. Neither command dispatches a
 target operation. The collector source is now available, but no M1-specific
 recipe, image, result transport, or return path is qualified. Do not use its

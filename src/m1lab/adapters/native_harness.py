@@ -269,7 +269,9 @@ class NativeResultFrame(NativeModel):
 
 class NativeCapture(NativeModel):
     status: Literal["complete", "partial", "unknown"]
+    # The frame echo is a consistency check, not proof of the frame's origin.
     identity_verified: bool
+    launch_binding_verified: bool
     payload: bytes = Field(max_length=MAX_NATIVE_OUTPUT_BYTES)
     frame_count: int = Field(ge=0, le=MAX_NATIVE_RESULT_FRAMES)
     message: str = Field(max_length=1024)
@@ -299,7 +301,7 @@ class NativeResultAssembler:
         )
         self.launch = launch
         self._enforce_receive_deadline = enforce_receive_deadline
-        self._identity_verified = False
+        self._launch_binding_verified = False
         self._expected_sequence = 0
         self._payload = bytearray()
         self._frame_count = 0
@@ -328,12 +330,12 @@ class NativeResultAssembler:
             raise NativeHarnessError("result frame configuration does not match the launch")
         if frame.target_identity != self.launch.target_identity:
             raise NativeHarnessError("result frame target identity does not match the launch")
-        if not self._identity_verified:
+        if not self._launch_binding_verified:
             if frame.frame_kind != "identity" or frame.sequence != 0:
                 raise NativeHarnessError("target identity frame must arrive first")
             if frame.boot_epoch != self.launch.boot_epoch:
                 raise NativeHarnessError("result boot epoch does not match the launch")
-            self._identity_verified = True
+            self._launch_binding_verified = True
             self._expected_sequence = 1
             self._frame_count += 1
             return
@@ -362,14 +364,16 @@ class NativeResultAssembler:
         if self._invalid_message:
             return NativeCapture(
                 status="unknown",
-                identity_verified=self._identity_verified,
+                identity_verified=False,
+                launch_binding_verified=self._launch_binding_verified,
                 payload=bytes(self._payload),
                 frame_count=self._frame_count,
                 message=self._invalid_message,
             )
         return NativeCapture(
             status=self._terminal_status or "unknown",
-            identity_verified=self._identity_verified,
+            identity_verified=False,
+            launch_binding_verified=self._launch_binding_verified,
             payload=bytes(self._payload),
             frame_count=self._frame_count,
             message=(

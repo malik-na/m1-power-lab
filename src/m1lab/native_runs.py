@@ -224,6 +224,7 @@ def import_native_capture(
         capture = NativeCapture(
             status="unknown",
             identity_verified=capture.identity_verified,
+            launch_binding_verified=capture.launch_binding_verified,
             payload=capture.payload,
             frame_count=capture.frame_count,
             message=message,
@@ -237,6 +238,8 @@ def import_native_capture(
             "launch_artifact_id": launch_artifact.id,
             "image_manifest_artifact_id": image_artifact.id,
             "protocol_status": capture.status,
+            "identity_verified": False,
+            "launch_binding_verified": capture.launch_binding_verified,
             "physical_source_verified": False,
             "capture_timing_verified": False,
         },
@@ -253,7 +256,8 @@ def import_native_capture(
         accepted_status = "unknown"
     safe_capture = NativeCapture(
         status=accepted_status,
-        identity_verified=capture.identity_verified,
+        identity_verified=False,
+        launch_binding_verified=capture.launch_binding_verified,
         payload=screened_payload,
         frame_count=capture.frame_count,
         message=scrub_text(capture.message or (
@@ -284,7 +288,8 @@ def import_native_capture(
             "raw_stream_artifact_id": raw_artifact.id,
             "capture_status": safe_capture.status,
             "protocol_status": capture.status,
-            "identity_verified": capture.identity_verified,
+            "identity_verified": False,
+            "launch_binding_verified": capture.launch_binding_verified,
             "physical_source_verified": False,
             "capture_timing_verified": False,
             "payload_screening": screening,
