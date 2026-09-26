@@ -151,7 +151,12 @@ session; existing accounting and unresolved-operation gates still apply.
 
 The helper stages only the three verified boot files, closes the proxy
 descriptor, invokes the pinned tethered boot tool once, receives the bounded
-native stream, and observes the same proxy USB identity again. A complete
+native stream, and observes the same proxy USB identity again. The boot client
+gets an owned pseudo-terminal on stdin for pySerial Miniterm. After capture
+finishes or fails, the helper sends Miniterm's Ctrl+] exit byte and applies
+bounded process-group cleanup. This host-console control is included in the
+helper configuration digest; changed launcher behavior requires fresh review
+and approval. No owner keyboard input is forwarded. A complete
 capture alone is insufficient: success also requires a new owned proxy
 connection and matching Linux image configuration. Raw received bytes are
 published before interpretation. Lost capture, launcher failure or missing

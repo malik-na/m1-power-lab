@@ -14,13 +14,16 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import pty
 import re
 import resource
 import signal
 import stat
 import subprocess
+import termios
 from tempfile import TemporaryFile
 import time
+import tty
 from uuid import uuid4
 
 from .hardware import (
@@ -37,6 +40,7 @@ _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 _TTY = re.compile(r"ttyACM[0-9]+\Z")
 _BOOTARGS = "console=tty0 earlycon rdinit=/init panic=10"
 _DEVICE_ENV_KEY = "M1N1DEVICE"
+_CONSOLE_CONTROL = "pty-stdin-miniterm-ctrl-]"
 _MAX_TOOL_BYTES = 128 << 20
 _MAX_PROXYCLIENT_FILES = 4096
 _MAX_PROXYCLIENT_BYTES = 256 << 20
@@ -94,6 +98,7 @@ class NativeCandidateBackend:
             "proxyclient_path": str(proxyclient_path),
             "proxyclient_sha256": proxyclient_sha256,
             "device_env_key": _DEVICE_ENV_KEY,
+            "console_control": _CONSOLE_CONTROL,
             "bootargs": _BOOTARGS,
         }
         self.configuration_digest = hashlib.sha256(json.dumps(
@@ -188,16 +193,25 @@ class NativeCandidateBackend:
                 proxy_device = self._observer.device
                 self._close_observer()
                 with TemporaryFile(mode="w+b") as log:
-                    process = subprocess.Popen(
-                        [str(self.python_path), str(self.boot_script_path), "-b", _BOOTARGS,
-                         str(bundle.kernel), str(bundle.dtb), str(bundle.initramfs)],
-                        stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
-                        cwd=self.proxyclient_path,
-                        env={"PATH": "/usr/bin:/bin", "PYTHONPATH": str(self.proxyclient_path),
-                             _DEVICE_ENV_KEY: str(proxy_device), "PYTHONDONTWRITEBYTECODE": "1"},
-                        start_new_session=True,
-                        preexec_fn=partial(_bind_child_to_worker, os.getpid()),
-                    )
+                    console_master, console_slave = pty.openpty()
+                    try:
+                        tty.setraw(console_slave, termios.TCSANOW)
+                        os.set_blocking(console_master, False)
+                        process = subprocess.Popen(
+                            [str(self.python_path), str(self.boot_script_path), "-b", _BOOTARGS,
+                             str(bundle.kernel), str(bundle.dtb), str(bundle.initramfs)],
+                            stdin=console_slave, stdout=log, stderr=subprocess.STDOUT,
+                            cwd=self.proxyclient_path,
+                            env={"PATH": "/usr/bin:/bin", "PYTHONPATH": str(self.proxyclient_path),
+                                 _DEVICE_ENV_KEY: str(proxy_device), "PYTHONDONTWRITEBYTECODE": "1"},
+                            start_new_session=True,
+                            preexec_fn=partial(_bind_child_to_worker, os.getpid()),
+                        )
+                    except BaseException:
+                        os.close(console_master)
+                        raise
+                    finally:
+                        os.close(console_slave)
                     tool_started = True
                     try:
                         device = self._wait_for_tty("1d6b", "0104", capture_deadline, proxy=False)
@@ -221,8 +235,10 @@ class NativeCandidateBackend:
                         stop_reason = f"capture_{type(exc).__name__}"[:80]
                     finally:
                         try:
+                            _request_console_exit(process, console_master)
                             tool_exit = _finish_process(process, total_deadline)
                         finally:
+                            os.close(console_master)
                             log.seek(0)
                             boot_log = log.read(_MAX_LOG_BYTES + 1)
                     if len(boot_log) > _MAX_LOG_BYTES:
@@ -445,6 +461,16 @@ def _bind_child_to_worker(expected_parent: int) -> None:
     if os.getppid() != expected_parent:
         os._exit(127)
     resource.setrlimit(resource.RLIMIT_FSIZE, (_MAX_LOG_BYTES, _MAX_LOG_BYTES))
+
+
+def _request_console_exit(process: subprocess.Popen[bytes], master_fd: int) -> None:
+    """Ask pySerial Miniterm to exit via its documented Ctrl+] input."""
+
+    if process.poll() is None:
+        try:
+            os.write(master_fd, b"\x1d")
+        except OSError:
+            pass  # The console may already have disconnected; timeout cleanup follows.
 
 
 def _finish_process(process: subprocess.Popen[bytes], deadline: float) -> int | None:

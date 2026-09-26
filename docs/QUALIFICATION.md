@@ -27,8 +27,19 @@ ACM channel nor proxy return was observed. Target stop remains unverified.
 
 The helper stopped normally after the terminal result. Raw diagnostics and the
 typed result are retained; the first attempt remains reconciled as failed.
-No additional boot is authorized or dispatched. Reconcile target state and fix
-the demonstrated host terminal integration defect before another exact review.
+At 16:59:12 UTC, following the owner's manual reboot, the fixed identity-bound
+five-request observation confirmed responsive m1n1 proxy. The retry was then
+reconciled as **failed**, preserving its original unknown outcome and all evidence.
+This is manual recovery evidence; no automatic native return was demonstrated.
+No additional native boot is authorized or dispatched. The host fix supplies
+private PTY stdin, requests Miniterm exit after capture, and preserves bounded
+cleanup and conservative success conditions. Its configuration digest changes.
+The regression first reproduced errno 25 with a real subprocess; the corrected
+path passed that regression and an actual installed pySerial 3.5 Miniterm test
+against `loop://`. The focused backend suite passed **19 tests in 0.46 seconds**;
+independent code review found no blocking issue. This is host evidence; a fresh
+exact review and owner approval must precede another physical test. See
+[terminal-fix evidence](evidence/2026-09-26-native-terminal-fix.json).
 The installed `f560929` lab remains paused with its usage hold; science remains
 stopped. See [retry evidence](evidence/2026-09-26-native-retry.json).
 

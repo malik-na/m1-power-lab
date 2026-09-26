@@ -70,7 +70,7 @@ def _dispatch(backend, *, seconds=30):
 def _synthetic_environment(monkeypatch, backend, events, *, raw=b"fixed frame bytes",
                            status="complete", observed=True, return_proxy=True,
                            capture_error=False, tool_exit=0, launch_seconds=20,
-                           boot_log=b""):
+                           boot_log=b"", capture_ready_path=None):
     monkeypatch.setattr(backend, "_verify_tools", lambda: events.append("verify_tools"))
 
     def tty(vid, _pid, _deadline, *, proxy):
@@ -137,6 +137,11 @@ def _synthetic_environment(monkeypatch, backend, events, *, raw=b"fixed frame by
         def capture(self, _launch, _image, *, deadline_monotonic, max_stream_bytes):
             events.append("capture")
             events.append(("capture_bound", deadline_monotonic, max_stream_bytes))
+            if capture_ready_path is not None:
+                ready_deadline = time.monotonic() + 2
+                while not capture_ready_path.exists() and time.monotonic() < ready_deadline:
+                    time.sleep(0.01)
+                assert capture_ready_path.exists(), "synthetic console never became ready"
             if capture_error:
                 raise OSError("synthetic capture lost")
             return SimpleNamespace(
@@ -168,6 +173,7 @@ def _synthetic_environment(monkeypatch, backend, events, *, raw=b"fixed frame by
         assert kwargs["env"]["PYTHONPATH"] == str(backend.proxyclient_path)
         assert kwargs["start_new_session"] is True
         assert isinstance(kwargs["preexec_fn"], partial)
+        assert os.isatty(kwargs["stdin"])
         kwargs["stdout"].write(boot_log)
         return Process()
 
@@ -215,6 +221,10 @@ def test_device_environment_key_changes_configuration_digest(tmp_path):
     ).encode()).hexdigest()
     assert backend.configuration_digest != old_digest
     old_configuration["device_env_key"] = "M1N1DEVICE"
+    assert backend.configuration_digest != hashlib.sha256(json.dumps(
+        old_configuration, sort_keys=True, separators=(",", ":"),
+    ).encode()).hexdigest()
+    old_configuration["console_control"] = "pty-stdin-miniterm-ctrl-]"
     assert backend.configuration_digest == hashlib.sha256(json.dumps(
         old_configuration, sort_keys=True, separators=(",", ":"),
     ).encode()).hexdigest()
@@ -259,6 +269,106 @@ def test_failed_boot_tool_retains_bounded_log_evidence_in_unknown_result(tmp_pat
     assert result.values["boot_log_tail"] == log.decode()[-4096:]
     assert len(result.values["boot_log_tail"]) == 4096
     assert events.count("launch") == 1
+
+
+def test_real_child_needs_tty_stdin_and_graceful_miniterm_exit(tmp_path, monkeypatch):
+    """The fixed launcher reaches a console that calls tcgetattr and waits for Ctrl+]."""
+
+    boot_script = tmp_path / "linux.py"
+    boot_script.write_text(
+        "import os, sys, termios, tty\n"
+        "from pathlib import Path\n"
+        "fd = sys.stdin.fileno()\n"
+        "print('Preparing to boot kernel', flush=True)\n"
+        "termios.tcgetattr(fd)\n"
+        "tty.setraw(fd)\n"
+        "print('Miniterm Console ready', flush=True)\n"
+        "Path(__file__).with_suffix('.ready').write_text('ready')\n"
+        "while os.read(fd, 1) != b'\\x1d': pass\n"
+        "print('Miniterm graceful exit', flush=True)\n"
+    )
+    library = tmp_path / "proxyclient"
+    library.mkdir()
+    (library / "module.py").write_text("# synthetic fixed import\n")
+    python = Path(sys.executable).resolve()
+    backend = module.NativeCandidateBackend(
+        artifact_root=tmp_path, usb_topology="1-1",
+        expected_proxy_serial_sha256=SERIAL,
+        python_path=python, python_sha256=hashlib.sha256(python.read_bytes()).hexdigest(),
+        boot_script_path=boot_script,
+        boot_script_sha256=hashlib.sha256(boot_script.read_bytes()).hexdigest(),
+        proxyclient_path=library,
+        proxyclient_sha256=module.compute_proxyclient_sha256(library),
+        sysfs_root=tmp_path / "sys", device_root=tmp_path / "dev",
+    )
+    events = []
+    actual_popen = subprocess.Popen
+    _synthetic_environment(
+        monkeypatch, backend, events,
+        capture_ready_path=boot_script.with_suffix(".ready"),
+    )
+    monkeypatch.setattr(module.subprocess, "Popen", actual_popen)
+    monkeypatch.setattr(
+        backend, "_verify_tools", module.NativeCandidateBackend._verify_tools.__get__(backend),
+    )
+    with backend:
+        result = backend.execute(_dispatch(backend))
+    assert result.status is HardwareResultStatus.COMPLETED, result.values["boot_log_tail"]
+    assert result.values["boot_tool_exit_code"] == 0
+    assert "Miniterm Console ready" in result.values["boot_log_tail"]
+    assert "Miniterm graceful exit" in result.values["boot_log_tail"]
+
+
+def test_installed_pyserial_miniterm_exits_over_owned_pty(tmp_path, monkeypatch):
+    """pySerial 3.5 Miniterm runs against loop://, never a physical serial port."""
+
+    python = Path(__file__).resolve().parents[2] / "build/m1n1-tool-venv/bin/python-m1lab"
+    if not python.is_file():
+        pytest.skip("separate pinned pySerial tool environment is unavailable")
+    boot_script = tmp_path / "linux.py"
+    boot_script.write_text(
+        "import serial\n"
+        "from serial.tools.miniterm import Miniterm\n"
+        "from pathlib import Path\n"
+        "print('Preparing to boot kernel', flush=True)\n"
+        "port = serial.serial_for_url('loop://', timeout=0.1)\n"
+        "console = Miniterm(port)\n"
+        "console.start()\n"
+        "print('Miniterm Console ready', flush=True)\n"
+        "Path(__file__).with_suffix('.ready').write_text('ready')\n"
+        "console.join()\n"
+        "port.close()\n"
+        "print('Miniterm graceful exit', flush=True)\n"
+    )
+    library = tmp_path / "proxyclient"
+    library.mkdir()
+    (library / "module.py").write_text("# synthetic fixed import\n")
+    backend = module.NativeCandidateBackend(
+        artifact_root=tmp_path, usb_topology="1-1",
+        expected_proxy_serial_sha256=SERIAL,
+        python_path=python, python_sha256=hashlib.sha256(python.read_bytes()).hexdigest(),
+        boot_script_path=boot_script,
+        boot_script_sha256=hashlib.sha256(boot_script.read_bytes()).hexdigest(),
+        proxyclient_path=library,
+        proxyclient_sha256=module.compute_proxyclient_sha256(library),
+        sysfs_root=tmp_path / "sys", device_root=tmp_path / "dev",
+    )
+    events = []
+    actual_popen = subprocess.Popen
+    _synthetic_environment(
+        monkeypatch, backend, events,
+        capture_ready_path=boot_script.with_suffix(".ready"),
+    )
+    monkeypatch.setattr(module.subprocess, "Popen", actual_popen)
+    monkeypatch.setattr(
+        backend, "_verify_tools", module.NativeCandidateBackend._verify_tools.__get__(backend),
+    )
+    with backend:
+        result = backend.execute(_dispatch(backend))
+    assert result.status is HardwareResultStatus.COMPLETED, result.values["boot_log_tail"]
+    assert result.values["boot_tool_exit_code"] == 0
+    assert "Miniterm Console ready" in result.values["boot_log_tail"]
+    assert "Miniterm graceful exit" in result.values["boot_log_tail"]
 
 
 @pytest.mark.parametrize("dispatch_seconds,launch_seconds", [(30, 20), (20, 30)])

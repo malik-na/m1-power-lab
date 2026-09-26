@@ -1,0 +1,27 @@
+{
+  "date": "2026-09-26",
+  "base_source": "8c423f6",
+  "model": "gpt-6-sol",
+  "reasoning_effort": "medium",
+  "failure": "Real boot tool reached kernel handoff preparation then Miniterm Console tcgetattr(stdin) failed with errno 25 because launcher stdin was DEVNULL.",
+  "red_regression": {
+    "command": ".venv/bin/pytest -q tests/integration/test_native_candidate_backend.py::test_real_child_needs_tty_stdin_and_graceful_miniterm_exit",
+    "result": "Failed before fix with exact termios.error (25, Inappropriate ioctl for device)."
+  },
+  "fix": "Give child a private raw PTY stdin; retain nonblocking master for a single documented Ctrl+] exit request after capture, then apply existing bounded process-group cleanup. Include fixed console behavior in helper configuration digest.",
+  "tests": {
+    "command": ".venv/bin/pytest -q tests/integration/test_native_candidate_backend.py",
+    "passed": 19,
+    "seconds": 0.46,
+    "actual_pyserial_smoke": "Installed pySerial 3.5 Miniterm against loop:// through real launcher subprocess/PTY path passed; no physical port opened.",
+    "scope": "Host subprocess and synthetic capture/return checks; real M1 round trip remains unqualified."
+  },
+  "review": "Independent gpt-6-sol medium code review found no blocking finding in PTY fix; completion still requires complete timely capture, zero tool exit and freshly observed proxy return.",
+  "manual_recovery": "Owner manual reboot followed by successful fixed identity-bound proxy check; retry reconciled failed with original unknown result preserved.",
+  "constraints": [
+    "No third native boot dispatched or approved",
+    "No live service deployment, investigation resume or usage-hold clearance",
+    "No upstream m1n1 source inspection or modification"
+  ],
+  "primary_interface_source": "https://pyserial.readthedocs.io/en/latest/tools.html"
+}
