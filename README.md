@@ -4,11 +4,14 @@ M1 Power Lab is a ThinkPad-hosted research workbench for investigating power man
 
 The first implementation uses a replay hardware adapter. Real m1n1 access stays disabled until the host/target transport, result channel and recovery path are qualified on the actual machines.
 
-Authoritative design documents currently live in `/home/naeem/Notes`:
+Project design and planning documents are checked into [`docs/plan`](docs/plan):
 
-- `M1 investigation tool - design.md`
-- `M1 investigation tool - implementation plan.md`
-- `M1 investigation tool - requirements and gap audit.md`
+- [Approved design](docs/plan/M1%20investigation%20tool%20-%20design.md)
+- [Implementation plan](docs/plan/M1%20investigation%20tool%20-%20implementation%20plan.md)
+- [Requirements and gap audit](docs/plan/M1%20investigation%20tool%20-%20requirements%20and%20gap%20audit.md)
+- [Historical transport and recovery research](docs/plan/M1%20tool%20-%20transport%20and%20recovery%20evidence.md)
+- [Historical measurement research](docs/plan/M1%20tool%20-%20measurement%20evidence.md)
+- [Historical Codex runtime research](docs/plan/M1%20tool%20-%20Codex%20runtime%20evidence.md)
 
 The implemented module and information flow is summarized in
 `docs/ARCHITECTURE.md`.
