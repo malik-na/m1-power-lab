@@ -62,6 +62,13 @@ install or switch while a session phase is active, job/operation effects or
 usage are unresolved, a live budget reservation remains, or an active-time
 segment is still open.
 
+Source maintenance tooling also refuses an active hardware-helper unit and
+holds its stable owner lock through the release operation. The helper's private
+state directory is `/var/lib/m1-power-lab-helper`; its deny journal is retained
+across source updates and rollbacks. These source improvements are not yet
+installed on the ThinkPad. The existing paused session's unresolved usage
+continues to block deployment.
+
 Install Codex through its supported system-wide installation method. Set its
 absolute path and the executable's SHA-256 digest as `M1LAB_CODEX_SHA256` in
 `/etc/m1-power-lab.env`, then verify that the service account
@@ -88,6 +95,47 @@ separate service with only its qualified device access; do not remove this
 boundary to enable hardware dispatch. systemd stops the full service cgroup,
 including the Codex app-server, and escalates after the 20-second shutdown
 window if graceful cleanup does not finish.
+
+### Prepared hardware-helper unit
+
+`systemd/m1-power-lab-helper.service` and
+`config/m1-power-lab-helper.env.example` are prepare-only artifacts. The release
+installer does not install or enable this unit. It uses the fixed inspect-only
+observer; it cannot enable live experiment dispatch. Its configuration example
+has an invalid `UNSET` serial digest so an unconfigured helper cannot start.
+
+The proposed helper runs as `m1lab` with supplementary `uucp` access, a closed
+device policy admitting only the reviewed `/dev/ttyACM0`, and its own private
+0700 state directory. The coordinator retains `PrivateDevices=yes`. The
+configured tty, unit `DeviceAllow`, topology and locally verified serial digest
+must agree. The future environment file belongs to root with mode 0600; keep
+the serial-derived identifier out of published evidence.
+
+The helper unit has no boot enablement or start/restart dependency on the
+coordinator. `After` orders explicit starts and `StopPropagatedFrom` propagates
+stop requests. The helper's `--require-coordinator-service` mode independently
+requires the fixed coordinator unit to be active, opens a kernel process handle
+(`pidfd`) for its MainPID and rechecks its invocation identity. When that process
+ends, the helper stops; a new coordinator process cannot inherit the old
+helper. `Restart=no` prevents helper self-restart. This avoids `BindsTo` and
+`PartOf`, which can propagate coordinator restart into reopening the target.
+
+Before installation, qualify the exact unit's device permissions, IPC visibility,
+coordinator exit/restart behavior and cleanup with synthetic fixtures, then a
+bounded owner-attended inspection. Static `systemd-analyze verify` validates
+unit syntax only. The prior physical checks ran as separate development
+processes with temporary group access, not under this unit's device policy.
+Deployment still needs settled accounting, a verified backup and exact owner
+approval. Do not bypass these gates by manually copying this unit over the
+running lab setup.
+
+Preserve the helper state as well as the coordinator backup before eventual
+maintenance. The existing coordinator backup/export does not include the
+separate helper directory. Never overwrite or delete `owner.lock.deny` when
+restoring an older coordinator archive: it retains refusal of already attempted
+dispatches, including uncertain ones. Restore/migration of the combined state
+still requires qualification before production dispatch is enabled.
+
 The app-server refuses to start if the configured executable is missing or its
 SHA-256 differs from the configured pin. Calculate it with `sha256sum` after
 installing the Codex CLI.

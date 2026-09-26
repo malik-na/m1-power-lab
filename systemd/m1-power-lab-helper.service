@@ -1,0 +1,34 @@
+# Prepare-only: not installed or enabled by release.sh.
+# DeviceAllow must match the reviewed selected tty and helper configuration.
+[Unit]
+Description=M1 Power Lab inspect-only hardware helper
+After=m1-power-lab.service
+StopPropagatedFrom=m1-power-lab.service
+# No start/restart dependency: an explicit coordinator restart must not reopen
+# the target. The supervisor also watches the current coordinator's pidfd.
+
+[Service]
+Type=exec
+User=m1lab
+Group=m1lab
+SupplementaryGroups=uucp
+EnvironmentFile=/etc/m1-power-lab-helper.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+WorkingDirectory=/var/lib/m1-power-lab-helper
+StateDirectory=m1-power-lab-helper
+StateDirectoryMode=0700
+ExecStart=/opt/m1-power-lab/current/.venv/bin/python /opt/m1-power-lab/current/scripts/serve-m1n1-helper.py --require-coordinator-service --state-dir /var/lib/m1-power-lab-helper --device ${M1LAB_HELPER_DEVICE} --usb-topology ${M1LAB_HELPER_USB_TOPOLOGY} --expected-serial-sha256 ${M1LAB_HELPER_SERIAL_SHA256}
+Restart=no
+KillMode=control-group
+TimeoutStopSec=12s
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=no
+DevicePolicy=closed
+DeviceAllow=/dev/ttyACM0 rw
+RestrictAddressFamilies=AF_UNIX
+LockPersonality=yes
+# No [Install] target: explicit operator start after exact qualification.

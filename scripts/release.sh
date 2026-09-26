@@ -3,7 +3,9 @@ set -Eeuo pipefail
 
 APP_ROOT=/opt/m1-power-lab
 STATE_ROOT=/var/lib/m1-power-lab
+HELPER_STATE=/var/lib/m1-power-lab-helper
 SERVICE_NAME=m1-power-lab.service
+HELPER_SERVICE_NAME=m1-power-lab-helper.service
 SERVICE_USER=m1lab
 ENV_FILE=/etc/m1-power-lab.env
 UNIT_FILE=/etc/systemd/system/m1-power-lab.service
@@ -99,6 +101,10 @@ if systemctl is-active --quiet "$SERVICE_NAME"; then
   echo "$SERVICE_NAME is active; quiesce the session and stop it before switching releases" >&2
   exit 1
 fi
+if systemctl is-active --quiet "$HELPER_SERVICE_NAME"; then
+  echo "$HELPER_SERVICE_NAME is active; stop it before switching releases" >&2
+  exit 1
+fi
 
 if ! id "$SERVICE_USER" >/dev/null 2>&1; then
   if [[ $action == install ]]; then
@@ -110,6 +116,11 @@ if ! id "$SERVICE_USER" >/dev/null 2>&1; then
   fi
 fi
 install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 "$STATE_ROOT"
+if [[ -L $HELPER_STATE ]]; then
+  echo "helper state path must not be a symbolic link" >&2
+  exit 1
+fi
+install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0700 "$HELPER_STATE"
 lock_path="$STATE_ROOT/coordinator.lock"
 if [[ -L $lock_path ]]; then
   echo "coordinator lock path must not be a symbolic link" >&2
@@ -127,8 +138,33 @@ flock -n "$maintenance_lock_fd" || {
   echo "coordinator lock is held; stop the service and all coordinator work first" >&2
   exit 1
 }
+helper_lock_path="$HELPER_STATE/owner.lock"
+if [[ -L $helper_lock_path ]]; then
+  echo "helper owner lock path must not be a symbolic link" >&2
+  exit 1
+fi
+if [[ ! -e $helper_lock_path ]]; then
+  temporary_helper_lock=$(mktemp /tmp/m1lab-helper-lock.XXXXXX)
+  chown "$SERVICE_USER:$SERVICE_USER" "$temporary_helper_lock"
+  chmod 0600 "$temporary_helper_lock"
+  mv -n -- "$temporary_helper_lock" "$helper_lock_path"
+  rm -f -- "$temporary_helper_lock"
+fi
+if [[ ! -f $helper_lock_path ]]; then
+  echo "helper owner lock path must be a regular file" >&2
+  exit 1
+fi
+exec {helper_maintenance_lock_fd}>>"$helper_lock_path"
+flock -n "$helper_maintenance_lock_fd" || {
+  echo "helper owner lock is held; stop the helper and all target work first" >&2
+  exit 1
+}
 if systemctl is-active --quiet "$SERVICE_NAME"; then
   echo "$SERVICE_NAME became active while preparing the release switch" >&2
+  exit 1
+fi
+if systemctl is-active --quiet "$HELPER_SERVICE_NAME"; then
+  echo "$HELPER_SERVICE_NAME became active while preparing the release switch" >&2
   exit 1
 fi
 
@@ -221,7 +257,7 @@ PY
 fi
 
 if [[ $action == check ]]; then
-  echo "service is stopped and durable coordinator state is clear for maintenance"
+  echo "services are stopped and durable coordinator state is clear for maintenance"
   exit 0
 fi
 

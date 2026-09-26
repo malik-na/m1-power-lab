@@ -27,6 +27,16 @@ class HelperSupervisorError(RuntimeError):
     """The helper could not start, remain responsive, or close cleanly."""
 
 
+def _check_owner(poller: select.poll | None) -> None:
+    if poller is None:
+        return
+    try:
+        if poller.poll(0):
+            raise HelperSupervisorError("coordinator process lease ended")
+    except (OSError, ValueError) as exc:
+        raise HelperSupervisorError("coordinator process lease is invalid") from exc
+
+
 def _kill_on_parent_death(expected_parent: int) -> None:
     # Linux PR_SET_PDEATHSIG. Check PID again to close the fork/prctl race.
     libc = ctypes.CDLL(None, use_errno=True)
@@ -123,11 +133,21 @@ class HelperSupervisor:
         if len(os.fsencode(self.socket_path)) > 100:
             raise ValueError("helper socket path exceeds Linux sockaddr_un bound")
 
-    def run(self, stop_event: Event) -> None:
+    def run(self, stop_event: Event, *, owner_pidfd: int | None = None) -> None:
         """Block until a requested stop; raise on worker failure or timeout."""
 
         if not isinstance(stop_event, Event):
             raise TypeError("stop_event must be a threading.Event")
+        owner_poller = None
+        if owner_pidfd is not None:
+            if type(owner_pidfd) is not int or owner_pidfd < 0:
+                raise HelperSupervisorError("coordinator process lease is invalid")
+            owner_poller = select.poll()
+            try:
+                owner_poller.register(owner_pidfd, select.POLLIN | select.POLLHUP | select.POLLERR)
+            except (OSError, ValueError) as exc:
+                raise HelperSupervisorError("coordinator process lease is invalid") from exc
+            _check_owner(owner_poller)
         self._prepare_state_dir()
         context = mp.get_context("spawn")
         parent, child = context.Pipe(duplex=True)
@@ -140,7 +160,10 @@ class HelperSupervisor:
             child.close()
             phase = "starting"
             deadline = time.monotonic() + self.startup_seconds
-            while not stop_event.is_set():
+            while True:
+                _check_owner(owner_poller)
+                if stop_event.is_set():
+                    break
                 if not process.is_alive():
                     raise HelperSupervisorError("helper worker exited unexpectedly")
                 if phase != "idle" and time.monotonic() >= deadline:

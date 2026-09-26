@@ -115,3 +115,10 @@ a separate service unit with its own constrained device access; spawning it
 inside the application would inherit that device restriction. No helper unit
 has been installed or enabled, no application device isolation has been
 relaxed, and this development entry point does not resume the paused lab.
+
+Prepare-only unit/configuration files now describe that separate boundary; see
+the [operator packaging notes](OPERATIONS.md#prepared-hardware-helper-unit).
+The unit requires a kernel process handle for the current coordinator
+generation and stops when that process exits, without a systemd start/restart
+dependency. The installed lab remains unchanged. Source release-maintenance
+checks now hold both coordinator and helper locks and preserve the deny journal.
