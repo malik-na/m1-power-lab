@@ -603,7 +603,14 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
         if args.science_action == "derive":
             return _derive_scientific_result(store, session_id, document)
         if args.science_action == "decision":
-            return _publish_codex_decision(store, session_id, document)
+            source_key = (
+                f"job:{args.job_id}"
+                if args.job_id
+                else "sha256:" + hashlib.sha256(
+                    json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+                ).hexdigest()
+            )
+            return _publish_codex_decision(store, session_id, document, source_key=source_key)
         if args.science_action == "hypotheses":
             return _publish_codex_hypotheses(store, session_id, args.job_id, document)
         if args.science_action == "checkpoint":
@@ -753,7 +760,7 @@ def _structured_output_candidates(value: Any) -> list[dict[str, Any]]:
 
 
 def _publish_codex_decision(
-    store: ScientificRecordStore, session_id: str, document: Any
+    store: ScientificRecordStore, session_id: str, document: Any, *, source_key: str
 ) -> dict[str, Any]:
     if not isinstance(document, dict) or not isinstance(document.get("scientific_decision"), dict):
         raise ValueError("Codex output must contain a non-null scientific_decision object")
@@ -772,7 +779,8 @@ def _publish_codex_decision(
     uncertainties = payload["unresolved_uncertainties"]
     if not isinstance(uncertainties, list) or any(not isinstance(item, str) for item in uncertainties):
         raise ValueError("scientific_decision.unresolved_uncertainties must be a string array")
-    records = {item.record.id: item.record for item in store.list(session_id)}
+    published_by_id = {item.record.id: item for item in store.list(session_id)}
+    records = {key: item.record for key, item in published_by_id.items()}
     hypothesis_id = payload["hypothesis_id"]
     protocol_id = payload["protocol_id"]
     result_id = payload["derived_result_id"]
@@ -783,6 +791,8 @@ def _publish_codex_decision(
         raise ValueError("scientific_decision hypothesis and protocol must match the derived result")
 
     claims: dict[str, list[ClaimEvidence]] = {"evidence": [], "counterevidence": []}
+    claims_to_publish: list[ClaimEvidence] = []
+    published_claims_by_id: dict[str, Any] = {}
     for collection, direction in (
         ("evidence", EvidenceDirection.SUPPORTS),
         ("counterevidence", EvidenceDirection.COUNTERS),
@@ -798,22 +808,34 @@ def _publish_codex_decision(
             }
             if set(entry) != claim_fields:
                 raise ValueError(f"scientific_decision.{collection} claim has unknown or missing fields")
-            claims[collection].append(
-                ClaimEvidence.model_validate(
-                    {
-                        **entry,
-                        "session_id": session_id,
-                        "hypothesis_id": hypothesis_id,
-                        "mode": result.mode,
-                        "direction": direction,
-                    }
-                )
+            index = len(claims[collection])
+            claim = ClaimEvidence.model_validate(
+                {
+                    **entry,
+                    "id": "claim_codex_" + hashlib.sha256(
+                        f"{source_key}:{collection}:{index}".encode("utf-8")
+                    ).hexdigest()[:24],
+                    "session_id": session_id,
+                    "hypothesis_id": hypothesis_id,
+                    "mode": result.mode,
+                    "direction": direction,
+                }
             )
+            prior = published_by_id.get(claim.id)
+            if prior is not None:
+                if _scientific_identity(prior.record) != _scientific_identity(claim):
+                    raise ValueError("decision claim ID conflicts with an existing record")
+                published_claims_by_id[claim.id] = prior
+            else:
+                store.validate(claim)
+                claims_to_publish.append(claim)
+            claims[collection].append(claim)
     all_claims = (*claims["evidence"], *claims["counterevidence"])
     if not any(result_id in claim.record_refs for claim in all_claims):
         raise ValueError("at least one decision claim must cite the exact derived_result_id")
 
     decision = DecisionRecord(
+        id="decision_codex_" + hashlib.sha256(source_key.encode("utf-8")).hexdigest()[:24],
         session_id=session_id,
         hypothesis_id=hypothesis_id,
         protocol_id=protocol_id,
@@ -827,12 +849,41 @@ def _publish_codex_decision(
         counterevidence=tuple(claims["counterevidence"]),
         unresolved_uncertainties=tuple(uncertainties),
     )
-    published_claims = store.publish_many(all_claims)
-    published_decision = store.publish(decision)
+    prior_decision = published_by_id.get(decision.id)
+    if prior_decision is not None and (
+        _scientific_identity(prior_decision.record) != _scientific_identity(decision)
+    ):
+        raise ValueError("decision ID conflicts with an existing record")
+    new_published_claims = {
+        item.record.id: item for item in store.publish_many(claims_to_publish)
+    }
+    for claim in all_claims:
+        if claim.id not in published_claims_by_id:
+            published_claims_by_id[claim.id] = new_published_claims[claim.id]
+    published_decision = prior_decision or store.publish(decision)
     return {
         "decision": published_decision.model_dump(mode="json"),
-        "claim_evidence": [item.model_dump(mode="json") for item in published_claims],
+        "claim_evidence": [
+            published_claims_by_id[item.id].model_dump(mode="json") for item in all_claims
+        ],
     }
+
+
+def _scientific_identity(record: Any) -> Any:
+    """Compare immutable record content while ignoring publication timestamps."""
+
+    def strip_timestamps(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {
+                key: strip_timestamps(item)
+                for key, item in value.items()
+                if key not in {"created_at", "decided_at", "derived_at"}
+            }
+        if isinstance(value, list):
+            return [strip_timestamps(item) for item in value]
+        return value
+
+    return strip_timestamps(record.model_dump(mode="json"))
 
 
 def _publish_codex_hypotheses(
@@ -861,9 +912,7 @@ def _publish_codex_hypotheses(
         )
         prior = existing.get(stable_id)
         if prior is not None:
-            if prior.record.model_dump(exclude={"created_at"}) != record.model_dump(
-                exclude={"created_at"}
-            ):
+            if _scientific_identity(prior.record) != _scientific_identity(record):
                 raise ValueError("hypothesis proposal ID conflicts with an existing record")
             resolved.append(prior)
             continue

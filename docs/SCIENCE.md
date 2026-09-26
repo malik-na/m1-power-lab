@@ -114,6 +114,9 @@ requires that job to be completed.
 The command validates same-session scientific lineage and citations, then
 publishes immutable claim evidence followed by the decision. If there is no
 published derived result, Codex must set `scientific_decision` to `null`.
+Publication IDs are stable for the selected completed job (or canonical output
+file), so retrying after an interrupted CLI call reuses existing records and
+does not duplicate the decision.
 
 Codex also returns a typed procedure draft candidate. To validate the candidate
 and freeze it as a content-digested procedure revision, copy the
