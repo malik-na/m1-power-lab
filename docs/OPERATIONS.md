@@ -128,7 +128,9 @@ does not block explicit shutdown requests.
 The overview and `m1lab diagnostics` report whether inhibition was not
 requested, requested but unconfirmed, or held by the service wrapper. A held
 lock confirms the logind request succeeded; it does not prove how this T480's
-firmware or lid sensor behaves.
+firmware or lid sensor behaves. If inhibition is explicitly requested but not
+confirmed, Codex admission is closed even when `m1lab serve` is launched
+outside the systemd wrapper.
 
 ## Tailscale access
 

@@ -66,6 +66,8 @@ class HostAdmissionPolicy:
             blockers.append(
                 f"host temperature is at least {self.maximum_temperature_c:.0f} °C"
             )
+        if snapshot.lab_mode == "sleep/lid inhibitor requested but not confirmed":
+            blockers.append("configured sleep/lid inhibitor is not confirmed")
         return blockers
 
 
