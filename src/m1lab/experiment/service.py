@@ -183,9 +183,29 @@ class ExperimentService:
                         },
                     )
                 )
+                returned_at = utc_now()
                 step, step_artifacts = self._publish_result(envelope, index, typed, result)
                 evidence.append(step)
                 artifacts.extend(step_artifacts)
+
+                if result.operation_id != dispatch_id:
+                    return self._unknown(
+                        envelope,
+                        evidence,
+                        artifacts,
+                        "adapter result operation ID differed from the dispatched operation",
+                    )
+                if (
+                    result.started_at > deadline
+                    or result.finished_at > deadline
+                    or returned_at > deadline
+                ):
+                    return self._unknown(
+                        envelope,
+                        evidence,
+                        artifacts,
+                        "adapter response exceeded the operation deadline; target effect is uncertain",
+                    )
 
                 if result.status is HardwareResultStatus.UNKNOWN:
                     return self._unknown(
