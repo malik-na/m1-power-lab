@@ -53,9 +53,11 @@ installer from the new committed checkout using a new release ID. The previous
 release and state remain available. Review the configuration and run
 `m1lab diagnostics` against the selected release before starting the unit.
 The installer takes the same coordinator lock as the service and reads the
-journal read-only; it refuses to install or switch while a session phase is
-active, job/operation effects or usage are unresolved, a live budget
-reservation remains, or an active-time segment is still open.
+journal read-only. For install and rollback it also checks that the journal
+schema version is inside the selected release's supported range. It refuses to
+install or switch while a session phase is active, job/operation effects or
+usage are unresolved, a live budget reservation remains, or an active-time
+segment is still open.
 
 Install Codex through its supported system-wide installation method. Set its
 absolute path and the executable's SHA-256 digest as `M1LAB_CODEX_SHA256` in
@@ -90,10 +92,13 @@ sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab diagnostics
 ```
 
 On each service start, `m1lab serve` takes the coordinator lock and reconciles
-the durable journal before opening the HTTP listener. Diagnostics report the
-OS/platform, Python and Codex versions, configured paths, Codex executable pin
-status, runtime configuration, and unqualified hardware gates. An executable
-pin match does not qualify authentication or a live model turn. Check process
+the durable journal before opening the HTTP listener. Startup refuses a journal
+with missing migration history or a schema version outside this release's
+supported range, before changing its journal mode or applying schema changes.
+Diagnostics report OS/platform, Python and Codex versions, configured paths,
+Codex executable pin status, runtime configuration, and unqualified hardware
+gates. An executable pin match does not qualify authentication or a live model
+turn. Check process
 readiness and startup errors with:
 
 ```bash

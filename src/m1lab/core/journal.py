@@ -18,6 +18,7 @@ from .errors import NotFoundError, ValidationError
 from .models import ArtifactRecord, EventRecord, new_id, utc_now
 
 
+MIN_SUPPORTED_SCHEMA_VERSION = 2
 SCHEMA_VERSION = 3
 JOURNAL_DISK_RESERVE_BYTES = 512 * 1024 * 1024
 LARGE_ARTIFACT_THRESHOLD_BYTES = 1 * 1024 * 1024
@@ -285,11 +286,53 @@ class Journal:
         self._lock = threading.RLock()
         self._connection = sqlite3.connect(paths.database, check_same_thread=False)
         self._connection.row_factory = sqlite3.Row
+        try:
+            self._assert_supported_schema_version()
+        except BaseException:
+            self._connection.close()
+            raise
         self._connection.execute("PRAGMA journal_mode=WAL")
         self._connection.execute("PRAGMA synchronous=FULL")
         self._connection.execute("PRAGMA foreign_keys=ON")
         self._connection.execute("PRAGMA busy_timeout=5000")
         self._migrate()
+
+    def _assert_supported_schema_version(self) -> None:
+        migration_table = self._connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'"
+        ).fetchone()
+        has_application_tables = self._connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' LIMIT 1"
+        ).fetchone() is not None
+        if migration_table is None:
+            if has_application_tables:
+                raise sqlite3.DatabaseError(
+                    "journal has no schema migration history; refusing to modify it"
+                )
+            return
+        versions = self._connection.execute(
+            "SELECT version FROM schema_migrations"
+        ).fetchall()
+        if not versions and has_application_tables:
+            raise sqlite3.DatabaseError(
+                "journal has no schema migration version; refusing to modify it"
+            )
+        highest_version = 0
+        for row in versions:
+            version = row[0]
+            if type(version) is not int or version < 1:
+                raise sqlite3.DatabaseError("journal has an invalid schema migration version")
+            highest_version = max(highest_version, version)
+        if versions and highest_version < MIN_SUPPORTED_SCHEMA_VERSION:
+            raise sqlite3.DatabaseError(
+                f"journal schema version {highest_version} is older than this release supports "
+                f"(minimum {MIN_SUPPORTED_SCHEMA_VERSION}); refusing to modify it"
+            )
+        if highest_version > SCHEMA_VERSION:
+            raise sqlite3.DatabaseError(
+                f"journal schema version {highest_version} is newer than this release supports "
+                f"(maximum {SCHEMA_VERSION}); refusing to modify it"
+            )
 
     def close(self) -> None:
         with self._lock:

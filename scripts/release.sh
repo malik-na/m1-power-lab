@@ -42,6 +42,58 @@ case $action in
   *) usage ;;
 esac
 
+source_root=
+release_path=
+schema_file=
+if [[ $action == install ]]; then
+  source_root=$(cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
+  release_path="$APP_ROOT/releases/$release_id"
+  schema_file="$source_root/src/m1lab/core/journal.py"
+elif [[ $action == switch ]]; then
+  release_path="$APP_ROOT/releases/$release_id"
+  [[ -d "$release_path" && ! -L "$release_path" ]] || {
+    echo "release must exist as a real directory: $release_path" >&2
+    exit 1
+  }
+  schema_file="$release_path/src/m1lab/core/journal.py"
+fi
+
+supported_schema_min=
+supported_schema_max=
+if [[ -n $schema_file ]]; then
+  schema_range=$(python3 - "$schema_file" <<'PY'
+import ast
+from pathlib import Path
+import sys
+
+tree = ast.parse(Path(sys.argv[1]).read_text(encoding="utf-8"))
+values = {}
+for node in tree.body:
+    if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+        continue
+    target = node.targets[0]
+    if isinstance(target, ast.Name) and target.id in {
+        "MIN_SUPPORTED_SCHEMA_VERSION",
+        "SCHEMA_VERSION",
+    }:
+        value = node.value
+        if not isinstance(value, ast.Constant) or type(value.value) is not int:
+            raise SystemExit("release schema version must be an integer literal")
+        values[target.id] = value.value
+if "SCHEMA_VERSION" not in values:
+    raise SystemExit("release does not declare its journal schema version")
+minimum = values.get("MIN_SUPPORTED_SCHEMA_VERSION", 2)
+if minimum < 1 or minimum > values["SCHEMA_VERSION"]:
+    raise SystemExit("release declares an invalid supported schema range")
+print(f"{minimum}:{values['SCHEMA_VERSION']}")
+PY
+  ) || {
+    echo "cannot determine the selected release's supported journal schema range" >&2
+    exit 1
+  }
+  IFS=: read -r supported_schema_min supported_schema_max <<<"$schema_range"
+fi
+
 if systemctl is-active --quiet "$SERVICE_NAME"; then
   echo "$SERVICE_NAME is active; quiesce the session and stop it before switching releases" >&2
   exit 1
@@ -81,13 +133,15 @@ fi
 
 database_path="$STATE_ROOT/m1lab.sqlite3"
 if [[ -e $database_path ]]; then
-  python3 - "$database_path" <<'PY'
+  python3 - "$database_path" "${supported_schema_min:-0}" "${supported_schema_max:-0}" <<'PY'
 from datetime import datetime, timezone
 from pathlib import Path
 import sqlite3
 import sys
 
 path = Path(sys.argv[1]).resolve()
+minimum_schema = int(sys.argv[2])
+maximum_schema = int(sys.argv[3])
 connection = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=2)
 connection.row_factory = sqlite3.Row
 try:
@@ -95,7 +149,14 @@ try:
     check = connection.execute("PRAGMA quick_check").fetchone()[0]
     if check != "ok":
         raise SystemExit(f"release refused: journal quick_check failed: {check}")
-    required = {"sessions", "jobs", "operations", "reservations", "active_segments"}
+    required = {
+        "schema_migrations",
+        "sessions",
+        "jobs",
+        "operations",
+        "reservations",
+        "active_segments",
+    }
     tables = {
         row[0]
         for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
@@ -104,6 +165,18 @@ try:
     if missing:
         raise SystemExit(
             "release refused: journal lacks required tables: " + ", ".join(sorted(missing))
+        )
+    versions = [
+        row[0] for row in connection.execute("SELECT version FROM schema_migrations")
+    ]
+    if not versions or any(type(version) is not int or version < 1 for version in versions):
+        raise SystemExit("release refused: journal has missing or invalid schema migration history")
+    latest_schema = max(versions)
+    if minimum_schema and not minimum_schema <= latest_schema <= maximum_schema:
+        raise SystemExit(
+            "release refused: journal schema version "
+            f"{latest_schema} is outside the selected release's supported range "
+            f"{minimum_schema}..{maximum_schema}"
         )
     active_sessions = connection.execute(
         "SELECT COUNT(*) FROM sessions WHERE phase IN "
@@ -149,7 +222,6 @@ if [[ $action == check ]]; then
   exit 0
 fi
 
-release_path="$APP_ROOT/releases/$release_id"
 switch_release() {
   [[ -x "$release_path/.venv/bin/m1lab" ]] || {
     echo "release is missing its m1lab executable: $release_path" >&2
@@ -162,10 +234,6 @@ switch_release() {
 }
 
 if [[ $action == switch ]]; then
-  [[ -d "$release_path" && ! -L "$release_path" ]] || {
-    echo "release must exist as a real directory: $release_path" >&2
-    exit 1
-  }
   switch_release
   echo "selected release $release_id; service remains stopped"
   exit 0
@@ -175,7 +243,6 @@ fi
   echo "release already exists; release directories are immutable: $release_path" >&2
   exit 1
 }
-source_root=$(cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 git_repo() {
   git -c "safe.directory=$source_root" -C "$source_root" "$@"
 }
