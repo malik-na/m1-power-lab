@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 from datetime import timedelta
 import json
+from pathlib import Path
 from typing import Any
 
 from m1lab.adapters import CodexRuntime, JobHandle, JobRequest, JobStatus, RuntimeEvent, SandboxMode, TokenUsage
@@ -21,16 +22,17 @@ from .prompts import OUTPUT_SCHEMA, bounded, build_manifest, build_prompt, scrub
 
 _EVENT_ARTIFACT_METHODS = frozenset({"item/completed", "turn/completed", "runtime/terminal", "runtime/unavailable"})
 _MAX_SUMMARIES = 120
-_MAX_EVENT_ARTIFACTS = 64
-_MAX_RUNTIME_EVENT_CHARS = 1_000_000
 
 
 class InvestigationOrchestrator:
     """Coordinates CoreApp admission and a CodexRuntime without hardware access."""
 
-    def __init__(self, core: CoreApp, runtime: CodexRuntime) -> None:
+    def __init__(self, core: CoreApp, runtime: CodexRuntime, *, workspace: Path) -> None:
+        if not workspace.is_absolute():
+            raise ValueError("Codex workspace must be absolute")
         self._core = core
         self._runtime = runtime
+        self._workspace = workspace.resolve()
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._runtime_ids: dict[str, str] = {}
         self._reservations: dict[str, str] = {}
@@ -75,6 +77,8 @@ class InvestigationOrchestrator:
                 await asyncio.gather(*active, return_exceptions=True)
 
     async def _launch(self, request: InvestigationRequest, *, thread_id: str | None) -> JobLaunch:
+        if request.cwd.resolve() != self._workspace:
+            raise ValueError("Codex job cwd must be the configured dedicated workspace")
         evidence_artifacts = []
         for evidence in request.evidence:
             cleaned = scrub_text(evidence.content).encode("utf-8")
@@ -195,7 +199,7 @@ class InvestigationOrchestrator:
                 if summary is not None:
                     summaries.append(summary)
                     summaries = summaries[-_MAX_SUMMARIES:]
-                if event.method in _EVENT_ARTIFACT_METHODS and len(artifact_ids) < _MAX_EVENT_ARTIFACTS:
+                if event.method in _EVENT_ARTIFACT_METHODS:
                     artifact = self._core.publish_artifact(
                         json.dumps(_event_document(event), sort_keys=True, ensure_ascii=False).encode(),
                         media_type="application/vnd.m1lab.runtime-event+json",
@@ -441,8 +445,8 @@ def _event_document(event: RuntimeEvent) -> dict[str, Any]:
         "method": event.method,
         "thread_id": event.thread_id,
         "turn_id": event.turn_id,
-        "payload_json": scrubbed[:_MAX_RUNTIME_EVENT_CHARS],
-        "payload_truncated": len(scrubbed) > _MAX_RUNTIME_EVENT_CHARS,
+        "payload_json": scrubbed,
+        "payload_truncated": False,
     }
 
 

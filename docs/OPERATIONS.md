@@ -55,7 +55,8 @@ sudo systemctl daemon-reload
 ```
 
 Install Codex through its supported system-wide installation method. Set its
-absolute path in `/etc/m1-power-lab.env`, then verify that the service account
+absolute path and the executable's SHA-256 digest as `M1LAB_CODEX_SHA256` in
+`/etc/m1-power-lab.env`, then verify that the service account
 can execute it and access its own authentication state:
 
 ```bash
@@ -67,7 +68,10 @@ Complete the Codex CLI login flow as the `m1lab` account before setting
 `M1LAB_CODEX_RUNTIME=app-server`. The runtime child receives only its home and
 XDG paths, PATH, locale, network bypass/TLS settings, and variables explicitly supplied
 by the coordinator. The web CSRF secret and unrelated host variables are not
-inherited.
+inherited. Explicit child environment overrides are limited to that same allowlist.
+The app-server refuses to start if the configured executable is missing or its
+SHA-256 differs from the configured pin. Calculate it with `sha256sum` after
+installing the Codex CLI.
 
 Edit `/etc/m1-power-lab.env`, generate the CSRF secret shown in the example,
 and set the exact Tailscale login. Create the session with the same owner before

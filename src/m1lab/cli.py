@@ -246,7 +246,9 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
         investigator = None
         if settings.codex_runtime == "app-server":
             _prepare_workspace(settings.workspace)
-            investigator = InvestigationOrchestrator(core, _codex_adapter(settings))
+            investigator = InvestigationOrchestrator(
+                core, _codex_adapter(settings), workspace=settings.workspace
+            )
         elif settings.codex_runtime != "disabled":
             raise ValueError("M1LAB_CODEX_RUNTIME must be 'disabled' or 'app-server'")
         facade = CoordinatorFacade(
@@ -418,6 +420,7 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
             "codex_runtime": settings.codex_runtime,
             "codex_cli": _tool_version(settings.codex_executable),
             "codex_executable": settings.codex_executable,
+            "codex_sha256": settings.codex_sha256 or None,
             "workspace": str(settings.workspace),
             "tailscale_cli": _tool_version("tailscale"),
             "tailscale_headers": settings.trust_tailscale_headers,
@@ -737,7 +740,9 @@ def _replay_demo(core: CoreApp, session_id: str) -> dict[str, Any]:
 async def _run_investigation(
     core: CoreApp, request: InvestigationRequest, settings: Settings
 ) -> dict[str, Any]:
-    orchestrator = InvestigationOrchestrator(core, _codex_adapter(settings))
+    orchestrator = InvestigationOrchestrator(
+        core, _codex_adapter(settings), workspace=settings.workspace
+    )
     try:
         launch = await orchestrator.start(request)
         record = await orchestrator.wait(launch.job_id)
@@ -747,7 +752,10 @@ async def _run_investigation(
 
 
 def _codex_adapter(settings: Settings) -> AppServerCodexAdapter:
-    return AppServerCodexAdapter(executable=settings.codex_executable)
+    return AppServerCodexAdapter(
+        executable=settings.codex_executable,
+        expected_sha256=settings.codex_sha256,
+    )
 
 
 def _prepare_workspace(path: Path) -> None:

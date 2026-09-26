@@ -16,6 +16,7 @@ class Settings:
     hardware_adapter: str
     codex_runtime: str
     codex_executable: str
+    codex_sha256: str
     workspace: Path
     csrf_secret: str
 
@@ -32,6 +33,7 @@ class Settings:
             hardware_adapter=os.getenv("M1LAB_HARDWARE_ADAPTER", "replay"),
             codex_runtime=os.getenv("M1LAB_CODEX_RUNTIME", "disabled"),
             codex_executable=os.getenv("M1LAB_CODEX_EXECUTABLE", "codex"),
+            codex_sha256=os.getenv("M1LAB_CODEX_SHA256", ""),
             workspace=Path(os.getenv("M1LAB_WORKSPACE", str(workspace_default))).expanduser().resolve(),
             csrf_secret=os.getenv("M1LAB_CSRF_SECRET", ""),
         )

@@ -56,7 +56,9 @@ Useful recovery commands:
 ```
 
 When Codex is enabled, set `M1LAB_CODEX_EXECUTABLE` to the installed CLI and
-`M1LAB_CODEX_RUNTIME=app-server`. The child process receives a small environment
+`M1LAB_CODEX_SHA256` to its SHA-256 digest, then set
+`M1LAB_CODEX_RUNTIME=app-server`. The CLI verifies that digest before every
+app-server process start. The child process receives a small environment
 containing its home/config paths, locale, executable path and TLS settings;
 unrelated service secrets are not inherited.
 

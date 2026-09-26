@@ -2,7 +2,8 @@
 
 ## Host-only gate
 
-- Runtime lifecycle, cancellation and usage semantics are recorded for the pinned Codex version.
+- The configured Codex executable SHA-256 is verified before app-server startup.
+- Live app-server startup, authenticated job lifecycle, cancellation and usage remain unqualified until a bounded turn completes on the deployment host.
 - Replay operations preserve intent, completion and unknown-effect outcomes.
 - Stale revisions, revoked approvals and exhausted budgets fail closed.
 - Coordinator restart reconciles incomplete jobs, operations and artifacts.

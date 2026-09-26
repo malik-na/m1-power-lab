@@ -12,9 +12,12 @@ import asyncio
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
+import hashlib
 import json
 import os
 from pathlib import Path
+import re
+import shutil
 import signal
 from types import MappingProxyType
 from typing import Any, Protocol, runtime_checkable
@@ -205,13 +208,20 @@ class AppServerCodexAdapter:
         self,
         *,
         executable: str = "codex",
+        expected_sha256: str,
         environment: Mapping[str, str] | None = None,
         startup_timeout_seconds: float = 15.0,
         request_timeout_seconds: float = 30.0,
     ) -> None:
         if not executable:
             raise ValueError("Codex executable must be non-empty")
+        if re.fullmatch(r"[a-fA-F0-9]{64}", expected_sha256) is None:
+            raise ValueError("expected_sha256 must be a 64-character SHA-256 digest")
+        disallowed = set(environment or {}) - _CHILD_ENVIRONMENT_KEYS
+        if disallowed:
+            raise ValueError("runtime environment keys are not allowlisted: " + ", ".join(sorted(disallowed)))
         self._executable = executable
+        self._expected_sha256 = expected_sha256.lower()
         self._environment = dict(environment) if environment is not None else None
         self._startup_timeout = startup_timeout_seconds
         self._request_timeout = request_timeout_seconds
@@ -342,6 +352,7 @@ class AppServerCodexAdapter:
                 }
                 if self._environment is not None:
                     env.update(self._environment)
+                await self._verify_executable(env)
                 try:
                     self._process = await asyncio.create_subprocess_exec(
                         self._executable,
@@ -380,6 +391,26 @@ class AppServerCodexAdapter:
             except BaseException:
                 await self.close()
                 raise
+
+    async def _verify_executable(self, env: Mapping[str, str]) -> None:
+        executable = shutil.which(self._executable, path=env.get("PATH"))
+        if executable is None:
+            raise RuntimeUnavailable(f"pinned Codex executable was not found: {self._executable}")
+        try:
+            resolved = Path(executable).resolve(strict=True)
+            digest = hashlib.sha256()
+            with resolved.open("rb") as stream:
+                for block in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(block)
+            actual_sha256 = digest.hexdigest()
+        except OSError as exc:
+            raise RuntimeUnavailable(f"could not verify pinned Codex executable: {exc}") from exc
+        if actual_sha256 != self._expected_sha256:
+            raise RuntimeUnavailable(
+                "Codex executable SHA-256 pin mismatch "
+                f"(expected {self._expected_sha256}, got {actual_sha256})"
+            )
+        self._executable = str(resolved)
 
     async def _start_turn(
         self, thread_id: str, request: JobRequest, *, resumed: bool
@@ -460,7 +491,12 @@ class AppServerCodexAdapter:
         request_id = self._request_id
         future: asyncio.Future[Mapping[str, Any]] = asyncio.get_running_loop().create_future()
         self._pending[request_id] = future
-        message = {"method": method, "id": request_id, "params": dict(params)}
+        message = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "id": request_id,
+            "params": dict(params),
+        }
         try:
             # Each request ID is written exactly once. Retrying state-changing
             # RPCs here could duplicate thread or turn creation after an
@@ -475,7 +511,7 @@ class AppServerCodexAdapter:
     async def _notify(self, method: str, params: Mapping[str, Any]) -> None:
         if method != "initialized":
             raise RuntimeProtocolError(f"notification is not allowlisted: {method}")
-        await self._write_json({"method": method, "params": dict(params)})
+        await self._write_json({"jsonrpc": "2.0", "method": method, "params": dict(params)})
 
     async def _write_json(self, message: Mapping[str, Any]) -> None:
         process = self._process
@@ -566,6 +602,7 @@ class AppServerCodexAdapter:
         # that still arrives fails closed instead of gaining coordinator power.
         await self._write_json(
             {
+                "jsonrpc": "2.0",
                 "id": request_id,
                 "error": {
                     "code": -32601,
