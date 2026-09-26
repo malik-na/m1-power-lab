@@ -286,6 +286,10 @@ else
   staging=
 fi
 
+# mktemp creates the staging directory as 0700. The root-owned release must be
+# traversable by the unprivileged service account, including on a resumed install.
+chmod 0755 "$release_path"
+
 install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 \
   "$STATE_ROOT" "$STATE_ROOT/workspace" "$STATE_ROOT/codex"
 
