@@ -33,31 +33,25 @@ The system unit uses this layout:
 | `/etc/m1-power-lab.env` | host configuration |
 | `/usr/local/bin/codex` | explicit system-wide Codex executable |
 
-Install the first release from the repository root. Replace `0.1.0` with a
-unique version or commit ID for later releases.
-
-Run these commands on the ThinkPad. They create a dedicated service account,
-release tree, private state root, and root-owned environment file. Application
-releases remain separate from the database, artifacts, workspace, and Codex
-home.
+Run the installer on the ThinkPad from a clean, committed checkout. It builds
+the release from the Git commit (excluding untracked files), installs the
+pinned requirements, creates the service account and private state paths,
+preserves an existing environment file, installs the systemd unit, and selects
+the release atomically. The service remains stopped so you can configure it
+before first startup. Release directories are immutable and must have unique
+IDs.
 
 ```bash
-sudo useradd --system --home-dir /var/lib/m1-power-lab --create-home \
-  --shell /usr/bin/nologin m1lab
-sudo install -d -o root -g root /opt/m1-power-lab/releases/0.1.0
-tar --exclude=.git --exclude=.venv -C . -cf - . | \
-  sudo tar -xf - -C /opt/m1-power-lab/releases/0.1.0
-sudo python3 -m venv /opt/m1-power-lab/releases/0.1.0/.venv
-sudo /opt/m1-power-lab/releases/0.1.0/.venv/bin/python -m pip install \
-  -r /opt/m1-power-lab/releases/0.1.0/requirements.lock
-sudo /opt/m1-power-lab/releases/0.1.0/.venv/bin/python -m pip install \
-  --no-deps /opt/m1-power-lab/releases/0.1.0
-sudo ln -s releases/0.1.0 /opt/m1-power-lab/current
-sudo install -m 0644 systemd/m1-power-lab.service \
-  /etc/systemd/system/m1-power-lab.service
-sudo install -m 0600 config/m1-power-lab.env.example /etc/m1-power-lab.env
-sudo systemctl daemon-reload
+RELEASE_ID=$(git rev-parse --short HEAD)
+sudo scripts/release.sh install "$RELEASE_ID"
 ```
+
+The script refuses to switch while the service is active and refuses to
+overwrite an existing release. Before an update, pause or stop the session,
+resolve unknown work, make and verify a backup, then stop the service. Run the
+installer from the new committed checkout using a new release ID. The previous
+release and state remain available. Review the configuration and run
+`m1lab diagnostics` against the selected release before starting the unit.
 
 Install Codex through its supported system-wide installation method. Set its
 absolute path and the executable's SHA-256 digest as `M1LAB_CODEX_SHA256` in
@@ -248,8 +242,7 @@ release.
 
 ```bash
 sudo systemctl stop m1-power-lab
-sudo ln -s releases/OLD_RELEASE /opt/m1-power-lab/current.rollback
-sudo mv -Tf /opt/m1-power-lab/current.rollback /opt/m1-power-lab/current
+sudo scripts/release.sh switch OLD_RELEASE
 sudo systemctl start m1-power-lab
 sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab diagnostics
 sudo -u m1lab /opt/m1-power-lab/current/.venv/bin/m1lab status
