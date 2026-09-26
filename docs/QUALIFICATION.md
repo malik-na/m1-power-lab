@@ -2,6 +2,26 @@
 
 ## Host-only gate
 
+- At source `a16f31e` on 2026-09-26, the ThinkPad full suite passed
+  **210 tests in 29.46 seconds**, no warnings reported, using
+  `.venv/bin/python -m pytest -q` with host socket permissions through Codex
+  `gpt-6-sol` medium. Sixteen new descriptor cases include a real synthetic
+  collector child whose stdout flows into acquisition and coordinator artifact
+  storage. They cover fragmented input, terminal completion without EOF,
+  retained prefixes/frames on disconnect or timeout, slow input under one
+  monotonic deadline, wire bounds, malformed/mismatched/trailing data, retained
+  accepted samples before truncation, caller descriptor ownership, and shared
+  sample-count screening. File and descriptor acquisition now use the same
+  artifact publication boundary. Host receipt metadata leaves physical source,
+  target identity, target capture timing and target stop unverified.
+  Standards review found no hard violations and one optional named-fixture
+  suggestion; independent spec review found no blocker for this increment.
+  No device is opened by this library path, and it is not wired to live
+  dispatch or a new CLI command. These tests do not demonstrate a physical
+  native channel or recovery. A bounded local historical-input inventory found
+  no usable native boot bundle; earlier ALARM SSH collection is historical
+  evidence, not a standalone image result channel. The live lab was not
+  resumed or modified, and its unresolved usage hold was not reconciled.
 - At source `dae67b6` on 2026-09-26, the ThinkPad full suite passed
   **194 tests in 23.69 seconds**, no warnings reported, using
   `.venv/bin/python -m pytest -q` with host socket permissions through Codex
