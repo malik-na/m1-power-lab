@@ -41,8 +41,11 @@ and listened only on `127.0.0.1:8765`. The `f58395f` update, rollback to
 the update with its budget unchanged. Release `97363a8` fixed restoration
 staging for the service account; a fresh bundle was restored over the stopped
 live data root, and the service restarted with HTTP 200, zero restarts, and
-the same session and full budget. This does not establish remote access, a
-live model turn, or long-term host availability.
+the same session and full budget. Release `10934e9` was later installed with
+the Codex app-server enabled; a host-only turn completed as `m1lab` with
+provider-reported usage of 19,816 tokens. The service uses pinned Codex
+0.156 and `gpt-6-sol` at medium reasoning effort. This establishes neither
+Tailscale Serve access nor long-term host availability or a physical M1 result.
 
 ## Observed execution machine
 

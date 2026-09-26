@@ -12,9 +12,16 @@
   budget. Release `97363a8` also restored a fresh verified bundle over the
   stopped live data root as `m1lab`; after restart the CLI reported the same
   session and full budget, and the service returned HTTP 200 with zero
-  restarts. The authenticated Codex runtime remains unqualified.
+  restarts. Release `10934e9` subsequently completed an authenticated,
+  host-only Codex turn on the T480 through the `m1lab` coordinator. Job
+  `job_c4b06fe7f5f44710926be4d698c0f8b7` ended `completed` in proposal
+  mode, with provider-reported usage of 19,816 tokens and no usage uncertainty.
+  The replacement session `session_f73011ac092642b88fabdccbaba723ff` is
+  paused. No physical M1 observation was made.
 - The configured Codex executable SHA-256 is verified before app-server startup.
-- Live app-server startup, authenticated job lifecycle, cancellation and usage remain unqualified until a bounded turn completes on the deployment host.
+- Live app-server startup, authenticated completion, and terminal usage are
+  demonstrated on the T480. Cancellation, sandbox escape checks, and recovery
+  from interrupted live turns remain unqualified.
 - Replay operations preserve intent, completion and unknown-effect outcomes.
 - Stale revisions, revoked approvals and exhausted budgets fail closed.
 - Coordinator restart reconciles incomplete jobs, operations and artifacts.
