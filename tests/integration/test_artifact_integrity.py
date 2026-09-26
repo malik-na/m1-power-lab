@@ -327,6 +327,13 @@ def test_disk_pressure_blocks_large_capture_before_dispatch(core, monkeypatch):
         JobCreate(
             session_id=session.id,
             kind="review",
+            evidence_manifest={
+                "review_target": {
+                    "procedure_id": procedure.procedure_id,
+                    "procedure_revision": procedure.revision,
+                    "procedure_digest": procedure.digest,
+                }
+            },
             lease_expires_at=now + timedelta(minutes=1),
             deadline_at=now + timedelta(minutes=2),
         )

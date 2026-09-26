@@ -7,6 +7,7 @@ This file distinguishes implemented behavior from physical qualification.
 | Durable coordinator | Host implemented | SQLite journal, revisions, budgets, exact approvals, reconciliation |
 | Replay experiment cycle | Host demonstrated | `m1lab replay-demo` records read-only and approved mutating paths, immutable scientific evidence and matching operator readback |
 | Scientific records | Host implemented | Versioned immutable records and frozen paired 10% / 95% decision rule |
+| Codex scientific decision loop | Advisory brief, cost comparison, typed draft/review boundary, and redesign checkpoint gates implemented | Live model turn and evidence-to-next-decision cycle remain unqualified until a bounded authenticated turn runs on the ThinkPad |
 | Codex runtime | Implemented, opt in | SHA-256 pinned, read only app-server adapter and budgeted job supervisor; authenticated live turn still needs host qualification |
 | Owner CLI | Host implemented | Lifecycle, budgets, approvals, events, artifacts, jobs, operation and usage recovery, export, backup, replay and diagnostics |
 | Owner web UI | Host rendered | Four responsive views, revisioned commands, SSE and local/Tailscale identity modes |

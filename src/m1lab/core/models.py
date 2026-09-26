@@ -199,6 +199,9 @@ class ProcedureDraft(BaseModel):
     physical_attendance: Literal["not_required", "required"] = "not_required"
     expected_benefit: str = ""
     failure_severity: str = "unknown"
+    hypothesis_id: str | None = None
+    protocol_id: str | None = None
+    redesign_checkpoint_id: str | None = None
 
 
 class ProcedureRecord(ProcedureDraft):

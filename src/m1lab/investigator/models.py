@@ -26,6 +26,7 @@ class InvestigationRequest(BaseModel):
     cwd: Path
     model: str = Field(min_length=1, max_length=128)
     kind: Literal["investigate", "implement", "analyze", "review", "conclude", "chat"] = "investigate"
+    review_procedure_id: str | None = Field(default=None, min_length=1, max_length=160)
     estimated_tokens: int = Field(default=100_000, gt=0, le=100_000_000)
     estimated_active_seconds: int = Field(default=900, gt=0, le=86_400)
     deadline_seconds: int = Field(default=900, gt=0, le=86_400)
@@ -42,6 +43,10 @@ class InvestigationRequest(BaseModel):
             raise ValueError("combined evidence exceeds 4,000,000 characters")
         if len(set(self.artifact_ids)) != len(self.artifact_ids):
             raise ValueError("artifact_ids must not contain duplicates")
+        if self.kind == "review" and self.review_procedure_id is None:
+            raise ValueError("review turns must identify the exact procedure to review")
+        if self.kind != "review" and self.review_procedure_id is not None:
+            raise ValueError("review_procedure_id is only valid for review turns")
         return self
 
 

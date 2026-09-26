@@ -71,11 +71,12 @@ def command(core, session_id, kind, payload=None):
     )
 
 
-def job_request(session_id, kind):
+def job_request(session_id, kind, evidence_manifest=None):
     now = utc_now()
     return JobCreate(
         session_id=session_id,
         kind=kind,
+        evidence_manifest=evidence_manifest or {},
         lease_expires_at=now + timedelta(minutes=5),
         deadline_at=now + timedelta(minutes=10),
     )
@@ -100,7 +101,14 @@ def procedure(session_id, *, mutates=True):
 
 
 def complete_review(core, record, disposition=ReviewDisposition.ACCEPTED):
-    reviewer = core.create_job(job_request(record.session_id, "review"))
+    review_target = {
+        "procedure_id": record.procedure_id,
+        "procedure_revision": record.revision,
+        "procedure_digest": record.digest,
+    }
+    reviewer = core.create_job(
+        job_request(record.session_id, "review", {"review_target": review_target})
+    )
     core.update_job(reviewer.id, state="running")
     core.update_job(reviewer.id, state="completed")
     return core.record_review(
@@ -132,7 +140,19 @@ def test_review_and_approval_waits_have_durable_phases_and_account_only_live_wor
         core.create_job(job_request(session.id, "investigate"))
 
     clock.set(100)
-    first = core.create_job(job_request(session.id, "review"))
+    first = core.create_job(
+        job_request(
+            session.id,
+            "review",
+            {
+                "review_target": {
+                    "procedure_id": record.procedure_id,
+                    "procedure_revision": record.revision,
+                    "procedure_digest": record.digest,
+                }
+            },
+        )
+    )
     clock.set(103)
     second = core.create_job(job_request(session.id, "chat"))
     core.update_job(first.id, state="running")

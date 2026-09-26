@@ -141,6 +141,7 @@ class ExperimentProtocol(ScientificModel):
     regression_checks: tuple[str, ...] = ()
     decision_rule: FrozenTenPercentRule = Field(default_factory=FrozenTenPercentRule)
     frozen_at: datetime | None = None
+    redesign_checkpoint_id: str | None = None
     created_at: datetime = Field(default_factory=_now)
 
     @model_validator(mode="after")
@@ -256,6 +257,18 @@ class DerivedResultRecord(ScientificModel):
         return self
 
 
+class RedesignCheckpointRecord(ScientificModel):
+    record_type: Literal["redesign_checkpoint"] = "redesign_checkpoint"
+    id: str = Field(default_factory=lambda: _id("redesign"))
+    session_id: str = Field(min_length=1)
+    hypothesis_id: str = Field(min_length=1)
+    mode: StudyMode
+    triggering_result_ids: tuple[str, str]
+    findings: str = Field(min_length=1)
+    redesign: str = Field(min_length=1)
+    created_at: datetime = Field(default_factory=_now)
+
+
 class ClaimEvidence(ScientificModel):
     record_type: Literal["claim_evidence"] = "claim_evidence"
     id: str = Field(default_factory=lambda: _id("evidence"))
@@ -309,6 +322,7 @@ ScientificRecord: TypeAlias = Annotated[
     | ExperimentProtocol
     | ObservationRecord
     | DerivedResultRecord
+    | RedesignCheckpointRecord
     | ClaimEvidence
     | DecisionRecord,
     Field(discriminator="record_type"),
@@ -352,6 +366,14 @@ class EvidenceBrief(ScientificModel):
     counterevidence: tuple[str, ...]
     limitations: tuple[str, ...]
     next_action: str | None
+    competing_hypotheses: tuple[dict[str, str], ...] = ()
+    strongest_support: tuple[str, ...] = ()
+    strongest_counterevidence: tuple[str, ...] = ()
+    failed_attempts: tuple[str, ...] = ()
+    uninformative_streak: int = Field(default=0, ge=0)
+    redesign_checkpoint_required: bool = False
+    redesign_hypothesis_ids: tuple[str, ...] = ()
+    resource_limits: dict[str, Any] = Field(default_factory=dict)
 
 
 class PublishedScientificRecord(ScientificModel):

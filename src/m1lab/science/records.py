@@ -6,7 +6,7 @@ from typing import Iterable, Protocol
 
 from pydantic import TypeAdapter
 
-from m1lab.core import ArtifactRecord, SessionRecord
+from m1lab.core import ArtifactRecord, ProcedureDraft, SessionRecord, SessionSnapshot
 
 from .models import (
     ClaimEvidence,
@@ -24,6 +24,7 @@ from .models import (
     ProtocolAdherence,
     PublishedScientificRecord,
     RegressionCheck,
+    RedesignCheckpointRecord,
     ScientificArtifactEnvelope,
     ScientificRecord,
     StudyMode,
@@ -35,6 +36,8 @@ class ScientificCore(Protocol):
     """The complete public core surface needed by this module."""
 
     def session(self, session_id: str) -> SessionRecord: ...
+
+    def snapshot(self, session_id: str) -> SessionSnapshot: ...
 
     def publish_artifact(
         self,
@@ -191,6 +194,41 @@ class ScientificRecordStore:
     def __init__(self, core: ScientificCore):
         self._core = core
 
+    def validate_procedure_binding(self, draft: ProcedureDraft) -> None:
+        """Validate optional scientific lineage and any required redesign gate."""
+
+        hypothesis_id = draft.hypothesis_id
+        protocol_id = draft.protocol_id
+        checkpoint_id = draft.redesign_checkpoint_id
+        if not any((hypothesis_id, protocol_id, checkpoint_id)):
+            return
+        if not hypothesis_id or not protocol_id:
+            raise ValueError("scientific procedure binding requires both hypothesis_id and protocol_id")
+        index = self._record_index(draft.session_id)
+        hypothesis = _require_record(index, hypothesis_id, HypothesisRecord)
+        protocol = _require_record(index, protocol_id, ExperimentProtocol)
+        _match_parent(protocol, hypothesis)
+        if protocol.hypothesis_id != hypothesis_id:
+            raise ValueError("procedure protocol belongs to a different hypothesis")
+        required_pair = _latest_inconclusive_pair(index, hypothesis_id)
+        if required_pair is not None:
+            if checkpoint_id is None:
+                raise ValueError("procedure requires a redesign checkpoint after two inconclusive results")
+            checkpoint = _require_record(index, checkpoint_id, RedesignCheckpointRecord)
+            if (
+                checkpoint.hypothesis_id != hypothesis_id
+                or checkpoint.triggering_result_ids != required_pair
+                or protocol.redesign_checkpoint_id != checkpoint_id
+            ):
+                raise ValueError("procedure redesign checkpoint does not match its hypothesis, protocol, and results")
+        elif checkpoint_id is not None:
+            checkpoint = _require_record(index, checkpoint_id, RedesignCheckpointRecord)
+            if (
+                checkpoint.hypothesis_id != hypothesis_id
+                or protocol.redesign_checkpoint_id != checkpoint_id
+            ):
+                raise ValueError("procedure checkpoint does not match its hypothesis and protocol")
+
     def publish(self, record: ScientificRecord) -> PublishedScientificRecord:
         session = self._core.session(record.session_id)
         if session.id != record.session_id:
@@ -327,6 +365,37 @@ class ScientificRecordStore:
             _match_parent(record, hypothesis)
             if record.created_at < hypothesis.created_at:
                 raise ValueError("protocol predates its hypothesis")
+            required_pair = _latest_inconclusive_pair(index, record.hypothesis_id)
+            if required_pair is not None and record.redesign_checkpoint_id is None:
+                raise ValueError(
+                    "two consecutive inconclusive results require a redesign checkpoint before another protocol"
+                )
+            if record.redesign_checkpoint_id is not None:
+                checkpoint = _require_record(
+                    index, record.redesign_checkpoint_id, RedesignCheckpointRecord
+                )
+                if checkpoint.hypothesis_id != record.hypothesis_id:
+                    raise ValueError("redesign checkpoint belongs to a different hypothesis")
+                if record.created_at < checkpoint.created_at:
+                    raise ValueError("protocol predates its referenced redesign checkpoint")
+                if required_pair is not None and checkpoint.triggering_result_ids != required_pair:
+                    raise ValueError("redesign checkpoint does not cover the current inconclusive result pair")
+            return
+
+        if isinstance(record, RedesignCheckpointRecord):
+            hypothesis = _require_record(index, record.hypothesis_id, HypothesisRecord)
+            _match_parent(record, hypothesis)
+            required_pair = _latest_inconclusive_pair(index, record.hypothesis_id)
+            if required_pair is None or record.triggering_result_ids != required_pair:
+                raise ValueError(
+                    "redesign checkpoint must cite the two latest inconclusive results for its hypothesis"
+                )
+            triggering = tuple(
+                _require_record(index, result_id, DerivedResultRecord)
+                for result_id in record.triggering_result_ids
+            )
+            if record.created_at < max(item.derived_at for item in triggering):
+                raise ValueError("redesign checkpoint predates one of its triggering results")
             return
 
         if isinstance(record, ObservationRecord):
@@ -515,9 +584,11 @@ class ScientificRecordStore:
     def brief(self, published: Iterable[PublishedScientificRecord]) -> EvidenceBrief:
         records = tuple(sorted(published, key=lambda item: item.created_at))
         manifest = self.manifest(records)
+        resource_limits = self._core.snapshot(manifest.session_id).budget.model_dump(mode="json")
         hypotheses = [item.record for item in records if isinstance(item.record, HypothesisRecord)]
         results = [item.record for item in records if isinstance(item.record, DerivedResultRecord)]
         decisions = [item.record for item in records if isinstance(item.record, DecisionRecord)]
+        claim_records = [item.record for item in records if isinstance(item.record, ClaimEvidence)]
         decision = decisions[-1] if decisions else None
         result = results[-1] if results else None
         hypothesis = hypotheses[-1] if hypotheses else None
@@ -531,6 +602,39 @@ class ScientificRecordStore:
             if decision
             else _result_limitations(result)
         )
+        claims_by_id = {item.id: item for item in claim_records}
+        for item in decisions:
+            claims_by_id.update(
+                (evidence.id, evidence)
+                for evidence in (*item.evidence, *item.counterevidence)
+            )
+        claims = list(claims_by_id.values())
+        support = sorted(
+            (item for item in claims if item.direction.value == "supports"),
+            key=lambda item: {"strong": 0, "moderate": 1, "weak": 2}[item.strength],
+        )
+        counters = sorted(
+            (item for item in claims if item.direction.value == "counters"),
+            key=lambda item: {"strong": 0, "moderate": 1, "weak": 2}[item.strength],
+        )
+        competing = tuple(
+            {
+                "hypothesis_id": item.id,
+                "statement": _compact(item.statement),
+                "prediction": _compact(item.predicted_effect),
+            }
+            for item in reversed(hypotheses[-12:])
+        )
+        failed = tuple(
+            _compact(f"{item.id}: {item.outcome.value}; hypothesis {item.hypothesis_id}")
+            for item in results[-24:]
+            if item.outcome in {OutcomeCategory.INCONCLUSIVE, OutcomeCategory.INVALID}
+        )
+        streaks = _uninformative_streaks(results)
+        redesign_hypotheses = tuple(
+            hypothesis_id for hypothesis_id, streak in streaks.items() if streak >= 2
+        )
+        streak = max(streaks.values(), default=0)
         finding = (
             _compact(decision.conclusion)
             if decision
@@ -543,9 +647,29 @@ class ScientificRecordStore:
             finding=finding,
             outcome=decision.outcome if decision else result.outcome if result else None,
             evidence_refs=tuple(entry.artifact_id for entry in manifest.entries),
-            counterevidence=counter,
+            counterevidence=tuple(
+                _compact(item.rationale) for item in counters[:12]
+            ) or counter,
             limitations=limitations,
             next_action=_compact(decision.next_action) if decision else None,
+            competing_hypotheses=competing,
+            strongest_support=tuple(
+                _compact(
+                    f"{item.strength}: {item.claim} — {item.rationale}; refs={','.join((*item.record_refs, *item.artifact_refs))}"
+                )
+                for item in support[:8]
+            ),
+            strongest_counterevidence=tuple(
+                _compact(
+                    f"{item.strength}: {item.claim} — {item.rationale}; refs={','.join((*item.record_refs, *item.artifact_refs))}"
+                )
+                for item in counters[:8]
+            ),
+            failed_attempts=failed,
+            uninformative_streak=streak,
+            redesign_checkpoint_required=bool(redesign_hypotheses),
+            redesign_hypothesis_ids=redesign_hypotheses,
+            resource_limits=resource_limits,
         )
 
 
@@ -562,6 +686,40 @@ def _require_record(
             f"scientific record {record_id} is {record.record_type}, expected {expected_type.__name__}"
         )
     return record
+
+
+def _latest_inconclusive_pair(
+    records: dict[str, ScientificRecord], hypothesis_id: str
+) -> tuple[str, str] | None:
+    results = sorted(
+        (
+            record
+            for record in records.values()
+            if isinstance(record, DerivedResultRecord)
+            and record.hypothesis_id == hypothesis_id
+        ),
+        key=lambda item: item.derived_at,
+    )
+    if len(results) < 2 or any(
+        item.outcome != OutcomeCategory.INCONCLUSIVE for item in results[-2:]
+    ):
+        return None
+    return (results[-2].id, results[-1].id)
+
+
+def _uninformative_streaks(results: list[DerivedResultRecord]) -> dict[str, int]:
+    grouped: dict[str, list[DerivedResultRecord]] = {}
+    for result in results:
+        grouped.setdefault(result.hypothesis_id, []).append(result)
+    streaks: dict[str, int] = {}
+    for hypothesis_id, values in grouped.items():
+        streak = 0
+        for result in sorted(values, key=lambda item: item.derived_at, reverse=True):
+            if result.outcome != OutcomeCategory.INCONCLUSIVE:
+                break
+            streak += 1
+        streaks[hypothesis_id] = streak
+    return streaks
 
 
 def _match_parent(record: ScientificRecord, hypothesis: HypothesisRecord) -> None:
@@ -649,6 +807,8 @@ def _summary(record: ScientificRecord | None) -> str:
         )
     if isinstance(record, ClaimEvidence):
         return _compact(f"{record.direction.value} claim: {record.claim} ({record.strength})")
+    if isinstance(record, RedesignCheckpointRecord):
+        return _compact(f"Redesign checkpoint for {record.hypothesis_id}: {record.redesign}")
     return _compact(f"Decision: {record.outcome.value}; {record.conclusion}")
 
 

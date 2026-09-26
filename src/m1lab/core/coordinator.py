@@ -347,6 +347,20 @@ class CoreApp:
         return snapshot
 
     def register_procedure(self, draft: ProcedureDraft) -> ProcedureRecord:
+        from m1lab.science import ScientificRecordStore
+
+        scientific = ScientificRecordStore(self)
+        published_science = scientific.list(draft.session_id)
+        if published_science:
+            brief = scientific.brief(published_science)
+            if brief.redesign_checkpoint_required and draft.hypothesis_id is None:
+                raise ValidationError(
+                    "procedure must identify its hypothesis and protocol while a redesign checkpoint is due"
+                )
+        try:
+            scientific.validate_procedure_binding(draft)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
         canonical = draft.model_dump(mode="json")
         digest = hashlib.sha256(json_dump(canonical).encode()).hexdigest()
         with self.journal.transaction() as tx:
@@ -386,7 +400,7 @@ class CoreApp:
             if procedure.session_id != review.session_id or procedure.digest != review.procedure_digest:
                 raise ValidationError("review does not match the exact procedure revision")
             reviewer = tx.execute(
-                "SELECT session_id, kind, state FROM jobs WHERE id=?",
+                "SELECT session_id, kind, state, evidence_manifest_json FROM jobs WHERE id=?",
                 (review.reviewer_job_id,),
             ).fetchone()
             if reviewer is None:
@@ -397,6 +411,16 @@ class CoreApp:
                 or reviewer["state"] != "completed"
             ):
                 raise ValidationError("reviewer job must be a completed review job in this session")
+            review_target = json_load(reviewer["evidence_manifest_json"], {}).get("review_target")
+            if not isinstance(review_target, dict) or any(
+                review_target.get(key) != expected
+                for key, expected in (
+                    ("procedure_id", review.procedure_id),
+                    ("procedure_revision", review.procedure_revision),
+                    ("procedure_digest", review.procedure_digest),
+                )
+            ):
+                raise ValidationError("reviewer job was not bound to this exact procedure revision")
             tx.execute("INSERT INTO reviews VALUES (?,?,?,?,?,?,?,?)", (review.id, review.session_id, review.procedure_id, review.procedure_revision, review.procedure_digest, review.disposition, review.model_dump_json(), iso(review.created_at)))
             self.journal.append_event(tx, kind="procedure.reviewed", session_id=review.session_id, subject_id=review.id, data={"procedure_id": review.procedure_id, "revision": review.procedure_revision, "disposition": review.disposition})
             next_phase = (
@@ -412,6 +436,24 @@ class CoreApp:
                 f"procedure review {review.disposition.value}",
             )
         return review
+
+    def _redesign_gate_blocker(
+        self, session_id: str, procedure: ProcedureRecord
+    ) -> str | None:
+        from m1lab.science import ScientificRecordStore
+
+        scientific = ScientificRecordStore(self)
+        published = scientific.list(session_id)
+        if not published:
+            return None
+        brief = scientific.brief(published)
+        if brief.redesign_checkpoint_required and procedure.hypothesis_id is None:
+            return "unbound procedure cannot proceed while a hypothesis redesign checkpoint is due"
+        try:
+            scientific.validate_procedure_binding(procedure)
+        except ValueError as exc:
+            return str(exc)
+        return None
 
     def authorize_operation(self, request: DispatchRequest) -> OperationAuthorization:
         with self.journal.transaction() as tx:
@@ -429,6 +471,9 @@ class CoreApp:
                 reasons.append(f"session phase {session.phase} does not admit work")
             if procedure.session_id != session.id or target.session_id != session.id:
                 reasons.append("procedure or target belongs to another session")
+            redesign_blocker = self._redesign_gate_blocker(session.id, procedure)
+            if redesign_blocker is not None:
+                reasons.append(redesign_blocker)
             if request.adapter_mode not in {TargetMode.REPLAY, TargetMode.SYNTHETIC}:
                 reasons.append("real hardware dispatch is disabled in this build")
             if request.adapter_mode != target.mode:
@@ -518,6 +563,9 @@ class CoreApp:
             procedure = self._procedure_in_tx(
                 tx, row["procedure_id"], row["procedure_revision"]
             )
+            redesign_blocker = self._redesign_gate_blocker(row["session_id"], procedure)
+            if redesign_blocker is not None:
+                raise ConflictError("scientific redesign gate: " + redesign_blocker)
             estimated_artifact_bytes = sum(
                 max(0, int(operation.parameters.get("length", 0)))
                 for operation in procedure.operations

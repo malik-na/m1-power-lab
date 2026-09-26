@@ -66,3 +66,72 @@ an inconclusive, negative, below-target or invalid result.
 
 Validated scientific records and the latest compact brief appear in Codex's
 evidence manifest, the operator evidence view and full JSON exports.
+
+## Codex decision loop
+
+The bounded Codex brief includes all recent competing hypotheses and their
+predictions, strongest support and counterevidence, inconclusive or invalid
+attempts, current resource limits, and whether a redesign checkpoint is due.
+Codex must compare the selected experiment's decision value and total cost
+(tokens, elapsed time, target-active time, and owner time) with a cheaper
+alternative. These estimates are advisory; coordinator budget and operation
+checks remain authoritative.
+
+Codex returns only a typed procedure draft candidate. To validate the candidate
+and freeze it as a content-digested procedure revision, copy the
+`procedure_draft_candidate` object to a JSON file and run:
+
+```bash
+m1lab --session SESSION_ID procedure-register procedure-candidate.json
+```
+
+Completed job records list their runtime event artifact IDs; inspect the
+completed job with `m1lab jobs --state completed`, then use
+`m1lab artifact-read ARTIFACT_ID` to read the full event payload before copying
+the structured object.
+
+Registration performs `ProcedureDraft` validation and enters the separate
+review phase. Run a new Codex turn against the exact registered procedure ID;
+the coordinator binds its review manifest to the current revision and digest:
+
+```bash
+m1lab --session SESSION_ID investigate \
+  --kind review --procedure-id PROCEDURE_ID \
+  "Independently review this exact procedure for safety, discriminating value, controls, and recovery."
+```
+
+After that review job is complete, copy its `procedure_review` object to a JSON
+file and record it against that completed review job:
+
+```bash
+m1lab --session SESSION_ID procedure-review \
+  --reviewer-job REVIEW_JOB_ID procedure-review.json
+```
+
+The coordinator checks that the review job is complete, is a review job in the
+same session, and that its procedure ID, revision, and digest match exactly.
+Neither registration nor review approves execution; owner approval and the
+existing target and recovery gates still apply.
+
+When a redesign checkpoint is due, a registered scientific procedure must
+identify its hypothesis, protocol, and matching checkpoint. This keeps a new
+procedure from bypassing the protocol-level checkpoint gate.
+
+## Redesign checkpoints
+
+Two most recent inconclusive derived results for the same hypothesis block
+publication of another protocol for that hypothesis until a redesign
+checkpoint cites those exact result IDs. An invalid result does not count as
+inconclusive. The Codex brief sets `redesign_checkpoint_required` and returns
+the triggering results and required redesign. Record the checkpoint from the
+Codex output with:
+
+```bash
+m1lab --session SESSION_ID science checkpoint codex-output.json \
+  --hypothesis-id HYPOTHESIS_ID
+```
+
+The store rejects stale, mismatched, or incomplete checkpoint references. A
+checkpoint records a design review; it does not authorize an experiment. The
+next Codex brief uses the resulting observations, deterministic outcome,
+decision, and checkpoint to revise the next recommendation.

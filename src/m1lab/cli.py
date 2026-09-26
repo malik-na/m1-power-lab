@@ -62,6 +62,7 @@ from m1lab.science import (
     Exclusion,
     HypothesisRecord,
     ProtocolAdherence,
+    RedesignCheckpointRecord,
     RegressionCheck,
     ScientificRecord,
     ScientificRecordStore,
@@ -178,6 +179,16 @@ def parser() -> argparse.ArgumentParser:
     commands.add_parser("diagnostics", help="show host and adapter readiness")
     commands.add_parser("replay-demo", help="run a complete deterministic replay cycle")
 
+    procedure_register = commands.add_parser(
+        "procedure-register", help="validate and freeze an explicit typed procedure draft"
+    )
+    procedure_register.add_argument("path", type=Path, help="Codex procedure_draft_candidate JSON")
+    procedure_review = commands.add_parser(
+        "procedure-review", help="record a separate completed review against an exact procedure revision"
+    )
+    procedure_review.add_argument("path", type=Path, help="Codex procedure_review JSON")
+    procedure_review.add_argument("--reviewer-job", required=True, help="completed job created with --kind review")
+
     science = commands.add_parser("science", help="publish and inspect validated scientific records")
     science_commands = science.add_subparsers(dest="science_action", required=True)
     science_publish = science_commands.add_parser("publish", help="validate and publish one record JSON file")
@@ -188,11 +199,17 @@ def parser() -> argparse.ArgumentParser:
         "derive", help="derive and publish a power result from published observations"
     )
     science_derive.add_argument("path", type=Path, help="JSON derivation specification")
+    science_checkpoint = science_commands.add_parser(
+        "checkpoint", help="record the required redesign checkpoint from a Codex output JSON"
+    )
+    science_checkpoint.add_argument("path", type=Path)
+    science_checkpoint.add_argument("--hypothesis-id", required=True)
 
     investigate = commands.add_parser("investigate", help="run one bounded Codex evidence turn")
     investigate.add_argument("instruction")
     investigate.add_argument("--evidence", action="append", type=Path, default=[])
     investigate.add_argument("--kind", choices=("investigate", "analyze", "review", "conclude"), default="investigate")
+    investigate.add_argument("--procedure-id", help="exact procedure ID to review; required with --kind review")
     investigate.add_argument("--estimated-tokens", type=int, default=100_000)
     investigate.add_argument("--estimated-minutes", type=int, default=15)
     investigate.add_argument("--deadline-minutes", type=int, default=15)
@@ -458,6 +475,44 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
         }
     if args.action == "replay-demo":
         return _replay_demo(core, session_id)
+    if args.action == "procedure-register":
+        document = json.loads(args.path.read_text(encoding="utf-8"))
+        if not isinstance(document, dict):
+            raise ValueError("procedure draft must be a JSON object")
+        candidate = document.get("procedure_draft_candidate", document)
+        if not isinstance(candidate, dict):
+            raise ValueError("procedure_draft_candidate must be a JSON object")
+        if "session_id" in candidate and candidate["session_id"] != session_id:
+            raise ValueError("procedure draft belongs to a different session")
+        candidate = dict(candidate)
+        for field in ("operations", "cleanup"):
+            normalized_operations = []
+            for operation in candidate.get(field, []):
+                if not isinstance(operation, dict):
+                    raise ValueError(f"procedure {field} entries must be objects")
+                normalized_operations.append(
+                    {
+                        **operation,
+                        "parameters": _key_value_entries(
+                            operation.get("parameters", []), f"{field} parameters"
+                        ),
+                    }
+                )
+            if field in candidate:
+                candidate[field] = normalized_operations
+        if "limits" in candidate:
+            candidate["limits"] = _key_value_entries(candidate["limits"], "procedure limits")
+        draft = ProcedureDraft.model_validate({**candidate, "session_id": session_id})
+        return core.register_procedure(draft).model_dump(mode="json")
+    if args.action == "procedure-review":
+        document = json.loads(args.path.read_text(encoding="utf-8"))
+        review_document = document.get("procedure_review", document) if isinstance(document, dict) else None
+        if not isinstance(review_document, dict):
+            raise ValueError("procedure review must be a JSON object")
+        review = ReviewRecord.model_validate(
+            {**review_document, "session_id": session_id, "reviewer_job_id": args.reviewer_job}
+        )
+        return core.record_review(review).model_dump(mode="json")
     if args.action == "science":
         store = ScientificRecordStore(core)
         if args.science_action == "list":
@@ -476,6 +531,30 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
             return store.publish(record).model_dump(mode="json")
         if args.science_action == "derive":
             return _derive_scientific_result(store, session_id, document)
+        if args.science_action == "checkpoint":
+            checkpoint = document.get("redesign_checkpoint") if isinstance(document, dict) else None
+            if not isinstance(checkpoint, dict) or checkpoint.get("required") is not True:
+                raise ValueError("Codex output does not require a redesign checkpoint")
+            hypothesis = next(
+                (
+                    item.record
+                    for item in store.list(session_id)
+                    if isinstance(item.record, HypothesisRecord)
+                    and item.record.id == args.hypothesis_id
+                ),
+                None,
+            )
+            if hypothesis is None:
+                raise ValueError("hypothesis is not published in this session")
+            record = RedesignCheckpointRecord(
+                session_id=session_id,
+                hypothesis_id=hypothesis.id,
+                mode=hypothesis.mode,
+                triggering_result_ids=tuple(checkpoint.get("result_refs", ())),
+                findings=str(checkpoint.get("findings", "")),
+                redesign=str(checkpoint.get("redesign", "")),
+            )
+            return store.publish(record).model_dump(mode="json")
         raise AssertionError(args.science_action)
     if args.action == "investigate":
         if settings.codex_runtime != "app-server":
@@ -491,6 +570,7 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
             cwd=settings.workspace,
             model=settings.model,
             kind=args.kind,
+            review_procedure_id=args.procedure_id,
             estimated_tokens=args.estimated_tokens,
             estimated_active_seconds=args.estimated_minutes * 60,
             deadline_seconds=args.deadline_minutes * 60,
@@ -498,6 +578,21 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
         )
         return asyncio.run(_run_investigation(core, request, settings))
     raise AssertionError(args.action)
+
+
+def _key_value_entries(values: Any, label: str) -> dict[str, Any]:
+    if isinstance(values, dict):
+        return values
+    if not isinstance(values, list):
+        raise ValueError(f"{label} must be a list of name/value entries")
+    result: dict[str, Any] = {}
+    for entry in values:
+        if not isinstance(entry, dict) or not isinstance(entry.get("name"), str) or "value" not in entry:
+            raise ValueError(f"{label} entries require a string name and a value")
+        if entry["name"] in result:
+            raise ValueError(f"{label} contains duplicate name {entry['name']!r}")
+        result[entry["name"]] = entry["value"]
+    return result
 
 
 def _derive_scientific_result(
@@ -566,6 +661,11 @@ def _record_replay_review(
                 "procedure_id": procedure.procedure_id,
                 "procedure_revision": procedure.revision,
                 "procedure_digest": procedure.digest,
+                "review_target": {
+                    "procedure_id": procedure.procedure_id,
+                    "procedure_revision": procedure.revision,
+                    "procedure_digest": procedure.digest,
+                },
                 "mode": "deterministic-host-review",
             },
             lease_expires_at=now + timedelta(minutes=1),
