@@ -28,7 +28,9 @@ ProtectHome=yes
 PrivateDevices=yes
 ReadWritePaths=/var/lib/m1-power-lab
 LockPersonality=yes
-RestrictSUIDSGID=yes
+# Codex's Bubblewrap helper needs openat2(), which RestrictSUIDSGID blocks
+# with ENOSYS. NoNewPrivileges still prevents gaining privileges on exec.
+RestrictSUIDSGID=no
 
 [Install]
 WantedBy=multi-user.target
