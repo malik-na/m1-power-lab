@@ -88,9 +88,29 @@
     "usage_note": "Observed lifetime_tokens=0 does not resolve missing provider usage"
   },
   "remaining": [
-    "Exact-procedure review and attended single-use owner approval",
+    "Attended single-use owner approval and fresh same-connection snapshot; expired launch requires a new exact review",
     "Actual native capture and same-target proxy return",
     "Recovery qualification and known-good promotion",
     "Measurement qualification; scientific investigation remains stopped"
-  ]
+  ],
+  "exact_procedure_review": {
+    "session_id": "session_645ad9bde7b64766b23801c8f3d64cef",
+    "job_id": "job_c75fdbf426d34c41b3380ae78864b804",
+    "procedure_id": "procedure_c11f70bfc4914b4db451dc271c47e702",
+    "procedure_revision": 1,
+    "procedure_digest": "e07bf8afd8659a28c04df9c2d4109223397beac0bcbe0854a13c0c9d27f5a797",
+    "disposition": "accepted",
+    "blocking_findings": [],
+    "usage_tokens": 48086,
+    "usage_uncertain": false,
+    "physical_approval_recorded": false,
+    "scope": "One attended three-sample native transport/return qualification; no scientific investigation",
+    "limitations": [
+      "Dispatch still requires attending-owner approval and a fresh bound proxy observation. The recorded proxy observation expired at 2026-09-26T15:30:34.608281Z.",
+      "The exact launch has a fixed deadline of 2026-09-26T15:45:04.735722Z. If it cannot accommodate the capture when dispatched, the attempt must be refused; this review does not authorize changing the launch or procedure.",
+      "A kernel hang can defeat both reboot requests. The attending owner must be ready to use the stated physical recovery path.",
+      "Host safeguards and test counts are described in the supplied review artifact; host implementation and test outputs were not supplied here for independent inspection. The three-sample window has no observed native latency result.",
+      "A complete transport result and a new owned proxy connection would support only this harness qualification. Physical boot identity, sensor provenance, and power measurement remain unqualified."
+    ]
+  }
 }

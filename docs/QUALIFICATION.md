@@ -26,7 +26,13 @@
   `21f0fdbbea097af66b2b3310c85c80400329fb32880fe9e382277bb23194d686`.
   Independent exact-image review verified packaged source/configuration and
   boot-file digests with no blocking finding; this does not replace exact
-  procedure review or physical approval. See [dispatch evidence](evidence/2026-09-26-native-dispatch.json).
+  procedure review or physical approval. A separately accounted
+  `gpt-6-sol` medium review then accepted the exact three-sample procedure
+  `e07bf8af…a797`, with **48,086 reported tokens** and no usage uncertainty
+  in the harness session. The installed live session retains its separate
+  unresolved hold. Attended approval and actual native execution remain
+  pending; the fixed launch expiry cannot be extended under this review.
+  See [dispatch evidence](evidence/2026-09-26-native-dispatch.json).
 - The identity-enabled candidate at `3f75558` was rebuilt and session-linked.
   Its packaged configuration SHA matched the image manifest. The actual
   packaged ARM64 Python/collector ran under qemu-user with synthetic sysfs and
