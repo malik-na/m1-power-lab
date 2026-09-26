@@ -27,6 +27,20 @@ ThinkPad host or a ThinkPad-to-Mac connection.
 
 ## Planned host and physical connection
 
+For the next T480 visit, collect current host facts without opening USB
+devices or recording their serial numbers:
+
+```bash
+python3 scripts/collect-host-inventory.py --output /tmp/t480-host-inventory.json
+```
+
+If the host m1n1 source checkout is available, add `--m1n1-repo PATH` to
+record its current commit; check and record working-tree changes separately.
+Review the JSON before attaching it to the lab record. The collector reports
+only currently enumerated USB product IDs, labels, sysfs port paths, and
+device-node permissions; cable identity, physical port mapping, target recovery,
+and mode qualification still require owner-observed entries below.
+
 | Field | State | Required observation |
 |---|---|---|
 | ThinkPad T480 identity, CPU, RAM, firmware | Unverified from this shell | Run inventory commands on the T480 and record exact outputs |
