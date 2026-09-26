@@ -125,7 +125,12 @@ class JobRequest:
             raise ValueError("read-only jobs cannot declare writable roots")
         if len(roots) > 32 or any(not root.is_absolute() for root in roots):
             raise ValueError("writable_roots must contain at most 32 absolute paths")
-        object.__setattr__(self, "writable_roots", roots)
+        workspace = self.cwd.resolve()
+        resolved_roots = tuple(root.resolve() for root in roots)
+        if any(root != workspace and not root.is_relative_to(workspace) for root in resolved_roots):
+            raise ValueError("writable roots must be inside the job workspace")
+        object.__setattr__(self, "cwd", workspace)
+        object.__setattr__(self, "writable_roots", resolved_roots)
         if self.output_schema is not None:
             encoded = json.dumps(self.output_schema, separators=(",", ":"))
             if len(encoded) > 256_000:
