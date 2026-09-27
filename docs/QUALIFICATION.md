@@ -1,5 +1,19 @@
 # Qualification gates
 
+## Expired launch replaced without target dispatch
+
+The owner replied `approved` at approximately 23:57 UTC, after the configfs
+launch deadline of 19:57 UTC. The exact reply and an unused approval bounded by
+that original deadline are retained. No eighth physical test occurred. The
+matching proxy and unused helper capability were freshly observed.
+
+Replacement `2366a423…eb6d2c5` changes only the run ID/deadline, keeping the same
+candidate, helper configuration, scripts and test bounds. Exact sol/medium review
+accepted it without blockers (95,466 reported tokens; isolated lifetime 1,101,538;
+no usage uncertainty). It expires at 00:13:56 UTC on September 27. Authorization
+for this new digest is pending; the old approval cannot transfer. Live pause and
+usage hold remain intact. See [evidence](evidence/2026-09-27-native-launch-refresh.json).
+
 ## Seventh attempt and concrete configfs fix
 
 The separately reviewed and owner-approved font-configured attempt ran once at

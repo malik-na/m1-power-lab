@@ -1,0 +1,29 @@
+{
+  "date_utc": "2026-09-27",
+  "candidate_source": "4c2855bdd89d74bdae5cdaa6a4870d1b1cdf52a3",
+  "build_id": "build_2c9d5eff9bd947a1ac8c575b8b993a9a",
+  "expired_procedure_digest": "1b751de3f64a077449ce9d2d5b7e51b11cfd879c355ad22ff4d14f7e353c8671",
+  "expired_launch_deadline": "2026-09-26T19:57:26.918915Z",
+  "owner_reply": "approved",
+  "reply_observed_after": "2026-09-26T23:57:24Z",
+  "expired_approval_disposition": "Recorded with original expired deadline, unused; no dispatch. Original proposal and review retained.",
+  "replacement_procedure_id": "procedure_a4ce0f31b5e04e2c8e98dc627638b2b3",
+  "replacement_procedure_digest": "2366a4236131c39d1b1744f526e754b8a98e3ec7b068ef911ccc4b222eb6d2c5",
+  "replacement_deadline": "2026-09-27T00:13:56.679424+00:00",
+  "change": "Fresh run ID/deadline only; same image, helper configuration, three-sample schedule, 480-second bound and pinned camera/launcher scripts.",
+  "physical_state": "Matching proxy observed, unused helper retains run_native_candidate capability. No native dispatch.",
+  "owner_approval": "pending for refreshed exact proposal",
+  "live_investigation": "paused; usage hold preserved; service f560929 active with zero restarts",
+  "exact_review": {
+    "review_id": "review_2ac4ddd1313842c19d33068ccd556ef9",
+    "job_id": "job_c0576bb78c9747ffb73d207f44348c0d",
+    "disposition": "accepted",
+    "blocking_findings": [],
+    "reported_tokens": 95466,
+    "harness_lifetime_tokens": 1101538,
+    "usage_uncertain": false,
+    "phase": "awaiting_approval",
+    "model": "gpt-6-sol",
+    "reasoning_effort": "medium"
+  }
+}

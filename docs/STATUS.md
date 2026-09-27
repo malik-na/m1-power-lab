@@ -16,8 +16,9 @@ path. A regression reproduced the old `ENOENT`; all eight native boot tests pass
 Clean source `4c2855b` has now produced candidate `build_2c9d5eff9bd947a1ac8c575b8b993a9a`.
 Stored artifact hashes/sizes and the packaged fixed bootstrap bytes match; kernel,
 DTB and collector are unchanged. The remaining delivery check is a real
-three-sample capture and proxy return. Exact review accepted `1b751de3…353c8671`;
-new attended approval for this changed image is pending. See [build evidence](evidence/2026-09-26-native-configfs-build.json).
+three-sample capture and proxy return. The first reviewed launch expired before the owner replied; no dispatch occurred.
+Exact review accepted replacement `2366a423…eb6d2c5` with the same image and bounds;
+its authorization is pending. See [refresh evidence](evidence/2026-09-27-native-launch-refresh.json). See [build evidence](evidence/2026-09-26-native-configfs-build.json).
 See [seventh-attempt evidence](evidence/2026-09-26-native-seventh-attempt.json).
 
 The sixth separately approved attended attempt booted Linux and returned to
