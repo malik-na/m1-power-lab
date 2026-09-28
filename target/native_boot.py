@@ -127,18 +127,26 @@ class _UsbTraceDiagnostic:
             self.close()
 
     def refresh(self) -> None:
+        page = int(time.monotonic()) % 6
         try:
             digits, label = ("0000", "UNAVAILABLE") if self.trace is None else self.trace.poll()
+            if 2 <= page < 4 and self.trace is not None:
+                digits, label = self.trace.event_page()
         except Exception:
             digits, label = "3000", "INCOMPLETE"
         # Alternate with the established stage/error overlay at the same place.
         # Two-second pages stay readable even when disconnected tty reads spin.
-        if int(time.monotonic()) % 4 < 2:
+        if page < 4:
             if label not in {"UNAVAILABLE", "READY", "CONFIG WINDOW", "INCOMPLETE"}:
                 digits, label = "3000", "INCOMPLETE"
-            _console_digits(digits, "M1LAB USB TRACE - V / A / G / P",
-                            "VALID ACM RETURNS SERIAL EP0 STATUS",
-                            f"TRACE {digits} {label}")
+            if page < 2:
+                _console_digits(digits, "M1LAB USB TRACE - V / A / G / P",
+                                "VALID ACM RETURNS SERIAL EP0 STATUS",
+                                f"TRACE {digits} {label}")
+            else:
+                _console_digits(digits, "M1LAB USB EVENT - V / R / E / S",
+                                "VALID RETURN EVENT STATUS",
+                                f"EVENT {digits} {label}")
 
     def close(self, *, required: bool = False) -> None:
         if self.trace is not None:
