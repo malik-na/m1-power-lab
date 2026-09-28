@@ -1,0 +1,92 @@
+{
+  "schema": "m1lab.native-qualification-evidence.v1",
+  "recorded_at": "2026-09-28T15:36:37.478690+00:00",
+  "scope": "Tenth delegated attended native console diagnostic; no power measurements",
+  "candidate_source": "92a84f4c2ec500e7e06ea3aea02daa3ea8860653",
+  "candidate_build_id": "build_7885d048ed074cf2bded9b757c5bd9a7",
+  "procedure_id": "procedure_32a33e85028c48d19dfeda41f83ed5e0",
+  "procedure_digest": "e653e5d499e8988282313b712cebebd45bdc6030075fb445442427c51ba6e043",
+  "review_id": "review_ebe748bd7f23417e9f670d694b89a72b",
+  "review_job_id": "job_76512fb7b6074548bdd60be439bdb7f7",
+  "review_disposition": "accepted",
+  "authority": "Owner delegated lab setup/validation and confirmed Mac attendance; camera was conditionally authorized after all other observation channels failed. Exact procedure selected under that delegation.",
+  "operation_id": "operation_f7fbabeda7064d71ae5c13de612e9e5c",
+  "initial_state": "unknown_effect",
+  "reconciled_state": "failed",
+  "native_samples": 0,
+  "native_payload_bytes": 0,
+  "usb_topology": "1-2",
+  "native_vid_pid": "1d6b:0104",
+  "native_enumerated_at": "2026-09-28T15:27:45.015494Z",
+  "host_configuration_failure_at": "2026-09-28T15:27:50.527488Z",
+  "host_configuration_failure": "can't set config #1, error -110",
+  "extra_usb_descriptor_probe": false,
+  "native_disconnect_at": "2026-09-28T15:30:06.497473Z",
+  "owned_proxy_return_at": "2026-09-28T15:30:13.295398Z",
+  "proxy_return_observed": true,
+  "new_owned_connection": true,
+  "independent_reboot_attestation": false,
+  "boot_log_bytes": 24000,
+  "boot_log_sha256": "a885eb989e2b259b491613d1edcf7454d6ad83e617b2db3ae3e525181ebf8eb5",
+  "optical_observation": {
+    "procedure_digest": "e653e5d499e8988282313b712cebebd45bdc6030075fb445442427c51ba6e043",
+    "started_at": "2026-09-28T15:27:14.052730+00:00",
+    "finished_at": "2026-09-28T15:30:15.812670+00:00",
+    "video_bytes": 471389606,
+    "video_sha256": "ae3b9d65eb83e0702ac0deba43e87e030b82ca8595a482cf979446767b75354c",
+    "camera_exit": 0,
+    "native_runner_exit": 0,
+    "camera_coverage_lost_at": null,
+    "private": true,
+    "bounded_seconds": 600,
+    "bounded_bytes": 1073741824,
+    "audio_recorded": false,
+    "frames": [
+      {
+        "video_offset_seconds": 35,
+        "sha256": "91a907595a6955baeefcc609bc9622c8dc337acf4b80b2fc35c669376202d033",
+        "bytes": 188462,
+        "decoded_code": "10/0/8",
+        "observation": "launch_wait / no reported error / configured"
+      },
+      {
+        "video_offset_seconds": 169,
+        "sha256": "ea456b88b5ac0bd7707e86823b34669ce3af5c5c95be42462bebf6563e9cb01e",
+        "bytes": 190632,
+        "decoded_code": "10/1/8",
+        "observation": "launch_wait / TimeoutError / configured"
+      },
+      {
+        "video_offset_seconds": 174,
+        "sha256": "cd244aa5026baadc4a1729f3c70b458922c28b80a300dd7683063766d3fe4453",
+        "bytes": 52662,
+        "decoded_code": null,
+        "observation": "Display blank apart from reflection"
+      },
+      {
+        "video_offset_seconds": 177,
+        "sha256": "0eac68bb5813c76a7ec9e5cb0e7a1cb505de018374d58656f5001221fa924efb",
+        "bytes": 58778,
+        "decoded_code": null,
+        "observation": "Apple logo visible"
+      }
+    ],
+    "independent_readers_agree": true,
+    "lower_kernel_lines": "Not reliably transcribed",
+    "camera_stopped": true,
+    "recording_scope": "Private local screen observation after USB diagnostics failed; no audio",
+    "limitations": "Self-reported stage/UDC state; not samples, successful host enumeration, or independently attested reboot"
+  },
+  "artifacts": [
+    "artifact_0619256a38b56f21813f49519675d231859fd71d88f3c45f71f4f91e838c5bc0",
+    "artifact_a885eb989e2b259b491613d1edcf7454d6ad83e617b2db3ae3e525181ebf8eb5",
+    "artifact_e51e7ffcb6b0eb9838e7326ea6cc9ff1d9602d1e983c8c0dcfcc3930a3cad04b",
+    "artifact_c9722913d6dcce0c5b41e83237b8574dddfa46188b4e681dd3880b6380636b25"
+  ],
+  "next_discriminator": "Determine whether ACM set_alt / endpoint enabling completes versus later DWC3 EP0 status-stage failure. Target configured state is published before those gates and cannot establish host enumeration.",
+  "scientific_power_qualified": false,
+  "autonomous_native_dispatch_enabled": false,
+  "no_automatic_repeat": true,
+  "host_tests": 407,
+  "preparation_history": "Two earlier proposals were superseded before dispatch; a third camera-backed preflight refused before creating any operation because its ffmpeg digest was not yet published. That unused approval was revoked, the binary published and a fresh exact procedure independently reviewed before this sole tenth dispatch."
+}

@@ -2,31 +2,45 @@
 
 ## Current gate: native USB configuration and capture
 
-On September 28, the ninth bounded attempt ran candidate
-`build_c22f6d964ead45689c0e59525896bb41` under exact review and single-use
-attended authorization. Operation `operation_caf72b0de52747a6971cd1ab649607fd`
-began at 14:39:18.676741 UTC. Host logs observed native USB enumeration at
-14:39:44.386495 UTC, followed by a configuration-1 timeout (`-110`) at
-14:39:49.504462 UTC. The separate fixed GET_DESCRIPTOR probe failed its fresh
-device-descriptor requests with timeout and protocol errors, so it obtained no
-configuration-string stage. Its 14:39:45 observation timestamp is the request
-start, not evidence of a completed descriptor read. No native result bytes or
-samples were captured. The operation is reconciled as failed; its original
-unknown result and 24,000-byte boot log remain retained.
+On September 28, the tenth bounded attempt ran candidate
+`build_7885d048ed074cf2bded9b757c5bd9a7` under exact independent review and
+single-use authorization selected under the owner's delegation. Operation
+`operation_f7fbabeda7064d71ae5c13de612e9e5c` ran at 15:27:19–15:30:13 UTC.
+Host logs show native enumeration at 15:27:45 UTC and SET_CONFIGURATION timeout
+(`-110`) at 15:27:50 UTC. No native tty, payload or samples were obtained.
 
-The watcher caught the same-identity proxy on a new owned connection at
-14:42:12.648913 UTC. That establishes a checked USB return, not independently
-attested reboot or native capture. Native power measurement and continuous
-native dispatch remain unqualified. The next discriminating evidence is the
-owner's exact last console line before another separately reviewed boot; this
-failure does not justify an automatic repeat. See
-[ninth-attempt evidence](evidence/2026-09-28-native-ninth-attempt.json) and
+After prior USB-only diagnostics failed, the owner-authorized bounded camera
+recording supplied the missing target stage. Two readers decoded the large
+console marker as `10 / 0 / 8` at 35 seconds and `10 / 1 / 8` at 169 seconds:
+`launch_wait`, initially no reported error, then `TimeoutError`, with UDC state
+`configured`. Lower kernel lines were not reliably transcribed. The image was
+unchanged after the independent review and its 52 published artifacts matched
+their stored hashes and sizes. All 407 host tests passed before packaging.
+
+The exact [Asahi kernel configuration path](https://github.com/AsahiLinux/linux/blob/asahi-7.1.13-3/drivers/usb/gadget/composite.c)
+sets `USB_STATE_CONFIGURED` before the function-interface `set_alt` loop.
+The [DWC3 EP0 path](https://github.com/AsahiLinux/linux/blob/asahi-7.1.13-3/drivers/usb/dwc3/ep0.c)
+also separates configuration handling from status completion. Thus the visible
+UDC state supports entry into configuration handling, but cannot prove ACM
+endpoint setup or the host's control transfer completed. The next diagnostic
+must distinguish those stages; these observations alone do not identify a fix.
+
+The watcher caught the same checked proxy identity on a new owned connection
+at 15:30:13.295398 UTC. The original unknown outcome is retained and reconciled
+as failed. Screen blanking and a later Apple logo were visible, but this is not
+independent reboot attestation or power qualification. The camera stopped
+cleanly with no coverage loss reported and no audio recorded. Footage remains
+private. The native qualification session is paused; no automatic repeat or
+unattended native dispatch is enabled. See
+[tenth-attempt evidence](evidence/2026-09-28-native-tenth-attempt.json) and
 [current deployment status](STATUS.md).
 
-The eighth configfs-fixed attempt also reached Linux USB descriptors but timed
-out setting configuration 1 (`-110`). It captured zero bytes and samples; its
-same-identity proxy return was reconciled as failed with the original unknown
-result and a 24,000-byte boot log retained. See
+The ninth attempt's fresh device-descriptor requests timed out or received
+protocol errors after the same host configuration timeout, so no target stage
+was available over EP0. The eighth attempt also timed out at configuration.
+Both captured zero samples, returned to checked proxy connections and were
+reconciled as failed while retaining original unknown results. See
+[ninth-attempt evidence](evidence/2026-09-28-native-ninth-attempt.json) and
 [eighth-attempt evidence](evidence/2026-09-28-native-eighth-attempt.json).
 
 The sections below retain historical qualification states as recorded at the

@@ -23,6 +23,12 @@ GADGET = Path("/sys/kernel/config/usb_gadget/m1lab")
 BOOT_ID = Path("/proc/sys/kernel/random/boot_id")
 IMAGE_CONFIG = Path("/etc/m1lab/image-config.json")
 MAX_IMAGE_CONFIG_BYTES = 256 * 1024
+CONSOLE = Path("/dev/tty0")
+_STAGE_CODES = {stage: index for index, stage in enumerate((
+    "python_entry", "module_phy_apple_atc", "module_tps6598x", "module_dwc3_apple",
+    "module_libcomposite", "module_usb_f_acm", "configfs_mount", "udc_wait",
+    "acm_bind", "tty_wait", "launch_wait", "launch_received", "capture", "capture_done",
+))}
 _DIAGNOSTIC_STAGES = frozenset({
     "acm_bind", "tty_wait", "launch_wait", "launch_received", "capture", "capture_done",
 })
@@ -35,6 +41,61 @@ _UDC_STATES = {
 _DIAGNOSTIC_ERRORS = (
     TimeoutError, ValueError, OSError, ImportError, RuntimeError, AssertionError, TypeError,
 )
+_STATE_CODES = {"unknown": 0, **{state: index for index, state in enumerate(_UDC_STATES.values(), 1)}}
+_DIGITS = (
+    ("111", "101", "101", "101", "111"),
+    ("010", "110", "010", "010", "111"),
+    ("111", "001", "111", "100", "111"),
+    ("111", "001", "111", "001", "111"),
+    ("101", "101", "111", "001", "001"),
+    ("111", "100", "111", "001", "111"),
+    ("111", "100", "111", "101", "111"),
+    ("111", "001", "001", "001", "001"),
+    ("111", "101", "111", "101", "111"),
+    ("111", "101", "111", "001", "111"),
+)
+
+
+def _error_kind(error: Exception | None) -> str:
+    if error is None:
+        return "None"
+    return next((kind.__name__ for kind in _DIAGNOSTIC_ERRORS
+                 if isinstance(error, kind)), "Exception")
+
+
+def _console_overlay(stage: str, state: str, error: Exception | None = None) -> None:
+    """One bounded best-effort write to the visible VT, never the result channel."""
+    if stage not in _STAGE_CODES:
+        return
+    state = state if state in _STATE_CODES else "unknown"
+    kind = _error_kind(error)
+    error_code = (("None", *[item.__name__ for item in _DIAGNOSTIC_ERRORS], "Exception").index(kind))
+    digits = f"{_STAGE_CODES[stage]:02d}{error_code}{_STATE_CODES[state]}"
+    lines = ["M1LAB DIAG - STAGE / ERROR / USB", "       STAGE                ERROR          USB"]
+    for row in range(5):
+        parts = ["".join("###" if pixel == "1" else "   " for pixel in _DIGITS[int(digit)][row])
+                 for digit in digits]
+        line = parts[0] + "  " + parts[1] + "     " + parts[2] + "     " + parts[3]
+        lines.extend((line, line))
+    lines.extend((f"S{digits[:2]} {stage} E{error_code} {kind} U{digits[3]} {state}",
+                  "DIAGNOSTIC ONLY - NOT SAMPLES OR SUCCESS"))
+    # Save/restore cursor and attributes. Do not clear the screen, change the
+    # scrolling region, or suppress kernel messages; redraw only these rows.
+    payload = ("\x1b7\x1b[0;37;40m" + "".join(
+        f"\x1b[{row};1H{line.ljust(64)}" for row, line in enumerate(lines, 1)
+    ) + "\x1b8").encode("ascii")
+    try:
+        fd = os.open(CONSOLE, os.O_WRONLY | os.O_NOCTTY | os.O_NONBLOCK
+                     | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0))
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISCHR(info.st_mode) or (os.major(info.st_rdev), os.minor(info.st_rdev)) != (4, 0):
+                return
+            os.write(fd, payload)  # No retry or drain if the VT cannot accept it.
+        finally:
+            os.close(fd)
+    except OSError:
+        pass
 
 
 class _ConfigurationDiagnostic:
@@ -43,6 +104,7 @@ class _ConfigurationDiagnostic:
     def __init__(self) -> None:
         self.path: Path | None = None
         self.controller: Path | None = None
+        self.state = "unknown"
 
     def _value(self, stage: str, error: Exception | None = None) -> str:
         state = "unknown"
@@ -54,11 +116,10 @@ class _ConfigurationDiagnostic:
                     state = _UDC_STATES.get(raw.decode("ascii").strip(), "unknown")
             except (OSError, UnicodeError):
                 pass
+        self.state = state
         if error is None:
             return f"M1Lab diag:v1:{stage}:{state}"
-        kind = next((kind.__name__ for kind in _DIAGNOSTIC_ERRORS
-                     if isinstance(error, kind)), "Exception")
-        return f"M1Lab diag:v1:fail:{stage}:{kind}:{state}"
+        return f"M1Lab diag:v1:fail:{stage}:{_error_kind(error)}:{state}"
 
     def prepare(self, configuration: Path, controller: Path) -> None:
         self.controller = controller
@@ -67,14 +128,24 @@ class _ConfigurationDiagnostic:
             self.path.parent.mkdir()
             # Nonempty before bind reserves iConfiguration. Keep the product
             # and serial labels unchanged for the existing capture transport.
-            self.path.write_text(self._value("acm_bind") + "\n", encoding="ascii")
+            value = self._value("acm_bind") + "\n"
+            _console_overlay("acm_bind", self.state)
+            self.path.write_text(value, encoding="ascii")
         except OSError:
             pass
 
     def update(self, stage: str, error: Exception | None = None) -> None:
+        if stage not in _STAGE_CODES:
+            return
+        # First show the current stage with cached state, even if the next
+        # sysfs read or configuration-string write blocks in a kernel driver.
+        _console_overlay(stage, self.state, error)
         if self.path is None or stage not in _DIAGNOSTIC_STAGES:
             return
+        previous_state = self.state
         value = self._value(stage, error).encode("ascii") + b"\n"
+        if self.state != previous_state:
+            _console_overlay(stage, self.state, error)
         try:
             # Open only the existing configfs attribute; do not recreate it.
             fd = os.open(self.path, os.O_WRONLY | os.O_TRUNC | os.O_CLOEXEC)
