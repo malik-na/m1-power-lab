@@ -149,24 +149,46 @@ The ninth attempt did not establish that channel: native USB enumerated, but
 the host timed out setting configuration 1, and the fixed probe's fresh
 device-descriptor reads returned timeout or protocol errors before it could
 request the configuration string. It captured zero result bytes and samples.
-The proxy returned on a new checked connection; the next useful observation
-is the owner's exact last console line. See
+The proxy returned on a new checked connection. The later bounded console
+trace is described below. See
 [ninth-attempt evidence](evidence/2026-09-28-native-ninth-attempt.json).
+
+The thirteenth attended RAM-only attempt again enumerated the native gadget,
+then timed out at host `SET_CONFIGURATION` (`-110`), with no tty, payload or
+samples. Its private optical trace showed the selected status command accepted
+and wrapper returned (`VAGP 2322`, `VRES 2200`). The matching cached event batch
+was unmasked (`VMCW 2201`), but no later event-count read, selected EP0 event
+or device event was observed in the retained first configuration window
+(`VDDW 2001`). These are provisional software observations, not a wire-level
+trace or proof of absent physical events. The same checked m1n1 proxy returned
+on a new owned connection. See
+[thirteenth-attempt evidence](evidence/2026-09-28-native-thirteenth-attempt.json).
 
 ## Qualification still required
 
 Host emulation has exercised the actual ARM64 Python/BusyBox/kmod binaries
 and collector with synthetic samples. It does not exercise the M1 kernel,
-USB controller, sensor drivers or reboot. The ninth physical attempt exposed
-an unresolved USB configuration failure before native capture.
+USB controller, sensor drivers or reboot. Thirteen bounded native attempts
+have produced no result stream or power sample. The latest trace rules out a
+missing *observed* event-buffer unmask for the selected status batch, but it
+does not identify a verified controller, interrupt, PHY, host or cable fix.
 
 An additional native boot needs new exact-artifact review and attended
 authorization. Preserve the existing normal ALARM boot path and physical
-recovery instructions. The current priority is the owner's exact last console
-line from the failed startup. Never mark this candidate `known_good` solely
+recovery instructions. Do not repeat trace variants without a new
+discriminating hypothesis. A supported independent debug UART or USB protocol
+analyzer would provide evidence the ordinary cable cannot return when native
+gadget setup fails. Never mark this candidate `known_good` solely
 because assembly or emulation passed. Scientific sensor qualification and
 power investigation remain stopped; bounded analysis of retained technical
 evidence is available in the installed workspace.
+
+Even a successful capture in this image would qualify only a minimal console
+fixture. It does not establish the original screen-on desktop idle workload,
+brightness or refresh settings. Battery telemetry exposed by the pinned
+`macsmc-power` driver remains unobserved in this boot, and the USB tether may
+contribute energy. Establish the live sensor fields and energy boundary before
+using them to support a whole-device power or 10% improvement claim.
 
 After a capture is published, its screened `native_capture` artifact can be
 summarized without opening a device, then selected as technical context for a

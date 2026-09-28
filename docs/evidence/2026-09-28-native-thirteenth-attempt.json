@@ -1,0 +1,136 @@
+{
+  "schema": "m1lab.native-qualification-evidence.v1",
+  "recorded_at": "2026-09-28T18:38:46.632501+00:00",
+  "scope": "Thirteenth delegated attended RAM-only native USB transport diagnostic; no power measurements",
+  "candidate_source": "a9a9d03ed42f9058bfdbfbd883468c41bc1bc499",
+  "candidate_build_id": "build_a66761403b56471391bc625ecf14ab74",
+  "package_check": {
+    "artifacts_verified": 53,
+    "initramfs_source_bytes_verified": true,
+    "source_commit_matches": true,
+    "host_tests_passed": 584
+  },
+  "procedure_id": "procedure_b367494f28bd40bb840274bb42e28263",
+  "procedure_digest": "aff55b61663b04b9428a10e7e70955c603addba680e03f25f567cebce4bcbb6a",
+  "review_id": "review_2125d19824ac44d8af824d2af553863c",
+  "review_job_id": "job_a684b64b72e24b399263c78716f8506a",
+  "review_disposition": "accepted",
+  "review_evidence": {
+    "selected_artifacts": 13,
+    "all_untruncated": true,
+    "selected_source_and_inner_runner_bytes_exact": true,
+    "outer_camera_wrapper_bound_and_byte_identical_to_prior_accepted_review": true
+  },
+  "authority": "Owner delegated lab setup and attended the Mac reboot; bounded private no-audio camera was authorized. Exact one-use procedure approved after independent review; owner did not manually read its digest.",
+  "operation_id": "operation_21b7785dafd342859c56c7448d23f2e4",
+  "initial_state": "unknown_effect",
+  "final_state": "reconciled",
+  "resolved_state": "failed",
+  "native_samples": 0,
+  "native_payload_bytes": 0,
+  "usb_topology": "1-2",
+  "native_vid_pid": "1d6b:0104",
+  "native_enumerated_at": "2026-09-28T18:30:37.196533Z",
+  "host_configuration_failure_at": "2026-09-28T18:30:42.687528Z",
+  "host_configuration_failure": "can't set config #1, error -110",
+  "native_disconnect_at": "2026-09-28T18:32:58.827646Z",
+  "owned_proxy_return_at": "2026-09-28T18:33:05.602319Z",
+  "proxy_return_observed": true,
+  "new_owned_connection": true,
+  "independent_reboot_attestation": false,
+  "host_usb_log_sha256": "5b9acc7e56731f8f1f1d6e5892535ea5b2a3eb2a431a3f28ec8e739ab4cd08ea",
+  "host_usb_log_bytes": 1674,
+  "boot_log_sha256": "e55b6b327d86fb0e8de02ca1b3765b19425900cd83833147a846603ae6ffa3d7",
+  "boot_log_bytes": 23614,
+  "optical_observation": {
+    "procedure_digest": "aff55b61663b04b9428a10e7e70955c603addba680e03f25f567cebce4bcbb6a",
+    "started_at": "2026-09-28T18:30:04.113128+00:00",
+    "finished_at": "2026-09-28T18:33:07.676715+00:00",
+    "video_bytes": 256740809,
+    "video_sha256": "c5c3a7088527533a7a41955601b639a5e738eb6ec21c637c8eea9ca32545625a",
+    "camera_exit": 0,
+    "camera_coverage_lost_at": null,
+    "private": true,
+    "audio_recorded": false,
+    "frames": [
+      {
+        "video_offset_seconds": 55,
+        "sha256": "0d7ac04d6c23f72ce5543a9d1e04b99057b871165c5b3c0947f0e2b930a13407",
+        "bytes": 63500,
+        "decoded_code": "2001",
+        "observation": "DEVICE cycle page: V2, no device event latched (DD00), first configuration window open (W1)."
+      },
+      {
+        "video_offset_seconds": 57,
+        "sha256": "7d633446d120f23693f4c3d2399dfbd95354e85c3dc8bb6c55b9510c2cdb33b5",
+        "bytes": 63826,
+        "decoded_code": "1000",
+        "observation": "STAGE cycle page: launch_wait (S10), no error (E0), USB state unknown (U0)."
+      },
+      {
+        "video_offset_seconds": 59,
+        "sha256": "ad4523564ef26df5db9dea17168eff8cadacd51bde17e14b8a3b258597899790",
+        "bytes": 63604,
+        "decoded_code": "2322",
+        "observation": "TRACE cycle page: V2, both ACM set_alt calls returned zero (A3), serial connect returned zero (G2), EP0 status start command accepted (P2)."
+      },
+      {
+        "video_offset_seconds": 61,
+        "sha256": "c49eb78e272d20a8134669fdb641a3a1b8241df099ebcabdd2abb5af0c6bd4e3",
+        "bytes": 63861,
+        "decoded_code": "2200",
+        "observation": "EVENT cycle page: V2, selected status wrapper returned after accepted command (R2); no selected EP0 event latched (E0), no completion state (S0)."
+      },
+      {
+        "video_offset_seconds": 63,
+        "sha256": "ea242a0084f55f732b6cff72ab447ca3c4c3c78e8be44a9ac5e08b0caf0a4201",
+        "bytes": 63612,
+        "decoded_code": "2201",
+        "observation": "REARM cycle page: V2, matching event-buffer unmask after wrapper return (M2), no later event-count read observed (C0), configuration window open (W1)."
+      },
+      {
+        "video_offset_seconds": 65,
+        "sha256": "65ab30cf06ec657290833670a284c6c31adaab440091e81f306be1944be7e406",
+        "bytes": 63531,
+        "decoded_code": "2001",
+        "observation": "Second DEVICE-cycle observation repeats no latched device event and open first configuration window."
+      },
+      {
+        "video_offset_seconds": 69,
+        "sha256": "7c861044441ae865cbe28fec7c30acfc7dbfdbfb2a95d2bd381bd31ba2ef7310",
+        "bytes": 63855,
+        "decoded_code": "2322",
+        "observation": "Second TRACE-cycle observation repeats successful software setup and accepted status command."
+      },
+      {
+        "video_offset_seconds": 71,
+        "sha256": "a3825c954b14c633f0775741cce5714792fdb907de3fb519acf8340028c12d34",
+        "bytes": 64048,
+        "decoded_code": "2200",
+        "observation": "Second EVENT-cycle observation repeats returned wrapper without selected EP0 event latched."
+      },
+      {
+        "video_offset_seconds": 73,
+        "sha256": "f1c478e9f197bfd278ad05afc92224f0306434b5404601eaa6c7d88bee010e7f",
+        "bytes": 63170,
+        "decoded_code": "2201",
+        "observation": "Second REARM-cycle observation repeats matching unmask with no later count read in the observed first window."
+      }
+    ],
+    "independent_readers_agree": true,
+    "page_title_limitation": "Small titles are overexposed; page assignment is corroborated by the pinned renderer cycle.",
+    "trace_limitation": "V2 is provisional. C0, E0 and DD00 mean not observed or latched in the first configuration window; they do not prove absence of bus events, SOF, interrupts or later activity."
+  },
+  "technical_finding": "The selected EP0 status command was accepted and its wrapper returned. The matching cached event batch was unmasked; no later event-count read, selected EP0 event or device event was observed in the first configuration window before the host timeout. This rules out a missing observed rearm write for that batch but establishes no wire-level status completion or verified driver fix.",
+  "remaining_blocker": "Native ACM never became usable; no payload or power sample. The specific controller/interrupt/PHY/host/cable cause is unverified. Further physical diagnosis needs an independent supported debug UART or protocol analyzer, or a separately reviewed redesign of the result channel.",
+  "artifacts": [
+    "artifact_9b1e3d696f67029ceac0ffa709815032beee5a80b85f8de6a4d8141febac14b8",
+    "artifact_e55b6b327d86fb0e8de02ca1b3765b19425900cd83833147a846603ae6ffa3d7",
+    "artifact_5b9acc7e56731f8f1f1d6e5892535ea5b2a3eb2a431a3f28ec8e739ab4cd08ea",
+    "artifact_2f8e05c86eb8088ea74b741f05efeb7877d785a8dacb05cbac242eddb7308481",
+    "artifact_6d767479c6ef30dc21e2fd3aa82897e2fd07cbfb88926c73664b119a6d759b6d"
+  ],
+  "scientific_power_qualified": false,
+  "autonomous_native_dispatch_enabled": false,
+  "no_automatic_repeat": true
+}
