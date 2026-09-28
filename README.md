@@ -22,9 +22,10 @@ The host application now includes the durable coordinator, replay experiment
 executor, bounded Codex app-server adapter, CLI, and responsive owner UI.  The
 native experiment adapter remains unavailable until the ThinkPad-to-Mac
 transport and recovery path are qualified on the actual machines. The latest
-physical attempt reached Linux USB enumeration but timed out during configuration
-and captured no native samples. See [current status](docs/STATUS.md) for the
-installed release, verified capabilities, and remaining qualification gates.
+physical attempt reached Linux USB enumeration, timed out during configuration,
+and produced no readable diagnostic configuration string or native samples. See
+[current status](docs/STATUS.md) for the installed release, verified
+capabilities, and remaining qualification gates.
 
 ## Quick start on the ThinkPad
 

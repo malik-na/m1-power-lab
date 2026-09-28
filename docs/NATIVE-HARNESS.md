@@ -110,32 +110,40 @@ writes a new private JSONL file capped at 256 KiB. It never configures, resets,
 or claims an interface. A same-port proxy observation is only a USB observation;
 the exclusive helper separately verifies proxy identity and connection generation.
 
-```bash
-sudo /usr/bin/python3 scripts/probe-native-usb-diagnostic.py \
-  --usb-topology 1-2 --seconds 480 --output /private/new-diagnostic.jsonl
-```
-
-The probe prints readiness before polling. Arm it only as part of the exact
-reviewed diagnostic procedure and keep an outer timeout with termination/reaping:
+Run the probe only from an exact-hash-verified, root-owned volatile copy as part
+of the reviewed attended procedure. The privileged wrapper starts it before
+dispatch, records a fresh process-bound readiness file, and enforces an outer
+480-second timeout with bounded termination and reaping. Running the mutable
+checkout script directly with `sudo` would bypass that reviewed staging boundary.
+The probe prints readiness before polling. The outer timeout is necessary because
 the 250 ms USB transfer timeout cannot bound every kernel mutex or filesystem
 wait. The standalone tool reserves two seconds before beginning a six-request
 batch. It exits on its observation deadline or a same-port proxy return after
 native enumeration. Failed reads establish no target stage. This channel must
 be demonstrated on the actual candidate before relying on it for diagnosis.
 
+The ninth attempt did not establish that channel: native USB enumerated, but
+the host timed out setting configuration 1, and the fixed probe's fresh
+device-descriptor reads returned timeout or protocol errors before it could
+request the configuration string. It captured zero result bytes and samples.
+The proxy returned on a new checked connection; the next useful observation
+is the owner's exact last console line. See
+[ninth-attempt evidence](evidence/2026-09-28-native-ninth-attempt.json).
+
 ## Qualification still required
 
 Host emulation has exercised the actual ARM64 Python/BusyBox/kmod binaries
 and collector with synthetic samples. It does not exercise the M1 kernel,
-USB controller, sensor drivers or reboot. The source review found no concrete
-boot blocker; the selected exact image/procedure still needs review before
-execution through the coordinator/helper path.
+USB controller, sensor drivers or reboot. The ninth physical attempt exposed
+an unresolved USB configuration failure before native capture.
 
-Next is exact-artifact review and one owner-attended M1 capture, with
-independent identity checks and observed return/re-identification. Preserve the
-existing normal ALARM boot path and physical recovery instructions. Never
-mark this candidate `known_good` solely because assembly or emulation passed.
-Scientific sensor qualification and investigation remain stopped.
+An additional native boot needs new exact-artifact review and attended
+authorization. Preserve the existing normal ALARM boot path and physical
+recovery instructions. The current priority is the owner's exact last console
+line from the failed startup. Never mark this candidate `known_good` solely
+because assembly or emulation passed. Scientific sensor qualification and
+power investigation remain stopped; bounded analysis of retained technical
+evidence is available in the installed workspace.
 
 After a capture is published, its screened `native_capture` artifact can be
 summarized without opening a device, then selected as technical context for a
