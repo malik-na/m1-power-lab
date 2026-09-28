@@ -333,9 +333,11 @@ def controller_event(raw, text, *, endpoint="ep0in", address="0x0000000382280000
 IN_COMPLETE = controller_event(0x0000c042, "Transfer Complete (sIL) [Status Phase]")
 OUT_COMPLETE = controller_event(0x00000040, "Transfer Complete (sil) [Setup Phase]", endpoint="ep0out")
 IN_NRDY = controller_event(0x000020c2, "Transfer Not Ready [00000000] (Not Active) [Status Phase]")
+EP1_COMPLETE = controller_event(0x00000046, "Transfer Complete (sil)", endpoint="ep1in")
+EP1_NRDY = controller_event(0x000020c6, "Transfer Not Ready [00000000] (Not Active)", endpoint="ep1in")
 
 
-def test_status_probe_uses_entry_saved_arguments_and_ep0_event_filter(fake_kernel):
+def test_status_probe_uses_entry_saved_arguments_and_complete_endpoint_event_filter(fake_kernel):
     monitor = armed(fake_kernel)
     definitions = (monitor.root / "kprobe_events").read_text()
     assert "r16:m1lab_usb/m1lab_status_return dwc3:__dwc3_ep0_do_control_status dwc=$arg1:x64 dep=$arg2:x64" in definitions
@@ -343,10 +345,11 @@ def test_status_probe_uses_entry_saved_arguments_and_ep0_event_filter(fake_kerne
     assert (monitor.instance / "events/dwc3/dwc3_event/filter").read_text() == trace.EVENT_FILTER + "\n"
     for name in ("dwc3_readl", "dwc3_writel"):
         assert (monitor.instance / f"events/dwc3/{name}/filter").read_text() == trace.IO_FILTER + "\n"
-    # Only EP0 and the explicitly decoded, non-SOF device kinds survive.
+    # Every endpoint event must survive to invalidate an intervened EP0 witness.
+    # Only the explicitly decoded, non-SOF device kinds survive otherwise.
     expression = trace.EVENT_FILTER.replace("&&", " and ").replace("||", " or ").replace("!", " not ")
     for event in range(4096):
-        expected = not event & 61 or (event & 255 == 1 and (event >> 8) in (0,1,2,3,4,5,6,9,10,11))
+        expected = not event & 1 or (event & 255 == 1 and (event >> 8) in (0,1,2,3,4,5,6,9,10,11))
         assert bool(eval(expression, {"__builtins__": {}}, {"event": event})) == bool(expected)
 
 
@@ -768,6 +771,37 @@ def test_only_explicit_in_status_nrdy_can_anchor_wrapper_entry(fake_kernel, witn
     monitor = armed(fake_kernel, data)
     assert monitor.poll()[0] == "3000"
     assert monitor.rearm_page()[0] == "3001"
+
+
+@pytest.mark.parametrize("intervening", [EP1_COMPLETE, EP1_NRDY])
+def test_noncontrol_endpoint_event_between_nrdy_and_wrapper_cannot_leave_stale_witness(fake_kernel, intervening):
+    # This is the delayed-status callback path: a non-EP0 event can run before
+    # the wrapper in the same acknowledged cached event batch.
+    data = SETUP + BATCH + STATUS_NRDY + intervening + STATUS_ENTER
+    data += record("dwc3_prepare_trb", TRB_BODY) + COMMAND + STATUS_RETURN + UNMASK
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "3000"
+    assert monitor.rearm_page()[0] == "3001"
+
+
+def test_noncontrol_endpoint_event_before_status_nrdy_is_valid_but_not_an_ep0_result(fake_kernel):
+    data = SETUP + BATCH + EP1_COMPLETE + STATUS_NRDY + STATUS_ENTER
+    data += record("dwc3_prepare_trb", TRB_BODY) + COMMAND + STATUS_RETURN + UNMASK
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "2002"
+    assert monitor.rearm_page()[0] == "2201"
+    assert monitor.event_page()[0] == "2200"
+
+
+@pytest.mark.parametrize("malformed", [
+    EP1_COMPLETE.replace(b"ep1in", b"ep2in"),
+    EP1_COMPLETE.replace(b"Transfer Complete (sil)", b"Transfer Complete (sil) [Status Phase]"),
+    EP1_NRDY.replace(b"Not Active)", b"Not Active) [Status Phase]"),
+])
+def test_noncontrol_endpoint_identity_and_text_mismatches_fail_closed(fake_kernel, malformed):
+    monitor = armed(fake_kernel, SETUP + BATCH + STATUS_NRDY + malformed + STATUS_ENTER)
+    assert monitor.poll()[0] == "3000"
+    assert monitor.event_page()[0][0] == "3"
 
 
 @pytest.mark.parametrize("intervening", [

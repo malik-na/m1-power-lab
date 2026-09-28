@@ -29,9 +29,11 @@ PROBES = {
 }
 DWC3_EVENTS = ("dwc3_ctrl_req", "dwc3_prepare_trb", "dwc3_complete_trb", "dwc3_gadget_ep_cmd",
                "dwc3_event", "dwc3_readl", "dwc3_writel")
-# EP0 OUT/IN, or device kinds 0..6/9..11. Excludes SOF and unknown kinds.
+# All endpoint events, or device kinds 0..6/9..11. An endpoint event from
+# another pipe must break an EP0 status witness inside the cached batch.
+# Device SOF and unknown kinds remain excluded.
 # tracefs '&' is a predicate, not a value usable by a following comparison.
-EVENT_FILTER = ("!(event & 61) || ((event & 1) && !(event & 254) && "
+EVENT_FILTER = ("!(event & 1) || ((event & 1) && !(event & 254) && "
                 "((!(event & 2048) && (!(event & 1024) || !(event & 512) || !(event & 256))) || "
                 "((event & 2048) && !(event & 1024) && (event & 768))))")
 IO_FILTER = "offset == 0xc408 || offset == 0xc40c"
@@ -422,27 +424,31 @@ class NativeUsbTrace:
         if device and int(device[1], 16) & 1:
             self._device_event(int(device[1], 16), device[2])
             return False
-        record = re.fullmatch(r"event \(([0-9a-f]{8})\): (ep0in|ep0out): (.*)", body)
+        record = re.fullmatch(r"event \(([0-9a-f]{8})\): (ep(?:[0-9]|1[0-5])(?:in|out)): (.*)", body)
         if not record:
             raise ValueError("invalid endpoint event")
         raw_text, endpoint, text = record.groups()
         raw = int(raw_text, 16)
-        if raw & 61 or endpoint != ("ep0in" if raw & 2 else "ep0out"):
+        epnum = (raw >> 1) & 31
+        if raw & 1 or endpoint != f"ep{epnum >> 1}{'in' if epnum & 1 else 'out'}":
             raise ValueError("inconsistent endpoint event")
         kind, status, parameter = (raw >> 6) & 15, (raw >> 12) & 15, raw >> 16
         flags = ("S" if status & 2 else "s") + ("I" if status & 4 else "i")
         state = 0
         if kind == 1:
-            complete = re.fullmatch(r"Transfer Complete \(([sS][iI][lL])\) \[(.+)\]", text)
-            states = ("Unconnected", "Setup Phase", "Data Phase", "Status Phase")
-            if not complete or complete[1] != flags + ("L" if status & 8 else "l") or complete[2] not in states:
-                raise ValueError("invalid completion state")
-            code, state = (1 if raw & 2 else 2), states.index(complete[2]) + 1
-            expected = text
+            expected = f"Transfer Complete ({flags}{'L' if status & 8 else 'l'})"
+            if epnum <= 1:
+                complete = re.fullmatch(r"Transfer Complete \(([sS][iI][lL])\) \[(.+)\]", text)
+                states = ("Unconnected", "Setup Phase", "Data Phase", "Status Phase")
+                if not complete or complete[1] != flags + ("L" if status & 8 else "l") or complete[2] not in states:
+                    raise ValueError("invalid completion state")
+                code, state = (1 if epnum else 2), states.index(complete[2]) + 1
+                expected = text
         elif kind == 3:
-            code = 3 if raw & 2 else 4
+            code = 3 if epnum & 1 else 4
             expected = f"Transfer Not Ready [{parameter:08x}] ({'Active' if status & 8 else 'Not Active'})"
-            expected += {1: " [Data Phase]", 2: " [Status Phase]"}.get(status & 3, "")
+            if epnum <= 1:
+                expected += {1: " [Data Phase]", 2: " [Status Phase]"}.get(status & 3, "")
         elif kind == 2:
             code = 6
             expected = f"Transfer In Progress [{parameter:08x}] ({flags}{'M' if status & 8 else 'm'})"
@@ -452,13 +458,15 @@ class NativeUsbTrace:
                         f" Stream {parameter} Found" if status == 1 else " Stream Not Found"}.get(kind, "UNKNOWN")
         if text != expected:
             raise ValueError("inconsistent event text")
+        if epnum > 1:
+            return False  # Valid non-control event only breaks the EP0 witness.
         # The first completion supersedes the first other event, then is latched.
         # NRDY's printed phase is from status bits, NOT the actual dwc->ep0state.
         if self.ep0 in (2, 3) and (self.event == 0 or (code in (1, 2) and self.event not in (1, 2))):
             self.event, self.state = code, state
         # xfernotready switches on the *entire* status: only exact value2
         # reaches status dispatch; Active/Status (10) cannot anchor this call.
-        return raw & 0xffff == 0x20c2
+        return epnum == 1 and raw & 0xffff == 0x20c2
 
     def event_page(self) -> tuple[str, str]:
         """No I/O: V, status-wrapper return, first event/completion, actual state.
