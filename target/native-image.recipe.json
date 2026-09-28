@@ -292,6 +292,12 @@
       "role": "diagnostic_source",
       "path": "target/native_usb_trace.py",
       "media_type": "text/x-python"
+    },
+    {
+      "name": "native_optical_calibration.py",
+      "role": "diagnostic_source",
+      "path": "target/native_optical_calibration.py",
+      "media_type": "text/x-python"
     }
   ],
   "outputs": [
@@ -349,5 +355,5 @@
   ],
   "maximum_runtime_seconds": 900,
   "maximum_output_bytes": 1048576,
-  "return_behavior": "RAM-only candidate: accept one bounded launch via ACM, emit capture, request reboot; watchdog requests reboot at 180s from init. Kernel hang, actual result delivery and return/re-identification remain unqualified; owner physical recovery required."
+  "return_behavior": "RAM-only candidate: default boot accepts one bounded launch via ACM and emits capture; exact optical_calibration boot flag instead draws only a fixed public QR token for a bounded visibility test. Both paths request reboot; watchdog requests reboot at 180s from init. Kernel hang, actual result delivery and return/re-identification remain unqualified; owner physical recovery required."
 }

@@ -28,9 +28,9 @@ PAYLOAD, IMAGE, LAUNCH = "a" * 64, "b" * 64, "c" * 64
 SERIAL = "d" * 64
 
 
-def _backend(tmp_path):
+def _backend(tmp_path, *, optical_calibration=False):
     library = tmp_path / "proxyclient"
-    library.mkdir()
+    library.mkdir(exist_ok=True)
     (library / "module.py").write_bytes(b"# synthetic import module\n")
     python = tmp_path / "python3"
     python.write_bytes(b"synthetic Python executable\n")
@@ -45,6 +45,7 @@ def _backend(tmp_path):
         proxyclient_path=library,
         proxyclient_sha256=module.compute_proxyclient_sha256(library),
         sysfs_root=tmp_path / "sys", device_root=tmp_path / "dev",
+        optical_calibration=optical_calibration,
     )
 
 
@@ -179,7 +180,7 @@ def _synthetic_environment(monkeypatch, backend, events, *, raw=b"fixed frame by
     def popen(argv, **kwargs):
         events.append("launch")
         assert argv[:4] == [str(backend.python_path), str(backend.boot_script_path),
-                            "-b", "console=tty0 earlycon rdinit=/init panic=10 fbcon=font:TER16x32"]
+                            "-b", backend.bootargs]
         assert argv[4:] == [str(backend.artifact_root / "Image.gz"),
                             str(backend.artifact_root / "j313.dtb"),
                             str(backend.artifact_root / "initramfs.cpio.gz")]
@@ -256,6 +257,20 @@ def test_device_environment_key_changes_configuration_digest(tmp_path):
     assert backend.configuration_digest == hashlib.sha256(json.dumps(
         old_configuration, sort_keys=True, separators=(",", ":"),
     ).encode()).hexdigest()
+
+
+def test_optical_calibration_changes_only_effective_bootargs_and_digest(tmp_path):
+    default = _backend(tmp_path)
+    calibrated = _backend(tmp_path, optical_calibration=True)
+    assert default.bootargs == module._BOOTARGS
+    assert calibrated.bootargs == f"{module._BOOTARGS} m1lab.optical_calibration=1"
+    assert calibrated.configuration_digest != default.configuration_digest
+
+
+@pytest.mark.parametrize("value", [None, 0, 1, "true", "false", [], {}])
+def test_optical_calibration_requires_exact_bool(tmp_path, value):
+    with pytest.raises(ValueError, match="optical_calibration must be a boolean"):
+        _backend(tmp_path, optical_calibration=value)
 
 
 def test_backend_refuses_inexact_approval_before_tool_entry(tmp_path, monkeypatch):

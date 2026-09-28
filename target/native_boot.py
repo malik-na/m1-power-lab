@@ -28,6 +28,7 @@ _STAGE_CODES = {stage: index for index, stage in enumerate((
     "python_entry", "module_phy_apple_atc", "module_tps6598x", "module_dwc3_apple",
     "module_libcomposite", "module_usb_f_acm", "configfs_mount", "udc_wait",
     "acm_bind", "tty_wait", "launch_wait", "launch_received", "capture", "capture_done",
+    "optical_calibration",
 ))}
 _DIAGNOSTIC_STAGES = frozenset({
     "acm_bind", "tty_wait", "launch_wait", "launch_received", "capture", "capture_done",
@@ -237,6 +238,33 @@ def _remaining(deadline: float) -> float:
     return remaining
 
 
+def _optical_calibration_requested() -> bool:
+    """The exact reviewed boot argument selects a separate diagnostic boot."""
+    with Path("/proc/cmdline").open("rb") as source:
+        raw = source.read(4097)
+    if len(raw) > 4096:
+        raise ValueError("native boot arguments exceed their bound")
+    arguments = raw.decode("ascii").split()
+    markers = [arg for arg in arguments if arg.startswith("m1lab.optical_calibration")]
+    if not markers:
+        return False
+    if markers != ["m1lab.optical_calibration=1"]:
+        raise ValueError("invalid optical calibration boot argument")
+    return True
+
+
+def _run_optical_calibration() -> None:
+    """Display only a fixed public QR token; this does not collect samples."""
+    path = Path(__file__).with_name("native_optical_calibration.py")
+    spec = importlib.util.spec_from_file_location("native_optical_calibration", path)
+    if spec is None or spec.loader is None:
+        raise ImportError("optical calibration module is absent")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    info = module.run()
+    print(f"M1Lab optical calibration completed framebuffer={info['xres']}x{info['yres']} depth={info['bits_per_pixel']}", flush=True)
+
+
 def _command(deadline: float, *args: str) -> None:
     subprocess.run(args, check=True, timeout=min(10, _remaining(deadline)))
 
@@ -380,6 +408,10 @@ def main() -> int:
 
     try:
         mark("python_entry")
+        if _optical_calibration_requested():
+            mark("optical_calibration")
+            _run_optical_calibration()
+            return 0
         channel = _configure_gadget(deadline, mark, diagnostic, trace)
         fd = os.open(channel, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
         tty.setraw(fd, termios.TCSANOW)

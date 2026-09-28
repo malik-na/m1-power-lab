@@ -40,6 +40,7 @@ _TOPOLOGY = re.compile(r"[0-9]+-[0-9]+(?:\.[0-9]+)*\Z")
 _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 _TTY = re.compile(r"ttyACM[0-9]+\Z")
 _BOOTARGS = "console=tty0 earlycon rdinit=/init panic=10 fbcon=font:TER16x32"
+_OPTICAL_CALIBRATION_BOOTARG = "m1lab.optical_calibration=1"
 _DEVICE_ENV_KEY = "M1N1DEVICE"
 _CONSOLE_CONTROL = "pty-stdin-miniterm-ctrl-]"
 _RETURN_WATCH = "same-topology-proxy-generation-v1"
@@ -65,7 +66,10 @@ class NativeCandidateBackend:
         boot_script_path: Path, boot_script_sha256: str, proxyclient_path: Path,
         proxyclient_sha256: str, diagnostic_dir: Path,
         sysfs_root: Path = Path("/sys/class/tty"), device_root: Path = Path("/dev"),
+        optical_calibration: bool = False,
     ) -> None:
+        if type(optical_calibration) is not bool:
+            raise ValueError("native candidate optical_calibration must be a boolean")
         if not _TOPOLOGY.fullmatch(usb_topology):
             raise ValueError("native candidate USB topology is invalid")
         for digest in (
@@ -93,6 +97,11 @@ class NativeCandidateBackend:
         self.diagnostic_dir = Path(diagnostic_dir)
         self.sysfs_root = Path(sysfs_root)
         self.device_root = Path(device_root)
+        self.optical_calibration = optical_calibration
+        self.bootargs = (
+            f"{_BOOTARGS} {_OPTICAL_CALIBRATION_BOOTARG}"
+            if optical_calibration else _BOOTARGS
+        )
         fixed = {
             "usb_topology": usb_topology,
             "proxy_serial_sha256": expected_proxy_serial_sha256,
@@ -107,7 +116,7 @@ class NativeCandidateBackend:
             "return_watch": _RETURN_WATCH,
             "boot_log_retention": _BOOT_LOG_RETENTION,
             "diagnostic_dir": str(diagnostic_dir),
-            "bootargs": _BOOTARGS,
+            "bootargs": self.bootargs,
         }
         self.configuration_digest = hashlib.sha256(json.dumps(
             fixed, sort_keys=True, separators=(",", ":"),
@@ -211,7 +220,7 @@ class NativeCandidateBackend:
                         tty.setraw(console_slave, termios.TCSANOW)
                         os.set_blocking(console_master, False)
                         process = subprocess.Popen(
-                            [str(self.python_path), str(self.boot_script_path), "-b", _BOOTARGS,
+                            [str(self.python_path), str(self.boot_script_path), "-b", self.bootargs,
                              str(bundle.kernel), str(bundle.dtb), str(bundle.initramfs)],
                             stdin=console_slave, stdout=log, stderr=subprocess.STDOUT,
                             cwd=self.proxyclient_path,
