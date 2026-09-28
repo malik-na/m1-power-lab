@@ -2,6 +2,33 @@
 
 ## Current gate: native USB configuration and capture
 
+On September 28, the eleventh bounded attempt ran candidate
+`build_91cbf0b92ef6404b8483bfdd5269c77f` after AC returned, a fresh
+independent accepted review and one-use attended authorization. Host logs show
+native enumeration at 16:11:58.268470 UTC and SET_CONFIGURATION timeout
+(`-110`) at 16:12:03.711495 UTC. No native tty, payload bytes or samples were
+obtained. The original `unknown_effect` outcome is retained and reconciled as
+failed.
+
+In the private no-audio recording, two readers independently decoded trace
+`2 / 3 / 2 / 2` at 37, 145 and 146 seconds. The target trace reports both ACM
+interface calls and serial connection returning zero, with the DWC3 EP0
+status Start Transfer command reaching its acceptance tracepoint. The console
+later showed `10 / 1 / 8` at 167 seconds: `launch_wait`, `TimeoutError` and UDC
+state `configured`. These are target-side, timing-perturbed observations, not
+host completion. The `P2` tracepoint occurs before the command helper returns,
+reads its resource index and restores PHY bits; the retained snapshots do not
+show a matching status-completion callback. The next diagnostic should
+separate helper return from controller EP0 event and callback completion. This
+trace establishes no role, FIFO, module or endpoint fix.
+
+The watcher caught the same checked proxy identity on a new owned connection
+at 16:14:26.749184 UTC. That USB return does not independently attest reboot.
+The camera stopped cleanly and its footage remains private. The qualification
+session is paused, with no automatic repeat or unattended native dispatch.
+Native power measurement remains unqualified. See
+[eleventh-attempt evidence](evidence/2026-09-28-native-eleventh-attempt.json).
+
 On September 28, the tenth bounded attempt ran candidate
 `build_7885d048ed074cf2bded9b757c5bd9a7` under exact independent review and
 single-use authorization selected under the owner's delegation. Operation

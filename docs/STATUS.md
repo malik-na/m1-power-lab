@@ -7,15 +7,16 @@ This file distinguishes implemented behavior from physical qualification.
 Release `1212afd` is installed on the ThinkPad as the enabled systemd service.
 The private owner interface and Codex jobs run independently of the setup
 terminal. Sleep, idle and lid-close inhibition is active while the service runs.
-The scoped inspect-only helper is installed and running for USB port `1-2` and
-`/dev/ttyACM1`; five fixed m1n1 requests verified the connected M1 proxy. The
-helper has no automatic restart or boot enablement and must be explicitly
+The scoped inspect-only helper is installed and active for USB port `1-2`.
+After the eleventh return, the proxy enumerated as `/dev/ttyACM0`; five fixed
+read-only requests verified its identity. The helper has no automatic restart
+or boot enablement and must be explicitly
 reopened after a coordinator restart or USB reconnection. It does not expose
 native experiment dispatch.
 
 The prior installed session is stopped. Its old uncertain usage was resolved
 with a conservative 300,000-token charge under the owner's delegation, not a
-provider measurement. A new session retains the eighth-, ninth- and tenth-attempt
+provider measurement. A new session retains the eighth- through eleventh-attempt
 technical artifacts and has completed two service-owned analysis turns. The first reported
 27,986 tokens; the resumed turn reported 51,192 additional tokens, for a thread
 and session total of 79,178 with no usage uncertainty. This verifies bounded
@@ -24,12 +25,39 @@ analysis of retained evidence, not a continuous autonomous native experiment loo
 The deployment fixes selected evidence being omitted from bounded prompts,
 per-event notification cursor commits contending with the web interface, and
 resumed chat reservation checks counting earlier turns. That installed release
-passed 368 host tests; the source including the bounded USB diagnostic passes
-407 tests.
+passed 368 host tests; the current source including the bounded native USB
+trace passes 454 tests.
 During the installed resumed job, all 90 authenticated and anonymous HTTP probes
 returned the expected 200 or 403; the slowest took 3.438 seconds. The private
 HTTPS pages also responded successfully. See
 [deployment evidence](evidence/2026-09-28-independent-service.json).
+
+The eleventh bounded physical attempt tested candidate
+`build_91cbf0b92ef6404b8483bfdd5269c77f` after fresh accepted review and
+single-use attended authorization. Two readers independently decoded the
+private console recording: `2 / 3 / 2 / 2` at 37, 145 and 146 seconds indicates
+both ACM interface calls and serial connection returned zero, while the DWC3
+EP0 status Start Transfer command reached a tracepoint reporting acceptance.
+The target stayed at `launch_wait` and later displayed `10 / 1 / 8`
+(`TimeoutError`, UDC state `configured`). The host still timed out setting
+configuration 1 (`-110`); no native tty, payload or samples were obtained.
+The `P2` tracepoint precedes the helper's return, resource-index MMIO readback
+and PHY-bit restoration, and no matching status-completion callback was
+observed in the retained snapshots. The next discriminator is helper return
+versus controller EP0 event and callback completion, not an assumed USB fix.
+
+The same checked proxy returned on a new owned connection at 16:14:26 UTC.
+The operation is reconciled as failed with its original unknown result retained;
+the native qualification session is paused and the camera stopped. The checked
+USB return does not independently attest reboot. Native capture, power
+measurement and unattended target recovery remain unqualified. Four technical
+artifacts and the summary were imported into the installed investigation
+session; raw video remains private. The coordinator and inspect-only helper
+were restored with zero observed restarts, two completed jobs and 79,178
+reported tokens preserved. Authenticated private HTTPS returned 200 and an
+anonymous local request returned 403. See
+[eleventh-attempt evidence](evidence/2026-09-28-native-eleventh-attempt.json)
+and [service handoff](evidence/2026-09-28-eleventh-service-handoff.json).
 
 The tenth bounded physical attempt used candidate
 `build_7885d048ed074cf2bded9b757c5bd9a7` with a large fixed console diagnostic.
@@ -53,12 +81,11 @@ capture, power measurement and unattended target recovery remain unqualified.
 See [tenth-attempt evidence](evidence/2026-09-28-native-tenth-attempt.json) and
 [service handoff evidence](evidence/2026-09-28-tenth-service-handoff.json).
 
-The next candidate adds a bounded target trace for ACM interface setup, serial
-endpoint connection and EP0 status. Source review and all 454 host tests pass;
-53 published artifacts and the packaged source bytes match. Its exact-procedure
-review was refused before a model job because the ThinkPad reported external
-power disconnected. No further native dispatch or camera recording occurred.
-Physical trace behavior remains unverified. See
+The trace candidate passed source review and all 454 host tests; 53 published
+artifacts and the packaged source bytes matched. An earlier exact-procedure
+review was refused before a model job because external power was disconnected.
+After AC returned, a new exact procedure received independent acceptance and
+was used for the eleventh attempt above. See
 [trace candidate evidence](evidence/2026-09-28-native-usb-trace-build.json).
 
 The ninth bounded attempt also timed out configuring native USB. Its separate

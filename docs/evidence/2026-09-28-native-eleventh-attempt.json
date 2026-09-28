@@ -1,0 +1,99 @@
+{
+  "schema": "m1lab.native-qualification-evidence.v1",
+  "recorded_at": "2026-09-28T16:16:35.843026+00:00",
+  "scope": "Eleventh delegated attended native console diagnostic; no power measurements",
+  "candidate_source": "1b7ce1f5f395fa91375a68b989a319a4f614c204",
+  "candidate_build_id": "build_91cbf0b92ef6404b8483bfdd5269c77f",
+  "procedure_id": "procedure_89f2522bcedb4430959d705016804112",
+  "procedure_digest": "973845c59130753a20344a1752782f1c19b5edcd76acb26daadad8c66708e2af",
+  "review_id": "review_d7e7dab230004cc096f54f30b0ea1f7b",
+  "review_job_id": "job_02ab35cf8b524ade9606c3b9c6105840",
+  "review_disposition": "accepted",
+  "authority": "Owner delegated lab setup/validation and confirmed Mac attendance; camera was conditionally authorized after all other observation channels failed. Exact procedure selected under that delegation.",
+  "operation_id": "operation_30deac36c4f54ecca5b4456d7c4cf919",
+  "initial_state": "unknown_effect",
+  "reconciled_state": "failed",
+  "native_samples": 0,
+  "native_payload_bytes": 0,
+  "usb_topology": "1-2",
+  "native_vid_pid": "1d6b:0104",
+  "native_enumerated_at": "2026-09-28T16:11:58.268470Z",
+  "host_configuration_failure_at": "2026-09-28T16:12:03.711495Z",
+  "host_configuration_failure": "can't set config #1, error -110",
+  "extra_usb_descriptor_probe": false,
+  "native_disconnect_at": "2026-09-28T16:14:19.914505Z",
+  "owned_proxy_return_at": "2026-09-28T16:14:26.749184Z",
+  "proxy_return_observed": true,
+  "new_owned_connection": true,
+  "independent_reboot_attestation": false,
+  "boot_log_bytes": 24000,
+  "boot_log_sha256": "892cb4ecb8836f06e943f5db6f2f4a51ec6480c5140a62adf435338ff7f3f1be",
+  "optical_observation": {
+    "procedure_digest": "973845c59130753a20344a1752782f1c19b5edcd76acb26daadad8c66708e2af",
+    "started_at": "2026-09-28T16:11:26.860599+00:00",
+    "finished_at": "2026-09-28T16:14:29.335705+00:00",
+    "video_bytes": 540270751,
+    "video_sha256": "7d9acdb5286444dbfbd0f70db1827a72177b86f5eba345b09f794ace166b5000",
+    "camera_exit": 0,
+    "native_runner_exit": 0,
+    "camera_coverage_lost_at": null,
+    "private": true,
+    "bounded_seconds": 600,
+    "bounded_bytes": 1073741824,
+    "audio_recorded": false,
+    "frames": [
+      {
+        "video_offset_seconds": 35,
+        "sha256": "7b39af6cf25ff074d526dc07414155c409fccff18c48dcc8b38335217bb09be5",
+        "bytes": 222024,
+        "decoded_code": "10/0/8",
+        "observation": "launch_wait / no reported error / configured"
+      },
+      {
+        "video_offset_seconds": 37,
+        "sha256": "fe1cb7658c60a6098de8725d5678f1eed11e866f63f4bcea3670ba9f38efa122",
+        "bytes": 221376,
+        "decoded_code": "2322",
+        "observation": "Trace V2 A3 G2 P2: both ACM interfaces and serial connection returned zero, EP0 status command accepted, completion not observed in snapshot"
+      },
+      {
+        "video_offset_seconds": 145,
+        "sha256": "dcea5fc479a22f36bb0db2e535edc384fcbd4663f0814024ef11390474d28d34",
+        "bytes": 221336,
+        "decoded_code": "2322",
+        "observation": "Trace V2 A3 G2 P2 remains in this snapshot"
+      },
+      {
+        "video_offset_seconds": 146,
+        "sha256": "9730e827f8e5e0b198b6ae5b2867e7afbdf1974320667d36f39540cc32213ae5",
+        "bytes": 221104,
+        "decoded_code": "2322",
+        "observation": "Trace V2 A3 G2 P2 remains in this snapshot"
+      },
+      {
+        "video_offset_seconds": 167,
+        "sha256": "b2f6e6499097fb882bc6882bd9d47bfd14a5a9f166c69fe8fd1354b662e4d493",
+        "bytes": 229256,
+        "decoded_code": "10/1/8",
+        "observation": "launch_wait / TimeoutError / configured"
+      }
+    ],
+    "independent_readers_agree": true,
+    "lower_kernel_lines": "Not reliably transcribed",
+    "camera_stopped": true,
+    "recording_scope": "Private local screen observation after USB diagnostics failed; no audio",
+    "limitations": "Self-reported stage/UDC state; not samples, successful host enumeration, or independently attested reboot"
+  },
+  "artifacts": [
+    "artifact_d39fde3e260c06183fc85f428e7c6b5fa4331cdce1d0834c8d91dfa0cdab3e8a",
+    "artifact_892cb4ecb8836f06e943f5db6f2f4a51ec6480c5140a62adf435338ff7f3f1be",
+    "artifact_34f236ded95fbd759b1241ff75ade8db8edb7ad3248bc09706689ce092026955",
+    "artifact_484a867df00abd9a595142e001fb8d9633516ea4091dc571eabad986c0b1a289"
+  ],
+  "next_discriminator": "Distinguish return from the status Start Transfer helper and EP0 event arrival from a missing status transaction completion. The command-accepted tracepoint precedes resource-index MMIO readback and PHY-bit restoration; it does not prove that helper returned. No role/FIFO/module fix is established.",
+  "scientific_power_qualified": false,
+  "autonomous_native_dispatch_enabled": false,
+  "no_automatic_repeat": true,
+  "host_tests": 454,
+  "preparation_history": "An earlier proposal was refused before a review job because external AC was absent. After AC returned, a fresh helper, launch, exact procedure and genuine independent accepted review preceded this sole eleventh dispatch."
+}
