@@ -66,17 +66,36 @@ def test_valid_config_passes_fixed_backend_factory_and_parent_lease(tmp_path, mo
     assert factory.keywords["boot_script_path"] == tmp_path / "linux.py"
     assert factory.keywords["proxyclient_sha256"] == "d" * 64
     assert factory.keywords["diagnostic_dir"] == tmp_path / "state" / "boot-logs"
+    assert "optical_calibration" not in factory.keywords
     with pytest.raises(OSError):
         os.fstat(read_fd)  # launcher closed its owner lease
 
 
-@pytest.mark.parametrize("damage", ["extra_key", "wrong_type", "duplicate_key"])
+@pytest.mark.parametrize("value", [False, True])
+def test_optional_optical_calibration_boolean_is_forwarded(tmp_path, value):
+    config = _config(tmp_path)
+    config["optical_calibration"] = value
+    config_path = tmp_path / "native-helper.json"
+    config_path.write_text(json.dumps(config))
+    assert launcher._read_config(config_path)["optical_calibration"] is value
+
+
+@pytest.mark.parametrize("damage", [
+    "extra_key", "wrong_type", "duplicate_key", "optical_string",
+    "optical_integer", "optical_null",
+])
 def test_invalid_config_fails_before_backend_construction(tmp_path, monkeypatch, damage):
     config = _config(tmp_path)
     if damage == "extra_key":
         config["backend_class"] = "arbitrary.module.Backend"
     elif damage == "wrong_type":
         config["python_sha256"] = 123
+    elif damage == "optical_string":
+        config["optical_calibration"] = "true"
+    elif damage == "optical_integer":
+        config["optical_calibration"] = 1
+    elif damage == "optical_null":
+        config["optical_calibration"] = None
     config_path = tmp_path / "invalid.json"
     encoded = json.dumps(config)
     if damage == "duplicate_key":
