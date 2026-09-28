@@ -53,6 +53,14 @@ capture, power measurement and unattended target recovery remain unqualified.
 See [tenth-attempt evidence](evidence/2026-09-28-native-tenth-attempt.json) and
 [service handoff evidence](evidence/2026-09-28-tenth-service-handoff.json).
 
+The next candidate adds a bounded target trace for ACM interface setup, serial
+endpoint connection and EP0 status. Source review and all 454 host tests pass;
+53 published artifacts and the packaged source bytes match. Its exact-procedure
+review was refused before a model job because the ThinkPad reported external
+power disconnected. No further native dispatch or camera recording occurred.
+Physical trace behavior remains unverified. See
+[trace candidate evidence](evidence/2026-09-28-native-usb-trace-build.json).
+
 The ninth bounded attempt also timed out configuring native USB. Its separate
 read-only descriptor probe timed out or received protocol errors, supplying no
 configuration-string stage and no samples. Its checked proxy return was
