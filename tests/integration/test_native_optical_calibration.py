@@ -179,13 +179,37 @@ def test_exact_calibration_boot_argument(monkeypatch, tmp_path, arguments, expec
     assert boot._optical_calibration_requested() is expected
 
 
-def test_duplicate_or_unknown_calibration_boot_argument_fails(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        b"m1lab.optical_calibration\n",
+        b"m1lab.optical_calibration m1lab.optical_calibration=1\n",
+        b"m1lab.optical_calibration=1 m1lab.optical_calibration=1\n",
+        b"m1lab.optical_calibration=0\n",
+        b"m1lab.optical_calibration=\n",
+        b"m1lab.optical_calibration==1\n",
+        b"m1lab.optical_calibration_extra=1\n",
+    ],
+)
+def test_duplicate_or_malformed_calibration_boot_argument_fails(monkeypatch, tmp_path, arguments):
     cmdline = tmp_path / "cmdline"
-    cmdline.write_text("m1lab.optical_calibration=1 m1lab.optical_calibration=1\n")
+    cmdline.write_bytes(arguments)
     original = boot.Path
     monkeypatch.setattr(boot, "Path", lambda value: cmdline if value == "/proc/cmdline" else original(value))
     with pytest.raises(ValueError, match="invalid optical calibration"):
         boot._optical_calibration_requested()
+
+
+def test_bare_calibration_flag_fails_before_gadget_setup(monkeypatch, tmp_path):
+    cmdline = tmp_path / "cmdline"
+    cmdline.write_text("console=tty0 m1lab.optical_calibration\n")
+    original = boot.Path
+    monkeypatch.setattr(boot, "Path", lambda value: cmdline if value == "/proc/cmdline" else original(value))
+    monkeypatch.setattr(boot, "CONSOLE", tmp_path / "absent-tty0")
+    gadget_calls = []
+    monkeypatch.setattr(boot, "_configure_gadget", lambda *_args: gadget_calls.append(True))
+    assert boot.main() == 2
+    assert gadget_calls == []
 
 
 def test_calibration_boot_never_starts_usb_gadget(monkeypatch, tmp_path):

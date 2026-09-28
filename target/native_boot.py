@@ -245,7 +245,7 @@ def _optical_calibration_requested() -> bool:
     if len(raw) > 4096:
         raise ValueError("native boot arguments exceed their bound")
     arguments = raw.decode("ascii").split()
-    markers = [arg for arg in arguments if arg.startswith("m1lab.optical_calibration=")]
+    markers = [arg for arg in arguments if arg.startswith("m1lab.optical_calibration")]
     if not markers:
         return False
     if markers != ["m1lab.optical_calibration=1"]:
