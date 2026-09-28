@@ -1,0 +1,46 @@
+{
+  "schema": "m1lab.service-handoff-evidence.v1",
+  "source_operation_id": "operation_21b7785dafd342859c56c7448d23f2e4",
+  "procedure_digest": "aff55b61663b04b9428a10e7e70955c603addba680e03f25f567cebce4bcbb6a",
+  "installed_session_id": "session_8b26578813be485da5afc3058473ea28",
+  "imported_artifact_ids": [
+    "artifact_9b1e3d696f67029ceac0ffa709815032beee5a80b85f8de6a4d8141febac14b8",
+    "artifact_e55b6b327d86fb0e8de02ca1b3765b19425900cd83833147a846603ae6ffa3d7",
+    "artifact_5b9acc7e56731f8f1f1d6e5892535ea5b2a3eb2a431a3f28ec8e739ab4cd08ea",
+    "artifact_2f8e05c86eb8088ea74b741f05efeb7877d785a8dacb05cbac242eddb7308481",
+    "artifact_6d767479c6ef30dc21e2fd3aa82897e2fd07cbfb88926c73664b119a6d759b6d",
+    "artifact_48d1692c493c5dd9317d41fc83faf4d9157a838228a854ad7e31e571f3eb4c0b"
+  ],
+  "imported_artifact_count": 6,
+  "source_session_and_jobs_preserved": true,
+  "prior_completed_job_count": 2,
+  "tokens_used_preserved": 79178,
+  "usage_uncertain": false,
+  "tokens_reserved": 0,
+  "pending_operations": 0,
+  "backup_created": true,
+  "service_states": {
+    "m1-power-lab.service": "active",
+    "m1-power-lab-helper.service": "active"
+  },
+  "service_restore_errors": [],
+  "helper_available": true,
+  "helper_scope": "Read-only m1n1 proxy inspection; native dispatch disabled in installed service",
+  "helper_device_binding_verified": true,
+  "web_checks": [
+    {
+      "surface": "authenticated_loopback",
+      "status": 200
+    },
+    {
+      "surface": "anonymous_loopback",
+      "status": 403
+    },
+    {
+      "surface": "private_https",
+      "status": 200
+    }
+  ],
+  "private_video_imported": false,
+  "native_samples_imported": 0
+}

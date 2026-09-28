@@ -296,15 +296,26 @@ def test_capture_requires_confirmed_trace_shutdown():
 
 def test_usb_trace_and_stage_codes_alternate_on_elapsed_time(console_writes, monkeypatch):
     diagnostic = native_boot._UsbTraceDiagnostic()
-    diagnostic.trace = SimpleNamespace(poll=lambda: ("2323", "CONFIG WINDOW"),
-                                       event_page=lambda: ("2210", "CONFIG WINDOW"))
-    for second in range(6):
+    polls = []
+    def poll():
+        polls.append(True)
+        return "2323", "CONFIG WINDOW"
+    diagnostic.trace = SimpleNamespace(poll=poll,
+                                       event_page=lambda: ("2210", "CONFIG WINDOW"),
+                                       rearm_page=lambda: ("2221", "CONFIG WINDOW"),
+                                       device_page=lambda: ("2023", "CONFIG WINDOW"))
+    visible = []
+    for second in range(20):
         monkeypatch.setattr(native_boot.time, "monotonic", lambda: second)
         native_boot._console_overlay("launch_wait", "configured")
+        before = len(console_writes[0])
         diagnostic.refresh()
+        assert len(console_writes[0]) - before <= 1
+        visible.append(console_writes[0][-1])
     payloads = console_writes[0]
-    assert [b"USB TRACE" in p for p in payloads] == [False, True, False, True, False, False, False, False, False, False]
-    assert [b"USB EVENT" in p for p in payloads] == [False, False, False, False, False, True, False, True, False, False]
+    expected = [b"USB TRACE"] * 2 + [b"USB EVENT"] * 2 + [b"USB REARM"] * 2 + [b"USB DEVICE"] * 2 + [b"STAGE / ERROR / USB"] * 2
+    assert all(header in payload for header, payload in zip(expected * 2, visible))
+    assert len(polls) == 20  # Drain tracing even while the stage page is visible.
     assert all(len(p) < 2048 for p in payloads)
 
 
@@ -316,6 +327,18 @@ def test_event_page_failure_remains_a_diagnostic(console_writes, monkeypatch):
     diagnostic.refresh()
     assert b"EVENT 3000 INCOMPLETE" in console_writes[0][0]
     assert b"private trace detail" not in console_writes[0][0]
+
+
+@pytest.mark.parametrize("second,method,heading", [(4, "rearm_page", b"REARM"), (6, "device_page", b"DEVICE")])
+def test_event_buffer_page_failure_is_bounded(console_writes, monkeypatch, second, method, heading):
+    monkeypatch.setattr(native_boot.time, "monotonic", lambda: second)
+    diagnostic = native_boot._UsbTraceDiagnostic()
+    diagnostic.trace = SimpleNamespace(poll=lambda: ("2322", "CONFIG WINDOW"))
+    setattr(diagnostic.trace, method, lambda: (_ for _ in ()).throw(ValueError("private register detail")))
+    diagnostic.refresh()
+    assert len(console_writes[0]) == 1
+    assert heading + b" 3000 INCOMPLETE" in console_writes[0][0]
+    assert b"private register detail" not in console_writes[0][0]
 
 
 @pytest.fixture

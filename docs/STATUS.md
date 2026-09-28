@@ -2,15 +2,22 @@
 
 This file distinguishes implemented behavior from physical qualification.
 
+The [September 28 delivery checkpoint](plan/2026-09-28%20delivery%20checkpoint.md)
+maps the original milestones to actual delivery, records the feasibility-first
+sequence drift, and identifies M2 native transport/measurement as the blocker.
+The original first-release acceptance remains unmet; no real power investigation
+has started.
+
 ## 2026-09-28 installed investigation workspace
 
 Release `1212afd` is installed on the ThinkPad as the enabled systemd service.
 The private owner interface and Codex jobs run independently of the setup
 terminal. Sleep, idle and lid-close inhibition is active while the service runs.
 The scoped inspect-only helper is installed and active for USB port `1-2`.
-After the twelfth return, the proxy enumerated as `/dev/ttyACM0`; five fixed
-read-only requests verified its identity. The helper has no automatic restart
-or boot enablement and must be explicitly
+Its device binding was checked on the twelfth and thirteenth proxy returns;
+the twelfth enumerated as `/dev/ttyACM0` and passed five fixed read-only
+identity requests.
+The helper has no automatic restart or boot enablement and must be explicitly
 reopened after a coordinator restart or USB reconnection. It does not expose
 native experiment dispatch.
 
@@ -33,6 +40,34 @@ returned the expected 200 or 403; the slowest took 3.438 seconds. The private
 HTTPS pages also responded successfully. See
 [deployment evidence](evidence/2026-09-28-independent-service.json).
 
+The thirteenth bounded physical attempt used source `a9a9d03` and candidate
+`build_a66761403b56471391bc625ecf14ab74`, whose 53 published artifacts
+were checked against the package. All 584 host tests passed, and exact review
+`review_2125d19824ac44d8af824d2af553863c` accepted the bounded procedure.
+The host saw native `1d6b:0104` at 18:30:37 UTC and timed out setting
+configuration 1 (`-110`) at 18:30:42 UTC. An independent raw-frame audit decoded
+`VAGP2322`, `VRES2200`, `VMCW2201` and `VDDW2001`: the selected status command
+and wrapper return occurred, the expected event-buffer unmask was observed, and
+the first configuration window opened. No later event-count read or selected
+EP0/device event was observed in the retained trace. These markers narrow the
+failure location but do not prove wire-level device behavior. No native tty,
+payload or power sample was obtained.
+
+The same checked proxy identity returned on a new owned connection at 18:33:05
+UTC, without independent reboot attestation. Operation
+`operation_21b7785dafd342859c56c7448d23f2e4` initially had an unknown
+outcome and was reconciled as failed while retaining that original result.
+The private no-audio camera recording stopped. Five technical artifacts and the
+attempt summary were imported into the installed investigation session; the coordinator and scoped
+helper were restored active, with authenticated local HTTP and private HTTPS
+returning 200 and an anonymous local request returning 403. See
+[thirteenth-attempt evidence](evidence/2026-09-28-native-thirteenth-attempt.json)
+and [service handoff](evidence/2026-09-28-thirteenth-service-handoff.json).
+Native result transport and power measurement remain unqualified. Exact static
+source review found no verified fix. Further repetition of the same tracing
+would not discriminate the cause; a supported independent debug UART or USB
+protocol analyzer would supply a separate physical observation channel.
+
 The twelfth bounded physical attempt tested candidate
 `build_a522bd6a10a44159bf38da9c5229d9d5` after fresh accepted review and
 one-use attended authorization. The host saw native USB enumeration at
@@ -47,10 +82,11 @@ target remained at `launch_wait` and later displayed `10 / 1 / 8`
 establish host configuration completion.
 
 The wrapper return no longer supports a stall in its MMIO/PHY-restoration tail.
-The next discriminator is controller status-TRB ownership/progress and
-device/link event state versus missing EP0 completion; no role, FIFO or module
-fix is established. The same checked proxy identity returned on a new owned
-connection at 17:05:50 UTC, without independent reboot attestation. The
+At that point the next discriminator was controller status-TRB ownership/progress
+and device/link event state versus missing EP0 completion; the thirteenth run
+above tested that window. No role, FIFO or module fix is established. The same
+checked proxy identity returned on a new owned connection at 17:05:50 UTC,
+without independent reboot attestation. The
 operation is reconciled as failed with its original unknown outcome retained;
 the camera stopped, footage remains private, and the native qualification
 session is paused. Native capture, power measurement and unattended target

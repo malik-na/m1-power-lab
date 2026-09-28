@@ -30,7 +30,18 @@ TRB_BODY = "0x0000000382280000: ep0in: trb 00000000ca123456 (E0:D0) buf 00000000
 STATUS_ARGS = "dwc=0xffff800080060000 dep=0xffff800080068000"
 STATUS_ENTER = record("m1lab_status_enter", "(__dwc3_ep0_do_control_status+0x0/0xe8 [dwc3]) " + STATUS_ARGS)
 STATUS_RETURN = record("m1lab_status_return", "(dwc3_ep0_interrupt+0x378/0xe90 [dwc3] <- __dwc3_ep0_do_control_status [dwc3]) " + STATUS_ARGS)
-PREPARE = STATUS_ENTER + record("dwc3_prepare_trb", TRB_BODY)
+def io_event(event, offset, value, *, controller="0x0000000382280000", irq=False):
+    data = record(event, f"{controller}: addr 00000000dead1234 offset {offset:04x} value {value:08x}")
+    return data.replace(b"irq/47-dwc3-128 [002]", b"swapper/0-0 [000]") if irq else data
+
+
+COUNT_READ = io_event("dwc3_readl", 0xc40c, 4, irq=True)
+MASK = io_event("dwc3_writel", 0xc408, 0x80001000, irq=True)
+ACK = io_event("dwc3_writel", 0xc40c, 4, irq=True)
+UNMASK = io_event("dwc3_writel", 0xc408, 4096)
+BATCH = COUNT_READ + MASK + ACK
+STATUS_NRDY = record("dwc3_event", "0x0000000382280000: event (000020c2): ep0in: Transfer Not Ready [00000000] (Not Active) [Status Phase]")
+PREPARE = BATCH + STATUS_NRDY + STATUS_ENTER + record("dwc3_prepare_trb", TRB_BODY)
 COMMAND = record("dwc3_gadget_ep_cmd", "0x0000000382280000: ep0in: cmd 'Start Transfer' [406] params 00000000 80020000 00000000 --> status: Successful")
 COMPLETE = record("dwc3_complete_trb", TRB_BODY.replace("ep0in", "ep0out"))
 ACM_SUCCESS = ACM0 + ACM_RETURN + ACM1 + SERIAL + SERIAL_RETURN + ACM_RETURN
@@ -322,16 +333,24 @@ def controller_event(raw, text, *, endpoint="ep0in", address="0x0000000382280000
 IN_COMPLETE = controller_event(0x0000c042, "Transfer Complete (sIL) [Status Phase]")
 OUT_COMPLETE = controller_event(0x00000040, "Transfer Complete (sil) [Setup Phase]", endpoint="ep0out")
 IN_NRDY = controller_event(0x000020c2, "Transfer Not Ready [00000000] (Not Active) [Status Phase]")
+EP1_COMPLETE = controller_event(0x00000046, "Transfer Complete (sil)", endpoint="ep1in")
+EP1_NRDY = controller_event(0x000020c6, "Transfer Not Ready [00000000] (Not Active)", endpoint="ep1in")
 
 
-def test_status_probe_uses_entry_saved_arguments_and_ep0_event_filter(fake_kernel):
+def test_status_probe_uses_entry_saved_arguments_and_complete_endpoint_event_filter(fake_kernel):
     monitor = armed(fake_kernel)
     definitions = (monitor.root / "kprobe_events").read_text()
     assert "r16:m1lab_usb/m1lab_status_return dwc3:__dwc3_ep0_do_control_status dwc=$arg1:x64 dep=$arg2:x64" in definitions
     assert "dwc3:dwc3_ep0_start_trans" not in definitions  # Inlined on STATUS2 path.
-    assert (monitor.instance / "events/dwc3/dwc3_event/filter").read_text() == "!(event & 61)\n"
-    # Bit0=device; physical endpoint is bits1..5: exactly EP0 OUT and IN survive.
-    assert [value for value in range(64) if not value & 61] == [0, 2]
+    assert (monitor.instance / "events/dwc3/dwc3_event/filter").read_text() == trace.EVENT_FILTER + "\n"
+    for name in ("dwc3_readl", "dwc3_writel"):
+        assert (monitor.instance / f"events/dwc3/{name}/filter").read_text() == trace.IO_FILTER + "\n"
+    # Every endpoint event must survive to invalidate an intervened EP0 witness.
+    # Only the explicitly decoded, non-SOF device kinds survive otherwise.
+    expression = trace.EVENT_FILTER.replace("&&", " and ").replace("||", " or ").replace("!", " not ")
+    for event in range(4096):
+        expected = not event & 1 or (event & 255 == 1 and (event >> 8) in (0,1,2,3,4,5,6,9,10,11))
+        assert bool(eval(expression, {"__builtins__": {}}, {"event": event})) == bool(expected)
 
 
 @pytest.mark.parametrize(("tail", "old", "new"), [
@@ -417,7 +436,7 @@ def test_first_completion_latches_and_next_setup_freezes_both_pages(fake_kernel)
 
 def test_events_before_command_other_controller_and_after_window_do_not_advance(fake_kernel):
     data = SETUP + IN_COMPLETE + PREPARE + IN_NRDY + COMMAND
-    data += IN_COMPLETE.replace(b"0x0000000382280000", b"0x0000000382380000")
+    data += IN_COMPLETE.replace(b"0x0000000382280000", b"0x0000000382380000").replace(b"-128 [002]", b"-129 [003]")
     data += OTHER_SETUP + STATUS_RETURN + IN_COMPLETE
     monitor = armed(fake_kernel, data)
     assert monitor.poll()[0] == "2002"
@@ -535,3 +554,309 @@ def test_non_ascii_trace_pipe_disables_tracing_and_stays_incomplete(fake_kernel,
         assert close_results == [True]  # No reopening/recovery on later polls.
     finally:
         os.close(write_fd)
+
+
+@pytest.mark.parametrize(("tail", "digits"), [
+    (b"", "2101"),
+    (STATUS_RETURN, "2101"),
+    (STATUS_RETURN + UNMASK, "2201"),
+    (STATUS_RETURN + UNMASK + io_event("dwc3_readl", 0xc40c, 0, irq=True), "2211"),
+    (STATUS_RETURN + UNMASK + COUNT_READ, "2221"),
+    (STATUS_RETURN + UNMASK + io_event("dwc3_readl", 0xc408, 0), "2201"),
+    (STATUS_RETURN + UNMASK + io_event("dwc3_writel", 0xc40c, 0x80000000), "2201"),
+])
+def test_cached_batch_rearm_and_fresh_count_observation(fake_kernel, tail, digits):
+    monitor = armed(fake_kernel, SETUP + PREPARE + COMMAND + tail)
+    assert monitor.poll() == ("2002", "CONFIG WINDOW")
+    assert monitor.rearm_page() == (digits, "CONFIG WINDOW")
+    assert monitor.device_page() == ("2001", "CONFIG WINDOW")
+
+
+@pytest.mark.parametrize("first", [0, 4])
+def test_first_post_rearm_read_latches_and_never_means_current_register_value(fake_kernel, first):
+    tail = STATUS_RETURN + UNMASK + io_event("dwc3_readl", 0xc40c, first, irq=True)
+    tail += io_event("dwc3_readl", 0xc40c, 4 if first == 0 else 0, irq=True)
+    monitor = armed(fake_kernel, SETUP + PREPARE + COMMAND + tail)
+    assert monitor.poll()[0] == "2002"
+    assert monitor.rearm_page()[0] == ("2211" if first == 0 else "2221")
+
+
+def test_startup_other_controller_and_prior_batches_cannot_claim_selected_rearm(fake_kernel):
+    startup = UNMASK + COUNT_READ + io_event("dwc3_writel", 0xc40c, 4, irq=True)
+    prior_batch = BATCH + STATUS_NRDY + UNMASK
+    other = (COUNT_READ + MASK + ACK + STATUS_NRDY + UNMASK).replace(
+        b"0x0000000382280000", b"0x0000000382380000").replace(b"-128 [002]", b"-129 [003]")
+    monitor = armed(fake_kernel, startup + prior_batch + SETUP + PREPARE + COMMAND + STATUS_RETURN + other)
+    assert monitor.poll()[0] == "2002"
+    assert monitor.rearm_page()[0] == "2101"
+
+
+def test_setup_batch_and_status_batch_may_be_separate_and_irq_task_differs_from_thread(fake_kernel):
+    # Acknowledgement happens in hardirq; event parsing/wrapper/unmask in threaded IRQ.
+    data = BATCH + OUT_COMPLETE + SETUP + ACM_SUCCESS + UNMASK
+    data += PREPARE + COMMAND + STATUS_RETURN + UNMASK + COUNT_READ
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "2322"
+    assert monitor.rearm_page()[0] == "2221"
+
+
+@pytest.mark.parametrize("bad", [
+    STATUS_NRDY + STATUS_ENTER + record("dwc3_prepare_trb", TRB_BODY),  # Missing batch.
+    COUNT_READ + MASK + STATUS_NRDY + STATUS_ENTER + record("dwc3_prepare_trb", TRB_BODY),  # Missing ack.
+    PREPARE.replace(STATUS_NRDY, b""),  # No event processing in selected thread.
+    PREPARE.replace(STATUS_NRDY, STATUS_NRDY.replace(b"-128 [002]", b"-129 [002]")),
+    PREPARE.replace(ACK, ACK.replace(b"[000]", b"[001]")),
+    PREPARE.replace(MASK, MASK.replace(b"swapper/0-0", b"swapper/0-1")),
+    PREPARE.replace(COUNT_READ, b""),
+    PREPARE.replace(ACK, ACK.replace(b"value 00000004", b"value 00000008")),
+    PREPARE.replace(ACK, ACK + ACK),
+    PREPARE.replace(MASK, MASK + MASK),
+    PREPARE.replace(ACK, ACK + COUNT_READ),
+    PREPARE + COMMAND + UNMASK,  # Must see selected helper return first.
+    PREPARE + COMMAND + STATUS_RETURN + UNMASK.replace(b"[002]", b"[003]"),
+    PREPARE + COMMAND + STATUS_RETURN + UNMASK.replace(b"-128 [002]", b"-129 [002]"),
+    PREPARE + COMMAND + STATUS_RETURN + UNMASK.replace(b"value 00001000", b"value 00002000"),
+    PREPARE.replace(COUNT_READ, COUNT_READ.replace(b"value 00000004", b"value 00002000")),
+    MASK.replace(b"offset c408", b"offset c409"),
+    COUNT_READ.replace(b"value 00000004", b"value nope"),
+    COUNT_READ.replace(b"addr 00000000dead1234", b"addr (____ptrval____)"),
+])
+def test_missing_ambiguous_or_malformed_batch_evidence_fails_closed(fake_kernel, bad):
+    monitor = armed(fake_kernel, SETUP + bad)
+    assert monitor.poll()[0][0] == "3"
+    assert monitor.rearm_page()[0][0] == monitor.device_page()[0][0] == "3"
+    assert monitor._fd is None
+    assert monitor.poll()[0][0] == "3"
+
+
+def test_controller_batch_storage_is_bounded_before_first_configuration(fake_kernel):
+    data = b"".join(io_event("dwc3_readl", 0xc40c, 4,
+                             controller=f"0x{0x382280000 + index * 0x100000:016x}", irq=True)
+                    for index in range(17))
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "3000"
+    assert len(monitor._batches) == 16
+
+
+def device_record(raw, text, controller="0x0000000382280000"):
+    return record("dwc3_event", f"{controller}: event ({raw:08x}): {text}")
+
+
+@pytest.mark.parametrize(("raw", "text", "digits", "window"), [
+    (0x00040001, "Disconnect: [SS.Disabled]", "2014", 4),
+    (0x000e0101, "Reset [Reset]", "2023", 3),
+    (0x00000201, "Connection Done [U0]", "2031", 1),
+    (0x00010301, "Link Change [U1]", "2041", 1),
+    (0x000f0401, "WakeUp [Resume]", "2051", 1),
+    (0x00000501, "UNKNOWN", "2061", 1),
+    (0x00030601, "Suspend [U3]", "2071", 1),
+    (0x00000901, "Erratic Error [U0]", "2101", 1),
+    (0x00000a01, "Command Complete [U0]", "2111", 1),
+    (0x000c0301, "Link Change [UNKNOWN link state]", "2041", 1),
+    (0x00000b01, "Overflow [U0]", "3121", 1),
+])
+def test_known_device_events_and_independent_window_closure(fake_kernel, raw, text, digits, window):
+    monitor = armed(fake_kernel, SETUP + PREPARE + COMMAND + STATUS_RETURN + UNMASK + device_record(raw, text))
+    monitor.poll()
+    assert monitor.device_page()[0] == digits
+    assert monitor.rearm_page()[0] == f"{digits[0]}20{window}"
+    assert monitor.event_page()[0] == f"{digits[0]}200"  # Device event is not EP0 event.
+
+
+@pytest.mark.parametrize(("raw", "text"), [
+    (0x00000701, "Start-Of-Frame [U0]"),  # Filtered out: cannot silently accept it.
+    (0x00000801, "UNKNOWN"),
+    (0x00000c01, "UNKNOWN"),
+    (0x00000003, "Disconnect: [U0]"),  # Wrong device subtype.
+    (0x00001001, "Disconnect: [U0]"),  # Reserved raw field.
+    (0x02000001, "Disconnect: [U0]"),
+    (0x00000301, "Link Change [U3]"),  # Raw/text mismatch.
+    (0x00000101, "Disconnect: [U0]"),
+])
+def test_unknown_filtered_or_inconsistent_device_records_fail_closed(fake_kernel, raw, text):
+    monitor = armed(fake_kernel, SETUP + device_record(raw, text))
+    assert monitor.poll()[0] == "3000"
+    assert monitor.device_page()[0] == "3001"
+
+
+@pytest.mark.parametrize(("close", "window"), [
+    (OTHER_SETUP, 2),
+    (device_record(0x101, "Reset [U0]"), 3),
+    (device_record(1, "Disconnect: [U0]"), 4),
+])
+def test_first_window_closure_preserves_all_observations_and_ignores_later_progress(fake_kernel, close, window):
+    first_device = device_record(0x301, "Link Change [U0]")
+    data = SETUP + PREPARE + COMMAND + first_device + close
+    data += STATUS_RETURN + UNMASK + COUNT_READ + IN_COMPLETE + COMPLETE + OTHER_SETUP
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "2002"
+    assert monitor.event_page()[0] == "2100"
+    assert monitor.rearm_page()[0] == f"210{window}"
+    assert monitor.device_page()[0] == f"204{window}"  # First device remains separate from closure.
+
+
+def test_device_events_before_window_or_from_other_controller_cannot_close_it(fake_kernel):
+    reset = device_record(0x101, "Reset [U0]")
+    wrong_controller = reset.replace(b"0x0000000382280000", b"0x0000000382380000").replace(b"-128 [002]", b"-129 [003]")
+    monitor = armed(fake_kernel, reset + SETUP + PREPARE + COMMAND + wrong_controller + STATUS_RETURN + UNMASK)
+    assert monitor.poll()[0] == "2002"
+    assert monitor.rearm_page()[0] == "2201"
+    assert monitor.device_page()[0] == "2001"
+
+
+def test_new_pages_have_no_io_and_share_current_loss_validity(fake_kernel, monkeypatch):
+    monitor = armed(fake_kernel, SETUP + PREPARE + COMMAND + STATUS_RETURN + UNMASK + COUNT_READ)
+    monitor.poll()
+    with monkeypatch.context() as patch:
+        def forbidden(*_args, **_kwargs):
+            pytest.fail("numeric pages must not perform I/O")
+        for operation in ("open", "read", "write"):
+            patch.setattr(trace.os, operation, forbidden)
+        assert monitor.rearm_page() == ("2221", "CONFIG WINDOW")
+        assert monitor.device_page() == ("2001", "CONFIG WINDOW")
+        monitor.validity = 3
+        assert monitor.rearm_page() == ("3221", "INCOMPLETE")
+        assert monitor.device_page() == ("3001", "INCOMPLETE")
+
+
+@pytest.mark.parametrize("event", ["dwc3_readl", "dwc3_writel"])
+def test_io_trace_setup_failure_stays_unavailable_and_cleans(fake_kernel, monkeypatch, event):
+    original = trace._write
+    def write(path, value, **kwargs):
+        if event in path.parts and path.name == "filter":
+            raise OSError("injected register trace filter failure")
+        return original(path, value, **kwargs)
+    monkeypatch.setattr(trace, "_write", write)
+    fake_kernel.start(time.monotonic() + 10)
+    assert fake_kernel.poll() == ("0000", "UNAVAILABLE")
+    assert fake_kernel.rearm_page() == fake_kernel.device_page() == ("0000", "UNAVAILABLE")
+    assert fake_kernel._probes == [] and fake_kernel._fd is None
+
+
+def test_startup_count_ack_cannot_supply_stale_count_for_later_mask(fake_kernel):
+    startup = COUNT_READ + io_event("dwc3_writel", 0xc40c, 4, irq=True)
+    missing_fresh_read = PREPARE.replace(COUNT_READ, b"")
+    monitor = armed(fake_kernel, startup + SETUP + missing_fresh_read + COMMAND + STATUS_RETURN + UNMASK)
+    assert monitor.poll()[0] == "3000"
+    assert monitor.rearm_page()[0] == "3001"
+
+
+def test_partial_unmask_and_later_count_cannot_claim_progress_until_records_complete(fake_kernel):
+    monitor = armed(fake_kernel, SETUP + PREPARE + COMMAND + STATUS_RETURN + UNMASK[:-3])
+    assert monitor.poll()[0] == "1002"
+    assert monitor.rearm_page()[0] == "1101"
+    with (monitor.instance / "trace_pipe").open("ab") as stream:
+        stream.write(UNMASK[-3:] + COUNT_READ[:-3])
+    assert monitor.poll()[0] == "1002"
+    assert monitor.rearm_page()[0] == "1201"
+    with (monitor.instance / "trace_pipe").open("ab") as stream:
+        stream.write(COUNT_READ[-3:])
+    assert monitor.poll()[0] == "2002"
+    assert monitor.rearm_page()[0] == "2221"
+
+
+@pytest.mark.parametrize("witness", [
+    device_record(0x301, "Link Change [U0]"),
+    IN_COMPLETE,
+    OUT_COMPLETE,
+    controller_event(0x20c0, "Transfer Not Ready [00000000] (Not Active) [Status Phase]", endpoint="ep0out"),
+    controller_event(0x10c2, "Transfer Not Ready [00000000] (Not Active) [Data Phase]"),
+    controller_event(0xa0c2, "Transfer Not Ready [00000000] (Active) [Status Phase]"),
+    STATUS_NRDY.replace(b"0x0000000382280000", b"0x0000000382380000"),
+])
+def test_only_explicit_in_status_nrdy_can_anchor_wrapper_entry(fake_kernel, witness):
+    # Synthetic hardening cases: these are not claimed realizable on the exact
+    # normal ACM path, whose status dispatch switches on exact NRDY status2.
+    data = SETUP + PREPARE.replace(STATUS_NRDY, witness) + COMMAND + STATUS_RETURN + UNMASK
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "3000"
+    assert monitor.rearm_page()[0] == "3001"
+
+
+@pytest.mark.parametrize("intervening", [EP1_COMPLETE, EP1_NRDY])
+def test_noncontrol_endpoint_event_between_nrdy_and_wrapper_cannot_leave_stale_witness(fake_kernel, intervening):
+    # This is the delayed-status callback path: a non-EP0 event can run before
+    # the wrapper in the same acknowledged cached event batch.
+    data = SETUP + BATCH + STATUS_NRDY + intervening + STATUS_ENTER
+    data += record("dwc3_prepare_trb", TRB_BODY) + COMMAND + STATUS_RETURN + UNMASK
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "3000"
+    assert monitor.rearm_page()[0] == "3001"
+
+
+def test_noncontrol_endpoint_event_before_status_nrdy_is_valid_but_not_an_ep0_result(fake_kernel):
+    data = SETUP + BATCH + EP1_COMPLETE + STATUS_NRDY + STATUS_ENTER
+    data += record("dwc3_prepare_trb", TRB_BODY) + COMMAND + STATUS_RETURN + UNMASK
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "2002"
+    assert monitor.rearm_page()[0] == "2201"
+    assert monitor.event_page()[0] == "2200"
+
+
+@pytest.mark.parametrize("malformed", [
+    EP1_COMPLETE.replace(b"ep1in", b"ep2in"),
+    EP1_COMPLETE.replace(b"Transfer Complete (sil)", b"Transfer Complete (sil) [Status Phase]"),
+    EP1_NRDY.replace(b"Not Active)", b"Not Active) [Status Phase]"),
+])
+def test_noncontrol_endpoint_identity_and_text_mismatches_fail_closed(fake_kernel, malformed):
+    monitor = armed(fake_kernel, SETUP + BATCH + STATUS_NRDY + malformed + STATUS_ENTER)
+    assert monitor.poll()[0] == "3000"
+    assert monitor.event_page()[0][0] == "3"
+
+
+@pytest.mark.parametrize("intervening", [
+    device_record(0x301, "Link Change [U0]"),
+    STATUS_NRDY,
+    STATUS_NRDY.replace(b"0x0000000382280000", b"0x0000000382380000"),
+    record("dwc3_prepare_trb", TRB_BODY.replace("0x0000000382280000", "0x0000000382380000")),
+])
+def test_entry_witness_cannot_be_replaced_before_selected_prepare(fake_kernel, intervening):
+    # Even another identical NRDY is a new event, not the entry-time witness.
+    data = SETUP + PREPARE.replace(STATUS_ENTER, STATUS_ENTER + intervening) + COMMAND + STATUS_RETURN + UNMASK
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "3000"
+    assert monitor.rearm_page()[0] == "3001"
+
+
+def test_nrdy_observed_only_after_wrapper_entry_cannot_retroactively_bind_it(fake_kernel):
+    data = SETUP + BATCH + STATUS_ENTER + STATUS_NRDY + record("dwc3_prepare_trb", TRB_BODY)
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "3000"
+    assert monitor.rearm_page()[0] == "3001"
+
+
+def test_foreign_controller_same_selected_thread_context_is_ambiguous(fake_kernel):
+    foreign = device_record(0x301, "Link Change [U0]", controller="0x0000000382380000")
+    monitor = armed(fake_kernel, SETUP + PREPARE + COMMAND + STATUS_RETURN + foreign + UNMASK)
+    assert monitor.poll()[0] == "3002"
+    assert monitor.rearm_page()[0] == "3101"
+
+
+def test_status_nrdy_in_later_batch_may_run_on_another_cpu_than_setup_batch(fake_kernel):
+    data = BATCH + OUT_COMPLETE + SETUP + ACM_SUCCESS + UNMASK
+    # The IRQ thread can migrate between batches, but a batch's locked callback
+    # and matched helper/unmask must remain in the same context.
+    status_batch = PREPARE + COMMAND + STATUS_RETURN + UNMASK
+    data += status_batch.replace(b"-128 [002]", b"-128 [003]") + COUNT_READ
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "2322"
+    assert monitor.rearm_page()[0] == "2221"
+    assert monitor.event_page()[0] == "2200"
+
+
+def test_other_call_witness_does_not_replace_selected_controller_call_binding(fake_kernel):
+    other_enter = STATUS_ENTER.replace(b"-128 [002]", b"-129 [003]").replace(b"80068000", b"80168000")
+    other_return = STATUS_RETURN.replace(b"-128 [002]", b"-129 [003]").replace(b"80068000", b"80168000")
+    monitor = armed(fake_kernel, SETUP + PREPARE + other_enter + COMMAND + other_return + STATUS_RETURN + UNMASK)
+    assert monitor.poll()[0] == "2002"
+    assert monitor.rearm_page()[0] == "2201"
+    assert monitor._call_witnesses == {}
+
+
+
+def test_one_nrdy_witness_cannot_be_reused_by_two_wrapper_calls(fake_kernel):
+    data = SETUP + BATCH + STATUS_NRDY + STATUS_ENTER + STATUS_RETURN
+    data += STATUS_ENTER + record("dwc3_prepare_trb", TRB_BODY) + COMMAND + STATUS_RETURN + UNMASK
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "3000"
+    assert monitor.rearm_page()[0] == "3001"
