@@ -26,7 +26,7 @@ The deployment fixes selected evidence being omitted from bounded prompts,
 per-event notification cursor commits contending with the web interface, and
 resumed chat reservation checks counting earlier turns. That installed release
 passed 368 host tests; the current source including the bounded native USB
-trace passes 454 tests.
+trace passes 500 tests.
 During the installed resumed job, all 90 authenticated and anonymous HTTP probes
 returned the expected 200 or 403; the slowest took 3.438 seconds. The private
 HTTPS pages also responded successfully. See
@@ -269,3 +269,9 @@ installed service `f560929` and the paused lab usage hold are unchanged.
 The first release remains incomplete until the physical gates and one real,
 bounded, multi-cycle investigation are complete. Replay evidence must never be
 used to claim an M1 power improvement.
+
+The EP0 follow-up candidate adds correlated status-wrapper entry/return probes
+and a separate raw-event page. Its exact source review and all 500 host tests
+pass; 53 published artifacts and packaged source bytes match. Physical behavior
+of the new event page remains unverified. See
+[EP0 candidate evidence](evidence/2026-09-28-native-ep0-build.json).

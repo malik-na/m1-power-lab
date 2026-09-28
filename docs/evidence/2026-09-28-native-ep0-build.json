@@ -1,0 +1,18 @@
+{
+  "build_id": "build_a522bd6a10a44159bf38da9c5229d9d5",
+  "source": "3719aece8323a7d1dba773ccf67288effbafd36d",
+  "checked_artifacts": 53,
+  "initramfs_sources": {
+    "init": "a48894f5febb755d8fd22d5e2ebb0b297ef33fbf7f74d782054a74fd847fdfb9",
+    "usr/lib/m1lab/native_boot.py": "26ae641a64f43453a9289779a57f6e3f10e58c41dfd60cba62dabcd4c19b6880",
+    "usr/lib/m1lab/native_usb_trace.py": "5cdc6e18ac332c91614657de48920189b6a12bdfb6133a1fa5a1d7e693097131"
+  },
+  "target_executed": false,
+  "schema": "m1lab.native-diagnostic-build.v1",
+  "recorded_at": "2026-09-28T16:35:10.785701+00:00",
+  "host_tests": 500,
+  "source_review": "Independent exact-source, compiled-path and decoder-format review found no blocker",
+  "purpose": "Distinguish EP0 status-wrapper return from raw controller event delivery after eleventh trace2322 result",
+  "physical_event_trace_qualified": false,
+  "scientific_power_qualified": false
+}
