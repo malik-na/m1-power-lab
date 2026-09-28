@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import importlib.util
 import mmap
+import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 
@@ -85,6 +88,39 @@ def test_unusual_framebuffer_bitfields_are_rejected():
     variable.transp.offset = 16
     with pytest.raises(ValueError, match="alpha field"):
         calibration._pixel(variable, 180)
+
+
+@pytest.mark.parametrize(("xoffset", "yoffset"), [(37, 0), (0, 37)])
+def test_render_rejects_symbol_past_virtual_framebuffer(xoffset, yoffset):
+    variable = calibration._VarScreenInfo()
+    variable.xres = variable.yres = 300
+    variable.xres_virtual = variable.yres_virtual = 300
+    variable.xoffset, variable.yoffset = xoffset, yoffset
+    variable.bits_per_pixel = 32
+    fixed = calibration._FixScreenInfo()
+    fixed.visual = 2
+    fixed.line_length = 400 * 4
+    fixed.smem_len = fixed.line_length * 400
+    with mmap.mmap(-1, fixed.smem_len) as framebuffer:
+        with pytest.raises(ValueError, match="virtual framebuffer"):
+            calibration._render(framebuffer, variable, fixed, scale=8, brightness=180)
+
+
+def test_calibration_rejects_other_framebuffer_minors_before_ioctl(monkeypatch):
+    closed = []
+    monkeypatch.setattr(calibration.os, "open", lambda *_args: 41)
+    monkeypatch.setattr(
+        calibration.os, "fstat",
+        lambda _fd: SimpleNamespace(st_mode=stat.S_IFCHR, st_rdev=os.makedev(29, 1)),
+    )
+    monkeypatch.setattr(calibration.os, "close", closed.append)
+    monkeypatch.setattr(
+        calibration, "_screen_info",
+        lambda _fd: pytest.fail("ioctl must not run for another framebuffer minor"),
+    )
+    with pytest.raises(ValueError, match="not a framebuffer device"):
+        calibration.run()
+    assert closed == [41]
 
 
 @pytest.mark.parametrize(

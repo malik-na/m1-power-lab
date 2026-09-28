@@ -122,6 +122,9 @@ def _render(framebuffer: mmap.mmap, variable: _VarScreenInfo,
     size = len(MATRIX) * scale
     if not 0 < size <= variable.xres or size > variable.yres:
         raise ValueError("calibration symbol does not fit the visible framebuffer")
+    if (variable.xoffset + size > variable.xres_virtual
+            or variable.yoffset + size > variable.yres_virtual):
+        raise ValueError("calibration symbol exceeds virtual framebuffer")
     if fixed.visual != 2 or not 0 < fixed.smem_len <= 128 << 20:
         raise ValueError("unsupported calibration framebuffer memory")
     depth = variable.bits_per_pixel // 8
@@ -146,7 +149,8 @@ def run() -> dict[str, int]:
     fd = os.open(path, os.O_RDWR | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0))
     try:
         info = os.fstat(fd)
-        if not stat.S_ISCHR(info.st_mode) or os.major(info.st_rdev) != 29:
+        if (not stat.S_ISCHR(info.st_mode) or os.major(info.st_rdev) != 29
+                or os.minor(info.st_rdev) != 0):
             raise ValueError("calibration output is not a framebuffer device")
         variable, fixed = _screen_info(fd)
         if (variable.bits_per_pixel not in (16, 32) or fixed.visual != 2
