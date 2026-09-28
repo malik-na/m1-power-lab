@@ -286,6 +286,12 @@
       "role": "bootstrap_source",
       "path": "target/native_boot.py",
       "media_type": "text/x-python"
+    },
+    {
+      "name": "native_usb_trace.py",
+      "role": "diagnostic_source",
+      "path": "target/native_usb_trace.py",
+      "media_type": "text/x-python"
     }
   ],
   "outputs": [

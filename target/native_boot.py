@@ -71,14 +71,22 @@ def _console_overlay(stage: str, state: str, error: Exception | None = None) -> 
     kind = _error_kind(error)
     error_code = (("None", *[item.__name__ for item in _DIAGNOSTIC_ERRORS], "Exception").index(kind))
     digits = f"{_STAGE_CODES[stage]:02d}{error_code}{_STATE_CODES[state]}"
-    lines = ["M1LAB DIAG - STAGE / ERROR / USB", "       STAGE                ERROR          USB"]
+    _console_digits(digits, "M1LAB DIAG - STAGE / ERROR / USB",
+                    "       STAGE                ERROR          USB",
+                    f"S{digits[:2]} {stage} E{error_code} {kind} U{digits[3]} {state}")
+
+
+def _console_digits(digits: str, title: str, legend: str, label: str) -> None:
+    """Internal renderer; callers supply only fixed titles and checked codes."""
+    if len(digits) != 4 or any(digit not in "0123456789" for digit in digits):
+        return
+    lines = [title, legend]
     for row in range(5):
         parts = ["".join("###" if pixel == "1" else "   " for pixel in _DIGITS[int(digit)][row])
                  for digit in digits]
         line = parts[0] + "  " + parts[1] + "     " + parts[2] + "     " + parts[3]
         lines.extend((line, line))
-    lines.extend((f"S{digits[:2]} {stage} E{error_code} {kind} U{digits[3]} {state}",
-                  "DIAGNOSTIC ONLY - NOT SAMPLES OR SUCCESS"))
+    lines.extend((label, "DIAGNOSTIC ONLY - NOT SAMPLES OR SUCCESS"))
     # Save/restore cursor and attributes. Do not clear the screen, change the
     # scrolling region, or suppress kernel messages; redraw only these rows.
     payload = ("\x1b7\x1b[0;37;40m" + "".join(
@@ -96,6 +104,50 @@ def _console_overlay(stage: str, state: str, error: Exception | None = None) -> 
             os.close(fd)
     except OSError:
         pass
+
+
+class _UsbTraceDiagnostic:
+    """Optional fixed kernel trace, never a launch prerequisite or sample."""
+
+    def __init__(self) -> None:
+        self.trace = None
+
+    def start(self, deadline: float) -> None:
+        try:
+            _command(deadline, "/usr/bin/busybox", "mount", "-t", "tracefs", "tracefs", "/sys/kernel/tracing")
+            spec = importlib.util.spec_from_file_location(
+                "native_usb_trace", Path(__file__).with_name("native_usb_trace.py"))
+            assert spec is not None and spec.loader is not None
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            self.trace = module.NativeUsbTrace()
+            self.trace.start(deadline)
+        except Exception:
+            # Missing tracing remains visibly unavailable, never a USB verdict.
+            self.close()
+
+    def refresh(self) -> None:
+        try:
+            digits, label = ("0000", "UNAVAILABLE") if self.trace is None else self.trace.poll()
+        except Exception:
+            digits, label = "3000", "INCOMPLETE"
+        # Alternate with the established stage/error overlay at the same place.
+        # Two-second pages stay readable even when disconnected tty reads spin.
+        if int(time.monotonic()) % 4 < 2:
+            if label not in {"UNAVAILABLE", "READY", "CONFIG WINDOW", "INCOMPLETE"}:
+                digits, label = "3000", "INCOMPLETE"
+            _console_digits(digits, "M1LAB USB TRACE - V / A / G / P",
+                            "VALID ACM RETURNS SERIAL EP0 STATUS",
+                            f"TRACE {digits} {label}")
+
+    def close(self, *, required: bool = False) -> None:
+        if self.trace is not None:
+            try:
+                stopped = self.trace.close()
+            except Exception:
+                stopped = False
+            if required and not stopped:
+                raise RuntimeError("cannot confirm diagnostic tracing stopped")
 
 
 class _ConfigurationDiagnostic:
@@ -210,11 +262,14 @@ def _launch_line(
 def _configure_gadget(
     deadline: float, mark: Callable[[str], None],
     diagnostic: _ConfigurationDiagnostic | None = None,
+    trace: _UsbTraceDiagnostic | None = None,
 ) -> Path:
     diagnostic = diagnostic if diagnostic is not None else _ConfigurationDiagnostic()
     for module in ("phy_apple_atc", "tps6598x", "dwc3_apple", "libcomposite", "usb_f_acm"):
         mark(f"module_{module}")
         _command(deadline, "/usr/bin/modprobe", module)
+    if trace is not None:
+        trace.start(deadline)
     mark("configfs_mount")
     _command(deadline, "/usr/bin/busybox", "mount", "-t", "configfs", "configfs", "/sys/kernel/config")
     # The connected port must enter peripheral mode through the kernel's role
@@ -290,6 +345,7 @@ def main() -> int:
     fd = None
     stage = "python_entry"
     diagnostic = _ConfigurationDiagnostic()
+    trace = _UsbTraceDiagnostic()
 
     def mark(value: str) -> None:
         nonlocal stage
@@ -297,14 +353,19 @@ def main() -> int:
         print(f"M1Lab stage={value}", flush=True)
         diagnostic.update(value)
 
+    def on_wait() -> None:
+        diagnostic.update(stage)
+        trace.refresh()
+
     try:
         mark("python_entry")
-        channel = _configure_gadget(deadline, mark, diagnostic)
+        channel = _configure_gadget(deadline, mark, diagnostic, trace)
         fd = os.open(channel, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
         tty.setraw(fd, termios.TCSANOW)
         mark("launch_wait")
-        raw = _launch_line(fd, deadline, on_wait=lambda: diagnostic.update(stage))
+        raw = _launch_line(fd, deadline, on_wait=on_wait)
         mark("launch_received")
+        trace.close(required=True)  # No capture while diagnostic tracing is active.
         launch_path = Path("/run/m1lab-launch.json")
         launch_path.write_bytes(raw)
         # -I excludes the script directory; load only this image's exact source.
@@ -330,6 +391,7 @@ def main() -> int:
         print(f"M1Lab failure stage={stage} type={type(exc).__name__}", flush=True)
         return 2
     finally:
+        trace.close()
         if fd is not None:
             os.close(fd)
 
