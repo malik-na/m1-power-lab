@@ -8,7 +8,7 @@ Release `1212afd` is installed on the ThinkPad as the enabled systemd service.
 The private owner interface and Codex jobs run independently of the setup
 terminal. Sleep, idle and lid-close inhibition is active while the service runs.
 The scoped inspect-only helper is installed and active for USB port `1-2`.
-After the eleventh return, the proxy enumerated as `/dev/ttyACM0`; five fixed
+After the twelfth return, the proxy enumerated as `/dev/ttyACM0`; five fixed
 read-only requests verified its identity. The helper has no automatic restart
 or boot enablement and must be explicitly
 reopened after a coordinator restart or USB reconnection. It does not expose
@@ -16,7 +16,7 @@ native experiment dispatch.
 
 The prior installed session is stopped. Its old uncertain usage was resolved
 with a conservative 300,000-token charge under the owner's delegation, not a
-provider measurement. A new session retains the eighth- through eleventh-attempt
+provider measurement. A new session retains the eighth- through twelfth-attempt
 technical artifacts and has completed two service-owned analysis turns. The first reported
 27,986 tokens; the resumed turn reported 51,192 additional tokens, for a thread
 and session total of 79,178 with no usage uncertainty. This verifies bounded
@@ -26,11 +26,42 @@ The deployment fixes selected evidence being omitted from bounded prompts,
 per-event notification cursor commits contending with the web interface, and
 resumed chat reservation checks counting earlier turns. That installed release
 passed 368 host tests; the current source including the bounded native USB
-trace passes 500 tests.
+trace passed 500 tests before the twelfth launch. The expanded 90-test tracer
+suite passed after the regression added for its exact review.
 During the installed resumed job, all 90 authenticated and anonymous HTTP probes
 returned the expected 200 or 403; the slowest took 3.438 seconds. The private
 HTTPS pages also responded successfully. See
 [deployment evidence](evidence/2026-09-28-independent-service.json).
+
+The twelfth bounded physical attempt tested candidate
+`build_a522bd6a10a44159bf38da9c5229d9d5` after fresh accepted review and
+one-use attended authorization. The host saw native USB enumeration at
+17:03:22 UTC, then timed out setting configuration 1 (`-110`) at 17:03:27 UTC.
+No native tty, payload or samples were obtained. Two readers independently
+decoded private screen snapshots: `VAGP 2 / 3 / 2 / 2` at 65 and 149 seconds
+records successful ACM setup and acceptance of the DWC3 EP0 status command;
+`VRES 2 / 2 / 0 / 0` at 67 and 145 seconds shows the selected status wrapper
+returned, with no post-command EP0 event observed in those snapshots. The
+target remained at `launch_wait` and later displayed `10 / 1 / 8`
+(`TimeoutError`, UDC state `configured`). These target-side markers do not
+establish host configuration completion.
+
+The wrapper return no longer supports a stall in its MMIO/PHY-restoration tail.
+The next discriminator is controller status-TRB ownership/progress and
+device/link event state versus missing EP0 completion; no role, FIFO or module
+fix is established. The same checked proxy identity returned on a new owned
+connection at 17:05:50 UTC, without independent reboot attestation. The
+operation is reconciled as failed with its original unknown outcome retained;
+the camera stopped, footage remains private, and the native qualification
+session is paused. Native capture, power measurement and unattended target
+recovery remain unqualified. See
+[twelfth-attempt evidence](evidence/2026-09-28-native-twelfth-attempt.json) and
+[service handoff](evidence/2026-09-28-twelfth-service-handoff.json).
+Four technical artifacts and the summary were imported into the installed
+investigation session; raw video was not. The coordinator and inspect-only
+helper are active with zero observed restarts, and both earlier completed jobs
+and 79,178 reported tokens were preserved. Authenticated local HTTP and private
+HTTPS returned 200; an anonymous local request returned 403.
 
 The eleventh bounded physical attempt tested candidate
 `build_91cbf0b92ef6404b8483bfdd5269c77f` after fresh accepted review and
@@ -43,8 +74,8 @@ The target stayed at `launch_wait` and later displayed `10 / 1 / 8`
 configuration 1 (`-110`); no native tty, payload or samples were obtained.
 The `P2` tracepoint precedes the helper's return, resource-index MMIO readback
 and PHY-bit restoration, and no matching status-completion callback was
-observed in the retained snapshots. The next discriminator is helper return
-versus controller EP0 event and callback completion, not an assumed USB fix.
+observed in the retained snapshots. The twelfth attempt above tested whether
+that helper returned.
 
 The same checked proxy returned on a new owned connection at 16:14:26 UTC.
 The operation is reconciled as failed with its original unknown result retained;

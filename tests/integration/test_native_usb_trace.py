@@ -492,3 +492,46 @@ def test_new_instrumentation_setup_failure_stays_unavailable_and_cleans(fake_ker
     assert fake_kernel.event_page() == ("0000", "UNAVAILABLE")
     assert fake_kernel._probes == [] and fake_kernel._fd is None
     assert fake_kernel.close() is True
+
+
+def test_non_ascii_trace_pipe_disables_tracing_and_stays_incomplete(fake_kernel, monkeypatch):
+    """Exercise real pipe reads and real cleanup, not a mocked decode exception."""
+    import errno
+
+    monitor = armed(fake_kernel)
+    os.close(monitor._fd)
+    read_fd, write_fd = os.pipe2(os.O_NONBLOCK | os.O_CLOEXEC)
+    monitor._fd = read_fd
+    # Model the aggregate enable value, which real tracefs computes for events.
+    (monitor.instance / "events/enable").write_text("1\n")
+    original_close = monitor.close
+    close_results = []
+
+    def close():
+        result = original_close()
+        close_results.append(result)
+        return result
+
+    monkeypatch.setattr(monitor, "close", close)
+    try:
+        assert issubclass(UnicodeDecodeError, ValueError)
+        os.write(write_fd, SETUP)
+        assert monitor.poll() == ("2000", "CONFIG WINDOW")
+        assert (monitor.instance / "tracing_on").read_text() == "1\n"
+
+        os.write(write_fd, b"non-ASCII kernel trace byte: \xff\n")
+        assert monitor.poll() == ("3000", "INCOMPLETE")
+        assert monitor.event_page() == ("3000", "INCOMPLETE")
+        assert close_results == [True]
+        assert (monitor.instance / "tracing_on").read_text() == "0\n"
+        assert (monitor.instance / "events/enable").read_text() == "0\n"
+        assert monitor._fd is None and monitor._probes == []
+        with pytest.raises(OSError) as closed:
+            os.fstat(read_fd)
+        assert closed.value.errno == errno.EBADF
+
+        assert monitor.poll() == ("3000", "INCOMPLETE")
+        assert monitor.event_page() == ("3000", "INCOMPLETE")
+        assert close_results == [True]  # No reopening/recovery on later polls.
+    finally:
+        os.close(write_fd)

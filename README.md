@@ -22,9 +22,10 @@ The host application now includes the durable coordinator, replay experiment
 executor, bounded Codex app-server adapter, CLI, and responsive owner UI.  The
 native experiment adapter remains unavailable until the ThinkPad-to-Mac
 transport and recovery path are qualified on the actual machines. The latest
-physical attempt reached Linux USB enumeration and exposed bounded target-side
-ACM/EP0 trace markers, but the host timed out during configuration and captured
-no native samples. See
+physical attempt reached Linux USB enumeration. Target-side trace snapshots show
+the selected EP0 status wrapper returned after its command was accepted, but
+show no subsequent EP0 event; the host timed out during configuration and
+captured no native samples. See
 [current status](docs/STATUS.md) for the installed release, verified
 capabilities, and remaining qualification gates.
 
