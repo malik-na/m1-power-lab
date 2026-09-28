@@ -24,6 +24,7 @@ _SPEC.loader.exec_module(native_boot)
 @pytest.fixture(autouse=True)
 def no_physical_console(monkeypatch, tmp_path):
     monkeypatch.setattr(native_boot, "CONSOLE", tmp_path / "absent-tty0")
+    monkeypatch.setattr(native_boot._UsbTraceDiagnostic, "start", lambda *_args: None)
 
 
 def test_approval_headroom_does_not_extend_or_prevent_short_native_capture():
@@ -273,6 +274,36 @@ def test_failed_launch_diagnostic_does_not_mask_received_launch():
     finally:
         os.close(read_fd)
         os.close(write_fd)
+
+
+def test_trace_read_failure_cannot_abort_launch_wait(console_writes, monkeypatch):
+    monkeypatch.setattr(native_boot.time, "monotonic", lambda: 0)
+    diagnostic = native_boot._UsbTraceDiagnostic()
+    diagnostic.trace = SimpleNamespace(poll=lambda: (_ for _ in ()).throw(ValueError("malformed trace")))
+    diagnostic.refresh()
+    assert b"TRACE 3000 INCOMPLETE" in console_writes[0][0]
+
+
+def test_capture_requires_confirmed_trace_shutdown():
+    diagnostic = native_boot._UsbTraceDiagnostic()
+    diagnostic.trace = SimpleNamespace(close=lambda: False)
+    diagnostic.close()  # Failure cleanup must not mask the original error.
+    with pytest.raises(RuntimeError, match="cannot confirm"):
+        diagnostic.close(required=True)
+    diagnostic.trace = SimpleNamespace(close=lambda: True)
+    diagnostic.close(required=True)
+
+
+def test_usb_trace_and_stage_codes_alternate_on_elapsed_time(console_writes, monkeypatch):
+    diagnostic = native_boot._UsbTraceDiagnostic()
+    diagnostic.trace = SimpleNamespace(poll=lambda: ("2323", "CONFIG WINDOW"))
+    for second in range(4):
+        monkeypatch.setattr(native_boot.time, "monotonic", lambda: second)
+        native_boot._console_overlay("launch_wait", "configured")
+        diagnostic.refresh()
+    payloads = console_writes[0]
+    assert [b"USB TRACE" in p for p in payloads] == [False, True, False, True, False, False]
+    assert all(len(p) < 2048 for p in payloads)
 
 
 @pytest.fixture

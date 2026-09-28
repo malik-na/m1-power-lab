@@ -126,3 +126,38 @@ may be incomplete or overwritten by concurrent console messages. It refreshes
 on existing stage/wait callbacks and adds no retry, timer, or watchdog extension;
 the 150-second native deadline, 180-second image watchdog and failure hold
 remain unchanged.
+
+
+The next diagnostic candidate also includes `native_usb_trace.py`. After the
+fixed USB modules load and before gadget binding, startup mounts tracefs and
+attempts one private trace instance. Four fixed entry/return probes observe
+`usb_f_acm:acm_set_alt` and `u_serial:gserial_connect`; four existing DWC3 events
+observe the first SET_CONFIGURATION(1) request and its EP0 status handling.
+It changes no kernel image, USB descriptor, role, transfer payload or recovery
+limit. Tracing perturbs timing and this image remains a diagnostic candidate.
+
+The upper display alternates every two seconds between the existing **SS E U**
+page and a **V A G P** page headed `M1LAB USB TRACE`. The trace page uses:
+
+| Digit | Meaning |
+| --- | --- |
+| V | 0 unavailable; 1 ready/no fully consumed configuration observation; 2 configuration observed with current loss checks clean; 3 incomplete/lost |
+| A | 0 no ACM entry; 1 call outstanding; 2 one interface returned zero; 3 both interfaces returned zero; 4 nonzero return |
+| G | 0 no serial entry; 1 outstanding; 2 returned zero; 3 nonzero return |
+| P | 0 no status evidence; 1 STATUS2 TRB prepared; 2 start command succeeded; 3 controller status completion observed; 4 start command failed |
+
+V2 is a provisional observation, not proof of host acknowledgement. The next
+SETUP freezes the first configuration window so later descriptor reads cannot
+appear as its progress. The observer uses a 32 KiB per-CPU ring (at most 32 CPUs),
+at most 16 nonblocking reads totaling 64 KiB per poll, a 512 KiB total read cap,
+and 1,024-byte lines. Missing controls, unexpected relevant data, lost events,
+probe misses and exceeded bounds are unavailable or incomplete, never success.
+Only numeric summaries and fixed labels reach the screen; raw addresses do not.
+
+Startup retains its 150-second deadline and 180-second image watchdog. Optional
+trace read errors cannot abort launch waiting. Once a launch arrives, capture is
+refused unless diagnostic tracing shutdown is confirmed. Cleanup is retried on
+exit and cannot mask the original failure. This code is host-tested; actual
+trace availability and readability remain unverified until a separately
+reviewed bounded physical run. Even a completed EP0 callback does not qualify
+physical identity, sample provenance, power measurement or unattended recovery.

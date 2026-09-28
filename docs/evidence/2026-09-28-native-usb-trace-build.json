@@ -1,0 +1,23 @@
+{
+  "build_id": "build_91cbf0b92ef6404b8483bfdd5269c77f",
+  "source": "1b7ce1f5f395fa91375a68b989a319a4f614c204",
+  "checked_artifacts": 53,
+  "initramfs_sources": {
+    "init": "a48894f5febb755d8fd22d5e2ebb0b297ef33fbf7f74d782054a74fd847fdfb9",
+    "usr/lib/m1lab/native_boot.py": "1f21b10368f8ae59d46fa4842d0e642f2a0713c6a4f137eccf86ea338336a6d8",
+    "usr/lib/m1lab/native_usb_trace.py": "7a3e755eac1ddde905534c91dfac0a8de0d48b1ce5b81276336ccc0189376a9b"
+  },
+  "target_executed": false,
+  "schema": "m1lab.native-diagnostic-build.v1",
+  "recorded_at": "2026-09-28T16:00:11.558599+00:00",
+  "host_tests": 454,
+  "source_review": "Independent source and final-delta reviews found no blockers",
+  "purpose": "Distinguish ACM interface setup, serial endpoint connection and EP0 status after tenth launch-wait timeout",
+  "physical_trace_qualified": false,
+  "scientific_power_qualified": false,
+  "procedure_id": "procedure_214a215d50ee46f1ba2e62aa91fc5f23",
+  "procedure_digest": "50f5fc65dda7d12416fa434be5b16f7b4b2df4da4800d1da71e07bd936df44b4",
+  "exact_review_status": "Admission refused before model job: ThinkPad AC power is not confirmed",
+  "native_dispatch": false,
+  "camera_active": false
+}

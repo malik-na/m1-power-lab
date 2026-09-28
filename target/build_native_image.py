@@ -285,6 +285,7 @@ def build(lock_path: Path, packages_dir: Path, kernel_package: Path, output_dir:
             "native-init": ("init", "init"),
             "native_capture.py": ("usr/lib/m1lab/native_capture.py", "collector.py"),
             "native_boot.py": ("usr/lib/m1lab/native_boot.py", "native_boot.py"),
+            "native_usb_trace.py": ("usr/lib/m1lab/native_usb_trace.py", "native_usb_trace.py"),
         }
         source_hashes = {}
         for source_name, (root_name, output_name) in source_map.items():
@@ -309,7 +310,7 @@ def build(lock_path: Path, packages_dir: Path, kernel_package: Path, output_dir:
         config.chmod(0o644)
 
         _write_initramfs(root, stage / "initramfs.cpio.gz", epoch)
-        output_names = ("Image", "Image.gz", "j313.dtb", "initramfs.cpio.gz", "collector.py", "native_boot.py")
+        output_names = ("Image", "Image.gz", "j313.dtb", "initramfs.cpio.gz", "collector.py", "native_boot.py", "native_usb_trace.py")
         metadata = {
             "schema_version": "m1lab.native-bundle.v1",
             "source_date_epoch": epoch,
