@@ -27,7 +27,10 @@ ACM_RETURN = record("m1lab_acm_return", "(set_config+0x1c0/0x2e0 [libcomposite] 
 SERIAL = record("m1lab_serial_enter", "(gserial_connect+0x0/0x18c [u_serial])")
 SERIAL_RETURN = record("m1lab_serial_return", "(acm_set_alt+0x140/0x198 [usb_f_acm] <- gserial_connect [u_serial]) ret=0")
 TRB_BODY = "0x0000000382280000: ep0in: trb 00000000ca123456 (E0:D0) buf 0000000080020000 size 0 ctrl 00000c23 sofn 00000000 (HLcs:SC:status2)"
-PREPARE = record("dwc3_prepare_trb", TRB_BODY)
+STATUS_ARGS = "dwc=0xffff800080060000 dep=0xffff800080068000"
+STATUS_ENTER = record("m1lab_status_enter", "(__dwc3_ep0_do_control_status+0x0/0xe8 [dwc3]) " + STATUS_ARGS)
+STATUS_RETURN = record("m1lab_status_return", "(dwc3_ep0_interrupt+0x378/0xe90 [dwc3] <- __dwc3_ep0_do_control_status [dwc3]) " + STATUS_ARGS)
+PREPARE = STATUS_ENTER + record("dwc3_prepare_trb", TRB_BODY)
 COMMAND = record("dwc3_gadget_ep_cmd", "0x0000000382280000: ep0in: cmd 'Start Transfer' [406] params 00000000 80020000 00000000 --> status: Successful")
 COMPLETE = record("dwc3_complete_trb", TRB_BODY.replace("ep0in", "ep0out"))
 ACM_SUCCESS = ACM0 + ACM_RETURN + ACM1 + SERIAL + SERIAL_RETURN + ACM_RETURN
@@ -309,3 +312,183 @@ def test_metadata_short_reads_cannot_hide_existing_owned_probe(fake_kernel, monk
     monitor.start(time.monotonic() + 10)
     assert monitor.poll() == ("0000", "UNAVAILABLE")
     assert (monitor.root / "kprobe_events").read_text() == text
+
+
+def controller_event(raw, text, *, endpoint="ep0in", address="0x0000000382280000"):
+    # trace.h: %pa: event (%08x): ...; debug.h decodes the raw endpoint fields.
+    return record("dwc3_event", f"{address}: event ({raw:08x}): {endpoint}: {text}")
+
+
+IN_COMPLETE = controller_event(0x0000c042, "Transfer Complete (sIL) [Status Phase]")
+OUT_COMPLETE = controller_event(0x00000040, "Transfer Complete (sil) [Setup Phase]", endpoint="ep0out")
+IN_NRDY = controller_event(0x000020c2, "Transfer Not Ready [00000000] (Not Active) [Status Phase]")
+
+
+def test_status_probe_uses_entry_saved_arguments_and_ep0_event_filter(fake_kernel):
+    monitor = armed(fake_kernel)
+    definitions = (monitor.root / "kprobe_events").read_text()
+    assert "r16:m1lab_usb/m1lab_status_return dwc3:__dwc3_ep0_do_control_status dwc=$arg1:x64 dep=$arg2:x64" in definitions
+    assert "dwc3:dwc3_ep0_start_trans" not in definitions  # Inlined on STATUS2 path.
+    assert (monitor.instance / "events/dwc3/dwc3_event/filter").read_text() == "!(event & 61)\n"
+    # Bit0=device; physical endpoint is bits1..5: exactly EP0 OUT and IN survive.
+    assert [value for value in range(64) if not value & 61] == [0, 2]
+
+
+@pytest.mark.parametrize(("tail", "old", "new"), [
+    (b"", "2321", "2100"),
+    (COMMAND, "2322", "2100"),
+    (COMMAND + STATUS_RETURN, "2322", "2200"),
+    (STATUS_RETURN, "2321", "2300"),  # Already-started fast path, no accepted command.
+    (COMMAND.replace(b"Successful", b"Timed Out") + STATUS_RETURN, "2324", "2300"),
+    (COMMAND + STATUS_RETURN + IN_COMPLETE, "2322", "2214"),
+    (COMMAND + STATUS_RETURN + IN_COMPLETE + COMPLETE, "2323", "2214"),
+    (COMMAND + STATUS_RETURN + OUT_COMPLETE, "2322", "2222"),
+    (COMMAND + STATUS_RETURN + IN_NRDY, "2322", "2230"),
+])
+def test_wrapper_return_and_event_page_separate_callback_progress(fake_kernel, tail, old, new):
+    monitor = armed(fake_kernel, SETUP + ACM_SUCCESS + PREPARE + tail)
+    assert monitor.poll() == (old, "CONFIG WINDOW")
+    assert monitor.event_page() == (new, "CONFIG WINDOW")
+
+
+def test_other_call_returns_cannot_complete_selected_status_call(fake_kernel):
+    other_enter = STATUS_ENTER.replace(b"-128 [002]", b"-129 [003]").replace(b"80068000", b"80168000")
+    other_return = STATUS_RETURN.replace(b"-128 [002]", b"-129 [003]").replace(b"80068000", b"80168000")
+    monitor = armed(fake_kernel, SETUP + PREPARE + other_enter + COMMAND + other_return)
+    assert monitor.poll()[0] == "2002"
+    assert monitor.event_page()[0] == "2100"
+    with (monitor.instance / "trace_pipe").open("ab") as stream:
+        stream.write(STATUS_RETURN)
+    assert monitor.poll()[0] == "2002"
+    assert monitor.event_page()[0] == "2200"
+
+
+@pytest.mark.parametrize("bad", [
+    STATUS_RETURN,  # No corresponding entry.
+    STATUS_ENTER + STATUS_ENTER,  # Nested same-context calls are ambiguous.
+    PREPARE + COMMAND + STATUS_RETURN.replace(b"80068000", b"80168000"),
+    PREPARE + COMMAND + STATUS_RETURN.replace(b"-128 [002]", b"-128 [003]"),
+    PREPARE + COMMAND.replace(b"-128 [002]", b"-129 [003]"),
+    record("dwc3_prepare_trb", TRB_BODY),  # Missing wrapper entry.
+    STATUS_ENTER.replace(b"dep=0xffff800080068000", b"dep=0x0"),
+    STATUS_ENTER.replace(b"-128 [002]", b"-missing [002]"),
+    PREPARE + COMMAND + IN_COMPLETE.replace(b"0000c042", b"0000c040"),
+    PREPARE + COMMAND + IN_COMPLETE.replace(b"(sIL)", b"(sil)"),
+    PREPARE + COMMAND + IN_COMPLETE.replace(b"Status Phase", b"UNKNOWN"),
+    PREPARE + COMMAND + IN_NRDY.replace(b"Not Active", b"Active"),
+    PREPARE + COMMAND + IN_NRDY.replace(b"00000000]", b"00000001]"),
+    PREPARE + COMMAND + IN_NRDY.replace(b"event (", b"event malformed ("),
+])
+def test_new_correlation_and_decoder_failures_share_invalidity(fake_kernel, bad, capsys):
+    monitor = armed(fake_kernel, SETUP + bad)
+    assert monitor.poll()[0][0] == "3"
+    assert monitor.event_page()[0][0] == "3"
+    assert monitor.event_page()[1] == "INCOMPLETE"
+    assert monitor._fd is None
+    assert capsys.readouterr() == ("", "")
+
+
+@pytest.mark.parametrize(("raw", "endpoint", "text", "digits"), [
+    (0x10c0, "ep0out", "Transfer Not Ready [00000000] (Not Active) [Data Phase]", "2240"),
+    (0xa0c2, "ep0in", "Transfer Not Ready [00000000] (Active) [Status Phase]", "2230"),
+    (0x000601c2, "ep0in", "Endpoint Command Complete", "2250"),
+    (0x0001c082, "ep0in", "Transfer In Progress [00000001] (sIM)", "2260"),
+    (0x102, "ep0in", "FIFO", "2270"),
+    (0x00011182, "ep0in", " Stream 1 Found", "2280"),
+    (0x2182, "ep0in", " Stream Not Found", "2280"),
+    (0x242, "ep0in", "UNKNOWN", "2290"),
+    (0x42, "ep0in", "Transfer Complete (sil) [Unconnected]", "2211"),
+    (0x42, "ep0in", "Transfer Complete (sil) [Data Phase]", "2213"),
+])
+def test_exact_event_raw_fields_and_text_decoding(fake_kernel, raw, endpoint, text, digits):
+    data = SETUP + PREPARE + COMMAND + STATUS_RETURN + controller_event(raw, text, endpoint=endpoint)
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll() == ("2002", "CONFIG WINDOW")
+    assert monitor.event_page()[0] == digits
+
+
+def test_first_completion_latches_and_next_setup_freezes_both_pages(fake_kernel):
+    data = SETUP + PREPARE + COMMAND + STATUS_RETURN + IN_NRDY + OUT_COMPLETE + IN_COMPLETE
+    data += OTHER_SETUP + IN_COMPLETE + COMPLETE
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "2002"
+    assert monitor.event_page()[0] == "2222"  # Later good-state event cannot erase first completion.
+
+
+def test_events_before_command_other_controller_and_after_window_do_not_advance(fake_kernel):
+    data = SETUP + IN_COMPLETE + PREPARE + IN_NRDY + COMMAND
+    data += IN_COMPLETE.replace(b"0x0000000382280000", b"0x0000000382380000")
+    data += OTHER_SETUP + STATUS_RETURN + IN_COMPLETE
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "2002"
+    assert monitor.event_page()[0] == "2100"
+
+
+def test_status_context_storage_is_bounded(fake_kernel):
+    calls = b"".join(STATUS_ENTER.replace(b"-128 [002]", f"-{pid} [002]".encode())
+                     for pid in range(100, 117))
+    monitor = armed(fake_kernel, SETUP + calls)
+    assert monitor.poll()[0] == "3000"
+    assert len(monitor._status_calls) == 16
+
+
+@pytest.mark.parametrize("probe", ["m1lab_status_enter", "m1lab_status_return"])
+def test_new_probe_miss_invalidates_both_pages(fake_kernel, probe):
+    monitor = armed(fake_kernel, SETUP + PREPARE + COMMAND + STATUS_RETURN + IN_COMPLETE)
+    profile = monitor.root / "kprobe_profile"
+    profile.write_text(profile.read_text().replace(f"{probe} 0 0", f"{probe} 3 1"))
+    assert monitor.poll()[0] == "3002"
+    assert monitor.event_page() == ("3214", "INCOMPLETE")
+
+
+def test_event_page_does_not_read_write_open_or_hide_existing_invalidity(fake_kernel, monkeypatch):
+    monitor = armed(fake_kernel, SETUP + PREPARE + COMMAND + STATUS_RETURN + IN_NRDY)
+    monitor.poll()
+    with monkeypatch.context() as patch:
+        def forbidden(*_args, **_kwargs):
+            pytest.fail("event_page must not perform I/O")
+        for operation in ("open", "read", "write"):
+            patch.setattr(trace.os, operation, forbidden)
+        assert monitor.event_page() == ("2230", "CONFIG WINDOW")
+        monitor.validity = 3
+        assert monitor.event_page() == ("3230", "INCOMPLETE")
+
+
+def test_new_probe_cleanup_failure_retains_ownership_and_forbids_capture(fake_kernel, monkeypatch):
+    monitor = armed(fake_kernel)
+    original = trace._write
+    def write(path, value, **kwargs):
+        if value == "-:m1lab_usb/m1lab_status_return":
+            raise OSError("injected removal failure")
+        return original(path, value, **kwargs)
+    monkeypatch.setattr(trace, "_write", write)
+    assert monitor.close() is False
+    assert monitor._probes == ["m1lab_status_return"]
+    assert monitor.event_page() == ("3000", "INCOMPLETE")
+
+
+def test_partial_status_return_cannot_claim_completed_call(fake_kernel):
+    cut = len(STATUS_RETURN) - 7
+    monitor = armed(fake_kernel, SETUP + PREPARE + COMMAND + STATUS_RETURN[:cut])
+    assert monitor.poll()[0] == "1002"
+    assert monitor.event_page() == ("1100", "READY")
+    with (monitor.instance / "trace_pipe").open("ab") as stream:
+        stream.write(STATUS_RETURN[cut:] + IN_COMPLETE)
+    assert monitor.poll()[0] == "2002"
+    assert monitor.event_page() == ("2214", "CONFIG WINDOW")
+
+
+@pytest.mark.parametrize("failure", ["status_probe", "event_filter"])
+def test_new_instrumentation_setup_failure_stays_unavailable_and_cleans(fake_kernel, monkeypatch, failure):
+    original = trace._write
+    def write(path, value, **kwargs):
+        if ((failure == "status_probe" and "m1lab_status_return" in path.parts)
+                or (failure == "event_filter" and path.name == "filter" and "dwc3_event" in path.parts)):
+            raise OSError("injected setup failure")
+        return original(path, value, **kwargs)
+    monkeypatch.setattr(trace, "_write", write)
+    fake_kernel.start(time.monotonic() + 10)
+    assert fake_kernel.poll() == ("0000", "UNAVAILABLE")
+    assert fake_kernel.event_page() == ("0000", "UNAVAILABLE")
+    assert fake_kernel._probes == [] and fake_kernel._fd is None
+    assert fake_kernel.close() is True

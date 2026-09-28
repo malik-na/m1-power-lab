@@ -128,16 +128,18 @@ the 150-second native deadline, 180-second image watchdog and failure hold
 remain unchanged.
 
 
-The next diagnostic candidate also includes `native_usb_trace.py`. After the
+The diagnostic candidate includes `native_usb_trace.py`. After the
 fixed USB modules load and before gadget binding, startup mounts tracefs and
-attempts one private trace instance. Four fixed entry/return probes observe
-`usb_f_acm:acm_set_alt` and `u_serial:gserial_connect`; four existing DWC3 events
-observe the first SET_CONFIGURATION(1) request and its EP0 status handling.
+attempts one private trace instance. Fixed entry/return probes observe
+`usb_f_acm:acm_set_alt`, `u_serial:gserial_connect` and
+`dwc3:__dwc3_ep0_do_control_status`; existing DWC3 events observe the first
+SET_CONFIGURATION(1) request and its EP0 status handling.
 It changes no kernel image, USB descriptor, role, transfer payload or recovery
 limit. Tracing perturbs timing and this image remains a diagnostic candidate.
 
-The upper display alternates every two seconds between the existing **SS E U**
-page and a **V A G P** page headed `M1LAB USB TRACE`. The trace page uses:
+The upper display rotates every two seconds through **V A G P** (`M1LAB USB
+TRACE`), **V R E S** (`M1LAB USB EVENT`) and the existing **SS E U** stage page.
+The trace page uses:
 
 | Digit | Meaning |
 | --- | --- |
@@ -154,10 +156,32 @@ and 1,024-byte lines. Missing controls, unexpected relevant data, lost events,
 probe misses and exceeded bounds are unavailable or incomplete, never success.
 Only numeric summaries and fixed labels reach the screen; raw addresses do not.
 
+The event page keeps the same validity digit and separates return from the
+STATUS2 helper from raw EP0 event delivery. The exact packaged kernel inlines
+the transfer-start body inside `__dwc3_ep0_do_control_status`; probing the
+standalone `dwc3_ep0_start_trans` would miss this path. The command-accepted
+tracepoint occurs before resource-index readback and PHY-bit restoration, so
+P2 alone does not establish that the helper returned.
+
+| Digit | Meaning |
+| --- | --- |
+| R | 0 no selected STATUS2 call; 1 outstanding; 2 matched return after accepted command; 3 matched return without accepted command |
+| E | 0 no post-command EP0 event; 1 IN complete; 2 OUT complete; 3 IN not-ready; 4 OUT not-ready; 5 endpoint-command complete; 6 in-progress; 7 FIFO; 8 stream; 9 other |
+| S | 0 actual EP0 state unavailable; 1 unconnected; 2 setup; 3 data; 4 status |
+
+The first post-command event is retained, then replaced once by the first
+completion event. Only completion records contain the actual EP0 state;
+not-ready request phases are not substituted for that state. Entry-saved
+arguments associate the selected status-helper call and return. Ambiguous,
+missing or malformed correlation remains incomplete. The raw event filter
+admits physical endpoints 0 and 1 only, and the existing byte/read limits apply
+to the enlarged event set.
+
 Startup retains its 150-second deadline and 180-second image watchdog. Optional
 trace read errors cannot abort launch waiting. Once a launch arrives, capture is
 refused unless diagnostic tracing shutdown is confirmed. Cleanup is retried on
-exit and cannot mask the original failure. This code is host-tested; actual
-trace availability and readability remain unverified until a separately
-reviewed bounded physical run. Even a completed EP0 callback does not qualify
+exit and cannot mask the original failure. The eleventh physical attempt
+confirmed readable VAGP snapshots of 2322 and then launch timeout, with no
+native samples. The additional helper-return/event page remains physically
+unverified until a separately reviewed bounded run. Even a completed EP0 callback does not qualify
 physical identity, sample provenance, power measurement or unattended recovery.

@@ -22,16 +22,23 @@ PROBES = {
     "m1lab_acm_return": "r16:m1lab_usb/m1lab_acm_return usb_f_acm:acm_set_alt ret=$retval:s32",
     "m1lab_serial_enter": "p:m1lab_usb/m1lab_serial_enter u_serial:gserial_connect",
     "m1lab_serial_return": "r16:m1lab_usb/m1lab_serial_return u_serial:gserial_connect ret=$retval:s32",
+    # The packaged kernel inlines start_trans into this void status wrapper.
+    # Exact-tag kretprobes save $argN at entry (FETCH_OP_EDATA), not at return.
+    "m1lab_status_enter": "p:m1lab_usb/m1lab_status_enter dwc3:__dwc3_ep0_do_control_status dwc=$arg1:x64 dep=$arg2:x64",
+    "m1lab_status_return": "r16:m1lab_usb/m1lab_status_return dwc3:__dwc3_ep0_do_control_status dwc=$arg1:x64 dep=$arg2:x64",
 }
-DWC3_EVENTS = ("dwc3_ctrl_req", "dwc3_prepare_trb", "dwc3_complete_trb", "dwc3_gadget_ep_cmd")
+DWC3_EVENTS = ("dwc3_ctrl_req", "dwc3_prepare_trb", "dwc3_complete_trb", "dwc3_gadget_ep_cmd", "dwc3_event")
 READ_BYTES = 64 * 1024
 MAX_READS = 16
 TOTAL_BYTES = 512 * 1024
 LINE_BYTES = 1024
 MAX_CPUS = 32
-_EVENT = re.compile(r": (m1lab_(?:acm|serial)_(?:enter|return)|dwc3_[a-z_]+): (.*)$")
+_EVENT = re.compile(r": (m1lab_(?:acm|serial|status)_(?:enter|return)|dwc3_[a-z_]+): (.*)$")
 _DEVICE = re.compile(r"(0x[0-9a-fA-F]{1,16}): (.*)$")
 _TRB = re.compile(r"(ep0in|ep0out): trb ([0-9a-fA-F]+) .*:status2\)$")
+_CONTEXT = re.compile(r"-([0-9]+)\s+\[([0-9]+)\]\s+(?:\S+\s+)?[0-9]+\.[0-9]+$")
+_STATUS_ARGS = re.compile(r"\bdwc=(0x[0-9a-f]{1,16}) dep=(0x[0-9a-f]{1,16})$")
+LABELS = ("UNAVAILABLE", "READY", "CONFIG WINDOW", "INCOMPLETE")
 
 
 def _write(path: Path, value: str, *, append: bool = False) -> None:
@@ -92,6 +99,9 @@ class NativeUsbTrace:
         self._acm_done: set[int] = set()
         self._trb: str | None = None
         self._closed_ok = True
+        self._status_calls: dict[tuple[int, int], tuple[str, str]] = {}
+        self._selected_call: tuple[tuple[int, int], tuple[str, str]] | None = None
+        self.returned = self.event = self.state = 0
 
     def prepare(self, deadline: float) -> None:
         """Best effort, one attempt; caller supplies the original boot deadline."""
@@ -129,7 +139,10 @@ class NativeUsbTrace:
                 put(self.instance / "events" / GROUP / name / "enable", "1")
             for name in DWC3_EVENTS:
                 event = self.instance / "events/dwc3" / name
-                if name != "dwc3_ctrl_req":
+                if name == "dwc3_event":
+                    # Reject device bit0 and EP-number bits2..5; allow EP0 OUT/IN.
+                    put(event / "filter", "!(event & 61)")
+                elif name != "dwc3_ctrl_req":
                     put(event / "filter", 'name == "ep0in" || name == "ep0out"')
                 put(event / "enable", "1")
             self._check_loss()
@@ -182,7 +195,29 @@ class NativeUsbTrace:
                 return
         if self._device is None or self._frozen:
             return
-        if event == "m1lab_acm_enter":
+        def context() -> tuple[int, int]:
+            found = _CONTEXT.search(line[:match.start()])
+            if not found:
+                raise ValueError("missing trace context")
+            return tuple(map(int, found.groups()))
+
+        if event.startswith("m1lab_status_"):
+            args = _STATUS_ARGS.search(body)
+            if not args or any(int(value, 16) == 0 for value in args.groups()):
+                raise ValueError("invalid status arguments")
+            key, pointers = context(), args.groups()
+            if event == "m1lab_status_enter":
+                if key in self._status_calls or len(self._status_calls) >= 16:
+                    raise ValueError("ambiguous status nesting")
+                self._status_calls[key] = pointers
+            else:
+                if self._status_calls.pop(key, None) != pointers:
+                    raise ValueError("unmatched status return")
+                if self._selected_call == (key, pointers):
+                    self.returned = 2 if self.ep0 in (2, 3) else 3
+        elif event == "dwc3_event":
+            self._controller_event(body)
+        elif event == "m1lab_acm_enter":
             intf = re.search(r"\bintf=([01])$", body)
             if not intf or self._acm_pending is not None:
                 raise ValueError("invalid ACM entry")
@@ -217,6 +252,11 @@ class NativeUsbTrace:
             if event == "dwc3_prepare_trb":
                 if endpoint != "ep0in" or self.ep0:
                     raise ValueError("unexpected status preparation")
+                key = context()
+                if key not in self._status_calls:
+                    raise ValueError("status preparation without call")
+                self._selected_call = (key, self._status_calls[key])
+                self.returned = 1
                 self._trb = pointer
                 self.ep0 = 1
             else:
@@ -230,10 +270,59 @@ class NativeUsbTrace:
             if not command and body.startswith("ep0in: cmd 'Start Transfer'"):
                 raise ValueError("unrecognized status command")
             if command:
+                key = context()
+                if self._selected_call != (key, self._status_calls.get(key)):
+                    raise ValueError("status command outside selected call")
                 status = command[1]
                 if status not in ("Successful", "Timed Out", "No Resource", "Bus Expiry", "UNKNOWN"):
                     raise ValueError("unknown command status")
                 self.ep0 = 2 if status == "Successful" else 4
+
+    def _controller_event(self, body: str) -> None:
+        record = re.fullmatch(r"event \(([0-9a-f]{8})\): (ep0in|ep0out): (.*)", body)
+        if not record:
+            raise ValueError("invalid endpoint event")
+        raw_text, endpoint, text = record.groups()
+        raw = int(raw_text, 16)
+        if raw & 61 or endpoint != ("ep0in" if raw & 2 else "ep0out"):
+            raise ValueError("inconsistent endpoint event")
+        kind, status, parameter = (raw >> 6) & 15, (raw >> 12) & 15, raw >> 16
+        flags = ("S" if status & 2 else "s") + ("I" if status & 4 else "i")
+        state = 0
+        if kind == 1:
+            complete = re.fullmatch(r"Transfer Complete \(([sS][iI][lL])\) \[(.+)\]", text)
+            states = ("Unconnected", "Setup Phase", "Data Phase", "Status Phase")
+            if not complete or complete[1] != flags + ("L" if status & 8 else "l") or complete[2] not in states:
+                raise ValueError("invalid completion state")
+            code, state = (1 if raw & 2 else 2), states.index(complete[2]) + 1
+            expected = text
+        elif kind == 3:
+            code = 3 if raw & 2 else 4
+            expected = f"Transfer Not Ready [{parameter:08x}] ({'Active' if status & 8 else 'Not Active'})"
+            expected += {1: " [Data Phase]", 2: " [Status Phase]"}.get(status & 3, "")
+        elif kind == 2:
+            code = 6
+            expected = f"Transfer In Progress [{parameter:08x}] ({flags}{'M' if status & 8 else 'm'})"
+        else:
+            code = {7: 5, 4: 7, 6: 8}.get(kind, 9)
+            expected = {7: "Endpoint Command Complete", 4: "FIFO", 6:
+                        f" Stream {parameter} Found" if status == 1 else " Stream Not Found"}.get(kind, "UNKNOWN")
+        if text != expected:
+            raise ValueError("inconsistent event text")
+        # The first completion supersedes the first other event, then is latched.
+        # NRDY's printed phase is from status bits, NOT the actual dwc->ep0state.
+        if self.ep0 in (2, 3) and (self.event == 0 or (code in (1, 2) and self.event not in (1, 2))):
+            self.event, self.state = code, state
+
+    def event_page(self) -> tuple[str, str]:
+        """No I/O: V, status-wrapper return, first event/completion, actual state.
+
+        R: 0 absent, 1 outstanding, 2 returned after accepted command, 3 otherwise.
+        E: 0 absent; 1/2 IN/OUT complete; 3/4 IN/OUT NRDY; 5 command complete;
+        6 in progress; 7 FIFO; 8 stream; 9 other. S: 0 unavailable; 1 unconnected;
+        2 setup; 3 data; 4 status. Actual state is printed only for completions.
+        """
+        return f"{self.validity}{self.returned}{self.event}{self.state}", LABELS[self.validity]
 
     def poll(self) -> tuple[str, str]:
         """At most 16 nonblocking reads/64KiB and bounded loss checks per call."""
@@ -270,8 +359,7 @@ class NativeUsbTrace:
             except (OSError, ValueError):
                 self.validity = 3
                 self.close()
-        labels = ("UNAVAILABLE", "READY", "CONFIG WINDOW", "INCOMPLETE")
-        return f"{self.validity}{self.acm}{self.serial}{self.ep0}", labels[self.validity]
+        return f"{self.validity}{self.acm}{self.serial}{self.ep0}", LABELS[self.validity]
 
     def close(self) -> bool:
         """Confirm tracing is off; false conservatively forbids subsequent capture."""

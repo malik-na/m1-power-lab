@@ -296,14 +296,26 @@ def test_capture_requires_confirmed_trace_shutdown():
 
 def test_usb_trace_and_stage_codes_alternate_on_elapsed_time(console_writes, monkeypatch):
     diagnostic = native_boot._UsbTraceDiagnostic()
-    diagnostic.trace = SimpleNamespace(poll=lambda: ("2323", "CONFIG WINDOW"))
-    for second in range(4):
+    diagnostic.trace = SimpleNamespace(poll=lambda: ("2323", "CONFIG WINDOW"),
+                                       event_page=lambda: ("2210", "CONFIG WINDOW"))
+    for second in range(6):
         monkeypatch.setattr(native_boot.time, "monotonic", lambda: second)
         native_boot._console_overlay("launch_wait", "configured")
         diagnostic.refresh()
     payloads = console_writes[0]
-    assert [b"USB TRACE" in p for p in payloads] == [False, True, False, True, False, False]
+    assert [b"USB TRACE" in p for p in payloads] == [False, True, False, True, False, False, False, False, False, False]
+    assert [b"USB EVENT" in p for p in payloads] == [False, False, False, False, False, True, False, True, False, False]
     assert all(len(p) < 2048 for p in payloads)
+
+
+def test_event_page_failure_remains_a_diagnostic(console_writes, monkeypatch):
+    monkeypatch.setattr(native_boot.time, "monotonic", lambda: 2)
+    diagnostic = native_boot._UsbTraceDiagnostic()
+    diagnostic.trace = SimpleNamespace(poll=lambda: ("2322", "CONFIG WINDOW"),
+                                       event_page=lambda: (_ for _ in ()).throw(ValueError("private trace detail")))
+    diagnostic.refresh()
+    assert b"EVENT 3000 INCOMPLETE" in console_writes[0][0]
+    assert b"private trace detail" not in console_writes[0][0]
 
 
 @pytest.fixture
