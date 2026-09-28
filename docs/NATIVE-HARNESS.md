@@ -106,6 +106,23 @@ existing normal ALARM boot path and physical recovery instructions. Never
 mark this candidate `known_good` solely because assembly or emulation passed.
 Scientific sensor qualification and investigation remain stopped.
 
+After a capture is published, its screened `native_capture` artifact can be
+summarized without opening a device, then selected as technical context for a
+bounded Codex turn:
+
+```bash
+m1lab --session HARNESS_ID native-summary \
+  --capture-artifact CAPTURE_ARTIFACT_ID
+m1lab --session HARNESS_ID investigate \
+  --artifact-id CAPTURE_ARTIFACT_ID \
+  "Assess the captured sensor fields and remaining measurement unknowns."
+```
+
+`--artifact-id` is repeatable and accepts only artifacts in the selected
+session. The raw binary stream stays preserved separately. A complete capture
+does not establish sensor units, a whole-device power boundary, or a scientific
+observation; qualify those before deriving a power result.
+
 ## Explicit attended qualification path
 
 This path is separate from normal application startup and the installed lab.

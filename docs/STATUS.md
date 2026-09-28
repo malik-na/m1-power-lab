@@ -2,6 +2,29 @@
 
 This file distinguishes implemented behavior from physical qualification.
 
+## 2026-09-28 continuation
+
+The Mac is currently enumerated as an m1n1 proxy on the ThinkPad's USB port
+`1-2`; the private helper configuration has been updated from `1-1`, with the
+prior configuration and expired proposal archived. The configfs-fixed candidate
+and its published artifacts still match their recorded hashes and sizes.
+The installed coordinator remains on `f560929`; its usage hold is preserved.
+No new native boot has been dispatched in this continuation. Device access for
+the current desktop process and confirmation of physical attendance remain the
+next prerequisites for a fresh reviewed run; previous expired approvals are not
+reused.
+
+New host tools report concrete preflight blockers without opening serial,
+summarize sensor availability/missingness and reported cadence from retained
+native captures, and support explicit artifact selection for an investigation
+turn. Summaries revalidate raw framing and artifact lineage and do not publish
+scientific observations or qualify power measurements. All 358 host tests pass;
+the Python wheel builds and its packaged CLI imports successfully. See
+[continuation evidence](evidence/2026-09-28-host-readiness.json),
+[native preflight](NATIVE-PREFLIGHT.md) and [native harness](NATIVE-HARNESS.md).
+
+## Prior qualification history
+
 Owner-selected coordination uses the installed Agents Orchestrator on
 `gpt-6-astra` with `xhigh` reasoning. All other development and review agents use
 `gpt-6-sol` with medium reasoning. One integration owner controls commits and

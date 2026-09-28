@@ -69,3 +69,11 @@ See `docs/OPERATIONS.md` for Tailscale Serve and service deployment.
 See `docs/SCIENCE.md` for the validated scientific record workflow.
 See `docs/BUILDING.md` for isolated target builds and artifact provenance.
 See `docs/STATUS.md` for the implemented and physically qualified boundary.
+
+For the connected Mac's explicit native harness, run the read-only
+[native preflight](docs/NATIVE-PREFLIGHT.md) before starting a helper. After a
+capture, `m1lab --session SESSION native-summary --capture-artifact ARTIFACT`
+checks retained raw evidence and lists sensor fields, missing readings and
+reported cadence. Use `investigate --artifact-id ARTIFACT` to select that
+capture explicitly for technical analysis. See the
+[native harness guide](docs/NATIVE-HARNESS.md) for the attended launch workflow.
