@@ -373,8 +373,8 @@ def build_manifest(
     """Build a deterministic view using only CoreApp's public read APIs."""
 
     snapshot = core.snapshot(request.session_id)
-    selected = set(request.artifact_ids)
-    selected.update(artifact.id for artifact in evidence_artifacts)
+    priority_ids = [*request.artifact_ids, *(artifact.id for artifact in evidence_artifacts)]
+    selected = set(priority_ids)
     all_artifacts = core.list_records(request.session_id, "artifacts")
     artifacts_by_id = {artifact.id: artifact for artifact in all_artifacts}
     automatic = [
@@ -390,6 +390,7 @@ def build_manifest(
     selected.update(artifact.id for artifact in automatic)
     parent = None
     parent_result: dict[str, Any] | None = None
+    parent_artifact_ids: list[str] = []
     if request.parent_job_id is not None:
         parent = core.job(request.parent_job_id)
         if parent.session_id != request.session_id or parent.state != "completed":
@@ -411,21 +412,29 @@ def build_manifest(
                 for item in parent_summaries[-10:]
                 if isinstance(item, dict)
             ]
-        parent_artifact_ids = parent_result_raw.get("event_artifact_ids", [])
-        if isinstance(parent_artifact_ids, list):
+        raw_parent_artifact_ids = parent_result_raw.get("event_artifact_ids", [])
+        if isinstance(raw_parent_artifact_ids, list):
             available_parent_artifacts = []
-            for artifact_id in parent_artifact_ids[-8:]:
+            for artifact_id in raw_parent_artifact_ids[-8:]:
                 if not isinstance(artifact_id, str) or artifact_id not in artifacts_by_id:
                     raise ValueError("helper parent references an unavailable runtime artifact")
                 available_parent_artifacts.append(artifact_id)
             selected.update(available_parent_artifacts)
+            parent_artifact_ids = available_parent_artifacts
             parent_result["event_artifact_ids"] = available_parent_artifacts
     missing = sorted(selected - artifacts_by_id.keys())
     if missing:
         raise ValueError("unknown or cross-session artifacts: " + ", ".join(missing))
+    ordered_ids = list(dict.fromkeys((
+        *priority_ids,
+        *parent_artifact_ids,
+        *(artifact.id for artifact in automatic),
+    )))
+    priority_count = len(dict.fromkeys((*priority_ids, *parent_artifact_ids)))
 
     records: dict[str, Any] = {}
     review_target = None
+    review_procedure = None
     for kind in ("procedures", "reviews", "operations", "jobs"):
         values = core.list_records(request.session_id, kind)
         records[kind] = [bounded(item) for item in values[:MAX_RECORDS_PER_KIND]]
@@ -448,6 +457,7 @@ def build_manifest(
                     "procedure_digest": procedure.digest,
                 }
             )
+            review_procedure = bounded(procedure)
     scientific = ScientificRecordStore(core).list(request.session_id)
     records["scientific"] = [bounded(item) for item in scientific[:MAX_RECORDS_PER_KIND]]
     scientific_brief = (
@@ -463,14 +473,16 @@ def build_manifest(
         "target": bounded(snapshot.latest_target),
         "records": records,
         "review_target": review_target,
+        "review_procedure": review_procedure,
         "scientific_brief": scientific_brief,
         "resource_limits": bounded(snapshot.budget),
         "events": [bounded(event) for event in events],
-        "artifacts": [bounded(artifacts_by_id[item]) for item in sorted(selected)],
+        "artifacts": [bounded(artifacts_by_id[item]) for item in ordered_ids],
         "artifact_excerpts": _artifact_excerpts(
             core,
             request.session_id,
-            [artifacts_by_id[item] for item in sorted(selected)],
+            [artifacts_by_id[item] for item in ordered_ids],
+            priority_count=priority_count,
         ),
         "bounds": {
             "events": MAX_EVENT_COUNT,
@@ -485,12 +497,6 @@ def build_manifest(
             "result": parent_result,
             "note": "This completed primary job is the explicit parent of the bounded helper task.",
         }
-        manifest["artifacts"] = [bounded(artifacts_by_id[item]) for item in sorted(selected)]
-        manifest["artifact_excerpts"] = _artifact_excerpts(
-            core,
-            request.session_id,
-            [artifacts_by_id[item] for item in sorted(selected)],
-        )
     def encoded_size() -> int:
         return len(json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False))
 
@@ -524,11 +530,11 @@ def build_manifest(
 
 
 def _artifact_excerpts(
-    core: CoreApp, session_id: str, artifacts: Sequence[ArtifactRecord]
+    core: CoreApp, session_id: str, artifacts: Sequence[ArtifactRecord], *, priority_count: int = 0,
 ) -> list[dict[str, Any]]:
     remaining = MAX_AUTOMATIC_EXCERPT_CHARS
     excerpts: list[dict[str, Any]] = []
-    for artifact in artifacts:
+    for index, artifact in enumerate(artifacts):
         if remaining <= 0:
             break
         if artifact.provenance.get("record_type") == "native_result_stream":
@@ -560,7 +566,11 @@ def _artifact_excerpts(
             content = scrub_text(raw.decode("utf-8"))
         except (OSError, UnicodeDecodeError, ValueError):
             continue
-        excerpt = content[: min(remaining, 16_000)]
+        per_artifact = (
+            max(1, remaining // (priority_count - index))
+            if index < priority_count else remaining
+        )
+        excerpt = content[: min(per_artifact, 16_000)]
         remaining -= len(excerpt)
         excerpts.append(
             {
@@ -579,9 +589,10 @@ def _artifact_excerpts(
 def build_prompt(request: InvestigationRequest, manifest: Mapping[str, Any]) -> str:
     previews: list[dict[str, str]] = []
     remaining = 32_000
-    for evidence in request.evidence:
+    for index, evidence in enumerate(request.evidence):
         content = scrub_text(evidence.content)
-        preview = content[: min(len(content), remaining, 16_000)]
+        per_evidence = max(1, remaining // (len(request.evidence) - index))
+        preview = content[: min(len(content), per_evidence, 16_000)]
         remaining -= len(preview)
         previews.append({"label": scrub_text(evidence.label), "media_type": evidence.media_type, "excerpt": preview})
         if remaining <= 0:
