@@ -2,6 +2,12 @@
 
 This file distinguishes implemented behavior from physical qualification.
 
+The [September 28 delivery checkpoint](plan/2026-09-28%20delivery%20checkpoint.md)
+maps the original milestones to actual delivery, records the feasibility-first
+sequence drift, and identifies M2 native transport/measurement as the blocker.
+The original first-release acceptance remains unmet; no real power investigation
+has started.
+
 ## 2026-09-28 installed investigation workspace
 
 Release `1212afd` is installed on the ThinkPad as the enabled systemd service.

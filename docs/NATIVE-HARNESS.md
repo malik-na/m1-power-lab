@@ -11,6 +11,29 @@ workspace supports bounded analysis of retained evidence; native dispatch
 remains disabled there. Build and capture preparation use a separate state
 directory with the model runtime disabled. See [current status](STATUS.md).
 
+## Why the boot log and native logs use different channels
+
+The m1n1 proxy connection is bidirectional: the ThinkPad sends commands and
+receives replies and a retained boot transcript. Native boot then shuts down
+m1n1 USB and transfers control to Linux. Linux must configure its own USB ACM
+gadget before the ThinkPad can open a serial channel for launch data, results
+or later logs. The same cable does not preserve the earlier firmware channel.
+
+The observed failure is in this handoff. Linux advertises its USB identity,
+but host SET_CONFIGURATION times out with error `-110`; no usable native ACM
+channel appears. Screen diagnostics can continue even though USB logs cannot
+reach the ThinkPad. A separately bounded, owner-authorized private camera
+recording is the current fallback for that diagnostic screen. It records no
+audio and stops with the attempt. It is not a measurement or result transport.
+
+A returned m1n1 connection does not prove that Linux RAM or its log buffers
+survived the reboot. The current image has no validated persistent log handoff.
+The m1n1 hypervisor offers a Linux virtual console, but it takes the connected
+USB port away from the guest and changes power-management behavior; it cannot
+reproduce this native USB handoff unchanged or qualify native power. See the
+[m1n1 handoff](https://github.com/AsahiLinux/m1n1/blob/v1.6.1/src/main.c)
+and [Linux guest console documentation](https://asahilinux.org/docs/sw/tethered-boot/#booting-a-kernel-under-the-hypervisor).
+
 ## Build
 
 Fetch each file from `target/native-image.lock.json` into

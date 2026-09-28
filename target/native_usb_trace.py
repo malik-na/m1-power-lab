@@ -56,6 +56,8 @@ class _Batch:
         self.count, self.irq_context = count, context
         self.masked = self.acked = False
         self.processor: tuple[int, int] | None = None
+        self.status_ready: tuple[tuple[int, int], object] | None = None
+        self.status_claimed = False
 
 
 
@@ -118,6 +120,7 @@ class NativeUsbTrace:
         self._trb: str | None = None
         self._closed_ok = True
         self._status_calls: dict[tuple[int, int], tuple[str, str]] = {}
+        self._call_witnesses: dict[tuple[int, int], tuple[_Batch, object]] = {}
         self._selected_call: tuple[tuple[int, int], tuple[str, str]] | None = None
         self.returned = self.event = self.state = 0
         self.rearm = self.count = self.window = self.device_event = 0
@@ -214,6 +217,14 @@ class NativeUsbTrace:
                 raise ValueError("invalid controller record")
             address, body = device.groups()
             if self._device is not None and address != self._device:
+                if not self._frozen and event in ("dwc3_event", "dwc3_prepare_trb"):
+                    batch = self._batches.get(self._device)
+                    if batch is not None and batch.processor == context():
+                        # A different controller in the same active processing
+                        # context cannot supply this controller's status witness.
+                        batch.status_ready = None
+                        if batch is self._selected_batch:
+                            raise ValueError("foreign controller inside selected batch context")
                 return
             if self._frozen:
                 return
@@ -234,6 +245,7 @@ class NativeUsbTrace:
                     if batch.processor not in (None, key):
                         raise ValueError("ambiguous batch processing context")
                     batch.processor = key
+                    batch.status_ready = None  # Only the current event can anchor a call.
         if self._device is None or self._frozen:
             return
 
@@ -246,13 +258,24 @@ class NativeUsbTrace:
                 if key in self._status_calls or len(self._status_calls) >= 16:
                     raise ValueError("ambiguous status nesting")
                 self._status_calls[key] = pointers
+                batch = self._batches.get(self._device)
+                if batch is not None and batch.status_ready is not None and batch.status_ready[0] == key:
+                    if batch.status_claimed:
+                        raise ValueError("status NRDY witness reused by another call")
+                    batch.status_claimed = True
+                    self._call_witnesses[key] = (batch, batch.status_ready[1])
             else:
+                self._call_witnesses.pop(key, None)
                 if self._status_calls.pop(key, None) != pointers:
                     raise ValueError("unmatched status return")
                 if self._selected_call == (key, pointers):
                     self.returned = 2 if self.ep0 in (2, 3) else 3
         elif event == "dwc3_event":
-            self._controller_event(body)
+            status_ready = self._controller_event(body)
+            batch = self._batches.get(self._device)
+            if status_ready and batch is not None and batch.acked:
+                batch.status_ready = (context(), object())
+                batch.status_claimed = False
         elif event == "m1lab_acm_enter":
             intf = re.search(r"\bintf=([01])$", body)
             if not intf or self._acm_pending is not None:
@@ -292,8 +315,14 @@ class NativeUsbTrace:
                 if key not in self._status_calls:
                     raise ValueError("status preparation without call")
                 batch = self._batches.get(self._device)
-                if batch is None or not batch.acked or batch.processor != key:
-                    raise ValueError("status without a correlated cached batch")
+                if (batch is None or not batch.acked or batch.processor != key
+                        or batch.status_ready is None or batch.status_ready[0] != key
+                        or self._call_witnesses.get(key) != (batch, batch.status_ready[1])):
+                    raise ValueError("status without its entry-time EP0 IN status NRDY witness")
+                # Exact ep0.c emits this prepare from start_control_status(dep)
+                # inside the keyed wrapper. trace.h derives physical identity
+                # from dep->dwc, binding the saved arguments through this call;
+                # no equality between raw pointers and physical addresses is assumed.
                 self._selected_batch, self.rearm = batch, 1
                 self._selected_call = (key, self._status_calls[key])
                 self.returned = 1
@@ -388,11 +417,11 @@ class NativeUsbTrace:
         if kind == 11:
             raise ValueError("controller event buffer overflow")
 
-    def _controller_event(self, body: str) -> None:
+    def _controller_event(self, body: str) -> bool:
         device = re.fullmatch(r"event \(([0-9a-f]{8})\): (.*)", body)
         if device and int(device[1], 16) & 1:
             self._device_event(int(device[1], 16), device[2])
-            return
+            return False
         record = re.fullmatch(r"event \(([0-9a-f]{8})\): (ep0in|ep0out): (.*)", body)
         if not record:
             raise ValueError("invalid endpoint event")
@@ -427,6 +456,9 @@ class NativeUsbTrace:
         # NRDY's printed phase is from status bits, NOT the actual dwc->ep0state.
         if self.ep0 in (2, 3) and (self.event == 0 or (code in (1, 2) and self.event not in (1, 2))):
             self.event, self.state = code, state
+        # xfernotready switches on the *entire* status: only exact value2
+        # reaches status dispatch; Active/Status (10) cannot anchor this call.
+        return raw & 0xffff == 0x20c2
 
     def event_page(self) -> tuple[str, str]:
         """No I/O: V, status-wrapper return, first event/completion, actual state.

@@ -433,7 +433,7 @@ def test_first_completion_latches_and_next_setup_freezes_both_pages(fake_kernel)
 
 def test_events_before_command_other_controller_and_after_window_do_not_advance(fake_kernel):
     data = SETUP + IN_COMPLETE + PREPARE + IN_NRDY + COMMAND
-    data += IN_COMPLETE.replace(b"0x0000000382280000", b"0x0000000382380000")
+    data += IN_COMPLETE.replace(b"0x0000000382280000", b"0x0000000382380000").replace(b"-128 [002]", b"-129 [003]")
     data += OTHER_SETUP + STATUS_RETURN + IN_COMPLETE
     monitor = armed(fake_kernel, data)
     assert monitor.poll()[0] == "2002"
@@ -582,7 +582,7 @@ def test_startup_other_controller_and_prior_batches_cannot_claim_selected_rearm(
     startup = UNMASK + COUNT_READ + io_event("dwc3_writel", 0xc40c, 4, irq=True)
     prior_batch = BATCH + STATUS_NRDY + UNMASK
     other = (COUNT_READ + MASK + ACK + STATUS_NRDY + UNMASK).replace(
-        b"0x0000000382280000", b"0x0000000382380000")
+        b"0x0000000382280000", b"0x0000000382380000").replace(b"-128 [002]", b"-129 [003]")
     monitor = armed(fake_kernel, startup + prior_batch + SETUP + PREPARE + COMMAND + STATUS_RETURN + other)
     assert monitor.poll()[0] == "2002"
     assert monitor.rearm_page()[0] == "2101"
@@ -694,7 +694,7 @@ def test_first_window_closure_preserves_all_observations_and_ignores_later_progr
 
 def test_device_events_before_window_or_from_other_controller_cannot_close_it(fake_kernel):
     reset = device_record(0x101, "Reset [U0]")
-    wrong_controller = reset.replace(b"0x0000000382280000", b"0x0000000382380000")
+    wrong_controller = reset.replace(b"0x0000000382280000", b"0x0000000382380000").replace(b"-128 [002]", b"-129 [003]")
     monitor = armed(fake_kernel, reset + SETUP + PREPARE + COMMAND + wrong_controller + STATUS_RETURN + UNMASK)
     assert monitor.poll()[0] == "2002"
     assert monitor.rearm_page()[0] == "2201"
@@ -750,3 +750,79 @@ def test_partial_unmask_and_later_count_cannot_claim_progress_until_records_comp
         stream.write(COUNT_READ[-3:])
     assert monitor.poll()[0] == "2002"
     assert monitor.rearm_page()[0] == "2221"
+
+
+@pytest.mark.parametrize("witness", [
+    device_record(0x301, "Link Change [U0]"),
+    IN_COMPLETE,
+    OUT_COMPLETE,
+    controller_event(0x20c0, "Transfer Not Ready [00000000] (Not Active) [Status Phase]", endpoint="ep0out"),
+    controller_event(0x10c2, "Transfer Not Ready [00000000] (Not Active) [Data Phase]"),
+    controller_event(0xa0c2, "Transfer Not Ready [00000000] (Active) [Status Phase]"),
+    STATUS_NRDY.replace(b"0x0000000382280000", b"0x0000000382380000"),
+])
+def test_only_explicit_in_status_nrdy_can_anchor_wrapper_entry(fake_kernel, witness):
+    # Synthetic hardening cases: these are not claimed realizable on the exact
+    # normal ACM path, whose status dispatch switches on exact NRDY status2.
+    data = SETUP + PREPARE.replace(STATUS_NRDY, witness) + COMMAND + STATUS_RETURN + UNMASK
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "3000"
+    assert monitor.rearm_page()[0] == "3001"
+
+
+@pytest.mark.parametrize("intervening", [
+    device_record(0x301, "Link Change [U0]"),
+    STATUS_NRDY,
+    STATUS_NRDY.replace(b"0x0000000382280000", b"0x0000000382380000"),
+    record("dwc3_prepare_trb", TRB_BODY.replace("0x0000000382280000", "0x0000000382380000")),
+])
+def test_entry_witness_cannot_be_replaced_before_selected_prepare(fake_kernel, intervening):
+    # Even another identical NRDY is a new event, not the entry-time witness.
+    data = SETUP + PREPARE.replace(STATUS_ENTER, STATUS_ENTER + intervening) + COMMAND + STATUS_RETURN + UNMASK
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "3000"
+    assert monitor.rearm_page()[0] == "3001"
+
+
+def test_nrdy_observed_only_after_wrapper_entry_cannot_retroactively_bind_it(fake_kernel):
+    data = SETUP + BATCH + STATUS_ENTER + STATUS_NRDY + record("dwc3_prepare_trb", TRB_BODY)
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "3000"
+    assert monitor.rearm_page()[0] == "3001"
+
+
+def test_foreign_controller_same_selected_thread_context_is_ambiguous(fake_kernel):
+    foreign = device_record(0x301, "Link Change [U0]", controller="0x0000000382380000")
+    monitor = armed(fake_kernel, SETUP + PREPARE + COMMAND + STATUS_RETURN + foreign + UNMASK)
+    assert monitor.poll()[0] == "3002"
+    assert monitor.rearm_page()[0] == "3101"
+
+
+def test_status_nrdy_in_later_batch_may_run_on_another_cpu_than_setup_batch(fake_kernel):
+    data = BATCH + OUT_COMPLETE + SETUP + ACM_SUCCESS + UNMASK
+    # The IRQ thread can migrate between batches, but a batch's locked callback
+    # and matched helper/unmask must remain in the same context.
+    status_batch = PREPARE + COMMAND + STATUS_RETURN + UNMASK
+    data += status_batch.replace(b"-128 [002]", b"-128 [003]") + COUNT_READ
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "2322"
+    assert monitor.rearm_page()[0] == "2221"
+    assert monitor.event_page()[0] == "2200"
+
+
+def test_other_call_witness_does_not_replace_selected_controller_call_binding(fake_kernel):
+    other_enter = STATUS_ENTER.replace(b"-128 [002]", b"-129 [003]").replace(b"80068000", b"80168000")
+    other_return = STATUS_RETURN.replace(b"-128 [002]", b"-129 [003]").replace(b"80068000", b"80168000")
+    monitor = armed(fake_kernel, SETUP + PREPARE + other_enter + COMMAND + other_return + STATUS_RETURN + UNMASK)
+    assert monitor.poll()[0] == "2002"
+    assert monitor.rearm_page()[0] == "2201"
+    assert monitor._call_witnesses == {}
+
+
+
+def test_one_nrdy_witness_cannot_be_reused_by_two_wrapper_calls(fake_kernel):
+    data = SETUP + BATCH + STATUS_NRDY + STATUS_ENTER + STATUS_RETURN
+    data += STATUS_ENTER + record("dwc3_prepare_trb", TRB_BODY) + COMMAND + STATUS_RETURN + UNMASK
+    monitor = armed(fake_kernel, data)
+    assert monitor.poll()[0] == "3000"
+    assert monitor.rearm_page()[0] == "3001"

@@ -7,14 +7,15 @@ private owner interface, and service-owned Codex jobs run independently of the
 setup terminal. The sleep, idle, and lid-switch inhibitor is held while the
 coordinator runs. A separately installed, explicitly started inspect-only
 helper has completed five fixed read-only requests against the connected M1
-proxy on USB topology `1-2` at `/dev/ttyACM1`. Native experiment dispatch
+proxy on USB topology `1-2`. The exact tty path is recorded in the latest
+service handoff evidence; Linux may renumber it after a return. Native experiment dispatch
 remains disabled; result collection, power measurement, and recovery have not
 passed the physical qualification gates.
 
 The previous installed session was stopped after resolving uncertain usage
 with a conservative 300,000-token owner decision, not a provider measurement.
-The new session `session_8b26578813be485da5afc3058473ea28` retains the failed
-eighth-attempt evidence. Its first service-owned analysis used 27,986 reported
+The new session `session_8b26578813be485da5afc3058473ea28` retains imported failed
+native-attempt evidence. Its first service-owned analysis used 27,986 reported
 tokens; a resumed turn used 51,192 additional tokens, for a provider-reported
 thread total of 79,178 with no usage uncertainty. During the resumed turn, 90
 authenticated and anonymous HTTP probes returned the expected 200 or 403, with
@@ -121,8 +122,9 @@ can inspect the proxy but cannot enable live experiment dispatch. The example
 retains an invalid `UNSET` serial digest so it cannot start unconfigured.
 
 The installed helper runs as `m1lab` with primary group `m1lab`, without a
-supplementary `uucp` group. Its closed device policy admits only the reviewed
-`/dev/ttyACM1` at USB topology `1-2`, with mode `0660` scoped to `m1lab`.
+supplementary `uucp` group. Its closed device policy admits one reviewed tty
+path at USB topology `1-2`, with mode `0660` scoped to `m1lab`; it does not
+admit a wildcard across ACM devices.
 The coordinator retains `PrivateDevices=yes`. The configured tty, unit
 `DeviceAllow`, topology and locally verified serial digest must agree. The
 root-owned environment file has mode 0600; keep the serial-derived identifier
