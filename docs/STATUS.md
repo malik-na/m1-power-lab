@@ -2,26 +2,48 @@
 
 This file distinguishes implemented behavior from physical qualification.
 
-## 2026-09-28 continuation
+## 2026-09-28 installed investigation workspace
 
-The Mac is currently enumerated as an m1n1 proxy on the ThinkPad's USB port
-`1-2`; the private helper configuration has been updated from `1-1`, with the
-prior configuration and expired proposal archived. The configfs-fixed candidate
-and its published artifacts still match their recorded hashes and sizes.
-The installed coordinator remains on `f560929`; its usage hold is preserved.
-No new native boot has been dispatched in this continuation. Device access for
-the current desktop process and confirmation of physical attendance remain the
-next prerequisites for a fresh reviewed run; previous expired approvals are not
-reused.
+Release `1212afd` is installed on the ThinkPad as the enabled systemd service.
+The private owner interface and Codex jobs run independently of the setup
+terminal. Sleep, idle and lid-close inhibition is active while the service runs.
+The scoped inspect-only helper is installed and running for USB port `1-2` and
+`/dev/ttyACM1`; five fixed m1n1 requests verified the connected M1 proxy. The
+helper has no automatic restart or boot enablement and must be explicitly
+reopened after a coordinator restart or USB reconnection. It does not expose
+native experiment dispatch.
 
-New host tools report concrete preflight blockers without opening serial,
-summarize sensor availability/missingness and reported cadence from retained
-native captures, and support explicit artifact selection for an investigation
-turn. Summaries revalidate raw framing and artifact lineage and do not publish
-scientific observations or qualify power measurements. All 358 host tests pass;
-the Python wheel builds and its packaged CLI imports successfully. See
-[continuation evidence](evidence/2026-09-28-host-readiness.json),
-[native preflight](NATIVE-PREFLIGHT.md) and [native harness](NATIVE-HARNESS.md).
+The prior installed session is stopped. Its old uncertain usage was resolved
+with a conservative 300,000-token charge under the owner's delegation, not a
+provider measurement. A new session retains the eighth-attempt technical
+artifacts and has completed two service-owned analysis turns. The first reported
+27,986 tokens; the resumed turn reported 51,192 additional tokens, for a thread
+and session total of 79,178 with no usage uncertainty. This verifies bounded
+analysis of retained evidence, not a continuous autonomous native experiment loop.
+
+The deployment fixes selected evidence being omitted from bounded prompts,
+per-event notification cursor commits contending with the web interface, and
+resumed chat reservation checks counting earlier turns. All 368 host tests pass.
+During the installed resumed job, all 90 authenticated and anonymous HTTP probes
+returned the expected 200 or 403; the slowest took 3.438 seconds. The private
+HTTPS pages also responded successfully. See
+[deployment evidence](evidence/2026-09-28-independent-service.json).
+
+The eighth physical attempt tested the configfs-fixed candidate after fresh
+exact review and single-use authorization under the owner's setup delegation.
+Linux USB descriptors appeared, but SET_CONFIGURATION timed out (`-110`). There
+was no configured native interface, no captured payload and no samples. The
+watcher caught a new same-identity proxy connection; the attempt is reconciled
+as failed with its original unknown outcome retained. Target kernel/console
+output around UDC binding and configuration is the next diagnostic. Native
+capture, power measurement and unattended target recovery remain unqualified.
+See [eighth-attempt evidence](evidence/2026-09-28-native-eighth-attempt.json).
+
+The host also provides read-only USB preflight, capture summaries that recheck
+framing and lineage, and explicit artifact selection for investigation turns.
+See [native preflight](NATIVE-PREFLIGHT.md) and [native harness](NATIVE-HARNESS.md).
+The [initial host-readiness evidence](evidence/2026-09-28-host-readiness.json)
+records the earlier state before this deployment and physical attempt.
 
 ## Prior qualification history
 

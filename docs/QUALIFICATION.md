@@ -1,5 +1,26 @@
 # Qualification gates
 
+## Current gate: native USB configuration and capture
+
+On September 28, the eighth bounded attempt tested the configfs-fixed image.
+Linux USB descriptors appeared on port `1-2`, but the ThinkPad timed out setting
+configuration 1 (`-110`). No configured native interface, sample bytes, or
+samples were received. The watcher caught the same-identity proxy on a new
+owned connection. The operation is reconciled as failed with its original
+unknown result and the 24,000-byte boot log retained. A zero boot-client exit
+status does not establish successful Linux capture.
+
+The owner delegated setup and validation and confirmed being at the Mac. The
+exact procedure passed independent review and received one-use authorization
+under that delegation; no expired approval was reused. Native power measurement
+and continuous native dispatch remain unqualified. Target console/kernel output
+around UDC binding and SET_CONFIGURATION is the next discriminating evidence.
+See [eighth-attempt evidence](evidence/2026-09-28-native-eighth-attempt.json)
+and [current deployment status](STATUS.md).
+
+The sections below retain historical qualification states as recorded at the
+time; their pending approvals and installed release versions are historical.
+
 ## Expired launch replaced without target dispatch
 
 The owner replied `approved` at approximately 23:57 UTC, after the configfs

@@ -2,9 +2,24 @@
 
 ## Current qualification state
 
-The application is ready for host-only development and replay demonstrations.
-The real m1n1 adapter remains unavailable until target identity, transport,
-result collection, and recovery pass the physical qualification gates.
+Release `1212afd` is installed and enabled on the ThinkPad. The coordinator,
+private owner interface, and service-owned Codex jobs run independently of the
+setup terminal. The sleep, idle, and lid-switch inhibitor is held while the
+coordinator runs. A separately installed, explicitly started inspect-only
+helper has completed five fixed read-only requests against the connected M1
+proxy on USB topology `1-2` at `/dev/ttyACM1`. Native experiment dispatch
+remains disabled; result collection, power measurement, and recovery have not
+passed the physical qualification gates.
+
+The previous installed session was stopped after resolving uncertain usage
+with a conservative 300,000-token owner decision, not a provider measurement.
+The new session `session_8b26578813be485da5afc3058473ea28` retains the failed
+eighth-attempt evidence. Its first service-owned analysis used 27,986 reported
+tokens; a resumed turn used 51,192 additional tokens, for a provider-reported
+thread total of 79,178 with no usage uncertainty. During the resumed turn, 90
+authenticated and anonymous HTTP probes returned the expected 200 or 403, with
+the slowest at 3.438 seconds. This demonstrates independently available
+bounded analysis; it does not qualify an autonomous native experiment loop.
 
 ## Local development
 
@@ -65,9 +80,9 @@ segment is still open.
 Source maintenance tooling also refuses an active hardware-helper unit and
 holds its stable owner lock through the release operation. The helper's private
 state directory is `/var/lib/m1-power-lab-helper`; its deny journal is retained
-across source updates and rollbacks. These source improvements are not yet
-installed on the ThinkPad. The existing paused session's unresolved usage
-continues to block deployment.
+across source updates and rollbacks. These guards are installed in release
+`1212afd`. The earlier usage hold was resolved before installation; maintenance
+still requires the current session and jobs to satisfy the gates above.
 
 Install Codex through its supported system-wide installation method. Set its
 absolute path and the executable's SHA-256 digest as `M1LAB_CODEX_SHA256` in
@@ -90,29 +105,32 @@ inside that workspace; path resolution rejects symlinks that escape it.
 `CODEX_HOME` and unrelated host files are outside those roots. System-provided
 compatibility paths remain available for the sandbox.
 The systemd unit also gives the coordinator and its Codex child a private `/dev`,
-so they cannot open host USB/serial devices. A future target helper must run as a
-separate service with only its qualified device access; do not remove this
-boundary to enable hardware dispatch. systemd stops the full service cgroup,
-including the Codex app-server, and escalates after the 20-second shutdown
-window if graceful cleanup does not finish.
+so they cannot open host USB/serial devices. The separate inspect-only helper
+has scoped device access; native dispatch is still unavailable. Do not remove
+the coordinator's private-device boundary to enable hardware dispatch. systemd
+stops the full service cgroup, including the Codex app-server, and escalates
+after the 20-second shutdown window if graceful cleanup does not finish.
 
-## Prepared hardware-helper unit
+## Inspect-only hardware-helper unit
 
 `systemd/m1-power-lab-helper.service` and
-`config/m1-power-lab-helper.env.example` are prepare-only artifacts. The release
-installer does not install or enable this unit. It uses the fixed inspect-only
-observer; it cannot enable live experiment dispatch. Its configuration example
-has an invalid `UNSET` serial digest so an unconfigured helper cannot start.
+`config/m1-power-lab-helper.env.example` remain prepare-only repository
+templates. The release installer does not install or enable the helper unit;
+the installed unit was separately reviewed and installed. Its fixed observer
+can inspect the proxy but cannot enable live experiment dispatch. The example
+retains an invalid `UNSET` serial digest so it cannot start unconfigured.
 
-The proposed helper runs as `m1lab` with supplementary `uucp` access, a closed
-device policy admitting only the reviewed `/dev/ttyACM0`, and its own private
-0700 state directory. The coordinator retains `PrivateDevices=yes`. The
-configured tty, unit `DeviceAllow`, topology and locally verified serial digest
-must agree. The future environment file belongs to root with mode 0600; keep
-the serial-derived identifier out of published evidence.
+The installed helper runs as `m1lab` with primary group `m1lab`, without a
+supplementary `uucp` group. Its closed device policy admits only the reviewed
+`/dev/ttyACM1` at USB topology `1-2`, with mode `0660` scoped to `m1lab`.
+The coordinator retains `PrivateDevices=yes`. The configured tty, unit
+`DeviceAllow`, topology and locally verified serial digest must agree. The
+root-owned environment file has mode 0600; keep the serial-derived identifier
+out of published evidence. The repository template still names the earlier
+`/dev/ttyACM0` and `uucp` setup; do not treat it as the installed unit.
 
-The helper unit has no boot enablement or start/restart dependency on the
-coordinator. `After` orders explicit starts and `StopPropagatedFrom` propagates
+The installed helper unit has no boot enablement or start/restart dependency on
+the coordinator. `After` orders explicit starts and `StopPropagatedFrom` propagates
 stop requests. The helper's `--require-coordinator-service` mode independently
 requires the fixed coordinator unit to be active, opens a kernel process handle
 (`pidfd`) for its MainPID and rechecks its invocation identity. When that process
@@ -120,14 +138,13 @@ ends, the helper stops; a new coordinator process cannot inherit the old
 helper. `Restart=no` prevents helper self-restart. This avoids `BindsTo` and
 `PartOf`, which can propagate coordinator restart into reopening the target.
 
-Before installation, qualify the exact unit's device permissions, IPC visibility,
-coordinator exit/restart behavior and cleanup with synthetic fixtures, then a
-bounded owner-attended inspection. Static `systemd-analyze verify` validates
-unit syntax only. The prior physical checks ran as separate development
-processes with temporary group access, not under this unit's device policy.
-Deployment still needs settled accounting, a verified backup and exact owner
-approval. Do not bypass these gates by manually copying this unit over the
-running lab setup.
+The installed scoped unit completed a bounded five-request physical inspection
+and was followed by five fixed read-only requests after the resumed Codex job.
+This verifies proxy observation under its selected device policy. Static
+`systemd-analyze verify` validates unit syntax only. Native result transport,
+qualified dispatch and target recovery still require separate physical proof.
+Future unit changes need the same settled accounting, backup and exact review
+gates; do not copy the repository template over the running lab setup.
 
 Preserve the helper state as well as the coordinator backup before eventual
 maintenance. The existing coordinator backup/export does not include the
@@ -205,8 +222,9 @@ admission and again immediately before runtime launch. Work is denied unless
 AC is confirmed, a thermal reading is available and below 90 °C, and at least
 5 GiB is free under the data root. An admission change after a durable job
 record is created leaves a failed job record and releases its reservation; it
-does not start Codex. These checks do not qualify sleep inhibition, lid
-behavior, shutdown handling, or the correctness of the T480's sensors.
+does not start Codex. These checks do not establish actual lid behavior,
+shutdown handling, or the correctness of the T480's sensors. The separately
+held sleep inhibitor only confirms the logind lock request.
 
 While the app-server runtime is enabled, the coordinator repeats these host
 checks every five seconds. A blocker or failed readiness sample pauses active
@@ -246,6 +264,9 @@ home-directory prefixes are scrubbed from evidence text and labels. Ordinary
 usage fields such as `codex_tokens` are retained. Review selected material for
 other personal data or unrelated private contents before starting the turn;
 automated scrubbing cannot identify every such case.
+Use repeatable `--artifact-id` to include exact published artifacts from the
+selected session, including older captures outside the automatic context
+window. The manifest retains bounded excerpts and artifact digests.
 
 Approval cards show the recorded recovery steps, status and evidence references
 alongside the reasons for their risk category. High declared failure severity

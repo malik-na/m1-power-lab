@@ -2,7 +2,7 @@
 
 M1 Power Lab is a ThinkPad-hosted research workbench for investigating power management on an Apple M1 target through m1n1. It keeps scientific evidence, approvals, budgets, Codex jobs and target operations in one durable local application.
 
-The first implementation uses a replay hardware adapter. Real m1n1 access stays disabled until the host/target transport, result channel and recovery path are qualified on the actual machines.
+The host application runs independently as a ThinkPad service. It supports bounded Codex analysis of retained evidence and a replay hardware adapter. A separate inspect-only helper can observe the connected m1n1 proxy; native experiment dispatch remains disabled until transport, capture and recovery are qualified.
 
 Project design and planning documents are checked into [`docs/plan`](docs/plan):
 
@@ -20,8 +20,11 @@ The implemented module and information flow is summarized in
 
 The host application now includes the durable coordinator, replay experiment
 executor, bounded Codex app-server adapter, CLI, and responsive owner UI.  The
-real m1n1 adapter remains deliberately unavailable until the ThinkPad-to-Mac
-transport and recovery path are qualified on the actual machines.
+native experiment adapter remains unavailable until the ThinkPad-to-Mac
+transport and recovery path are qualified on the actual machines. The latest
+physical attempt reached Linux USB enumeration but timed out during configuration
+and captured no native samples. See [current status](docs/STATUS.md) for the
+installed release, verified capabilities, and remaining qualification gates.
 
 ## Quick start on the ThinkPad
 
