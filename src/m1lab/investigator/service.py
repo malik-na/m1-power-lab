@@ -256,6 +256,7 @@ class InvestigationOrchestrator:
         last_sequence = 0
         consumption_error: BaseException | None = None
         interruption_requested = False
+        accounted_tokens = 0
         try:
             async for event in self._runtime.events(handle.job_id):
                 last_sequence = max(last_sequence, event.sequence)
@@ -277,12 +278,13 @@ class InvestigationOrchestrator:
                     )
                     artifact_ids.append(artifact.id)
                 if event.method == "thread/tokenUsage/updated":
-                    should_interrupt = self._account_live_usage(
-                        session_id,
-                        job_id,
-                        handle,
-                        event.sequence,
-                        estimated_tokens,
+                    accounted_tokens += self._account_live_usage(
+                        session_id, job_id, handle, event.sequence,
+                    )
+                    should_interrupt = (
+                        accounted_tokens >= estimated_tokens
+                        or self._core.budget_limit_reached(session_id)
+                        or self._core.snapshot(session_id).budget.usage_uncertain
                     )
                     if should_interrupt and not interruption_requested:
                         interruption_requested = True
@@ -304,6 +306,9 @@ class InvestigationOrchestrator:
                 ):
                     interruption_requested = True
                     await self._runtime.interrupt(handle.job_id)
+                # Queue.get() may complete immediately for an event burst. Let
+                # web requests and safety tasks run between durable updates.
+                await asyncio.sleep(0)
         except BaseException as exc:
             consumption_error = exc
 
@@ -393,19 +398,18 @@ class InvestigationOrchestrator:
         job_id: str,
         handle: JobHandle,
         sequence: int,
-        admitted_tokens: int,
-    ) -> bool:
+    ) -> int:
+        """Return this report's newly charged tokens, not thread lifetime usage."""
         usage = self._runtime.usage(handle.job_id)
         if usage is None:
-            return False
+            return 0
         if usage.total_tokens is not None:
             input_tokens, output_tokens = usage.total_tokens, 0
         elif usage.input_tokens is not None and usage.output_tokens is not None:
             input_tokens, output_tokens = usage.input_tokens, usage.output_tokens
         else:
-            return False
-        observed = input_tokens + output_tokens
-        self._core.report_usage(
+            return 0
+        result = self._core.report_usage(
             UsageUpdate(
                 report_id=f"usage:{job_id}:live:{sequence}",
                 session_id=session_id,
@@ -416,11 +420,9 @@ class InvestigationOrchestrator:
                 terminal=False,
             )
         )
-        return (
-            observed >= admitted_tokens
-            or self._core.budget_limit_reached(session_id)
-            or self._core.snapshot(session_id).budget.usage_uncertain
-        )
+        # The ledger subtracts already-accounted cumulative thread usage and
+        # ignores duplicate reports. Accumulate only these deltas for this job.
+        return result.token_delta
 
     def _account_usage(self, session_id: str, job_id: str, handle: JobHandle) -> dict[str, Any]:
         try:
