@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+from contextlib import nullcontext
 import mmap
 import os
 from pathlib import Path
@@ -120,6 +121,46 @@ def test_calibration_rejects_other_framebuffer_minors_before_ioctl(monkeypatch):
     )
     with pytest.raises(ValueError, match="not a framebuffer device"):
         calibration.run()
+    assert closed == [41]
+
+
+def test_calibration_variants_do_not_shrink_the_visible_symbol(monkeypatch):
+    draws = []
+    sleeps = []
+    closed = []
+    variable = SimpleNamespace(xres=300, yres=300, bits_per_pixel=32)
+    fixed = SimpleNamespace(visual=2, smem_len=300 * 300 * 4, line_length=300 * 4)
+    monkeypatch.setattr(
+        calibration, "os",
+        SimpleNamespace(
+            open=lambda *_args: 41,
+            fstat=lambda _fd: SimpleNamespace(st_mode=stat.S_IFCHR, st_rdev=os.makedev(29, 0)),
+            close=closed.append,
+            O_RDWR=os.O_RDWR,
+            O_CLOEXEC=os.O_CLOEXEC,
+            O_NOFOLLOW=getattr(os, "O_NOFOLLOW", 0),
+            major=os.major,
+            minor=os.minor,
+        ),
+    )
+    monkeypatch.setattr(calibration, "_screen_info", lambda _fd: (variable, fixed))
+    monkeypatch.setattr(
+        calibration, "mmap",
+        SimpleNamespace(mmap=lambda *_args, **_kwargs: nullcontext(bytearray()), ACCESS_WRITE=mmap.ACCESS_WRITE),
+    )
+    monkeypatch.setattr(calibration, "_render", lambda _fb, _var, _fix, **kwargs: draws.append(kwargs))
+    monkeypatch.setattr(calibration, "time", SimpleNamespace(sleep=sleeps.append))
+
+    assert calibration.run() == {
+        "xres": 300, "yres": 300, "bits_per_pixel": 32, "line_length": 1200,
+    }
+    assert draws == [
+        {"scale": 6, "brightness": 180},
+        {"scale": 6, "brightness": 255},
+        {"scale": 8, "brightness": 180},
+        {"scale": 8, "brightness": 255},
+    ]
+    assert sleeps == [18] * 4
     assert closed == [41]
 
 

@@ -157,7 +157,7 @@ def run() -> dict[str, int]:
                 or not 0 < fixed.smem_len <= 128 << 20):
             raise ValueError("unsupported calibration framebuffer size or depth")
         with mmap.mmap(fd, fixed.smem_len, access=mmap.ACCESS_WRITE) as framebuffer:
-            for scale, brightness in ((6, 180), (8, 180), (6, 255), (8, 255)):
+            for scale, brightness in ((6, 180), (6, 255), (8, 180), (8, 255)):
                 _render(framebuffer, variable, fixed, scale=scale, brightness=brightness)
                 time.sleep(18)
         return {"xres": variable.xres, "yres": variable.yres,
