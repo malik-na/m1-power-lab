@@ -6,6 +6,8 @@ import importlib.util
 import errno
 import os
 from pathlib import Path
+import stat
+from types import SimpleNamespace
 import threading
 import time
 
@@ -17,6 +19,11 @@ _SPEC = importlib.util.spec_from_file_location("m1lab_native_boot_test", _SOURCE
 assert _SPEC is not None and _SPEC.loader is not None
 native_boot = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(native_boot)
+
+
+@pytest.fixture(autouse=True)
+def no_physical_console(monkeypatch, tmp_path):
+    monkeypatch.setattr(native_boot, "CONSOLE", tmp_path / "absent-tty0")
 
 
 def test_approval_headroom_does_not_extend_or_prevent_short_native_capture():
@@ -266,3 +273,124 @@ def test_failed_launch_diagnostic_does_not_mask_received_launch():
     finally:
         os.close(read_fd)
         os.close(write_fd)
+
+
+@pytest.fixture
+def console_writes(monkeypatch):
+    writes, closes, flags = [], [], []
+    original_open = os.open
+    original_write = os.write
+    original_close = os.close
+    original_fstat = os.fstat
+    fake_fd = 123456
+
+    def open_console(path, value, *args, **kwargs):
+        if path == native_boot.CONSOLE:
+            flags.append(value)
+            return fake_fd
+        return original_open(path, value, *args, **kwargs)
+
+    def write_console(fd, payload):
+        if fd == fake_fd:
+            writes.append(payload)
+            return len(payload)
+        return original_write(fd, payload)
+
+    def close_console(fd):
+        if fd == fake_fd:
+            closes.append(fd)
+            return
+        return original_close(fd)
+
+    monkeypatch.setattr(native_boot.os, "open", open_console)
+    monkeypatch.setattr(native_boot.os, "write", write_console)
+    monkeypatch.setattr(native_boot.os, "close", close_console)
+    monkeypatch.setattr(native_boot.os, "fstat", lambda fd:
+                        SimpleNamespace(st_mode=stat.S_IFCHR, st_rdev=os.makedev(4, 0))
+                        if fd == fake_fd else original_fstat(fd))
+    return writes, closes, flags
+
+
+def test_console_overlay_is_large_anchored_allowlisted_and_separate(console_writes, capsys):
+    writes, closes, flags = console_writes
+    native_boot._console_overlay("launch_wait", "address", TimeoutError("private failure text"))
+    assert len(writes) == len(closes) == len(flags) == 1
+    payload = writes[0]
+    assert len(payload) < 2048
+    assert payload.startswith(b"\x1b7") and payload.endswith(b"\x1b8")
+    assert b"\x1b[1;1H" in payload and b"\x1b[14;1H" in payload
+    assert b"S10 launch_wait E1 TimeoutError U7 address" in payload
+    assert b"private failure text" not in payload
+    # The first large glyph row begins with the top strokes of digits 1 and 0.
+    assert b"\x1b[3;1H   ###     #########" in payload
+    assert b"\x1b[2J" not in payload and b"\x1b[r" not in payload
+    expected = os.O_WRONLY | os.O_NOCTTY | os.O_NONBLOCK | os.O_CLOEXEC | os.O_NOFOLLOW
+    assert flags == [expected]
+    assert not flags[0] & os.O_CREAT
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize("mode,device", [(stat.S_IFREG, (0, 0)), (stat.S_IFCHR, (4, 1)), (stat.S_IFCHR, (5, 0))])
+def test_console_overlay_refuses_anything_except_tty0(console_writes, monkeypatch, mode, device):
+    writes, closes, flags = console_writes
+    monkeypatch.setattr(native_boot.os, "fstat", lambda _fd:
+                        SimpleNamespace(st_mode=mode, st_rdev=os.makedev(*device)))
+    native_boot._console_overlay("capture", "configured")
+    assert writes == [] and len(closes) == len(flags) == 1
+
+
+@pytest.mark.parametrize("failure", ["open", "write", "short_write"])
+def test_console_overlay_failures_do_not_retry_or_escape(console_writes, monkeypatch, failure):
+    writes, closes, flags = console_writes
+
+    def unavailable(*_args, **_kwargs):
+        raise OSError("synthetic unavailable console")
+
+    if failure == "open":
+        monkeypatch.setattr(native_boot.os, "open", unavailable)
+    else:
+        def write(_fd, payload):
+            writes.append(payload)
+            return 1 if failure == "short_write" else unavailable()
+        monkeypatch.setattr(native_boot.os, "write", write)
+    native_boot._console_overlay("capture", "configured", ValueError("original failure"))
+    assert len(writes) == (0 if failure == "open" else 1)
+    assert len(closes) == (0 if failure == "open" else 1)
+
+
+def test_overlay_precedes_udc_read_and_configuration_write(configuration_diagnostic, monkeypatch):
+    diagnostic, controller = configuration_diagnostic
+    (controller / "state").write_text("configured\n")
+    events = []
+    monkeypatch.setattr(native_boot, "_console_overlay", lambda stage, state, error=None:
+                        events.append(f"overlay:{stage}:{state}"))
+    original_path_open, original_os_open = Path.open, os.open
+
+    def read(path, *args, **kwargs):
+        if path == controller / "state":
+            events.append("read_state")
+        return original_path_open(path, *args, **kwargs)
+
+    def write(path, *args, **kwargs):
+        if path == diagnostic.path:
+            events.append("write_configuration")
+        return original_os_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", read)
+    monkeypatch.setattr(native_boot.os, "open", write)
+    diagnostic.update("capture", TimeoutError("private detail"))
+    assert events == ["overlay:capture:address", "read_state", "overlay:capture:configured", "write_configuration"]
+    assert diagnostic.path.read_text() == "M1Lab diag:v1:fail:capture:TimeoutError:configured\n"
+
+
+def test_early_stage_overlay_works_before_any_gadget_exists(console_writes):
+    writes, _closes, _flags = console_writes
+    diagnostic = native_boot._ConfigurationDiagnostic()
+    diagnostic.update("udc_wait", RuntimeError("private detail"))
+    assert b"S07 udc_wait E5 RuntimeError U0 unknown" in writes[0]
+    count = len(writes)
+    diagnostic.update("arbitrary untrusted stage")
+    assert len(writes) == count
+    native_boot._console_overlay("capture", "arbitrary untrusted state", KeyError("private detail"))
+    assert b"S12 capture E8 Exception U0 unknown" in writes[-1]
+    assert b"private" not in writes[-1] and b"untrusted" not in writes[-1]

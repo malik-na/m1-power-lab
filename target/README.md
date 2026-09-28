@@ -91,3 +91,38 @@ failure cannot establish a stage transition or stop a capture on its own.
 A descriptor may be unavailable after an EP0 timeout, stale, or torn during a
 concurrent read. These strings are neither physical identity nor samples and
 must never be treated as capture success or hardware qualification.
+
+
+For a fixed camera view that cuts off the lower screen, the same diagnostics
+also redraw rows 1–14 of `/dev/tty0`. Four large digits encode **SS E U**: a
+two-digit stage, one error digit, and one USB state digit. Each digit uses a
+3-by-5 bitmap expanded to 9 columns by 10 rows of the existing console font.
+The current stage is drawn with cached/unknown USB state before any diagnostic
+sysfs access, then refreshed when a new state is available. A label below the
+digits names the values; no exception messages or other arbitrary data appear.
+
+| SS | Stage | SS | Stage |
+| --- | --- | --- | --- |
+| 00 | Python entry | 07 | Waiting for UDC |
+| 01 | Load phy_apple_atc | 08 | Bind ACM gadget |
+| 02 | Load tps6598x | 09 | Waiting for ttyGS0 |
+| 03 | Load dwc3_apple | 10 | Waiting for launch |
+| 04 | Load libcomposite | 11 | Launch received |
+| 05 | Load usb_f_acm | 12 | Capture |
+| 06 | Mount configfs | 13 | Capture emission finished |
+
+**E:** 0 none, 1 TimeoutError, 2 ValueError, 3 OSError, 4 ImportError,
+5 RuntimeError, 6 AssertionError, 7 TypeError, 8 other exception.
+**U:** 0 unknown, 1 not attached, 2 attached, 3 powered, 4 reconnecting,
+5 unauthenticated, 6 default, 7 address, 8 configured, 9 suspended.
+For example, **10 1 7** means timeout while waiting for a launch, with the last
+reported UDC state `address`. These are self-reported diagnostics, not proof of
+samples, physical source, or successful recovery.
+
+Each redraw is one nonblocking write to a verified character device 4:0, with
+cursor/attribute save and restore. It does not clear the screen, suppress kernel
+logs, change the scroll region, or write to USB or the result stream. A redraw
+may be incomplete or overwritten by concurrent console messages. It refreshes
+on existing stage/wait callbacks and adds no retry, timer, or watchdog extension;
+the 150-second native deadline, 180-second image watchdog and failure hold
+remain unchanged.
