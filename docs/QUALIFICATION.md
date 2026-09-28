@@ -2,6 +2,35 @@
 
 ## Current gate: native USB configuration and capture
 
+On September 28, the twelfth bounded attempt ran candidate
+`build_a522bd6a10a44159bf38da9c5229d9d5` after fresh independent accepted
+review and one-use attended authorization. Host logs show native enumeration
+at 17:03:22.271519 UTC and SET_CONFIGURATION timeout (`-110`) at
+17:03:27.487533 UTC. No native tty, payload bytes or samples were obtained.
+The original `unknown_effect` outcome is retained and reconciled as failed.
+
+Two readers independently decoded private no-audio screen snapshots.
+`VAGP 2 / 3 / 2 / 2` at 65 and 149 seconds reports both ACM interface calls and
+serial connection returned zero and the DWC3 EP0 status command was accepted.
+`VRES 2 / 2 / 0 / 0` at 67 and 145 seconds reports the selected status wrapper
+returned, with no post-command EP0 event observed in those snapshots. The
+target displayed `10 / 1 / 8` at 174 and 176 seconds: `launch_wait`,
+`TimeoutError` and UDC state `configured`. These are target-side observations,
+not evidence that host configuration completed. Wrapper return makes a stall
+in its MMIO/PHY-restoration tail unsupported; the next diagnostic must separate
+controller status-TRB ownership/progress and device/link event state from
+missing EP0 completion. No role, FIFO or module fix is established.
+
+The same checked proxy identity returned on a new owned connection at
+17:05:50.672948 UTC, without independent reboot attestation. The camera
+stopped; footage remains private. The qualification session is paused with no
+automatic repeat or unattended native dispatch. Native capture and power
+measurement remain unqualified. The frozen source passed 500 host tests before
+launch, and the expanded 90-test tracer suite passed after its review
+regression. See
+[twelfth-attempt evidence](evidence/2026-09-28-native-twelfth-attempt.json) and
+[service handoff](evidence/2026-09-28-twelfth-service-handoff.json).
+
 On September 28, the eleventh bounded attempt ran candidate
 `build_91cbf0b92ef6404b8483bfdd5269c77f` after AC returned, a fresh
 independent accepted review and one-use attended authorization. Host logs show

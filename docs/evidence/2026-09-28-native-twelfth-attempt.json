@@ -1,0 +1,114 @@
+{
+  "schema": "m1lab.native-qualification-evidence.v1",
+  "recorded_at": "2026-09-28T17:10:05.101890+00:00",
+  "scope": "Twelfth delegated attended native console diagnostic; no power measurements",
+  "candidate_source": "3719aece8323a7d1dba773ccf67288effbafd36d",
+  "candidate_build_id": "build_a522bd6a10a44159bf38da9c5229d9d5",
+  "procedure_id": "procedure_e1172f764f9f47e690db4d47f19042d9",
+  "procedure_digest": "8a4788a5ae908bce6e9088e549db4aeb4af32df9dcaf6d3542c46b9ffc95bfed",
+  "review_id": "review_b606e3444763427698dd9c73d80b9a18",
+  "review_job_id": "job_9d0ad22e377b4afb8355418badccda1d",
+  "review_disposition": "accepted",
+  "authority": "Owner delegated lab setup/validation and confirmed Mac attendance; camera was conditionally authorized after all other observation channels failed. Exact procedure selected under that delegation.",
+  "operation_id": "operation_47420b1630ed40e49cc7911fa1a4c413",
+  "initial_state": "unknown_effect",
+  "reconciled_state": "failed",
+  "native_samples": 0,
+  "native_payload_bytes": 0,
+  "usb_topology": "1-2",
+  "native_vid_pid": "1d6b:0104",
+  "native_enumerated_at": "2026-09-28T17:03:22.271519Z",
+  "host_configuration_failure_at": "2026-09-28T17:03:27.487533Z",
+  "host_configuration_failure": "can't set config #1, error -110",
+  "extra_usb_descriptor_probe": false,
+  "native_disconnect_at": "2026-09-28T17:05:43.918106Z",
+  "owned_proxy_return_at": "2026-09-28T17:05:50.672948Z",
+  "proxy_return_observed": true,
+  "new_owned_connection": true,
+  "independent_reboot_attestation": false,
+  "boot_log_bytes": 23636,
+  "boot_log_sha256": "f872b92f611dab0a39d56b7844252fd41f48e5270e5fd39483d43cdc6c1ffcbd",
+  "optical_observation": {
+    "procedure_digest": "8a4788a5ae908bce6e9088e549db4aeb4af32df9dcaf6d3542c46b9ffc95bfed",
+    "started_at": "2026-09-28T17:02:45.043556+00:00",
+    "finished_at": "2026-09-28T17:05:55.631897+00:00",
+    "video_bytes": 618223394,
+    "video_sha256": "a0567bcdadf1f2b3c201736f42f06f26fb103896331cad8bc7a0340959feeb1d",
+    "camera_exit": 0,
+    "native_runner_exit": 0,
+    "camera_coverage_lost_at": null,
+    "private": true,
+    "bounded_seconds": 600,
+    "bounded_bytes": 1073741824,
+    "audio_recorded": false,
+    "frames": [
+      {
+        "video_offset_seconds": 65,
+        "sha256": "2196adee473caf7326360db5e5f00e10321aaa815605b70393b94f5d4a7f063b",
+        "bytes": 250960,
+        "decoded_code": "2322",
+        "observation": "VAGP: both ACM interface calls and serial connection returned zero; status2 command accepted; no matching completion callback observed"
+      },
+      {
+        "video_offset_seconds": 67,
+        "sha256": "c15dc2bd856d84ac5d229d44779b64d00ce7f783a30fb6d40028e969766cf909",
+        "bytes": 251564,
+        "decoded_code": "2200",
+        "observation": "VRES: selected status wrapper returned after accepted command; no post-command EP0 event observed"
+      },
+      {
+        "video_offset_seconds": 69,
+        "sha256": "e3db4d7320b6b55a53d28fbdd01c41b3d60ba4c86bba90396425e3b40007b740",
+        "bytes": 252078,
+        "decoded_code": "10/0/8",
+        "observation": "launch_wait / no reported error / configured"
+      },
+      {
+        "video_offset_seconds": 145,
+        "sha256": "33f865d0656c1ce106ed890921fe41e18708cbca84239a520f57b926b37436ed",
+        "bytes": 252142,
+        "decoded_code": "2200",
+        "observation": "VRES remains2200 in late snapshot"
+      },
+      {
+        "video_offset_seconds": 149,
+        "sha256": "c3c5265b30b43b2cd53362c031d4122c0d3e9b95fb7f45d523e9b6ef493837e7",
+        "bytes": 251020,
+        "decoded_code": "2322",
+        "observation": "VAGP remains2322 in late snapshot"
+      },
+      {
+        "video_offset_seconds": 174,
+        "sha256": "023478ff2b1c288fc95526b14c8ff3fb37f9790e463dab21aa8a8230ce37cb3a",
+        "bytes": 256882,
+        "decoded_code": "10/1/8",
+        "observation": "launch_wait / TimeoutError / configured"
+      },
+      {
+        "video_offset_seconds": 176,
+        "sha256": "b34c25f037cfce70e6006f68781ae56084683390f495599851e450ff4c609a8b",
+        "bytes": 256250,
+        "decoded_code": "10/1/8",
+        "observation": "launch_wait / TimeoutError / configured"
+      }
+    ],
+    "independent_readers_agree": true,
+    "lower_kernel_lines": "Not reliably transcribed",
+    "camera_stopped": true,
+    "recording_scope": "Private local screen observation after USB diagnostics failed; no audio",
+    "limitations": "Self-reported stage/UDC state; not samples, successful host enumeration, or independently attested reboot"
+  },
+  "artifacts": [
+    "artifact_6acf8f460ddbe883cb0f6cd008876e7a191923fdd1ee539a164ad9ff15ff5537",
+    "artifact_f872b92f611dab0a39d56b7844252fd41f48e5270e5fd39483d43cdc6c1ffcbd",
+    "artifact_f7edf5bfc7a287c02dd50a1c028679373cc4841b19c722f2364262903530bc20",
+    "artifact_e4439bb10f4473b26f9eb995e4d56a9fed9dbbdedfe13cf41713e6c376bb2dbe"
+  ],
+  "next_discriminator": "The selected status wrapper returned, so a stall in its MMIO/PHY-restoration tail is no longer supported. Next distinguish controller status-TRB ownership/progress and device/link event state from missing EP0 completion. No role/FIFO/module fix is established.",
+  "scientific_power_qualified": false,
+  "autonomous_native_dispatch_enabled": false,
+  "no_automatic_repeat": true,
+  "host_tests": 500,
+  "additional_tracer_regression_tests": 90,
+  "preparation_history": "Prior review parser objection was disproved by a real-pipe regression (UnicodeDecodeError is a ValueError); a later review correctly required the camera arm-age assertion immediately before dispatch, which was added and accepted in fresh exact review. A separate host thermal interruption at90C had no dispatch; its missing usage was conservatively reconciled and Intel host turbo temporarily disabled without changing the thermal guard. All earlier proposals are retained; only this accepted exact procedure physically ran."
+}

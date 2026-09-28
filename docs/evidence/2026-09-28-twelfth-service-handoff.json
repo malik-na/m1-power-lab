@@ -1,0 +1,60 @@
+{
+  "schema": "m1lab.service-evidence-handoff.v1",
+  "recorded_at": "2026-09-28T17:11:54.386857+00:00",
+  "installed_release": "1212afd",
+  "session_id": "session_8b26578813be485da5afc3058473ea28",
+  "artifact_ids": [
+    "artifact_6acf8f460ddbe883cb0f6cd008876e7a191923fdd1ee539a164ad9ff15ff5537",
+    "artifact_f872b92f611dab0a39d56b7844252fd41f48e5270e5fd39483d43cdc6c1ffcbd",
+    "artifact_f7edf5bfc7a287c02dd50a1c028679373cc4841b19c722f2364262903530bc20",
+    "artifact_e4439bb10f4473b26f9eb995e4d56a9fed9dbbdedfe13cf41713e6c376bb2dbe",
+    "artifact_78142e21abb21727a44fcf45e3135bc2f7576116d2509ea6f80583545f5bf34a"
+  ],
+  "existing_jobs_preserved": [
+    {
+      "id": "job_873d880f16dd42bbbaa45fbbf60e0a3d",
+      "state": "completed"
+    },
+    {
+      "id": "job_4e69a99fe37743adab5bf28b63b48086",
+      "state": "completed"
+    }
+  ],
+  "confirmed_tokens_used": 79178,
+  "usage_uncertain": false,
+  "helper_device": "/dev/ttyACM0",
+  "helper_observed_at": "2026-09-28 17:11:18.058944+00:00",
+  "helper_available": true,
+  "helper_qualified": false,
+  "helper_scope": "Five fixed read-only m1n1 proxy requests completed; dispatch and recovery remain unqualified.",
+  "coordinator_active": true,
+  "helper_active": true,
+  "automatic_restart_count": 0,
+  "web_checks": [
+    {
+      "surface": "local HTTP",
+      "authenticated": true,
+      "status": 200,
+      "seconds": 0.2722
+    },
+    {
+      "surface": "local HTTP",
+      "authenticated": false,
+      "status": 403,
+      "seconds": 0.0184
+    },
+    {
+      "surface": "private HTTPS",
+      "authenticated": true,
+      "status": 200,
+      "seconds": 0.1051
+    }
+  ],
+  "native_samples": 0,
+  "native_dispatch_enabled": false,
+  "backup_created_before_import": true,
+  "source_test_count": 500,
+  "camera_active": false,
+  "raw_video_imported": false,
+  "additional_tracer_regression_test_suite_count": 90
+}
