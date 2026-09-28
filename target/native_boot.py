@@ -127,26 +127,39 @@ class _UsbTraceDiagnostic:
             self.close()
 
     def refresh(self) -> None:
-        page = int(time.monotonic()) % 6
+        page = int(time.monotonic()) % 10
         try:
             digits, label = ("0000", "UNAVAILABLE") if self.trace is None else self.trace.poll()
-            if 2 <= page < 4 and self.trace is not None:
-                digits, label = self.trace.event_page()
+            if self.trace is not None:
+                if 2 <= page < 4:
+                    digits, label = self.trace.event_page()
+                elif 4 <= page < 6:
+                    digits, label = self.trace.rearm_page()
+                elif 6 <= page < 8:
+                    digits, label = self.trace.device_page()
         except Exception:
             digits, label = "3000", "INCOMPLETE"
         # Alternate with the established stage/error overlay at the same place.
         # Two-second pages stay readable even when disconnected tty reads spin.
-        if page < 4:
+        if page < 8:
             if label not in {"UNAVAILABLE", "READY", "CONFIG WINDOW", "INCOMPLETE"}:
                 digits, label = "3000", "INCOMPLETE"
             if page < 2:
                 _console_digits(digits, "M1LAB USB TRACE - V / A / G / P",
                                 "VALID ACM RETURNS SERIAL EP0 STATUS",
                                 f"TRACE {digits} {label}")
-            else:
+            elif page < 4:
                 _console_digits(digits, "M1LAB USB EVENT - V / R / E / S",
                                 "VALID RETURN EVENT STATUS",
                                 f"EVENT {digits} {label}")
+            elif page < 6:
+                _console_digits(digits, "M1LAB USB REARM - V / M / C / W",
+                                "VALID MASK COUNT WINDOW",
+                                f"REARM {digits} {label}")
+            else:
+                _console_digits(digits, "M1LAB USB DEVICE - V / DD / W",
+                                "VALID DEVICE EVENT WINDOW",
+                                f"DEVICE {digits} {label}")
 
     def close(self, *, required: bool = False) -> None:
         if self.trace is not None:
