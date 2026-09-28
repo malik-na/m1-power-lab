@@ -74,3 +74,20 @@ primitive for future qualified channel wiring. Its receive deadline bounds
 host waiting; it cannot stop a stuck target or demonstrate recovery.
 The owner CLI exposes it as `native-receive`, consuming the channel owner's
 stdin pipe and publishing raw and screened artifacts for the selected launch.
+
+
+Native startup also exposes an experimental USB **configuration string**
+(`iConfiguration`), precreated and nonempty before binding the gadget. Its fixed
+ASCII format is `M1Lab diag:v1:<stage>:<state>`, or
+`M1Lab diag:v1:fail:<stage>:<type>:<state>` on failure. Only the six stages from
+`acm_bind` through `capture_done`, recognized UDC states, and allowlisted
+exception types are emitted; arbitrary error text is excluded. The static
+product and serial strings remain unchanged.
+
+Updates are best effort. While waiting for the launch line, a one-second select
+slice refreshes the diagnostic without resetting the original 150-second boot
+deadline; the separate image watchdog is unchanged. Configfs or UDC-state I/O
+failure cannot establish a stage transition or stop a capture on its own.
+A descriptor may be unavailable after an EP0 timeout, stale, or torn during a
+concurrent read. These strings are neither physical identity nor samples and
+must never be treated as capture success or hardware qualification.

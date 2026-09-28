@@ -6,9 +6,10 @@ DTB/modules, and 37 pinned Arch Linux ARM userspace packages. The lock records
 URLs, versions, sizes and SHA-256 values. Assembly uses the Python standard
 library; no cross compiler or host package installation is required.
 
-This is a candidate, not a qualified known-good return image. The current
-live lab stays paused with its unresolved usage hold. Build and capture
-preparation use a separate state directory with the model runtime disabled.
+This is a candidate, not a qualified known-good return image. The installed
+workspace supports bounded analysis of retained evidence; native dispatch
+remains disabled there. Build and capture preparation use a separate state
+directory with the model runtime disabled. See [current status](STATUS.md).
 
 ## Build
 
@@ -91,6 +92,36 @@ After capture, the target allows two seconds for output delivery and requests
 reboot. A separate userspace watchdog requests reboot at 180 seconds from
 init. A stuck kernel may defeat either path. Host timeout or complete framing
 does not prove target stop, delivery, or recovery.
+
+## Experimental USB startup diagnostic
+
+A diagnostic candidate preallocates a configuration string before UDC binding,
+then updates it with a fixed startup stage and sampled UDC state. Product and
+serial labels stay unchanged. Failure strings include only a fixed exception
+category. The existing finite boot and watchdog limits remain; the diagnostic
+never carries samples, physical identity, or proof of recovery. Concurrent
+string reads may be stale or torn, and an EP0 failure can make the string
+unavailable entirely.
+
+`scripts/probe-native-usb-diagnostic.py` reads only a fixed set of standard
+GET_DESCRIPTOR requests from the selected bus-port. It checks native VID/PID,
+public labels and descriptor indices, validates the diagnostic format, and
+writes a new private JSONL file capped at 256 KiB. It never configures, resets,
+or claims an interface. A same-port proxy observation is only a USB observation;
+the exclusive helper separately verifies proxy identity and connection generation.
+
+```bash
+sudo /usr/bin/python3 scripts/probe-native-usb-diagnostic.py \
+  --usb-topology 1-2 --seconds 480 --output /private/new-diagnostic.jsonl
+```
+
+The probe prints readiness before polling. Arm it only as part of the exact
+reviewed diagnostic procedure and keep an outer timeout with termination/reaping:
+the 250 ms USB transfer timeout cannot bound every kernel mutex or filesystem
+wait. The standalone tool reserves two seconds before beginning a six-request
+batch. It exits on its observation deadline or a same-port proxy return after
+native enumeration. Failed reads establish no target stage. This channel must
+be demonstrated on the actual candidate before relying on it for diagnosis.
 
 ## Qualification still required
 

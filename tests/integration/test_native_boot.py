@@ -101,6 +101,7 @@ def test_configfs_acm_link_resolves_function_from_process_cwd(monkeypatch, tmp_p
     gadget.parent.mkdir(parents=True)
     udc = tmp_path / "sys/class/udc"
     (udc / "synthetic-udc").mkdir(parents=True)
+    (udc / "synthetic-udc/state").write_text("not attached\n")
     channel = tmp_path / "dev/ttyGS0"
     channel.parent.mkdir()
     channel.touch()
@@ -114,6 +115,8 @@ def test_configfs_acm_link_resolves_function_from_process_cwd(monkeypatch, tmp_p
         if path == gadget:
             for directory in ("strings", "configs", "functions"):
                 original_mkdir(gadget / directory)
+        elif path == gadget / "configs/c.1":
+            original_mkdir(path / "strings")
         return result
 
     monkeypatch.setattr(original_path, "mkdir", configfs_mkdir)
@@ -134,10 +137,24 @@ def test_configfs_acm_link_resolves_function_from_process_cwd(monkeypatch, tmp_p
         return original_symlink_to(link, target, *args, **kwargs)
 
     monkeypatch.setattr(original_path, "symlink_to", configfs_symlink_to)
+    original_write_text = original_path.write_text
+    configuration_at_bind = []
+
+    def write_text(path, value, *args, **kwargs):
+        if path == gadget / "UDC":
+            configuration_at_bind.append(
+                (gadget / "configs/c.1/strings/0x409/configuration").read_text()
+            )
+        return original_write_text(path, value, *args, **kwargs)
+
+    monkeypatch.setattr(original_path, "write_text", write_text)
     stages = []
     assert native_boot._configure_gadget(time.monotonic() + 1, stages.append) == channel
     assert (gadget / "configs/c.1/acm.usb0").readlink() == gadget / "functions/acm.usb0"
     assert stages[-2:] == ["acm_bind", "tty_wait"]
+    assert configuration_at_bind == ["M1Lab diag:v1:acm_bind:not_attached\n"]
+    assert (gadget / "strings/0x409/product").read_text() == "M1Lab native candidate\n"
+    assert (gadget / "strings/0x409/serialnumber").read_text() == "m1lab-native-candidate\n"
 
 
 @pytest.mark.parametrize("wire", [b"{}\n{}\n", b"x" * 32 + b"\n"])
@@ -151,3 +168,101 @@ def test_multiple_or_oversized_launch_line_is_rejected(monkeypatch, wire):
             native_boot._launch_line(read_fd, time.monotonic() + 1)
     finally:
         os.close(read_fd)
+
+
+@pytest.fixture
+def configuration_diagnostic(tmp_path):
+    configuration = tmp_path / "configs/c.1"
+    (configuration / "strings").mkdir(parents=True)
+    controller = tmp_path / "udc/controller"
+    controller.mkdir(parents=True)
+    (controller / "state").write_text("address\n")
+    diagnostic = native_boot._ConfigurationDiagnostic()
+    diagnostic.update("python_entry")  # No attribute exists before preparation.
+    diagnostic.update("acm_bind")
+    diagnostic.prepare(configuration, controller)
+    return diagnostic, controller
+
+
+def test_configuration_diagnostic_updates_only_fixed_stages_and_states(configuration_diagnostic):
+    diagnostic, controller = configuration_diagnostic
+    assert diagnostic.path.read_text() == "M1Lab diag:v1:acm_bind:address\n"
+    for stage in ("tty_wait", "launch_wait", "launch_received", "capture", "capture_done"):
+        (controller / "state").write_text("configured\n")
+        diagnostic.update(stage)
+        encoded = diagnostic.path.read_bytes()
+        assert encoded == f"M1Lab diag:v1:{stage}:configured\n".encode("ascii")
+        assert len(encoded.rstrip()) <= 126
+    before = diagnostic.path.read_bytes()
+    diagnostic.update("untrusted private stage")
+    assert diagnostic.path.read_bytes() == before
+    (controller / "state").write_text("private unexpected controller data" * 5)
+    diagnostic.update("launch_wait")
+    assert diagnostic.path.read_text() == "M1Lab diag:v1:launch_wait:unknown\n"
+
+
+@pytest.mark.parametrize("error,kind", [
+    (TimeoutError("private detail"), "TimeoutError"),
+    (PermissionError("private detail"), "OSError"),
+    (ValueError("private detail"), "ValueError"),
+    (KeyError("private detail"), "Exception"),
+])
+def test_configuration_failure_reports_fixed_type_without_error_text(configuration_diagnostic, error, kind):
+    diagnostic, _controller = configuration_diagnostic
+    diagnostic.update("capture", error)
+    assert diagnostic.path.read_text() == f"M1Lab diag:v1:fail:capture:{kind}:address\n"
+    assert len(diagnostic.path.read_bytes().rstrip()) <= 126
+    diagnostic.update("capture_done")
+    assert diagnostic.path.read_text() == "M1Lab diag:v1:capture_done:address\n"
+
+
+def test_configuration_io_failures_are_best_effort_and_do_not_recreate_attribute(configuration_diagnostic, monkeypatch):
+    diagnostic, controller = configuration_diagnostic
+    diagnostic.path.unlink()
+    diagnostic.update("launch_wait", ValueError("original failure"))
+    assert not diagnostic.path.exists()
+    monkeypatch.setattr(native_boot.os, "open", lambda *_a, **_k: (_ for _ in ()).throw(OSError("denied")))
+    diagnostic.update("capture_done")
+    diagnostic.update("capture", ValueError("original failure"))
+    unavailable = native_boot._ConfigurationDiagnostic()
+    unavailable.prepare(controller / "absent/configuration", controller)
+    unavailable.update("tty_wait")
+
+
+@pytest.mark.parametrize("diagnostic_fails", [False, True])
+def test_launch_diagnostic_refresh_preserves_original_deadline(monkeypatch, diagnostic_fails):
+    now = [0.0]
+    waits = []
+    refreshes = []
+    monkeypatch.setattr(native_boot.time, "monotonic", lambda: now[0])
+
+    def select(_read, _write, _error, timeout):
+        waits.append(timeout)
+        now[0] += timeout
+        return [], [], []
+
+    def refresh():
+        refreshes.append(now[0])
+        if diagnostic_fails:
+            raise OSError("synthetic diagnostic unavailable")
+
+    monkeypatch.setattr(native_boot.select, "select", select)
+    with pytest.raises(TimeoutError, match="startup deadline"):
+        native_boot._launch_line(12345, 2.5, on_wait=refresh)
+    assert waits == [1, 1, 0.5]
+    assert refreshes == [0.0, 1.0, 2.0]
+    assert now[0] == 2.5
+
+
+def test_failed_launch_diagnostic_does_not_mask_received_launch():
+    read_fd, write_fd = os.pipe()
+    try:
+        os.write(write_fd, b"{}\n")
+
+        def unavailable():
+            raise OSError("diagnostic unavailable")
+
+        assert native_boot._launch_line(read_fd, time.monotonic() + 1, on_wait=unavailable) == b"{}"
+    finally:
+        os.close(read_fd)
+        os.close(write_fd)

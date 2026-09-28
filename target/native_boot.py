@@ -23,6 +23,67 @@ GADGET = Path("/sys/kernel/config/usb_gadget/m1lab")
 BOOT_ID = Path("/proc/sys/kernel/random/boot_id")
 IMAGE_CONFIG = Path("/etc/m1lab/image-config.json")
 MAX_IMAGE_CONFIG_BYTES = 256 * 1024
+_DIAGNOSTIC_STAGES = frozenset({
+    "acm_bind", "tty_wait", "launch_wait", "launch_received", "capture", "capture_done",
+})
+_UDC_STATES = {
+    value: value.replace(" ", "_") for value in (
+        "not attached", "attached", "powered", "reconnecting", "unauthenticated",
+        "default", "address", "configured", "suspended",
+    )
+}
+_DIAGNOSTIC_ERRORS = (
+    TimeoutError, ValueError, OSError, ImportError, RuntimeError, AssertionError, TypeError,
+)
+
+
+class _ConfigurationDiagnostic:
+    """Experimental iConfiguration hint; never identity or sample evidence."""
+
+    def __init__(self) -> None:
+        self.path: Path | None = None
+        self.controller: Path | None = None
+
+    def _value(self, stage: str, error: Exception | None = None) -> str:
+        state = "unknown"
+        if self.controller is not None:
+            try:
+                with (self.controller / "state").open("rb") as source:
+                    raw = source.read(65)
+                if len(raw) <= 64:
+                    state = _UDC_STATES.get(raw.decode("ascii").strip(), "unknown")
+            except (OSError, UnicodeError):
+                pass
+        if error is None:
+            return f"M1Lab diag:v1:{stage}:{state}"
+        kind = next((kind.__name__ for kind in _DIAGNOSTIC_ERRORS
+                     if isinstance(error, kind)), "Exception")
+        return f"M1Lab diag:v1:fail:{stage}:{kind}:{state}"
+
+    def prepare(self, configuration: Path, controller: Path) -> None:
+        self.controller = controller
+        self.path = configuration / "strings/0x409/configuration"
+        try:
+            self.path.parent.mkdir()
+            # Nonempty before bind reserves iConfiguration. Keep the product
+            # and serial labels unchanged for the existing capture transport.
+            self.path.write_text(self._value("acm_bind") + "\n", encoding="ascii")
+        except OSError:
+            pass
+
+    def update(self, stage: str, error: Exception | None = None) -> None:
+        if self.path is None or stage not in _DIAGNOSTIC_STAGES:
+            return
+        value = self._value(stage, error).encode("ascii") + b"\n"
+        try:
+            # Open only the existing configfs attribute; do not recreate it.
+            fd = os.open(self.path, os.O_WRONLY | os.O_TRUNC | os.O_CLOEXEC)
+            try:
+                os.write(fd, value)
+            finally:
+                os.close(fd)
+        except OSError:
+            pass  # Diagnostics must not mask a capture or its original failure.
 
 
 def _remaining(deadline: float) -> float:
@@ -36,11 +97,22 @@ def _command(deadline: float, *args: str) -> None:
     subprocess.run(args, check=True, timeout=min(10, _remaining(deadline)))
 
 
-def _launch_line(fd: int, deadline: float) -> bytes:
+def _launch_line(
+    fd: int, deadline: float, *, on_wait: Callable[[], None] | None = None,
+) -> bytes:
     """Receive exactly one bounded JSON line from the exclusive host owner."""
     content = bytearray()
     while len(content) <= MAX_LAUNCH_BYTES:
-        if not select.select([fd], [], [], _remaining(deadline))[0]:
+        remaining = _remaining(deadline)
+        if on_wait is not None:
+            try:
+                on_wait()
+            except OSError:
+                pass
+        timeout = min(1, _remaining(deadline)) if on_wait is not None else remaining
+        if not select.select([fd], [], [], timeout)[0]:
+            if on_wait is not None:
+                continue  # Refresh diagnostics without extending the deadline.
             raise TimeoutError("no native launch received")
         try:
             chunk = os.read(fd, min(4096, MAX_LAUNCH_BYTES + 1 - len(content)))
@@ -64,7 +136,11 @@ def _launch_line(fd: int, deadline: float) -> bytes:
     raise ValueError("native launch exceeds size bound")
 
 
-def _configure_gadget(deadline: float, mark: Callable[[str], None]) -> Path:
+def _configure_gadget(
+    deadline: float, mark: Callable[[str], None],
+    diagnostic: _ConfigurationDiagnostic | None = None,
+) -> Path:
+    diagnostic = diagnostic if diagnostic is not None else _ConfigurationDiagnostic()
     for module in ("phy_apple_atc", "tps6598x", "dwc3_apple", "libcomposite", "usb_f_acm"):
         mark(f"module_{module}")
         _command(deadline, "/usr/bin/modprobe", module)
@@ -93,6 +169,7 @@ def _configure_gadget(deadline: float, mark: Callable[[str], None]) -> Path:
     (strings / "serialnumber").write_text("m1lab-native-candidate\n")
     configuration = GADGET / "configs/c.1"
     configuration.mkdir()
+    diagnostic.prepare(configuration, controller)
     (configuration / "MaxPower").write_text("2\n")
     (GADGET / "functions/acm.usb0").mkdir()
     (configuration / "acm.usb0").symlink_to(GADGET / "functions/acm.usb0")
@@ -141,19 +218,21 @@ def main() -> int:
     deadline = time.monotonic() + BOOT_SECONDS
     fd = None
     stage = "python_entry"
+    diagnostic = _ConfigurationDiagnostic()
 
     def mark(value: str) -> None:
         nonlocal stage
         stage = value
         print(f"M1Lab stage={value}", flush=True)
+        diagnostic.update(value)
 
     try:
         mark("python_entry")
-        channel = _configure_gadget(deadline, mark)
+        channel = _configure_gadget(deadline, mark, diagnostic)
         fd = os.open(channel, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
         tty.setraw(fd, termios.TCSANOW)
         mark("launch_wait")
-        raw = _launch_line(fd, deadline)
+        raw = _launch_line(fd, deadline, on_wait=lambda: diagnostic.update(stage))
         mark("launch_received")
         launch_path = Path("/run/m1lab-launch.json")
         launch_path.write_bytes(raw)
@@ -176,6 +255,7 @@ def main() -> int:
         time.sleep(min(2, _remaining(deadline)))
         return 0
     except Exception as exc:
+        diagnostic.update(stage, exc)
         print(f"M1Lab failure stage={stage} type={type(exc).__name__}", flush=True)
         return 2
     finally:
