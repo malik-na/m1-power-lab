@@ -194,11 +194,15 @@ class PushNotifications:
                 if alert is not None:
                     self._deliver_to_enrolled(event.cursor, *alert)
                 cursor = event.cursor
-                with self._core.journal.transaction() as tx:
-                    tx.execute(
-                        "UPDATE push_cursors SET cursor=?,updated_at=? WHERE session_id=?",
-                        (cursor, iso(), self._session_id),
-                    )
+            # Delivery claims are durable and deduplicated by event cursor. If
+            # this batch stops early, replay starts at the prior cursor and
+            # skips claimed alerts. Persisting once per batch avoids a write
+            # and shared journal lock acquisition for every runtime delta.
+            with self._core.journal.transaction() as tx:
+                tx.execute(
+                    "UPDATE push_cursors SET cursor=?,updated_at=? WHERE session_id=?",
+                    (cursor, iso(), self._session_id),
+                )
 
         budget_alert = self._budget_alert()
         if budget_alert is not None:

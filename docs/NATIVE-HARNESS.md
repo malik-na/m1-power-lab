@@ -6,9 +6,10 @@ DTB/modules, and 37 pinned Arch Linux ARM userspace packages. The lock records
 URLs, versions, sizes and SHA-256 values. Assembly uses the Python standard
 library; no cross compiler or host package installation is required.
 
-This is a candidate, not a qualified known-good return image. The current
-live lab stays paused with its unresolved usage hold. Build and capture
-preparation use a separate state directory with the model runtime disabled.
+This is a candidate, not a qualified known-good return image. The installed
+workspace supports bounded analysis of retained evidence; native dispatch
+remains disabled there. Build and capture preparation use a separate state
+directory with the model runtime disabled. See [current status](STATUS.md).
 
 ## Build
 
@@ -92,19 +93,74 @@ reboot. A separate userspace watchdog requests reboot at 180 seconds from
 init. A stuck kernel may defeat either path. Host timeout or complete framing
 does not prove target stop, delivery, or recovery.
 
+## Experimental USB startup diagnostic
+
+A diagnostic candidate preallocates a configuration string before UDC binding,
+then updates it with a fixed startup stage and sampled UDC state. Product and
+serial labels stay unchanged. Failure strings include only a fixed exception
+category. The existing finite boot and watchdog limits remain; the diagnostic
+never carries samples, physical identity, or proof of recovery. Concurrent
+string reads may be stale or torn, and an EP0 failure can make the string
+unavailable entirely.
+
+`scripts/probe-native-usb-diagnostic.py` reads only a fixed set of standard
+GET_DESCRIPTOR requests from the selected bus-port. It checks native VID/PID,
+public labels and descriptor indices, validates the diagnostic format, and
+writes a new private JSONL file capped at 256 KiB. It never configures, resets,
+or claims an interface. A same-port proxy observation is only a USB observation;
+the exclusive helper separately verifies proxy identity and connection generation.
+
+Run the probe only from an exact-hash-verified, root-owned volatile copy as part
+of the reviewed attended procedure. The privileged wrapper starts it before
+dispatch, records a fresh process-bound readiness file, and enforces an outer
+480-second timeout with bounded termination and reaping. Running the mutable
+checkout script directly with `sudo` would bypass that reviewed staging boundary.
+The probe prints readiness before polling. The outer timeout is necessary because
+the 250 ms USB transfer timeout cannot bound every kernel mutex or filesystem
+wait. The standalone tool reserves two seconds before beginning a six-request
+batch. It exits on its observation deadline or a same-port proxy return after
+native enumeration. Failed reads establish no target stage. This channel must
+be demonstrated on the actual candidate before relying on it for diagnosis.
+
+The ninth attempt did not establish that channel: native USB enumerated, but
+the host timed out setting configuration 1, and the fixed probe's fresh
+device-descriptor reads returned timeout or protocol errors before it could
+request the configuration string. It captured zero result bytes and samples.
+The proxy returned on a new checked connection; the next useful observation
+is the owner's exact last console line. See
+[ninth-attempt evidence](evidence/2026-09-28-native-ninth-attempt.json).
+
 ## Qualification still required
 
 Host emulation has exercised the actual ARM64 Python/BusyBox/kmod binaries
 and collector with synthetic samples. It does not exercise the M1 kernel,
-USB controller, sensor drivers or reboot. The source review found no concrete
-boot blocker; the selected exact image/procedure still needs review before
-execution through the coordinator/helper path.
+USB controller, sensor drivers or reboot. The ninth physical attempt exposed
+an unresolved USB configuration failure before native capture.
 
-Next is exact-artifact review and one owner-attended M1 capture, with
-independent identity checks and observed return/re-identification. Preserve the
-existing normal ALARM boot path and physical recovery instructions. Never
-mark this candidate `known_good` solely because assembly or emulation passed.
-Scientific sensor qualification and investigation remain stopped.
+An additional native boot needs new exact-artifact review and attended
+authorization. Preserve the existing normal ALARM boot path and physical
+recovery instructions. The current priority is the owner's exact last console
+line from the failed startup. Never mark this candidate `known_good` solely
+because assembly or emulation passed. Scientific sensor qualification and
+power investigation remain stopped; bounded analysis of retained technical
+evidence is available in the installed workspace.
+
+After a capture is published, its screened `native_capture` artifact can be
+summarized without opening a device, then selected as technical context for a
+bounded Codex turn:
+
+```bash
+m1lab --session HARNESS_ID native-summary \
+  --capture-artifact CAPTURE_ARTIFACT_ID
+m1lab --session HARNESS_ID investigate \
+  --artifact-id CAPTURE_ARTIFACT_ID \
+  "Assess the captured sensor fields and remaining measurement unknowns."
+```
+
+`--artifact-id` is repeatable and accepts only artifacts in the selected
+session. The raw binary stream stays preserved separately. A complete capture
+does not establish sensor units, a whole-device power boundary, or a scientific
+observation; qualify those before deriving a power result.
 
 ## Explicit attended qualification path
 

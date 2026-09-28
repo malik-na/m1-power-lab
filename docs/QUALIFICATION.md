@@ -1,5 +1,37 @@
 # Qualification gates
 
+## Current gate: native USB configuration and capture
+
+On September 28, the ninth bounded attempt ran candidate
+`build_c22f6d964ead45689c0e59525896bb41` under exact review and single-use
+attended authorization. Operation `operation_caf72b0de52747a6971cd1ab649607fd`
+began at 14:39:18.676741 UTC. Host logs observed native USB enumeration at
+14:39:44.386495 UTC, followed by a configuration-1 timeout (`-110`) at
+14:39:49.504462 UTC. The separate fixed GET_DESCRIPTOR probe failed its fresh
+device-descriptor requests with timeout and protocol errors, so it obtained no
+configuration-string stage. Its 14:39:45 observation timestamp is the request
+start, not evidence of a completed descriptor read. No native result bytes or
+samples were captured. The operation is reconciled as failed; its original
+unknown result and 24,000-byte boot log remain retained.
+
+The watcher caught the same-identity proxy on a new owned connection at
+14:42:12.648913 UTC. That establishes a checked USB return, not independently
+attested reboot or native capture. Native power measurement and continuous
+native dispatch remain unqualified. The next discriminating evidence is the
+owner's exact last console line before another separately reviewed boot; this
+failure does not justify an automatic repeat. See
+[ninth-attempt evidence](evidence/2026-09-28-native-ninth-attempt.json) and
+[current deployment status](STATUS.md).
+
+The eighth configfs-fixed attempt also reached Linux USB descriptors but timed
+out setting configuration 1 (`-110`). It captured zero bytes and samples; its
+same-identity proxy return was reconciled as failed with the original unknown
+result and a 24,000-byte boot log retained. See
+[eighth-attempt evidence](evidence/2026-09-28-native-eighth-attempt.json).
+
+The sections below retain historical qualification states as recorded at the
+time; their pending approvals and installed release versions are historical.
+
 ## Expired launch replaced without target dispatch
 
 The owner replied `approved` at approximately 23:57 UTC, after the configfs

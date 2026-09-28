@@ -1,0 +1,37 @@
+{
+  "observed_at": "2026-09-28T12:40:22.663873+00:00",
+  "scope": "Host tools and preparation; no new physical dispatch",
+  "candidate_source": "4c2855bdd89d74bdae5cdaa6a4870d1b1cdf52a3",
+  "candidate_build_id": "build_2c9d5eff9bd947a1ac8c575b8b993a9a",
+  "published_artifact_checks": {
+    "count": 52,
+    "hashes_and_sizes_match": true
+  },
+  "usb": {
+    "mode": "m1n1 proxy enumerated",
+    "vid_pid": "1209:316d",
+    "interface": "00",
+    "topology": "1-2",
+    "device_access": "denied to current desktop process"
+  },
+  "private_configuration": "Prior 1-1 configuration and expired launch/review archived; helper configured for observed port 1-2.",
+  "native_dispatch_performed": false,
+  "installed_coordinator": {
+    "release": "f560929",
+    "active": true,
+    "restarts": 0,
+    "usage_hold": "preserved"
+  },
+  "validation": {
+    "full_suite": "358 passed in 41.09s",
+    "independent_code_review": "No blocking findings",
+    "wheel_import_and_cli_parser": "passed"
+  },
+  "package": {
+    "path": "dist/m1_power_lab-0.1.0-py3-none-any.whl",
+    "sha256": "c2f0b9ccc94749f0d2881749408d7f67293a687792a609a001a8e9250db3e22a"
+  },
+  "physical_next_step": "Current-user USB access and attendance confirmation, followed by a fresh exact reviewed bounded native capture and proxy return.",
+  "investigation_ready": false,
+  "remaining_measurement_gate": "Sensor provenance, units, energy boundary, fixture, noise/drift and observer effect remain physically unqualified."
+}

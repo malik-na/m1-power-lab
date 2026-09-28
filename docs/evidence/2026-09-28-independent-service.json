@@ -1,0 +1,68 @@
+{
+  "schema": "m1lab.independent-service-evidence.v1",
+  "recorded_at": "2026-09-28T14:10:19.047134+00:00",
+  "installed_release": "1212afd",
+  "host_tests_passed": 368,
+  "coordinator_systemd_enabled": true,
+  "sleep_idle_lid_inhibitor_observed": true,
+  "service_owned_analysis": true,
+  "session_id": "session_8b26578813be485da5afc3058473ea28",
+  "usage_uncertain": false,
+  "reported_session_tokens": 79178,
+  "prior_session_resolution": {
+    "conservative_charge": 300000,
+    "provider_measurement": false,
+    "phase": "stopped"
+  },
+  "jobs": [
+    {
+      "id": "job_4e69a99fe37743adab5bf28b63b48086",
+      "state": "completed",
+      "new_reported_tokens": 27986
+    },
+    {
+      "id": "job_873d880f16dd42bbbaa45fbbf60e0a3d",
+      "state": "completed",
+      "resumed": true,
+      "new_reported_tokens": 51192,
+      "thread_total_tokens": 79178
+    }
+  ],
+  "http_during_resumed_job": {
+    "started_at": "2026-09-28T14:06:47.770836+00:00",
+    "finished_at": "2026-09-28T14:09:06.368033+00:00",
+    "requests": 90,
+    "all_expected_status": true,
+    "authenticated_status": 200,
+    "anonymous_status": 403,
+    "max_seconds": 3.438,
+    "paths": [
+      "/overview",
+      "/conversation"
+    ]
+  },
+  "private_https_verified": true,
+  "inspection": {
+    "observed_at": "2026-09-28T14:09:22.289354+00:00",
+    "fixed_read_only_requests": 5,
+    "available": true,
+    "qualified": false,
+    "mode": "proxy",
+    "usb_topology": "1-2",
+    "tty": "/dev/ttyACM1",
+    "capabilities": []
+  },
+  "helper_systemd_installed": true,
+  "helper_automatic_start_or_restart": false,
+  "independence_limit": "Service-owned bounded evidence analysis survives setup-terminal exit; the native experiment loop is not enabled.",
+  "native_samples": 0,
+  "power_measurements_qualified": false,
+  "fixes": [
+    "Preserve explicitly selected evidence and exact procedure in bounded review prompts",
+    "Batch notification cursor commits",
+    "Use newly charged job tokens for resumed reservation checks",
+    "Yield between queued runtime events"
+  ],
+  "live_validation_limits": "No machine reboot or iPhone-specific notification delivery was tested in this continuation.",
+  "wheel_sha256": "106e7ddc1cf185fda87fc3d76b5806e2dd56a5df53650565956e1f48e2990f4e"
+}

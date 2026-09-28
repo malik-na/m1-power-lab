@@ -178,6 +178,79 @@ def test_enrollment_skips_old_events_and_revocation_stops_delivery(core, push_se
     assert len(sent) == 2
 
 
+def test_push_cursor_is_persisted_per_event_batch_under_runtime_event_volume(
+    core, push_setup,
+):
+    session, push, _, sent = push_setup
+    push.subscribe(**SUBSCRIPTION)
+    with core.journal.transaction() as tx:
+        for index in range(450):
+            core.journal.append_event(
+                tx,
+                kind="operation.reconciled" if index == 50 else "job.running",
+                session_id=session.id,
+                subject_id="synthetic-job",
+                data={},
+            )
+
+    cursor_updates = []
+    core.journal._connection.set_trace_callback(
+        lambda statement: cursor_updates.append(statement)
+        if statement.startswith("UPDATE push_cursors SET cursor=") else None
+    )
+    try:
+        push.dispatch_pending()
+    finally:
+        core.journal._connection.set_trace_callback(None)
+
+    assert len(cursor_updates) == 3
+    assert len(sent) == 1
+    assert core.journal.one(
+        "SELECT cursor FROM push_cursors WHERE session_id=?", (session.id,),
+    )["cursor"] == core.snapshot(session.id).last_event_cursor
+    push.dispatch_pending()
+    assert len(sent) == 1
+
+
+def test_interrupted_push_batch_replays_without_duplicate_alert(core, push_setup, monkeypatch):
+    session, push, _, sent = push_setup
+    push.subscribe(**SUBSCRIPTION)
+    initial_cursor = core.journal.one(
+        "SELECT cursor FROM push_cursors WHERE session_id=?", (session.id,),
+    )["cursor"]
+    with core.journal.transaction() as tx:
+        for kind in ("operation.reconciled", "job.running"):
+            core.journal.append_event(
+                tx, kind=kind, session_id=session.id,
+                subject_id="synthetic-job", data={},
+            )
+
+    original = notifications._event_alert
+    calls = 0
+
+    def interrupted(event):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("synthetic interruption inside a batch")
+        return original(event)
+
+    monkeypatch.setattr(notifications, "_event_alert", interrupted)
+    with pytest.raises(RuntimeError, match="synthetic interruption"):
+        push.dispatch_pending()
+    assert len(sent) == 1
+    assert core.journal.one(
+        "SELECT cursor FROM push_cursors WHERE session_id=?", (session.id,),
+    )["cursor"] == initial_cursor
+
+    monkeypatch.setattr(notifications, "_event_alert", original)
+    push.dispatch_pending()
+    assert len(sent) == 1
+    assert core.journal.one(
+        "SELECT cursor FROM push_cursors WHERE session_id=?", (session.id,),
+    )["cursor"] == core.snapshot(session.id).last_event_cursor
+
+
 @pytest.mark.parametrize("failure", ["unavailable", "expired"])
 def test_failed_push_preserves_pending_approval_and_expiry_revokes_subscription(
     core, push_setup, monkeypatch, failure,

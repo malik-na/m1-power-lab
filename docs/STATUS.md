@@ -2,6 +2,68 @@
 
 This file distinguishes implemented behavior from physical qualification.
 
+## 2026-09-28 installed investigation workspace
+
+Release `1212afd` is installed on the ThinkPad as the enabled systemd service.
+The private owner interface and Codex jobs run independently of the setup
+terminal. Sleep, idle and lid-close inhibition is active while the service runs.
+The scoped inspect-only helper is installed and running for USB port `1-2` and
+`/dev/ttyACM0`; five fixed m1n1 requests verified the connected M1 proxy. The
+helper has no automatic restart or boot enablement and must be explicitly
+reopened after a coordinator restart or USB reconnection. It does not expose
+native experiment dispatch.
+
+The prior installed session is stopped. Its old uncertain usage was resolved
+with a conservative 300,000-token charge under the owner's delegation, not a
+provider measurement. A new session retains the eighth- and ninth-attempt
+technical artifacts and has completed two service-owned analysis turns. The first reported
+27,986 tokens; the resumed turn reported 51,192 additional tokens, for a thread
+and session total of 79,178 with no usage uncertainty. This verifies bounded
+analysis of retained evidence, not a continuous autonomous native experiment loop.
+
+The deployment fixes selected evidence being omitted from bounded prompts,
+per-event notification cursor commits contending with the web interface, and
+resumed chat reservation checks counting earlier turns. That installed release
+passed 368 host tests; the source including the bounded USB diagnostic passes
+398 tests.
+During the installed resumed job, all 90 authenticated and anonymous HTTP probes
+returned the expected 200 or 403; the slowest took 3.438 seconds. The private
+HTTPS pages also responded successfully. See
+[deployment evidence](evidence/2026-09-28-independent-service.json).
+
+The ninth bounded physical attempt used a reviewed USB descriptor diagnostic
+with candidate `build_c22f6d964ead45689c0e59525896bb41`. The host observed
+native USB enumeration at 14:39:44 UTC, then a configuration-1 timeout (`-110`)
+at 14:39:49 UTC. The separate read-only descriptor probe also timed out or
+received a protocol error on a fresh device-descriptor request. It obtained no
+configuration-string stage. No native result bytes or samples were captured.
+The proxy returned at 14:42:12 UTC with the same checked identity on a new
+owned connection; this is not independent reboot attestation. The probe's
+14:39:45 timestamp marks the start of an observation whose request completed
+later, not a successful descriptor read. The next useful evidence is the
+owner's exact last console line before any separately reviewed boot. Native
+capture, power measurement and unattended target recovery remain unqualified.
+The ninth operation is reconciled as failed with the original unknown outcome
+retained. Its five technical artifacts and reconciliation summary are available
+in the installed workspace. The inspection helper was explicitly restored on
+the re-enumerated proxy interface, and both private HTTPS access and anonymous
+denial were rechecked. See
+[ninth-attempt evidence](evidence/2026-09-28-native-ninth-attempt.json) and
+[service handoff evidence](evidence/2026-09-28-ninth-service-handoff.json).
+
+The eighth attempt had likewise reached native USB enumeration and timed out
+at SET_CONFIGURATION. It captured no samples, and its returned proxy was
+reconciled as failed while preserving the original unknown outcome. See
+[eighth-attempt evidence](evidence/2026-09-28-native-eighth-attempt.json).
+
+The host also provides read-only USB preflight, capture summaries that recheck
+framing and lineage, and explicit artifact selection for investigation turns.
+See [native preflight](NATIVE-PREFLIGHT.md) and [native harness](NATIVE-HARNESS.md).
+The [initial host-readiness evidence](evidence/2026-09-28-host-readiness.json)
+records the earlier state before this deployment and physical attempt.
+
+## Prior qualification history
+
 Owner-selected coordination uses the installed Agents Orchestrator on
 `gpt-6-astra` with `xhigh` reasoning. All other development and review agents use
 `gpt-6-sol` with medium reasoning. One integration owner controls commits and

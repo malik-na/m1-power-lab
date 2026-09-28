@@ -1,0 +1,58 @@
+{
+  "schema": "m1lab.service-evidence-handoff.v1",
+  "recorded_at": "2026-09-28T14:53:35.282754+00:00",
+  "installed_release": "1212afd",
+  "session_id": "session_8b26578813be485da5afc3058473ea28",
+  "artifact_ids": [
+    "artifact_be163dabebc58e129a2e8f94aa83e2e391023bee4eb56a0d65a7ff1cbdef3e3b",
+    "artifact_cc5d7f19fb2c8e515b48729c2698b416dfc39c3fec139095c0de43e17aebd624",
+    "artifact_3f22407c39d17304eed7719a141ac33daaaff2b55082b8e88835bac626eb0605",
+    "artifact_2b5e185e8e3c75856ffd83624fd61d934d70f281c4efeeb572fde9e4e62cc82e",
+    "artifact_797066a7b0487024484ae4d25280c9684ae837deb1b009f6ee3d6f48c421a7b0",
+    "artifact_602453923ec9f63607ba621cd9abf78e73d15d4273593fa348a0d55519c059c9"
+  ],
+  "existing_jobs_preserved": [
+    {
+      "id": "job_873d880f16dd42bbbaa45fbbf60e0a3d",
+      "state": "completed"
+    },
+    {
+      "id": "job_4e69a99fe37743adab5bf28b63b48086",
+      "state": "completed"
+    }
+  ],
+  "confirmed_tokens_used": 79178,
+  "usage_uncertain": false,
+  "helper_device": "/dev/ttyACM0",
+  "helper_observed_at": "2026-09-28 14:52:55.780141+00:00",
+  "helper_available": true,
+  "helper_qualified": false,
+  "helper_scope": "Five fixed read-only m1n1 proxy requests completed; dispatch and recovery remain unqualified.",
+  "coordinator_active": true,
+  "helper_active": true,
+  "automatic_restart_count": 0,
+  "web_checks": [
+    {
+      "surface": "local HTTP",
+      "authenticated": true,
+      "status": 200,
+      "seconds": 0.1058
+    },
+    {
+      "surface": "local HTTP",
+      "authenticated": false,
+      "status": 403,
+      "seconds": 0.0078
+    },
+    {
+      "surface": "private HTTPS",
+      "authenticated": true,
+      "status": 200,
+      "seconds": 0.0509
+    }
+  ],
+  "native_samples": 0,
+  "native_dispatch_enabled": false,
+  "backup_created_before_import": true,
+  "source_test_count": 398
+}

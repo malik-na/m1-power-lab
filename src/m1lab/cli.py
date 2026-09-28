@@ -65,6 +65,7 @@ from m1lab.experiment.native_qualification import NativeQualificationError, Nati
 from m1lab.investigator import EvidenceExcerpt, InvestigationOrchestrator, InvestigationRequest
 from m1lab.host import HostAdmissionPolicy, LinuxHostMonitor
 from m1lab.native_runs import import_native_capture, prepare_native_launch, receive_native_capture
+from m1lab.native_summary import summarize_native_capture
 from m1lab.notifications import PushConfig
 from m1lab.science import (
     ClaimEvidence,
@@ -240,6 +241,11 @@ def parser() -> argparse.ArgumentParser:
     native_run.add_argument("--procedure-revision", type=int, required=True)
     native_run.add_argument("--target-snapshot", required=True)
 
+    native_summary = commands.add_parser(
+        "native-summary", help="summarize a published native capture without qualifying power"
+    )
+    native_summary.add_argument("--capture-artifact", required=True)
+
     procedure_register = commands.add_parser(
         "procedure-register", help="validate and freeze an explicit typed procedure draft"
     )
@@ -289,6 +295,12 @@ def parser() -> argparse.ArgumentParser:
         default=[],
         help="selected technical evidence file (regular files up to 1 MB; review for private content)",
     )
+    investigate.add_argument(
+        "--artifact-id",
+        action="append",
+        default=[],
+        help="selected artifact ID from this session (repeatable)",
+    )
     investigate.add_argument("--kind", choices=("investigate", "analyze", "review", "conclude"), default="investigate")
     investigate.add_argument("--procedure-id", help="exact procedure ID to review; required with --kind review")
     investigate.add_argument(
@@ -303,7 +315,7 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> None:
     args = parser().parse_args(argv)
-    if args.action in {"native-inspect", "native-run"} and not args.session:
+    if args.action in {"native-inspect", "native-run", "native-summary"} and not args.session:
         parser().error(f"{args.action} requires an explicit --session")
     try:
         settings = Settings.from_env()
@@ -355,6 +367,8 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
             core, HelperHardwareAdapter(args.helper_socket)
         ).inspect_and_record(session_id)
         return snapshot.model_dump(mode="json")
+    if args.action == "native-summary":
+        return summarize_native_capture(core, session_id, args.capture_artifact)
     if args.action == "native-run":
         with _coordinator_lease(settings.paths.root / "coordinator.lock"):
             report = NativeQualificationService(
@@ -798,6 +812,7 @@ def _dispatch(args: argparse.Namespace, settings: Settings, core: CoreApp) -> An
             estimated_active_seconds=args.estimated_minutes * 60,
             deadline_seconds=args.deadline_minutes * 60,
             evidence=evidence,
+            artifact_ids=args.artifact_id,
         )
         with _coordinator_lease(settings.paths.root / "coordinator.lock"):
             core.reconcile()
