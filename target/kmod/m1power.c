@@ -375,6 +375,56 @@ static int pmgr_duty_show(struct seq_file *m, void *unused)
 }
 DEFINE_SHOW_ATTRIBUTE(pmgr_duty);
 
+/*
+ * pmgr_set: write "label state" (state 0, 4 or f) to drive one PMGR
+ * power-state register directly, for measuring what a domain costs. Only
+ * domains whose label starts with an allowed prefix can be written: gating
+ * a block that a running driver touches raises an SError. Like the
+ * pmgr-pwrstate driver, the write clears auto-PM and the sticky flags, then
+ * waits up to 100 ms for the actual state to follow.
+ */
+static const char *const pmgr_set_allowed[] = { "atc", "dispext" };
+
+static ssize_t pmgr_set_write(struct file *file, const char __user *ubuf, size_t len, loff_t *ppos)
+{
+	char buf[48], label[32];
+	unsigned int state;
+	int i, j, ret = -ENOENT;
+	u32 v = 0;
+
+	if (len >= sizeof(buf))
+		return -EINVAL;
+	if (copy_from_user(buf, ubuf, len))
+		return -EFAULT;
+	buf[len] = '\0';
+	if (sscanf(buf, "%31s %x", label, &state) != 2 || (state != 0 && state != 4 && state != 0xf))
+		return -EINVAL;
+	for (j = 0; j < ARRAY_SIZE(pmgr_set_allowed); j++)
+		if (!strncmp(label, pmgr_set_allowed[j], strlen(pmgr_set_allowed[j])))
+			break;
+	if (j == ARRAY_SIZE(pmgr_set_allowed))
+		return -EPERM;
+	for (i = 0; i < pmgr_count; i++) {
+		if (strcmp(pmgr_doms[i].label, label))
+			continue;
+		ret = regmap_update_bits(pmgr_doms[i].map, pmgr_doms[i].offset,
+					 BIT(28) | BIT(9) | BIT(8) | 0xf, state);
+		if (ret)
+			break;
+		ret = regmap_read_poll_timeout(pmgr_doms[i].map, pmgr_doms[i].offset, v,
+					       ((v >> 4) & 0xf) == state, 100, 100000);
+		pr_info("m1power: pmgr %s -> %x: actual %x (%d)\n", label, state, (v >> 4) & 0xf, ret);
+		break;
+	}
+	return ret ? ret : len;
+}
+
+static const struct file_operations pmgr_set_fops = {
+	.owner = THIS_MODULE,
+	.write = pmgr_set_write,
+	.llseek = noop_llseek,
+};
+
 /* Called from the wake-timer interrupt while suspending (devices suspended
  * when it fires inside s2idle). syscon regmaps use a spinlock, so this is
  * safe in hard-IRQ context. */
@@ -779,6 +829,7 @@ static int __init m1power_init(void)
 		debugfs_create_file("pmgr_ps", 0400, root, NULL, &pmgr_ps_fops);
 		debugfs_create_file("pmgr_duty", 0400, root, NULL, &pmgr_duty_fops);
 		debugfs_create_file("pmgr_s2idle", 0400, root, NULL, &pmgr_s2idle_fops);
+		debugfs_create_file("pmgr_set", 0200, root, NULL, &pmgr_set_fops);
 	}
 
 	pr_info("m1power: %u SMC keys (read-only), %d PMGR domains, wake timer %s\n",

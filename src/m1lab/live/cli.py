@@ -737,14 +737,14 @@ def lab_collect(job: str, device: str | None = None, experiment: str = "probe") 
         print_stress(data)
     elif experiment == "pmp":
         out(f"\nkernel {data.get('kernel', '?')}  job {job}  PMP started: {data.get('pmp_started')}")
-        for phase in ("before", "after"):
+        for phase in ("before", "after", "reports"):
             rows = data.get(phase) or []
             watts = [r["sys_w"] for r in rows if isinstance(r.get("sys_w"), (int, float))]
             socs = [r["soc_w"] for r in rows if isinstance(r.get("soc_w"), (int, float))]
             if watts:
                 out(f"{phase:6}: system {sum(watts) / len(watts):.3f} W over {len(watts)} windows "
                     f"({', '.join(f'{w:.3f}' for w in watts)}), SoC {sum(socs) / max(len(socs), 1):.3f} W")
-        for line in (data.get("dmesg_pmp") or [])[-12:]:
+        for line in (data.get("dmesg_pmp") or [])[-12:] + (data.get("dmesg_reports") or [])[-6:]:
             out(f"  {line}")
     elif experiment == "display":
         out(f"\nkernel {data.get('kernel', '?')}  job {job}")

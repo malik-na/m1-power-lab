@@ -26,7 +26,7 @@ load_m1power "$work"
 wait_uptime "$(plan boot_settle_s 120)"
 agent knob display off > "$MACLAB_OUT/display.json" 2>&1
 
-dmesg | grep -E 'pms_sram|always-on domain|PMPv1|pmp' > "$MACLAB_OUT/dmesg-before.txt"
+dmesg | grep -E 'pms_sram|always-on domain|PMPv1|pmp|apple-pmp-v1' > "$MACLAB_OUT/dmesg-before.txt"
 [ -e /sys/kernel/debug/m1power/pmgr_ps ] && grep -E '^(pmp|pms_sram|dcs|mcc|nub_fabric|smx|rmx|imx) ' /sys/kernel/debug/m1power/pmgr_ps > "$MACLAB_OUT/pmgr-before.txt"
 [ -e /sys/kernel/debug/m1power/pmgr_duty ] && cat /sys/kernel/debug/m1power/pmgr_duty > "$MACLAB_OUT/duty-before.txt"
 
@@ -43,7 +43,7 @@ timeout 60 modprobe apple-pmp-v1 $(plan modprobe_args "") > "$MACLAB_OUT/modprob
 echo "rc=$?" >> "$MACLAB_OUT/modprobe.txt"
 sleep 5
 journalctl --sync
-dmesg | grep -E 'PMPv1|23b300000|pmp|RTKit' | tail -200 > "$MACLAB_OUT/dmesg-pmp.txt"
+dmesg | grep -E 'PMPv1|apple-pmp-v1|23b300000|pmp|RTKit' | tail -200 > "$MACLAB_OUT/dmesg-pmp.txt"
 started=0
 grep -q 'handshake complete' "$MACLAB_OUT/dmesg-pmp.txt" && started=1
 log "PMP handshake complete: $started"
@@ -52,6 +52,19 @@ sleep "$(plan after_settle_s 45)"
 for i in $(seq 1 "$windows"); do
 	agent record --duration "$measure" --interval 1 --out "$MACLAB_OUT/after-$i.json" >/dev/null 2>&1
 done
+# Stage 2: device power reports, when the module loaded with reports=0 has
+# a switch for them.
+reports=/sys/kernel/debug/apple_pmp_v1/reports
+if [ "$started" = 1 ] && [ -e "$reports" ] && [ "$(plan reports_phase 1)" = 1 ]; then
+	log "turning on PMP device power reports"
+	echo 1 > "$reports"
+	sleep 5
+	dmesg | grep -E 'PMPv1' | tail -80 > "$MACLAB_OUT/dmesg-reports.txt"
+	sleep "$(plan after_settle_s 45)"
+	for i in $(seq 1 "$windows"); do
+		agent record --duration "$measure" --interval 1 --out "$MACLAB_OUT/reports-$i.json" >/dev/null 2>&1
+	done
+fi
 [ -e /sys/kernel/debug/m1power/pmgr_ps ] && grep -E '^(pmp|pms_sram|dcs|mcc|nub_fabric|smx|rmx|imx) ' /sys/kernel/debug/m1power/pmgr_ps > "$MACLAB_OUT/pmgr-after.txt"
 [ -e /sys/kernel/debug/m1power/pmgr_duty ] && cat /sys/kernel/debug/m1power/pmgr_duty > "$MACLAB_OUT/duty-after.txt"
 dmesg | grep -E 'PMPv1|23b300000' | tail -60 > "$MACLAB_OUT/dmesg-end.txt"
@@ -80,6 +93,8 @@ result = {
     "pmp_started": os.environ["STARTED"] == "1",
     "before": windows("before"),
     "after": windows("after"),
+    "reports": windows("reports"),
+    "dmesg_reports": lines("dmesg-reports.txt")[-40:],
     "modprobe": lines("modprobe.txt"),
     "dmesg_pmp": lines("dmesg-pmp.txt")[-80:],
     "dmesg_end": lines("dmesg-end.txt")[-30:],

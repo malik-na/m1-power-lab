@@ -947,6 +947,48 @@ class WifiFirmwareIntKnob(Knob):
             brcmf_dcmd(self._iface(), self.WLC_SET_VAR, self.iovar.encode() + b"\0" + raw, set_=True)
 
 
+class PmgrGateKnob(Knob):
+    """Gate a group of PMGR power domains directly (m1power's pmgr_set), to
+    measure what they cost. Children first when gating, parents first when
+    restoring. Only for blocks no running driver touches: e.g. the unused
+    USB-C port's ATC complex with nothing plugged in. Plugging something into
+    that port while it is gated can crash the kernel; its PHY may need a
+    reboot to work again afterwards."""
+
+    GROUPS = {
+        "atc1": ["atc1_usb", "atc1_pcie", "atc1_usb_aon", "atc1_common"],
+        "atc0": ["atc0_usb", "atc0_pcie", "atc0_usb_aon", "atc0_common"],
+    }
+    persistable = False
+    choices = ["on", "off"]
+
+    def __init__(self, group):
+        self.group = group
+        self.name = f"pmgrgate:{group}"
+        self.help = f"PMGR domains {', '.join(self.GROUPS[group])} powered (on) or gated (off), directly"
+
+    def supported(self):
+        return (DEBUGFS / "pmgr_set").exists()
+
+    def _actual(self):
+        states = {}
+        for line in (read(DEBUGFS / "pmgr_ps") or "").splitlines():
+            parts = line.split()
+            if parts and parts[0] in self.GROUPS[self.group]:
+                field = next((p for p in parts if p.startswith("actual=")), "actual=?")
+                states[parts[0]] = field.split("=")[1]
+        return states
+
+    def get(self):
+        states = set(self._actual().values())
+        return "on" if states == {"f"} else ("off" if states == {"0"} else "mixed")
+
+    def set(self, value):
+        order = self.GROUPS[self.group] if value == "off" else list(reversed(self.GROUPS[self.group]))
+        for label in order:
+            write(DEBUGFS / "pmgr_set", f"{label} {'0' if value == 'off' else 'f'}")
+
+
 class RfkillKnob(Knob):
     def __init__(self, kind, kills_network):
         self.kind = kind
@@ -1513,6 +1555,7 @@ def knob_registry():
         LtrMaxLatencyKnob(),
         HyprOptionKnob("hypr_vfr", "misc:vfr", "Hyprland variable frame rate (render only on change)"),
         RuntimePmKnob(),
+        PmgrGateKnob("atc1"),
     ]
     return {k.name: k for k in knobs}
 
