@@ -1011,3 +1011,22 @@ def test_ab_stops_when_the_lab_arrives_and_restores_the_knob(monkeypatch: pytest
     result = agent.run_ab(ns)
     assert result["aborted"].startswith("lab:")
     assert len(result["blocks"]) == 1 and values["x"] == "a"
+
+
+def test_guard_ignores_timer_wakes_it_did_not_arm(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setattr(agent, "RUN_DIR", tmp_path)
+    monkeypatch.setattr(agent, "LEDGER", tmp_path / "ledger.jsonl")
+    monkeypatch.setattr(agent, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(agent, "SLEEP_TEST_MARK", tmp_path / "no-test")
+    monkeypatch.setattr(agent, "TUNE_SPEC", tmp_path / "no-tune.json")
+    monkeypatch.setattr(agent, "standby_spec", lambda: {"check_every_s": 7200})
+    monkeypatch.setattr(agent, "waketimer_armed", lambda: True)  # someone else (a probe) armed it
+    monkeypatch.setattr(agent, "apply_sleep_knobs", lambda knobs: None)
+    monkeypatch.setattr(agent, "restore_sleep_knobs", lambda: None)
+    monkeypatch.setattr(agent, "sleep_snapshot", lambda: {"boot": 100.0, "mono": 50.0, "wall": 100.0})
+    monkeypatch.setattr(agent, "sleep_summary", lambda pre, post: {"wake_sources": [["m1power_waketimer", 1]], "start_wall": 0})
+    decided = []
+    monkeypatch.setattr(agent, "standby_decide", lambda summary, spec: decided.append(summary))
+    agent.run_hook("pre", "suspend")
+    agent.run_hook("post", "suspend")
+    assert decided == []

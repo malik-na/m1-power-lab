@@ -1776,14 +1776,19 @@ def run_hook(phase, operation):
     if phase == "pre":
         if not lab_passive:
             apply_sleep_knobs(sleep_knobs_for(spec, test_running))
+        guard_armed = False
         if spec and not test_running and not lab_passive:
             if spec.get("check_every_s") and (DEBUGFS / "waketimer").exists() and not waketimer_armed():
                 try:
                     write(DEBUGFS / "waketimer", str(int(spec["check_every_s"])))
+                    guard_armed = True
                 except OSError:
                     pass
         snap = sleep_snapshot()
         snap["operation"] = operation
+        # Only a wake from a timer the guard itself armed is a dark wake; the
+        # timer may also belong to a probe, a test or someone at a shell.
+        snap["guard_armed"] = guard_armed
         atomic_json(pre_file, snap)
         return
     if phase != "post":
@@ -1818,7 +1823,7 @@ def run_hook(phase, operation):
     if not spec or test_running or summary is None:
         return
     woken_by = {name for name, _ in summary["wake_sources"]}
-    if is_dark_wake(woken_by):
+    if is_dark_wake(woken_by) and pre.get("guard_armed"):
         standby_decide(summary, spec)
     else:
         STANDBY_STATE.unlink(missing_ok=True)
@@ -1900,6 +1905,118 @@ def _run_sleep(args, has_timer, before, journal_before):
     if args.out:
         atomic_json(args.out, entry)
     return entry
+
+
+# ----------------------------------------------------------- maclab probe
+
+
+def wdt_channels():
+    """Watchdog channel registers from the module, as {channel: {reg: int}}."""
+    channels = {}
+    for line in (read(DEBUGFS / "wdt_regs", "") or "").splitlines():
+        parts = line.split()
+        if not parts or not parts[0].startswith("wd"):
+            continue
+        regs = {}
+        for item in parts[1:]:
+            key, _, value = item.partition("=")
+            try:
+                regs[key] = int(value, 16)
+            except ValueError:
+                continue
+        channels[parts[0]] = regs
+    return channels
+
+
+def run_probe(args):
+    """One self-contained measurement for a maclab job (or any boot): settle,
+    idle capture with the display off, then one self-waking sleep. Writes a
+    single JSON file. It is the lab's own work, so it does not defer to it."""
+    plan = json.loads(Path(args.plan).read_text()) if args.plan else {}
+    settle_s = float(plan.get("settle_s", 60))
+    idle_s = float(plan.get("idle_s", 90))
+    sleep_s = int(plan.get("sleep_s", 90))
+    display = plan.get("display", "off")
+    result = {
+        "kind": "probe",
+        "agent": AGENT_VERSION,
+        "plan": plan,
+        "job": os.environ.get("MACLAB_JOB"),
+        "test": os.environ.get("MACLAB_TEST"),
+        "kernel": os.uname().release,
+        "model": (read("/proc/device-tree/model") or "").rstrip("\0"),
+        "cmdline": read("/proc/cmdline"),
+        "lab_boot": lab_boot(),
+        "module": {"loaded": (DEBUGFS / "smc_keys").exists(), "waketimer": (DEBUGFS / "waketimer").exists()},
+        "started_wall": time.time(),
+        "status": "running",
+    }
+
+    def save():
+        if args.out:
+            atomic_json(args.out, result)
+
+    save()
+    uptime = float((read("/proc/uptime") or "0 0").split()[0])
+    if uptime < settle_s:
+        time.sleep(settle_s - uptime)
+    result["uptime_at_start_s"] = float((read("/proc/uptime") or "0 0").split()[0])
+    restore_display = None
+    if display in ("on", "off"):
+        try:
+            knob = DisplayKnob()
+            if knob.supported():
+                restore_display = knob.get()
+                knob.set(display)
+                time.sleep(5)
+        except Exception as error:  # noqa: BLE001 - measure anyway, say so
+            result["display_error"] = str(error)
+    try:
+        result["context"] = context_snapshot()
+        _, summary = measure_window(Sampler(), idle_s)
+        result["idle"] = summary
+        result["domains_on"] = sorted(d for d, v in power_domains().items() if v["status"] == "on")
+        save()
+        if sleep_s and result["module"]["waketimer"]:
+            result["wdt_before"] = wdt_channels()
+            RUN_DIR.mkdir(parents=True, exist_ok=True)
+            SLEEP_TEST_MARK.write_text(str(os.getpid()))
+            pre = sleep_snapshot()
+            write(DEBUGFS / "waketimer", str(sleep_s))
+            mono0, boot0 = clocks()
+            proc = sh("systemctl", "suspend", timeout=60)
+            if proc.returncode != 0:
+                result["sleep"] = {"error": proc.stderr.strip() or "suspend refused"}
+            else:
+                deadline = time.monotonic() + sleep_s + 180
+                resumed = False
+                while time.monotonic() < deadline:
+                    time.sleep(0.5)
+                    mono, boot = clocks()
+                    if (boot - mono) - (boot0 - mono0) > 1.0:
+                        resumed = True
+                        break
+                time.sleep(3)
+                post = sleep_snapshot()
+                sleep = sleep_summary(pre, post)
+                sleep["resumed"] = resumed
+                sleep["requested_s"] = sleep_s
+                result["sleep"] = sleep
+                result["wdt_after"] = wdt_channels()
+            SLEEP_TEST_MARK.unlink(missing_ok=True)
+        elif sleep_s:
+            result["sleep"] = {"skipped": "the m1power wake timer is not loaded on this boot"}
+    finally:
+        SLEEP_TEST_MARK.unlink(missing_ok=True)
+        if restore_display not in (None, display):
+            try:
+                DisplayKnob().set(restore_display)
+            except Exception:  # noqa: BLE001
+                pass
+    result["status"] = "complete"
+    result["finished_wall"] = time.time()
+    save()
+    return result
 
 
 # ------------------------------------------------------------- persistence
@@ -2173,6 +2290,9 @@ def main(argv=None):
     tune.add_argument("--spec")
     sub.add_parser("kmod")
     sub.add_parser("lab")
+    probe = sub.add_parser("probe", help="one settle/idle/sleep measurement, e.g. inside a maclab job")
+    probe.add_argument("--plan")
+    probe.add_argument("--out")
     standby = sub.add_parser("standby")
     standby.add_argument("action", choices=["set", "show", "off"])
     standby.add_argument("--spec")
@@ -2230,6 +2350,9 @@ def main(argv=None):
             emit(json.loads(TUNE_SPEC.read_text()) if TUNE_SPEC.exists() else {})
     elif args.cmd == "lab":
         emit(lab_status())
+    elif args.cmd == "probe":
+        result = run_probe(args)
+        emit({"status": result["status"], "out": args.out} if args.out else result)
     elif args.cmd == "kmod":
         # Runs early at every boot (m1power-kmod.service), with or without a
         # tune: the place to undo a radio left off by an interrupted sleep.

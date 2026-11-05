@@ -514,6 +514,104 @@ def cmd_standby(target: Target, args: argparse.Namespace) -> None:
     out(json.dumps(target.agent("standby", "set", "--spec", json.dumps(spec)), indent=1))
 
 
+LAB_PROBE = Path(__file__).resolve().parents[3] / "target" / "lab" / "m1power-probe.sh"
+LAB_PROBE_TEST = "m1power-probe"
+
+
+def lab_cli() -> str:
+    import shutil
+
+    path = shutil.which("lab") or str(Path.home() / ".local" / "bin" / "lab")
+    if not Path(path).exists():
+        raise UsageError("maclab's `lab` CLI is not installed (build it from github.com/chriskearney/maclab: go build ./cmd/lab)")
+    return path
+
+
+def cmd_lab_run(target: Target, args: argparse.Namespace) -> None:
+    import re
+    import subprocess
+    import tempfile
+
+    from m1lab.live.remote import AGENT_SOURCE, KMOD_DIR
+
+    plan = {"settle_s": args.settle, "idle_s": args.idle, "sleep_s": args.sleep, "display": args.display}
+    with tempfile.TemporaryDirectory() as tmp:
+        plan_path = Path(tmp) / "plan.json"
+        plan_path.write_text(json.dumps(plan))
+        command = [lab_cli(), "run", args.device]
+        if args.kernel:
+            command += ["--kernel", args.kernel]
+        command += [
+            "--script", str(LAB_PROBE),
+            "--payload", f"agent.py={AGENT_SOURCE}",
+            "--payload", f"m1power.c={KMOD_DIR / 'm1power.c'}",
+            "--payload", f"Makefile={KMOD_DIR / 'Makefile'}",
+            "--payload", f"plan.json={plan_path}",
+            "--script-timeout", f"{int(args.settle + args.idle + args.sleep + 600)}s",
+            "--no-wait",
+        ]
+        proc = subprocess.run(command, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise UsageError(f"lab run failed: {(proc.stderr or proc.stdout).strip()}")
+    match = re.search(r"job (\S+) queued", proc.stdout)
+    if not match:
+        raise UsageError(f"could not read the job id from: {proc.stdout.strip()}")
+    job = match.group(1)
+    where = f"with kernel {args.kernel}" if args.kernel else "(its known-good kernel)"
+    out(f"lab job {job} queued on {args.device} {where}")
+    if args.no_wait:
+        out(f"collect it later with `m1power lab-collect {job}`")
+        return
+    lab_collect(job, args.device)
+
+
+def lab_collect(job: str, device: str | None = None) -> None:
+    import subprocess
+
+    lab = lab_cli()
+    subprocess.run([lab, "wait", job])  # prints the job's events; exits 3 unless it passed
+    fetched = subprocess.run([lab, "logs", job, f"test-{LAB_PROBE_TEST}/result.json"], capture_output=True, text=True)
+    if fetched.returncode != 0 or not fetched.stdout.strip():
+        detail = fetched.stderr.strip() or "empty"
+        raise UsageError(f"job {job} returned no probe result ({detail}); see `lab job {job}` and `lab logs {job}`")
+    data = json.loads(fetched.stdout)
+    data["lab_job"] = job
+    summary = subprocess.run([lab, "job", job], capture_output=True, text=True).stdout
+    data["lab_job_summary"] = summary[-4000:]
+    saved = save_result("lab-probe", data, device or data.get("kernel", ""))
+    print_probe(data)
+    out(f"saved {saved}")
+
+
+def print_probe(data: dict[str, Any]) -> None:
+    module = data.get("module", {})
+    out(f"\n{data.get('model')}  kernel {data.get('kernel')}  lab boot={data.get('lab_boot')}  job {data.get('job')}")
+    loaded = "loaded" if module.get("loaded") else "not loaded (hwmon only)"
+    out(f"module: {loaded}, wake timer {'yes' if module.get('waketimer') else 'no'}")
+    idle = data.get("idle") or {}
+    if idle:
+        ctx = data.get("context", {})
+        out(f"idle ({ctx.get('display')} display, AC={ctx.get('ac')}): system {fmt_w(idle.get('sys_w'))} W, "
+            f"load {fmt_w(idle.get('load_acc_w'))} W, SoC {fmt_w(idle.get('soc_w'))} W, {idle.get('irq_s')} IRQ/s")
+        for row in (idle.get("top_wakers") or [])[:5]:
+            out(f"  {row['wakeups_s']:8.2f}/s  {row['cpu_pct']:6.2f}%  {row['comm']}")
+    sleep = data.get("sleep") or {}
+    if "slept_s" in sleep:
+        wake = ", ".join(name for name, _ in sleep.get("wake_sources", [])[:3]) or "?"
+        out(f"sleep: asked {sleep.get('requested_s')} s, slept {sleep.get('slept_s')} s, {fmt_w(sleep.get('sleep_w'))} W over "
+            f"the bracket, resumed={sleep.get('resumed')}, woken by {wake}, CPUs powered down {100 * sleep.get('s2idle_cpus_pd', 0):.0f}%")
+        after = (data.get("wdt_after") or {}).get("wd1", {})
+        boot = "this Lab boot" if data.get("lab_boot") else "this boot"
+        out(f"  watchdog channel 1 after resume: ctrl={after.get('ctrl', 0):#x}; {boot} survived a "
+            f"{sleep.get('slept_s')} s sleep with it armed")
+    elif sleep:
+        out(f"sleep: {sleep}")
+
+
+def cmd_lab_collect(target: Target, args: argparse.Namespace) -> None:
+    lab_collect(args.job)
+
+
 def cmd_domains(target: Target, args: argparse.Namespace) -> None:
     domains = target.agent("domains")
     for name, info in sorted(domains.items(), key=lambda kv: (kv[1]["status"] != "on", kv[0])):
@@ -629,6 +727,17 @@ def build_parser() -> argparse.ArgumentParser:
     standby.add_argument("--sleep-knob", action="append", help="KNOB=VALUE applied only while asleep")
     standby.add_argument("--max-dark-wakes", type=int, help="testing aid: stay awake after this many dark wakes")
 
+    lab_run = sub.add_parser("lab-run", help="run the m1power probe as a maclab job (needs `lab login`)")
+    lab_run.add_argument("device", help="the lab's name for the Mac, e.g. naeems-m1-airr")
+    lab_run.add_argument("--kernel", help="a lab kernel (file, sha256, build id or GitHub URL); default: its known-good kernel")
+    lab_run.add_argument("--settle", type=float, default=60, help="seconds after boot before measuring")
+    lab_run.add_argument("--idle", type=float, default=90, help="seconds of idle capture")
+    lab_run.add_argument("--sleep", type=int, default=90, help="seconds of self-waking sleep (0 skips; >120 pages the lab)")
+    lab_run.add_argument("--display", choices=["on", "off", "leave"], default="off")
+    lab_run.add_argument("--no-wait", action="store_true")
+    lab_collect_p = sub.add_parser("lab-collect", help="wait for a lab probe job and fetch its result")
+    lab_collect_p.add_argument("job")
+
     domains = sub.add_parser("domains", help="SoC power domains (PMGR) and their devices")
     domains.add_argument("--all", action="store_true")
 
@@ -659,6 +768,8 @@ COMMANDS = {
     "ledger": cmd_ledger,
     "tune": cmd_tune,
     "standby": cmd_standby,
+    "lab-run": cmd_lab_run,
+    "lab-collect": cmd_lab_collect,
     "domains": cmd_domains,
     "smc": cmd_smc,
     "report": cmd_report,
