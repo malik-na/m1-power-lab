@@ -1107,3 +1107,75 @@ def test_sleep_knobs_save_the_restore_value(monkeypatch: pytest.MonkeyPatch, tmp
     assert json.loads((tmp_path / "saved.json").read_text()) == {"pcielink:wifi:l1_2_aspm": "clear"}
     agent.restore_sleep_knobs()
     assert sets == ["0", "clear"]
+
+
+def test_wifi_power_save_persists_through_networkmanager(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    conf_d = tmp_path / "conf.d"
+    conf_d.mkdir()
+    (conf_d / "omarchy-wifi-powersave.conf").write_text("[connection]\nwifi.powersave = 2\n")
+    dropin = conf_d / "zz-m1power-wifi-powersave.conf"
+    monkeypatch.setattr(agent.WifiPowerSaveKnob, "NM_DROPIN", dropin)
+    commands = []
+    monkeypatch.setattr(agent, "sh", lambda *args, **kw: commands.append(args))
+    knob = agent.WifiPowerSaveKnob()
+    assert knob.persist("on") == f"wrote {dropin}"
+    assert "wifi.powersave = 3" in dropin.read_text()
+    # NetworkManager reads conf.d in name order and the later file wins.
+    assert sorted(p.name for p in conf_d.iterdir())[-1] == dropin.name
+    assert commands == [("nmcli", "general", "reload", "conf")]
+    assert knob.persist("on") is None and len(commands) == 1  # unchanged: no rewrite, no reload
+    assert knob.unpersist() == f"removed {dropin}" and not dropin.exists()
+    assert knob.unpersist() is None
+
+
+def test_wifi_power_save_persist_is_a_no_op_without_networkmanager(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setattr(agent.WifiPowerSaveKnob, "NM_DROPIN", tmp_path / "absent" / "x.conf")
+    monkeypatch.setattr(agent, "sh", lambda *args, **kw: pytest.fail("no NetworkManager: nothing to reload"))
+    assert agent.WifiPowerSaveKnob().persist("on") is None
+
+
+class _PersistingKnob(_FakeKnob):
+    def __init__(self, name: str, store: dict, log: list) -> None:
+        super().__init__(name, store)
+        self.log = log
+
+    def persist(self, value):
+        self.log.append(("persist", self.name, value))
+        return "noted"
+
+    def unpersist(self):
+        self.log.append(("unpersist", self.name))
+
+
+def test_tune_run_persists_and_revert_unpersists(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    store, log = {"wifi_ps": "off", "aspm": "default"}, []
+    knobs = {"wifi_ps": _PersistingKnob("wifi_ps", store, log), "aspm": _PersistingKnob("aspm", store, log)}
+    _use_journal(monkeypatch, tmp_path, knobs)
+    monkeypatch.setattr(agent, "sh", lambda *args, **kw: None)
+    monkeypatch.setattr(agent, "write_tune_unit", lambda: None)
+    monkeypatch.setattr(agent, "lab_boot", lambda: False)
+    monkeypatch.setattr(agent, "restore_sleep_radios", lambda: {})
+    result = agent.tune_apply(json.dumps({"knobs": {"wifi_ps": "on"}}))
+    assert store["wifi_ps"] == "on" and result["persisted"] == {"wifi_ps": "noted"}
+    assert ("persist", "wifi_ps", "on") in log
+    # A new spec without wifi_ps undoes its persistence.
+    agent.tune_apply(json.dumps({"knobs": {"aspm": "powersupersave"}}))
+    assert ("unpersist", "wifi_ps") in log
+    log.clear()
+    agent.tune_revert()
+    assert log == [("unpersist", "aspm")]
+
+
+def test_tune_drift_reports_lapsed_knobs(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    store = {"wifi_ps": "off", "aspm": "powersupersave"}
+    _use_journal(monkeypatch, tmp_path, {"wifi_ps": _FakeKnob("wifi_ps", store), "aspm": _FakeKnob("aspm", store)})
+    monkeypatch.setattr(agent, "lab_boot", lambda: False)
+    assert agent.tune_drift() == {}
+    (tmp_path / "tune.json").write_text(json.dumps({"knobs": {"wifi_ps": "on", "aspm": "powersupersave"}}))
+    assert agent.tune_drift() == {"wifi_ps": {"want": "on", "now": "off"}}
+
+
+def test_ltr_knob_matches_hex_and_microsecond_spellings(monkeypatch: pytest.MonkeyPatch) -> None:
+    knob = agent.LtrMaxLatencyKnob()
+    monkeypatch.setattr(knob, "get", lambda: f"{agent.LtrMaxLatencyKnob.decode(0x1008):g}")
+    assert knob.matches("0x1008") and knob.matches(knob.get()) and not knob.matches("0x1009")

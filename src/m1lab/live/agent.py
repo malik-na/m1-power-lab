@@ -668,6 +668,19 @@ class Knob:
         """What to journal so `restore` puts this knob back (normally its value)."""
         return self.get()
 
+    def matches(self, value):
+        """Whether the knob currently holds `value` (spellings may differ)."""
+        return self.get() == str(value)
+
+    def persist(self, value):
+        """Make `value` survive whatever else on the system resets this knob
+        (`tune` calls it at apply, boot and resume). Returns a note or None."""
+        return None
+
+    def unpersist(self):
+        """Undo `persist` (on `tune revert`)."""
+        return None
+
     def describe(self):
         info = {"name": self.name, "help": self.help, "choices": self.choices, "kills_network": self.kills_network, "persistable": self.persistable}
         try:
@@ -804,6 +817,34 @@ class WifiPowerSaveKnob(Knob):
 
     def set(self, value):
         sh("iw", "dev", self._iface(), "set", "power_save", value, check=True)
+
+    # NetworkManager sets power save on every connection it activates, from
+    # its `wifi.powersave` default; Omarchy ships 2 (off) in
+    # omarchy-wifi-powersave.conf. Each resume reconnects, so a value set with
+    # iw lasts only until the next suspend. NetworkManager reads conf.d in
+    # file-name order, later files winning, so this drop-in overrides it.
+    NM_DROPIN = Path("/etc/NetworkManager/conf.d/zz-m1power-wifi-powersave.conf")
+
+    def persist(self, value):
+        if not self.NM_DROPIN.parent.is_dir():
+            return None
+        text = (
+            "# Written by m1power tune (wifi_ps); removed by `m1power tune revert`.\n"
+            "# Overrides other conf.d files: NetworkManager reads them in name order.\n"
+            f"[connection]\nwifi.powersave = {3 if value == 'on' else 2}\n"
+        )
+        if read(self.NM_DROPIN) == text.strip():
+            return None
+        self.NM_DROPIN.write_text(text)
+        sh("nmcli", "general", "reload", "conf")
+        return f"wrote {self.NM_DROPIN}"
+
+    def unpersist(self):
+        if not self.NM_DROPIN.exists():
+            return None
+        self.NM_DROPIN.unlink()
+        sh("nmcli", "general", "reload", "conf")
+        return f"removed {self.NM_DROPIN}"
 
 
 class RfkillKnob(Knob):
@@ -1230,10 +1271,17 @@ class LtrMaxLatencyKnob(Knob):
         snoop, nosnoop = (int(x, 16) for x in out)
         return f"{self.decode(snoop):g}" if snoop == nosnoop else f"{self.decode(snoop):g}/{self.decode(nosnoop):g}"
 
+    @classmethod
+    def parse(cls, value):
+        text = str(value).split("/")[0]
+        return int(text, 16) if text.lower().startswith("0x") else cls.encode(float(text))
+
+    def matches(self, value):
+        return self.get() == f"{self.decode(self.parse(value)):g}"
+
     def set(self, value):
         bdf = wifi_pci_device()
-        text = str(value).split("/")[0]
-        reg = int(text, 16) if text.lower().startswith("0x") else self.encode(float(text))
+        reg = self.parse(value)
         sh("setpci", "-s", bdf, f"ECAP_LTR+0x4.w={reg:04x}", f"ECAP_LTR+0x6.w={reg:04x}", check=True)
 
 
@@ -2147,6 +2195,13 @@ def run_hook(phase, operation):
                     pass
         snap = sleep_snapshot()
         snap["operation"] = operation
+        if not lab_passive and TUNE_SPEC.exists():
+            try:
+                # Awake tuning that had lapsed before this sleep (sleep knobs
+                # are applied above and do not count).
+                snap["tune_drift"] = tune_drift()
+            except Exception:  # noqa: BLE001 - never block suspend
+                pass
         # Only a wake from a timer the guard itself armed is a dark wake; the
         # timer may also belong to a probe, a test or someone at a shell.
         snap["guard_armed"] = guard_armed
@@ -2166,6 +2221,8 @@ def run_hook(phase, operation):
         summary["operation"] = operation
         summary["kind"] = "sleep"
         summary["tune"] = TUNE_SPEC.exists()
+        if "tune_drift" in pre:
+            summary["tune_drift"] = pre["tune_drift"]
         summary["test"] = test_running
         summary["standby"] = bool(spec)
         summary["waketimer_fired"] = "m1power_waketimer" in dict(summary["wake_sources"])
@@ -2537,7 +2594,7 @@ def tune_run():
         # the unit gained its ConditionKernelCommandLine guard.
         return {"applied": {}, "errors": {}, "skipped": "maclab Lab boot"}
     spec = json.loads(TUNE_SPEC.read_text())
-    applied, errors = {}, {}
+    applied, errors, persisted = {}, {}, {}
     for name, value in spec.get("knobs", {}).items():
         try:
             knob = get_knob(name)
@@ -2545,8 +2602,11 @@ def tune_run():
                 # Never cut the network at boot or resume (an older spec may hold one).
                 errors[name] = "kills the network; not applied"
                 continue
-            if knob.supported() and knob.get() != value:
+            if knob.supported() and not knob.matches(value):
                 knob.set(value)
+            note = knob.persist(value)
+            if note:
+                persisted[name] = note
             applied[name] = value
         except Exception as error:  # noqa: BLE001
             errors[name] = str(error)
@@ -2555,7 +2615,22 @@ def tune_run():
     # that never ran cannot leave the Mac offline.
     restored = restore_sleep_radios()
     applied.update(restored)
-    return {"applied": applied, "errors": errors}
+    return {"applied": applied, "errors": errors} | ({"persisted": persisted} if persisted else {})
+
+
+def tune_drift():
+    """Tuned knobs that no longer hold their tuned value: {name: {want, now}}."""
+    if not TUNE_SPEC.exists() or lab_boot():
+        return {}
+    drift = {}
+    for name, value in json.loads(TUNE_SPEC.read_text()).get("knobs", {}).items():
+        try:
+            knob = get_knob(name)
+            if knob.supported() and not knob.matches(value):
+                drift[name] = {"want": value, "now": knob.get()}
+        except Exception as error:  # noqa: BLE001 - report, never fail
+            drift[name] = {"want": value, "error": str(error)}
+    return drift
 
 
 # Radios the pre-sleep hook switched off. Kept on disk (not /run) because
@@ -2617,7 +2692,13 @@ def tune_apply(spec_json):
         RuntimePmKnob().ensure_baseline()
     previous = {}
     if TUNE_SPEC.exists():
-        previous = json.loads(TUNE_SPEC.read_text()).get("baseline", {})
+        old = json.loads(TUNE_SPEC.read_text())
+        previous = old.get("baseline", {})
+        for name in set(old.get("knobs", {})) - set(knobs):
+            try:
+                get_knob(name).unpersist()
+            except Exception:  # noqa: BLE001 - the drop-in is best effort
+                pass
     baseline = dict(previous)
     for name in knobs:
         baseline.setdefault(name, get_knob(name).get())
@@ -2634,6 +2715,11 @@ def tune_revert():
         return {"reverted": {}, "note": "no tuning installed"}
     spec = json.loads(TUNE_SPEC.read_text())
     reverted, errors, warnings = {}, {}, {}
+    for name in spec.get("knobs", {}):
+        try:
+            get_knob(name).unpersist()
+        except Exception as error:  # noqa: BLE001
+            warnings[name] = f"could not undo its persistence: {error}"
     for name, value in spec.get("baseline", {}).items():
         if name == "runtime_pm" and not RuntimePmKnob.SAVE.exists():
             warnings[name] = f"no baseline in {RuntimePmKnob.SAVE}; device runtime PM left as it is"
@@ -2724,6 +2810,7 @@ def info():
         "hook_installed": Path(HOOK_PATH).exists(),
         "maclab": lab_status(),
         "tune": json.loads(TUNE_SPEC.read_text()) if TUNE_SPEC.exists() else None,
+        "tune_drift": tune_drift(),
         "battery": battery(),
         "smc_now": parse_smc_lines(read(DEBUGFS / "smc_sensors", "") or "") if (DEBUGFS / "smc_sensors").exists() else Smc().read(),
         "cpuidle": {"driver": read("/sys/devices/system/cpu/cpuidle/current_driver"), "governor": read("/sys/devices/system/cpu/cpuidle/current_governor")},

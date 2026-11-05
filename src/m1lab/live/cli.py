@@ -94,6 +94,9 @@ def cmd_doctor(target: Target, args: argparse.Namespace) -> None:
         out(f"  [{'x' if ok else ' '}] {label}")
     if not all(ok for _, ok in checks[:3]):
         out("  run `m1power install` to set up the module, wake timer and ledger")
+    for name, drift in (info.get("tune_drift") or {}).items():
+        now = drift.get("now", drift.get("error"))
+        out(f"  ! tuned {name}={drift['want']} has lapsed (now {now}); `m1power tune` re-applies at boot and resume")
     if info.get("journal"):
         out(f"  ! knobs changed and not restored: {info['journal']} (run `m1power restore`)")
     lab = info.get("maclab") or {}
