@@ -142,7 +142,17 @@ Verified on the physical M1 this session:
     (the handler masks without touching `irq_ready`; the thread unmasks
     without setting it) and `fix/brcmfmac-d3-recovery-v2` (adds: a missed D3
     ACK no longer aborts suspend without WoWL, and forces a firmware reload on
-    resume because the chip stays powered in s2idle). Lab A/B pending.
+    resume because the chip stays powered in s2idle).
+  - Lab A/B, each a 15-cycle suspend stress with the macOS-like configuration
+    on a lab build from the same commit (`b798f2b`):
+    | Kernel | Job | Result |
+    |---|---|---|
+    | stock `7.2.11-labb798f2b0-4585` | `j1105-104309-e433` | D3 timeout on the 4th suspend; omarchy-m-test regressed (failed systemd-suspend.service) |
+    | P1 only `7.2.11-lab428772f0-1559` | `j1105-104457-32c5` | the same, on the 4th suspend |
+    | P1+P2 `7.2.11-labc0e6d3fa-4ed7` | `j1105-104639-fa1b` | 15/15 suspends; D3 not acknowledged on suspends 4, 8 and 12, each recovered by a firmware reload on resume; omarchy-m-test 0 regressed |
+    The lost-completion race is real but is not what stops this firmware: the
+    firmware itself fails the D3 handshake on every fourth suspend with L1
+    substates on, and P2 turns that into a recovery.
 - Direction (independent review, 2026-11-05): continue in-OS. m1n1 proxy mode
   cannot measure Linux idle, and neither it nor in-OS tuning reaches macOS's
   tens-of-mW SoC power collapse, which needs firmware-level resume support.
