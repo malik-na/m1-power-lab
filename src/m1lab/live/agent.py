@@ -664,6 +664,10 @@ class Knob:
     def set(self, value):
         raise NotImplementedError
 
+    def restore_value(self):
+        """What to journal so `restore` puts this knob back (normally its value)."""
+        return self.get()
+
     def describe(self):
         info = {"name": self.name, "help": self.help, "choices": self.choices, "kills_network": self.kills_network, "persistable": self.persistable}
         try:
@@ -1105,7 +1109,20 @@ class PcieLinkKnob(Knob):
     def get(self):
         return read(self._path())
 
+    def restore_value(self):
+        # Writing 0 here is not "off for now": the ASPM core records it in
+        # link->aspm_disable, and later policy writes can never enable the
+        # state again. Writing back the 0 that the default policy shows would
+        # therefore disable the state for good, so restore by clearing.
+        return "clear"
+
     def set(self, value):
+        if value == "clear":
+            write(self._path(), "1")  # drops the disable; the policy still decides
+            policy_path = "/sys/module/pcie_aspm/parameters/policy"
+            policy = re.search(r"\[(\S+)\]", read(policy_path)).group(1)
+            write(policy_path, policy)  # recompute the link from the policy
+            return
         write(self._path(), value)
 
 
@@ -1340,7 +1357,7 @@ def journal_set(name, value):
     knob = get_knob(name)
     journal = journal_load()
     if name not in journal:
-        journal[name] = knob.get()
+        journal[name] = knob.restore_value()
         atomic_json(JOURNAL, journal)
     knob.set(value)
 
@@ -2223,7 +2240,21 @@ def _run_sleep(args, has_timer, before, journal_before):
 SUSPEND_STATS = Path("/sys/power/suspend_stats")
 WIFI_ERROR_PATTERNS = ("brcmf_pcie_pm_enter_D3", "Timeout on response", "timed out waiting for txstatus",
                        "failed to suspend", "Some devices failed to suspend", "brcmf_cfg80211_set_power_mgmt: error",
-                       "query command", "Firmware has halted", "PCIe link", "AER")
+                       "query command", "Firmware has halted", "PCIe link", "AER", "No D3 ACK", "reloaded on resume")
+# Lines that mean the firmware stopped answering or suspend broke, as opposed
+# to flowring teardown timeouts, which also happen around plain disconnects.
+WIFI_CRITICAL_PATTERNS = ("entering D3", "No D3 ACK", "failed to suspend", "Some devices failed to suspend",
+                          "query command", "Firmware has halted", "set_power_mgmt: error")
+
+
+def wait_for_network(timeout):
+    """Seconds until the Wi-Fi is associated with a default route, or None."""
+    start = time.monotonic()
+    while time.monotonic() - start < timeout:
+        if wifi_ap() not in ("none", "no-wifi") and gateway():
+            return round(time.monotonic() - start, 1)
+        time.sleep(0.5)
+    return None
 
 
 def suspend_counts():
@@ -2257,20 +2288,31 @@ def run_stress(args):
         raise SystemExit("the m1power wake timer is needed for unattended cycles")
     for name, value in (args.set or []):
         journal_set(name, value)
-    result = {"kind": "stress", "agent": AGENT_VERSION, "cycles": [], "set": dict(args.set or []),
+    result = {"kind": "stress", "agent": AGENT_VERSION, "kernel": os.uname().release, "cycles": [], "set": dict(args.set or []),
               "knobs": {n: get_knob(n).get() for n in ("aspm", "l1ss_tpoweron_us", "pcielink:wifi:l1_1_aspm",
                                                         "pcielink:wifi:l1_2_aspm", "pcielink:wifi:l1_1_pcipm",
                                                         "pcielink:wifi:l1_2_pcipm", "wifi_ps")
                         if get_knob(n).supported()},
               "started_wall": time.time(), "status": "running"}
     _, cursor = kernel_lines_since(None)
-    gw = gateway()
     RUN_DIR.mkdir(parents=True, exist_ok=True)
     SLEEP_TEST_MARK.write_text(str(os.getpid()))
     try:
         for index in range(args.cycles):
-            cycle = {"index": index, "ap_start": wifi_ap()}
-            # awake with traffic
+            cycle = {"index": index}
+            # Wi-Fi reconnects after every resume (and may change network):
+            # wait for it, keep the run's settings applied, then make traffic.
+            cycle["reconnect_s"] = wait_for_network(30)
+            for name, value in (args.set or []):
+                try:
+                    knob = get_knob(name)
+                    if knob.get() != value:
+                        knob.set(value)
+                except Exception as error:  # noqa: BLE001
+                    cycle.setdefault("set_errors", {})[name] = str(error)
+            cycle["ap_start"] = wifi_ap()
+            gw = gateway()
+            cycle["gateway"] = gw
             ping = sh("ping", "-q", "-c", str(int(args.awake * 5)), "-i", "0.2", "-W", "1", gw, timeout=args.awake + 30) if gw else None
             cycle["ping_loss"] = (re.search(r"(\d+(?:\.\d+)?)% packet loss", ping.stdout).group(1) if ping and "packet loss" in ping.stdout else None)
             before = suspend_counts()
@@ -2296,10 +2338,11 @@ def run_stress(args):
             time.sleep(args.settle)
             lines, cursor = kernel_lines_since(cursor)
             cycle["wifi_errors"] = [l for l in lines if any(p in l for p in WIFI_ERROR_PATTERNS)][:20]
+            cycle["critical"] = [l for l in cycle["wifi_errors"] if any(p in l for p in WIFI_CRITICAL_PATTERNS)]
             result["cycles"].append(cycle)
             if args.out:
                 atomic_json(args.out, result)
-            if outcome != "ok" or (cycle["wifi_errors"] and args.stop_on_error):
+            if outcome != "ok" or (cycle["critical"] and args.stop_on_error):
                 result["stopped"] = f"cycle {index}: {outcome}" + (f", {len(cycle['wifi_errors'])} Wi-Fi errors" if cycle["wifi_errors"] else "")
                 break
     finally:
@@ -2308,7 +2351,13 @@ def run_stress(args):
             restore_knobs(set(dict(args.set or [])))
     ok = sum(1 for c in result["cycles"] if c["outcome"] == "ok")
     result["summary"] = {"cycles": len(result["cycles"]), "ok": ok,
-                         "cycles_with_wifi_errors": sum(1 for c in result["cycles"] if c["wifi_errors"])}
+                         "cycles_with_wifi_errors": sum(1 for c in result["cycles"] if c["wifi_errors"]),
+                         "cycles_with_critical": sum(1 for c in result["cycles"] if c.get("critical"))}
+    # What the link actually ran with (sticky sysfs disables can silently
+    # keep states off), read at the end of the run.
+    result["link_at_end"] = {n: get_knob(n).get() for n in ("aspm", "pcielink:wifi:l1_1_aspm", "pcielink:wifi:l1_2_aspm",
+                                                             "pcielink:wifi:l1_1_pcipm", "pcielink:wifi:l1_2_pcipm",
+                                                             "pcielink:wifi:clkpm") if get_knob(n).supported()}
     result["status"] = "complete"
     result["finished_wall"] = time.time()
     if args.out:

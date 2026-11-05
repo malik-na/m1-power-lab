@@ -472,6 +472,7 @@ ARMS: dict[str, dict[str, str]] = {
     # Context knobs for each Wi-Fi link power arm. The A/B then compares the
     # `default` ASPM policy with `powersupersave` inside that context, and the
     # stress run uses `powersupersave`.
+    # Every arm also holds Wi-Fi power save on: a reconnect resets it.
     "macos50": {"pcielink:wifi:clkpm": "0", "l1ss_profile": "apple50", "ltr_max_us": "0x1008"},
     "macos100": {"pcielink:wifi:clkpm": "0", "l1ss_profile": "apple100", "ltr_max_us": "0x1008"},
     "noclkpm": {"pcielink:wifi:clkpm": "0"},
@@ -483,7 +484,7 @@ ARMS: dict[str, dict[str, str]] = {
 def cmd_arm(target: Target, args: argparse.Namespace) -> None:
     """One Wi-Fi link power arm: context, power A/B, suspend stress, restore."""
     lab_guard(target, args, "the arm")
-    context = dict(ARMS[args.arm])
+    context = {"wifi_ps": "on", **ARMS[args.arm]}
     for pair in args.extra or []:
         knob, _, value = pair.partition("=")
         context[knob] = value
@@ -493,7 +494,7 @@ def cmd_arm(target: Target, args: argparse.Namespace) -> None:
                      "settle": args.settle, "measure": args.measure, "detail": True})
     if args.cycles:
         jobs.append({"kind": "stress", "cycles": args.cycles, "awake": args.awake, "sleep": args.sleep,
-                     "set": [["aspm", "powersupersave"]], "restore": True})
+                     "set": [["aspm", "powersupersave"], ["wifi_ps", "on"]], "restore": True})
     jobs.append({"kind": "restore"})
     expected = (args.pairs * 2 * (args.settle + args.measure) if args.pairs else 0) + args.cycles * (args.awake + args.sleep + 20) + 30
     result = run_batch(target, jobs, label=f"arm-{args.arm}", expected_s=expected)
@@ -510,15 +511,20 @@ def cmd_arm(target: Target, args: argparse.Namespace) -> None:
 
 
 def print_stress(result: dict[str, Any]) -> None:
-    out(f"knobs: {result.get('knobs')}")
+    out(f"knobs at start: {result.get('knobs')}")
+    if result.get("link_at_end"):
+        out(f"link while stressed: {result['link_at_end']}")
     for cycle in result.get("cycles", []):
-        errors = len(cycle.get("wifi_errors", []))
+        errors = len(cycle.get("critical", cycle.get("wifi_errors", [])))
         switched = cycle.get("ap_start") and cycle.get("ap_start") != cycle.get("ap_end")
         out(f"  cycle {cycle['index']:2}: {cycle['outcome']:8} slept {cycle.get('slept_s', 0):6.1f} s  ping loss {cycle.get('ping_loss')}%"
             + (f"  network changed: {cycle['ap_start']} -> {cycle['ap_end']}" if switched else "")
-            + (f"  {errors} Wi-Fi error line(s): {cycle['wifi_errors'][0][:120]}" if errors else ""))
+            + (f"  reconnect {cycle['reconnect_s']} s" if cycle.get("reconnect_s") else "")
+            + (f"  {errors} critical Wi-Fi line(s): {cycle.get('critical', cycle['wifi_errors'])[0][:120]}" if errors else "")
+            + (f"  ({len(cycle['wifi_errors'])} Wi-Fi notices)" if cycle.get("wifi_errors") and not errors else ""))
     summary = result.get("summary", {})
-    out(f"{summary.get('ok')}/{summary.get('cycles')} suspends ok, {summary.get('cycles_with_wifi_errors')} cycle(s) with Wi-Fi errors"
+    out(f"{summary.get('ok')}/{summary.get('cycles')} suspends ok, {summary.get('cycles_with_critical', '?')} cycle(s) with critical Wi-Fi errors, "
+        f"{summary.get('cycles_with_wifi_errors')} with any Wi-Fi notice"
         + (f"; stopped: {result['stopped']}" if result.get("stopped") else ""))
 
 
@@ -590,7 +596,7 @@ def cmd_standby(target: Target, args: argparse.Namespace) -> None:
 
 
 LAB_DIR = Path(__file__).resolve().parents[3] / "target" / "lab"
-LAB_EXPERIMENTS = {"probe": "m1power-probe", "atc1": "m1power-atc1"}
+LAB_EXPERIMENTS = {"probe": "m1power-probe", "atc1": "m1power-atc1", "stress": "m1power-stress"}
 
 
 def lab_cli() -> str:
@@ -643,6 +649,10 @@ def cmd_lab_run(target: Target, args: argparse.Namespace) -> None:
 
     script = LAB_DIR / f"{LAB_EXPERIMENTS[args.experiment]}.sh"
     plan: dict[str, Any] = {"settle_s": args.settle, "idle_s": args.idle, "sleep_s": args.sleep, "display": args.display}
+    if args.experiment == "stress":
+        knobs = dict(pair.split("=", 1) for pair in args.set or [])
+        plan = {"cycles": args.cycles, "awake_s": args.awake, "sleep_s": args.sleep, "boot_settle_s": args.settle,
+                "knobs": knobs or {"aspm": "powersupersave"}}
     if args.experiment == "atc1":
         plan = {"usb_device": args.usb_device, "pairs": args.pairs, "settle_s": 10, "measure_s": args.measure,
                 "sleep_s": args.sleep, "boot_settle_s": args.settle}
@@ -711,6 +721,9 @@ def lab_collect(job: str, device: str | None = None, experiment: str = "probe") 
     saved = save_result(f"lab-{experiment}", data, device or data.get("kernel", ""))
     if experiment == "atc1":
         print_atc1(data)
+    elif experiment == "stress":
+        out(f"\nkernel {data.get('kernel', '?')}  job {job}")
+        print_stress(data)
     else:
         print_probe(data)
     out(f"saved {saved}")
@@ -914,6 +927,9 @@ def build_parser() -> argparse.ArgumentParser:
     lab_run.add_argument("--pairs", type=int, default=3, help="atc1: A/B pairs")
     lab_run.add_argument("--measure", type=float, default=30, help="atc1: seconds per block")
     lab_run.add_argument("--timeout-min", type=float, default=30, help="script timeout in minutes")
+    lab_run.add_argument("--cycles", type=int, default=15, help="stress: suspend cycles")
+    lab_run.add_argument("--awake", type=float, default=30, help="stress: seconds awake with Wi-Fi traffic per cycle")
+    lab_run.add_argument("--set", action="append", help="stress: KNOB=VALUE for the run (default aspm=powersupersave)")
     lab_collect_p = sub.add_parser("lab-collect", help="wait for a lab job and fetch its result")
     lab_collect_p.add_argument("job")
     lab_collect_p.add_argument("--experiment", choices=sorted(LAB_EXPERIMENTS), default="probe")

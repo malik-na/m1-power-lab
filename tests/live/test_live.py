@@ -1063,3 +1063,19 @@ def test_pairs_spanning_a_network_switch_are_set_aside() -> None:
     analyzed = analysis.analyze_ab(result)
     assert analyzed["pairs"] == 3 and analyzed["excluded_pairs"] == 1
     assert "set aside" in analyzed["verdict"]
+
+
+def test_pcielink_knob_restores_by_clearing_not_writing_zero(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setattr(agent, "JOURNAL", tmp_path / "journal.json")
+    writes = []
+    values = {"attr": "0", "policy": "[default] performance powersave powersupersave"}
+    knob = agent.PcieLinkKnob("wifi", "l1_2_aspm")
+    monkeypatch.setattr(knob, "_path", lambda: "ATTR")
+    monkeypatch.setattr(agent, "get_knob", lambda name: knob)
+    monkeypatch.setattr(agent, "read", lambda path, default=None: values["attr"] if path == "ATTR" else values["policy"])
+    monkeypatch.setattr(agent, "write", lambda path, value: writes.append((str(path), str(value))))
+    agent.journal_set("pcielink:wifi:l1_2_aspm", "1")
+    assert json.loads((tmp_path / "journal.json").read_text()) == {"pcielink:wifi:l1_2_aspm": "clear"}
+    agent.restore_all()
+    assert ("ATTR", "1") in writes and ("ATTR", "0") not in writes
+    assert writes[-1] == ("/sys/module/pcie_aspm/parameters/policy", "default")
