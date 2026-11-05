@@ -1,0 +1,53 @@
+[17664.285983] Unable to handle kernel NULL pointer dereference at virtual address 00000000000005b0
+[17664.285998] Mem abort info:
+[17664.286002]   ESR = 0x0000000096000004
+[17664.286007]   EC = 0x25: DABT (current EL), IL = 32 bits
+[17664.286013]   SET = 0, FnV = 0
+[17664.286017]   EA = 0, S1PTW = 0
+[17664.286021]   FSC = 0x04: level 0 translation fault
+[17664.286026] Data abort info:
+[17664.286029]   ISV = 0, ISS = 0x00000004, ISS2 = 0x00000000
+[17664.286034]   CM = 0, WnR = 0, TnD = 0, TagAccess = 0
+[17664.286038]   GCS = 0, Overlay = 0, DirtyBit = 0
+[17664.286043] user pgtable: 16k pages, 48-bit VAs, pgdp=00000008032c6650
+[17664.286049] [00000000000005b0] pgd=0000000000000000, p4d=0000000000000000
+[17664.286064] Internal error: Oops: 0000000096000004 [#1]  SMP
+[17664.286072] Modules linked in: brcmfmac_wcc brcmfmac m1power(O) xt_connmark xt_MASQUERADE xt_mark nft_chain_nat nf_nat rfcomm snd_seq_dummy snd_hrtimer snd_seq snd_seq_device des_generic libdes md4 bnep tun brcmutil hci_bcm4377 bluetooth cfg80211 ecdh_generic ecc rfkill dwc3_apple apple_avd dwc3 v4l2_vp9 snd_soc_macaudio v4l2_h264 udc_core videobuf2_dma_contig snd_soc_aop v4l2_mem2mem ane macsmc_reboot macsmc_power apple_nvmem_spmi macsmc_hwmon macsmc_input regmap_spmi apple_isp videobuf2_v4l2 gpio_shared_proxy videodev snd_soc_cs42l83_i2c videobuf2_dma_sg snd_soc_cs42l42 videobuf2_memops snd_soc_tas2770 snd_soc_apple_mca videobuf2_common apple_admac mc ofpart spi_nor apple_soc_cpufreq phram joydev ip6t_REJECT nf_reject_ipv6 xt_hl ip6t_rt ipt_REJECT xt_LOG nf_log_syslog nft_limit xt_limit xt_addrtype xt_conntrack nf_conntrack nf_defrag_ipv6 nf_defrag_ipv4 nft_compat nf_tables tcp_bbr sch_fq i2c_dev crypto_user fuse zstd zram 842_decompress 842_compress lz4hc_compress lz4_compress btrfs xor raid6_pq dm_crypt tps6598x
+[17664.286317]  tps6598x_core aop_als aop rtc_macsmc gpio_macsmc phy_apple_atc nvme_apple apple_sart macsmc asahi mfd_core clk_apple_nco spmi_apple_controller pinctrl_apple_gpio appledrm i2c_pasemi_platform i2c_pasemi_core mux_apple_display_crossbar drm_dma_helper dcp_fabric_core thunderbolt_apple typec apple_rtkit_helper apple_pmp pwm_apple spi_hid_apple_of thunderbolt spi_hid_apple dockchannel_hid spi_apple usbhid apple_dockchannel hid_magicmouse hid_apple_mtp_haptic hid_apple [last unloaded: brcmfmac]
+[17664.286420] CPU: 0 UID: 0 PID: 46410 Comm: python3 Tainted: G S         O        7.2.11-14-1-ARCH #1 PREEMPT(full) 
+[17664.286434] Tainted: [S]=CPU_OUT_OF_SPEC, [O]=OOT_MODULE
+[17664.286439] Hardware name: Apple Inc. MacBookAir10,1/J313, BIOS 2026.07-gd30213eadcaa-dirty 07/01/2026
+[17664.286444] pstate: 01400009 (nzcv daif +PAN -UAO -TCO +DIT -SSBS BTYPE=--)
+[17664.286453] pc : mutex_lock+0x24/0x6c
+[17664.286469] lr : mutex_lock+0x18/0x6c
+[17664.286477] sp : ffff800097447be0
+[17664.286481] x29: ffff800097447be0 x28: ffff000032f4e040 x27: 0000000000000000
+[17664.286493] x26: 0000000000000000 x25: 0000000000000000 x24: ffff80008202e000
+[17664.286503] x23: ffff8000810399f0 x22: ffff0000f58e1140 x21: ffff80007b2dc038
+[17664.286513] x20: ffff000010033810 x19: 00000000000005b0 x18: 0000000000000000
+[17664.286522] x17: 0000000000000000 x16: 0000000000000000 x15: 0000aaaae297f1a0
+[17664.286532] x14: ffff000003fde880 x13: ffff000003fde880 x12: ffff000003fde878
+[17664.286542] x11: ffff0000031e6ab0 x10: ffff000032f4e041 x9 : 0000000000000000
+[17664.286551] x8 : ffff000032f4e040 x7 : 7f7f7f7f7f7f7f7f x6 : 1f7223ff6364626d
+[17664.286561] x5 : 0000008000000000 x4 : 0000000000000020 x3 : 207325006465636e
+[17664.286571] x2 : 79735f6574617473 x1 : 0000000000000000 x0 : 0000000000000000
+[17664.286581] Call trace:
+[17664.286585]  mutex_lock+0x24/0x6c (P)
+[17664.286596]  dwc3_apple_remove+0x1c/0xa4 [dwc3_apple]
+[17664.286609]  platform_remove+0x24/0x30
+[17664.286625]  device_release_driver_internal+0x160/0x26c
+[17664.286638]  device_driver_detach+0x18/0x24
+[17664.286648]  unbind_store+0xc4/0xf4
+[17664.286657]  drv_attr_store+0x28/0x3c
+[17664.286666]  sysfs_kf_write+0x80/0xa0
+[17664.286682]  kernfs_fop_write_iter+0xe4/0x184
+[17664.286694]  vfs_write+0x220/0x380
+[17664.286706]  ksys_write+0x74/0xe8
+[17664.286714]  __arm64_sys_write+0x1c/0x28
+[17664.286723]  invoke_syscall+0x4c/0xd8
+[17664.286737]  do_el0_svc+0x70/0xa8
+[17664.286747]  el0_svc+0x40/0x104
+[17664.286760]  el0t_64_sync_handler+0x84/0x12c
+[17664.286771]  el0t_64_sync+0x198/0x19c
+[17664.286784] Code: 97fffc58 d5384108 d503201f aa1f03e9 (c8e97e68) 
+[17664.286791] ---[ end trace 0000000000000000 ]---

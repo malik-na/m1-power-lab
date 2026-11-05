@@ -68,6 +68,15 @@ Verified on the physical M1 this session:
   display attached, the second USB-C complex (`atc1_*`, nothing plugged in,
   controller without runtime PM), the internal display coprocessor
   (`disp0_*`), and the PCIe root (`apcie*`, `pcie_ref`).
+- Unbinding `dwc3-apple` from the never-connected second USB-C port
+  (`502280000.usb`, to let `atc1_*` power down) oopsed the kernel: NULL
+  dereference in `mutex_lock` from `dwc3_apple_remove+0x1c` at the unbind
+  write ([trace](evidence/2026-11-05-dwc3-apple-unbind-oops.txt)). The driver
+  never initialised that instance, so its remove path is unsafe. The M1 was
+  rebooted (it unlocks itself); the module rebuilt and loaded at boot, tuning
+  re-applied, and a suspend afterwards worked (0.69 W). `atc1_*` stays a
+  target, but it needs a driver fix first, not an unbind. m1power has no
+  unbind knob; the test was a one-off script.
 - Direction (independent review, 2026-11-05): continue in-OS. m1n1 proxy mode
   cannot measure Linux idle, and neither it nor in-OS tuning reaches macOS's
   tens-of-mW SoC power collapse, which needs firmware-level resume support.
