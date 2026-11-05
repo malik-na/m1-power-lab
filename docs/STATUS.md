@@ -83,6 +83,10 @@ Verified on the physical M1 this session:
   11:55:50; the second dark wake at 12:00:51 stayed awake as configured
   (`--max-dark-wakes 2`). Each dark wake kept the Mac up about 24 s; sleeps in
   between drew 0.62-0.63 W.
+- The guard is now enabled permanently on the M1 at the owner's request:
+  `m1power standby set --check-every 2h --poweroff-below 10` (stored in
+  `/etc/m1power/standby.json`). Persisted target state: Wi-Fi power save on
+  (`m1power tune`), standby guard on, module and sleep ledger installed.
 - Direction (independent review, 2026-11-05): continue in-OS. m1n1 proxy mode
   cannot measure Linux idle, and neither it nor in-OS tuning reaches macOS's
   tens-of-mW SoC power collapse, which needs firmware-level resume support.
