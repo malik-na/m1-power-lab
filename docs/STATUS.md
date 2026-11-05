@@ -77,6 +77,12 @@ Verified on the physical M1 this session:
   re-applied, and a suspend afterwards worked (0.69 W). `atc1_*` stays a
   target, but it needs a driver fix first, not an unbind. m1power has no
   unbind knob; the test was a one-off script.
+- Standby guard verified on the M1 on battery: an ordinary suspend at
+  11:50:26 armed the 5-minute check by itself; the 11:55:26 timer-only wake
+  decided `resleep`, watched the input devices for 8 s, and suspended again at
+  11:55:50; the second dark wake at 12:00:51 stayed awake as configured
+  (`--max-dark-wakes 2`). Each dark wake kept the Mac up about 24 s; sleeps in
+  between drew 0.62-0.63 W.
 - Direction (independent review, 2026-11-05): continue in-OS. m1n1 proxy mode
   cannot measure Linux idle, and neither it nor in-OS tuning reaches macOS's
   tens-of-mW SoC power collapse, which needs firmware-level resume support.
