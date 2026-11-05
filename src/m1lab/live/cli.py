@@ -686,6 +686,8 @@ def cmd_lab_run(target: Target, args: argparse.Namespace) -> None:
         command = [lab_cli(), "run", args.device]
         if args.kernel:
             command += ["--kernel", args.kernel]
+        if args.cmdline:
+            command += ["--cmdline", args.cmdline]
         command += ["--script", str(script)]
         for name, path in payload.items():
             command += ["--payload", f"{name}={path}"]
@@ -945,6 +947,7 @@ def build_parser() -> argparse.ArgumentParser:
     lab_run.add_argument("--sleep", type=int, default=90, help="seconds of self-waking sleep (0 skips; >120 pages the lab)")
     lab_run.add_argument("--display", choices=["on", "off", "leave"], default="off")
     lab_run.add_argument("--no-wait", action="store_true")
+    lab_run.add_argument("--cmdline", help="extra kernel arguments for the Lab boot (e.g. pd_ignore_unused)")
     lab_run.add_argument("--experiment", choices=sorted(LAB_EXPERIMENTS), default="probe",
                          help="probe: idle + sleep; atc1: unused USB-C port crash check and bound/unbound A/B")
     lab_run.add_argument("--module-build", default="auto",

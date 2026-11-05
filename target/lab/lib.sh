@@ -63,9 +63,9 @@ unload_m1power() {
 	fi
 }
 
-wait_uptime() { # SECONDS
-	local up
+wait_uptime() { # SECONDS (fractions are dropped)
+	local up want=${1%%.*}
 	up=$(cut -d. -f1 /proc/uptime)
-	[ "$up" -lt "$1" ] && sleep $(($1 - up))
+	[ "$up" -lt "$want" ] && sleep $((want - up))
 	return 0
 }
