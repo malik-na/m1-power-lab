@@ -12,11 +12,13 @@
 #     3. every secondary down for 10 s, then up, 3 times
 #
 #   apple_cpu_hotplug=powerdown[-legacy] panic=10 oops=panic -> phase "powerdown"
-#     Only an m1n1 stage 2 older than v1.9.9 with powerdown-legacy really
-#     powers down. Otherwise the kernel must fall back to park and say why
-#     (debugfs powerdown_fallback; always for v1.9.9+, re-entry "mpidr"):
-#     the script checks that, reports "park fallback" and runs the park
-#     phase instead.
+#     Only powerdown-legacy with a legacy m1n1 (re-entry "legacy": a clean
+#     release tag no newer than v1.6.1) really powers down; mode=powerdown
+#     with anything else is a FAIL. Otherwise the kernel must fall back to
+#     park and give a reason in debugfs powerdown_fallback (authoritative;
+#     the "powerdown refused" boot log line is only cross-checked, and a
+#     missing one is a warning, since the ring buffer may have rotated).
+#     The script then reports "park fallback" and runs the park phase.
 #     1. cpu7 only (cpu4-6 stay online, so cpu7 is never the last core of
 #        its cluster): PD_CYCLES (default 1) offline/online cycles, with
 #        the per-cycle checks below. Re-run with PD_CYCLES=100 once 1 passes.
@@ -54,11 +56,20 @@ fail() {
 }
 
 echo "== $(date -Is) $(uname -r)"
-cat /proc/cmdline
+cmdline=$(cat /proc/cmdline)
+echo "$cmdline"
 dmesg > "$OUT/dmesg-before.txt"
 grep -h . /proc/device-tree/chosen/asahi,m1n1-stage2-version 2>/dev/null | tr -d '\0' |
 	sed 's/^/m1n1 stage2: /'
-dmesg | grep 'apple-cpu-hotplug' | tee "$OUT/dmesg-hotplug-boot.txt"
+# This boot's apple-cpu-hotplug lines. The ring buffer may have rotated
+# them out already; the journal keeps them if it is persistent.
+bootlog="$OUT/dmesg-hotplug-boot.txt"
+dmesg | grep 'apple-cpu-hotplug' > "$bootlog"
+if ! [ -s "$bootlog" ] && command -v journalctl > /dev/null; then
+	journalctl -k -b 0 -o cat --no-pager 2>/dev/null |
+		grep 'apple-cpu-hotplug' > "$bootlog"
+fi
+cat "$bootlog"
 for w in /sys/class/watchdog/watchdog*; do
 	[ -e "$w" ] && echo "$w: $(cat "$w/identity" 2>/dev/null) state=$(cat "$w/state" 2>/dev/null) timeout=$(cat "$w/timeout" 2>/dev/null)"
 done
@@ -69,28 +80,39 @@ done
 snap before
 cat "$dbg"
 
+# --- header check (begin) -------------------------------------------------
+# Inputs: $dbg, $cmdline, $bootlog. Sets mode, note.
 mode=$(sed -n 's/^mode: //p' "$dbg")
 fallback=$(sed -n 's/^powerdown_fallback: //p' "$dbg")
 reentry=$(sed -n 's/^m1n1: .* reentry=//p' "$dbg")
+# The last apple_cpu_hotplug= on the command line wins, as in the kernel.
+hp=$(tr -s ' \t' '\n\n' <<< "$cmdline" | sed -n 's/^apple_cpu_hotplug=//p' | tail -n 1)
 want=park
-grep -qw 'apple_cpu_hotplug=powerdown\(-legacy\)\?' /proc/cmdline && want=powerdown
-echo "requested: $want, active: $mode, m1n1 re-entry: $reentry, fallback: ${fallback:-?}"
+case "$hp" in powerdown|powerdown-legacy) want=powerdown ;; esac
+echo "requested: ${hp:-?} ($want), active: $mode, m1n1 re-entry: ${reentry:-?}, fallback: ${fallback:-?}"
+[ -n "$mode" ] || fail "debugfs has no mode line"
 [ -n "$fallback" ] || fail "debugfs has no powerdown_fallback line (old kernel?)"
+[ -n "$reentry" ] || fail "debugfs has no m1n1 reentry= field"
 note=$mode
-if [ "$want" = powerdown ] && [ "$reentry" = mpidr ] && [ "$mode" != park ]; then
-	fail "powerdown active with m1n1 re-entry mpidr; it must fall back to park"
-fi
-if [ "$want" = powerdown ] && [ "$mode" = park ]; then
+if [ "$mode" = powerdown ]; then
+	[ "$hp" = powerdown-legacy ] ||
+		fail "mode powerdown but apple_cpu_hotplug=${hp:-?}; only powerdown-legacy may power down"
+	[ "$reentry" = legacy ] ||
+		fail "mode powerdown with m1n1 re-entry $reentry; only legacy may power down"
+	[ "$fallback" = - ] || fail "mode powerdown but powerdown_fallback=$fallback"
+elif [ "$want" = powerdown ]; then
+	[ "$mode" = park ] || fail "requested $hp but the kernel runs ${mode:-?}"
 	[ "$fallback" != - ] || fail "powerdown fell back to park without a reason"
-	dmesg | grep -q 'apple-cpu-hotplug: powerdown refused' ||
-		fail "no 'powerdown refused' line in dmesg"
+	grep -q 'apple-cpu-hotplug: powerdown refused' "$bootlog" 2>/dev/null ||
+		echo "WARNING: no 'powerdown refused' line in $bootlog (log rotated?); debugfs powerdown_fallback is authoritative"
 	echo "PARK FALLBACK: $fallback; running the park phase"
 	note="park fallback from powerdown: $fallback"
 elif [ "$want" != "$mode" ]; then
-	fail "requested $want but the kernel runs $mode"
+	fail "requested $want but the kernel runs ${mode:-?}"
 elif [ "$fallback" != - ]; then
 	fail "mode $mode but powerdown_fallback=$fallback"
 fi
+# --- header check (end) ---------------------------------------------------
 
 # --- helpers ---------------------------------------------------------------
 

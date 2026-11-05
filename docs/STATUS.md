@@ -292,12 +292,14 @@ waiting for the M1 (after the overnight batch):
   (sleeps only after an awake alarm proves the IRQ path; m1power's 75 s wake
   timer is the backup). Checker: ready.
 - CPU hotplug (`cpu_die`/`cpu_kill` for spin-table cores, park or PMGR
-  power-down): `m1power/s2r-cpu-hotplug` `c7d79cc`, build `b1105-185910-a771`.
+  power-down): `m1power/s2r-cpu-hotplug` `fffde00`, build `b1105-191712-d6ee`.
   Park mode is safe to test. Power-down is refused (falls back to park, with
-  the reason in debugfs) on m1n1 v1.9.9+ and unknown m1n1: a restarted core
-  would run on m1n1 stacks the kernel cannot prove are reserved. Only
-  `powerdown-legacy` on m1n1 older than v1.9.9 still powers cores down, and a
-  failed restart now blocks all further restarts (they share one m1n1 stack).
+  the reason in debugfs) unless m1n1 reports a clean tag no newer than v1.6.1
+  and the cmdline says `powerdown-legacy`: newer m1n1, any git-describe
+  snapshot (`v1.6.1-47-g...`), `-dirty` or unknown builds restart cores on
+  per-CPU stacks the kernel has no stable way to prove are reserved. A failed
+  restart blocks all further restarts (legacy restarts share one m1n1 stack).
+  The lab M1's m1n1 banner says v1.6.1, but its build provenance is unverified.
   Test: [`target/lab/m1power-s2r-cpu-hotplug.sh`](../target/lab/m1power-s2r-cpu-hotplug.sh).
 - m1n1 hypervisor trace kit for macOS 13.5 sleep entry:
   [`tools/hv-trace-kit`](../tools/hv-trace-kit/RUNBOOK.md) (owner runbook:
