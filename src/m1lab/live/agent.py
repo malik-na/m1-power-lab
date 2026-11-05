@@ -939,6 +939,32 @@ class WifiFirmwareIntKnob(Knob):
             reply = brcmf_dcmd(self._iface(), self.WLC_GET_VAR, name, buflen=max(len(name), 4) + 4)
         return str(int.from_bytes(reply[:4], "little", signed=True))
 
+    # NetworkManager re-sends power save (PM_FAST) at every connection it
+    # activates and a phy re-register resets firmware state; resume's tune
+    # run comes before the reconnect. A dispatcher hook re-applies the tuning
+    # each time Wi-Fi comes up.
+    NM_DISPATCH = Path("/etc/NetworkManager/dispatcher.d/90-m1power-tune")
+
+    def persist(self, value):
+        if not self.NM_DISPATCH.parent.is_dir():
+            return None
+        text = (
+            "#!/bin/sh\n# Written by m1power tune (Wi-Fi firmware knobs); removed by `m1power tune revert`.\n"
+            '[ "$2" = up ] || exit 0\n[ -d "/sys/class/net/$1/phy80211" ] || exit 0\n'
+            f"exec /usr/bin/python3 -I {AGENT_HOME}/agent.py tune run >/dev/null 2>&1\n"
+        )
+        if read(self.NM_DISPATCH) == text.strip():
+            return None
+        self.NM_DISPATCH.write_text(text)
+        self.NM_DISPATCH.chmod(0o755)
+        return f"wrote {self.NM_DISPATCH}"
+
+    def unpersist(self):
+        if not self.NM_DISPATCH.exists():
+            return None
+        self.NM_DISPATCH.unlink()
+        return f"removed {self.NM_DISPATCH}"
+
     def set(self, value):
         raw = int(value, 0).to_bytes(4, "little", signed=True)
         if self.ioctl:

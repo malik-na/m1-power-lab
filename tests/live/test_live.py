@@ -1245,3 +1245,15 @@ def test_brcmf_dcmd_builds_iovar_get_and_set(monkeypatch: pytest.MonkeyPatch) ->
     pm = agent.WifiFirmwareIntKnob("wifi_pm", "", ioctl=(85, 86))
     pm.set("1")
     assert bytes(int(x, 16) for x in calls[2][7:]).hex() == "56000000" "04000000" "14000000" "01000000" "00000000" "01000000"
+
+
+def test_wifi_firmware_knob_persists_through_a_dispatcher_hook(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    hook = tmp_path / "dispatcher.d" / "90-m1power-tune"
+    hook.parent.mkdir()
+    monkeypatch.setattr(agent.WifiFirmwareIntKnob, "NM_DISPATCH", hook)
+    knob = agent.WifiFirmwareIntKnob("wifi_pm", "", ioctl=(85, 86))
+    assert knob.persist("1") == f"wrote {hook}"
+    text = hook.read_text()
+    assert '"$2" = up' in text and "tune run" in text and hook.stat().st_mode & 0o111
+    assert knob.persist("1") is None
+    assert knob.unpersist() == f"removed {hook}" and not hook.exists()
