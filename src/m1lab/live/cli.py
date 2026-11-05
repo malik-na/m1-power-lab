@@ -599,7 +599,7 @@ def cmd_standby(target: Target, args: argparse.Namespace) -> None:
 
 
 LAB_DIR = Path(__file__).resolve().parents[3] / "target" / "lab"
-LAB_EXPERIMENTS = {"probe": "m1power-probe", "atc1": "m1power-atc1", "stress": "m1power-stress"}
+LAB_EXPERIMENTS = {"probe": "m1power-probe", "atc1": "m1power-atc1", "stress": "m1power-stress", "display": "m1power-display"}
 
 
 def lab_cli() -> str:
@@ -656,6 +656,9 @@ def cmd_lab_run(target: Target, args: argparse.Namespace) -> None:
         knobs = dict(pair.split("=", 1) for pair in args.set or [])
         plan = {"cycles": args.cycles, "awake_s": args.awake, "sleep_s": args.sleep, "boot_settle_s": args.settle,
                 "knobs": knobs or {"aspm": "powersupersave"}}
+    if args.experiment == "display":
+        plan = {"pairs": args.pairs, "settle_s": 15, "measure_s": args.measure, "backlight": args.backlight,
+                "boot_settle_s": args.settle}
     if args.experiment == "atc1":
         plan = {"usb_device": args.usb_device, "pairs": args.pairs, "settle_s": 10, "measure_s": args.measure,
                 "sleep_s": args.sleep, "boot_settle_s": args.settle}
@@ -727,6 +730,12 @@ def lab_collect(job: str, device: str | None = None, experiment: str = "probe") 
     elif experiment == "stress":
         out(f"\nkernel {data.get('kernel', '?')}  job {job}")
         print_stress(data)
+    elif experiment == "display":
+        out(f"\nkernel {data.get('kernel', '?')}  job {job}")
+        if data.get("ab"):
+            print_ab_table([data["ab"]])
+        for state in ("on", "off"):
+            out(f"interrupts with the panel {state}: " + "; ".join(line.strip() for line in data.get(f"irq_{state}", [])[:6]))
     else:
         print_probe(data)
     out(f"saved {saved}")
@@ -927,7 +936,8 @@ def build_parser() -> argparse.ArgumentParser:
     lab_run.add_argument("--module-build", default="auto",
                          help="module-build.tar.zst to build m1power.ko on the Lab boot ('auto': fetch it for --kernel)")
     lab_run.add_argument("--usb-device", default="502280000.usb", help="atc1: the unused port's controller")
-    lab_run.add_argument("--pairs", type=int, default=3, help="atc1: A/B pairs")
+    lab_run.add_argument("--pairs", type=int, default=3, help="atc1/display: A/B pairs")
+    lab_run.add_argument("--backlight", default="16", help="display: backlight level held during the A/B")
     lab_run.add_argument("--measure", type=float, default=30, help="atc1: seconds per block")
     lab_run.add_argument("--timeout-min", type=float, default=30, help="script timeout in minutes")
     lab_run.add_argument("--cycles", type=int, default=15, help="stress: suspend cycles")

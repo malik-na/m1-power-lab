@@ -950,15 +950,23 @@ class DisplayKnob(Knob):
 
     def set(self, value):
         # Hyprland < 0.56 takes `dispatch dpms off`; 0.56+ evaluates dispatch
-        # arguments as Lua and wants `hl.dsp.dpms("off")`.
-        try:
-            out = hyprctl("dispatch", "dpms", value)
-        except RuntimeError as error:
-            out = f"error: {error}"
-        if out.strip().lower().startswith("error"):
-            out = hyprctl("dispatch", f'hl.dsp.dpms("{value}")')
-            if out.strip().lower().startswith("error"):
-                raise RuntimeError(out.strip())
+        # arguments as Lua and wants `hl.dsp.dpms("off")`. On 0.56 the old
+        # form still answers "ok" but ignores its argument and toggles, so
+        # every form is checked against the state it leaves.
+        if self.get() == value:
+            return
+        forms = (("dispatch", f'hl.dsp.dpms("{value}")'), ("dispatch", "dpms", value))
+        replies = []
+        for form in forms:
+            try:
+                replies.append(hyprctl(*form).strip())
+            except RuntimeError as error:
+                replies.append(f"error: {error}")
+            for _ in range(10):
+                if self.get() == value:
+                    return
+                time.sleep(0.1)
+        raise RuntimeError(f"display did not turn {value}: " + " | ".join(replies))
 
 
 class HyprOptionKnob(Knob):
