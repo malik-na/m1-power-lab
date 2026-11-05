@@ -1,0 +1,147 @@
+# 100 reads 50 ms apart; share of reads with actual < f (gated) and actual = 0 (power-gated)
+sbr              gated=  0% pwrgated=  0%
+aic              gated=  0% pwrgated=  0%
+dwi              gated=  0% pwrgated=  0%
+soc_spmi0        gated=100% pwrgated=  0%
+soc_spmi1        gated=100% pwrgated=  0%
+soc_spmi2        gated=100% pwrgated=  0%
+gpio             gated=  0% pwrgated=  0%
+pms_busif        gated=  0% pwrgated=  0%
+pms              gated=  0% pwrgated=  0%
+pms_fpwm0        gated=100% pwrgated=  0%
+pms_fpwm1        gated=100% pwrgated=  0%
+pms_fpwm2        gated=100% pwrgated=  0%
+pms_fpwm3        gated=100% pwrgated=  0%
+pms_fpwm4        gated=100% pwrgated=  0%
+soc_dpe          gated=  0% pwrgated=  0%
+pmgr_soc_ocla    gated=100% pwrgated=100%
+ispsens0         gated=100% pwrgated=100%
+ispsens1         gated=100% pwrgated=100%
+ispsens2         gated=100% pwrgated=100%
+ispsens3         gated=100% pwrgated=100%
+pcie_ref         gated= 99% pwrgated=  0%
+aft0             gated=100% pwrgated=  0%
+devc0_ivdmc      gated=100% pwrgated=  0%
+imx              gated=  0% pwrgated=  0%
+sio_busif        gated=100% pwrgated=  0%
+sio              gated=  0% pwrgated=  0%
+sio_cpu          gated=  0% pwrgated=  0%
+fpwm0            gated=100% pwrgated=  0%
+fpwm1            gated=  0% pwrgated=  0%
+fpwm2            gated=100% pwrgated=  0%
+i2c0             gated=  0% pwrgated=  0%
+i2c1             gated=  0% pwrgated=  0%
+i2c2             gated=100% pwrgated=100%
+i2c3             gated=  0% pwrgated=  0%
+i2c4             gated=100% pwrgated=100%
+spi_p            gated=  0% pwrgated=  0%
+uart_p           gated=  0% pwrgated=  0%
+audio_p          gated=  0% pwrgated=  0%
+sio_adma         gated=  0% pwrgated=  0%
+aes              gated=100% pwrgated=100%
+spi0             gated=100% pwrgated=100%
+spi1             gated=100% pwrgated=100%
+spi2             gated=100% pwrgated=100%
+spi3             gated=100% pwrgated=100%
+spi4             gated=100% pwrgated=100%
+uart_n           gated=100% pwrgated=100%
+uart0            gated=  0% pwrgated=  0%
+uart1            gated=100% pwrgated=100%
+uart2            gated=100% pwrgated=100%
+uart3            gated=100% pwrgated=100%
+uart4            gated=100% pwrgated=100%
+uart5            gated=100% pwrgated=100%
+uart6            gated=100% pwrgated=100%
+uart7            gated=100% pwrgated=100%
+uart8            gated=100% pwrgated=100%
+mca0             gated=100% pwrgated=100%
+mca1             gated=100% pwrgated=100%
+mca2             gated=  0% pwrgated=  0%
+mca3             gated=100% pwrgated=100%
+mca4             gated=100% pwrgated=100%
+mca5             gated=100% pwrgated=100%
+dpa0             gated=  0% pwrgated=  0%
+dpa1             gated=100% pwrgated=100%
+mcc              gated=  0% pwrgated=  0%
+dcs0             gated= 93% pwrgated=  0%
+dcs1             gated= 91% pwrgated=  0%
+dcs2             gated= 92% pwrgated=  0%
+dcs3             gated= 89% pwrgated=  0%
+smx              gated=  0% pwrgated=  0%
+apcie            gated=  0% pwrgated=  0%
+rmx              gated=  0% pwrgated=  0%
+mmx              gated=100% pwrgated=100%
+disp0_fe         gated=  0% pwrgated=  0%
+dispext_fe       gated=  0% pwrgated=  0%
+dispext_cpu0     gated=100% pwrgated=  0%
+jpg              gated=100% pwrgated=100%
+msr              gated=100% pwrgated=100%
+msr_ase_core     gated=100% pwrgated=100%
+pmp              gated=  0% pwrgated=  0%
+pms_sram         gated=100% pwrgated=100%
+apcie_gp         gated= 99% pwrgated= 88%
+ans2             gated=100% pwrgated=100%
+gfx              gated=100% pwrgated=100%
+dcs4             gated= 92% pwrgated=  0%
+dcs5             gated= 94% pwrgated=  0%
+dcs6             gated= 95% pwrgated=  0%
+dcs7             gated= 94% pwrgated=  0%
+dispdfr_fe       gated=100% pwrgated=100%
+dispdfr_be       gated=100% pwrgated=100%
+mipi_dsi         gated=100% pwrgated=100%
+isp_sys          gated=100% pwrgated=100%
+venc_sys         gated=100% pwrgated=100%
+avd_sys          gated=100% pwrgated=100%
+apcie_st         gated=100% pwrgated=100%
+ane_sys          gated=100% pwrgated=100%
+atc0_common      gated=  0% pwrgated=  0%
+atc0_pcie        gated=  0% pwrgated=  0%
+atc0_cio         gated=100% pwrgated=100%
+atc0_cio_pcie    gated=100% pwrgated=100%
+atc0_cio_usb     gated=100% pwrgated=100%
+atc1_common      gated=  0% pwrgated=  0%
+atc1_pcie        gated=  0% pwrgated=  0%
+atc1_cio         gated=100% pwrgated=100%
+atc1_cio_pcie    gated=100% pwrgated=100%
+atc1_cio_usb     gated=100% pwrgated=100%
+sep              gated=  0% pwrgated=  0%
+venc_dma         gated=100% pwrgated=100%
+venc_pipe4       gated=100% pwrgated=100%
+venc_pipe5       gated=100% pwrgated=100%
+venc_me0         gated=100% pwrgated=100%
+venc_me1         gated=100% pwrgated=100%
+ane_sys_cpu      gated=100% pwrgated=100%
+ane_base         gated=100% pwrgated=100%
+ane_set1         gated=100% pwrgated=100%
+ane_set2         gated=100% pwrgated=100%
+ane_set3         gated=100% pwrgated=100%
+ane_set4         gated=100% pwrgated=100%
+ane_set5         gated=100% pwrgated=100%
+disp0_cpu0       gated=100% pwrgated=  0%
+isp_set0         gated=100% pwrgated=100%
+isp_set1         gated=100% pwrgated=100%
+isp_set2         gated=100% pwrgated=100%
+isp_fe           gated=100% pwrgated=100%
+isp_set4         gated=100% pwrgated=100%
+isp_set5         gated=100% pwrgated=100%
+isp_set6         gated=100% pwrgated=100%
+isp_set7         gated=100% pwrgated=100%
+isp_set8         gated=100% pwrgated=100%
+isp_set9         gated=100% pwrgated=100%
+isp_set10        gated=100% pwrgated=100%
+isp_set11        gated=100% pwrgated=100%
+isp_set12        gated=100% pwrgated=100%
+debug            gated=  0% pwrgated=  0%
+nub_spmi0        gated= 96% pwrgated=  0%
+nub_aon          gated=  0% pwrgated=  0%
+nub_gpio         gated=  0% pwrgated=  0%
+nub_fabric       gated=  7% pwrgated=  7%
+nub_sram         gated=100% pwrgated=100%
+debug_usb        gated=100% pwrgated=100%
+debug_auth       gated=100% pwrgated=100%
+nub_spmi1        gated=100% pwrgated=  0%
+msg              gated=  0% pwrgated=  0%
+atc0_usb_aon     gated=  0% pwrgated=  0%
+atc1_usb_aon     gated=  0% pwrgated=  0%
+atc0_usb         gated=  0% pwrgated=  0%
+atc1_usb         gated=  0% pwrgated=  0%
