@@ -95,7 +95,16 @@ after 1m30s". The passing job became the Mac's omarchy-m-test reference, with
 `m1power` taint among its new kernel lines; the lab's after-tests screenshot
 timed out, possibly because the probe turned the display off.
 
-Keep `--sleep` under 120 s: longer sleeps in a job page a person.
+Keep the sleep in a job under 120 s in total: labd counts back-to-back sleeps
+as one, and past two minutes it notifies the lab's maintainers.
+
+`--experiment atc1` runs `target/lab/m1power-atc1.sh` instead: unbind an
+unused USB-C controller and its PHY (crash check), a paired bound/unbound A/B,
+and one sleep each way. For a lab kernel, `--module-build auto` fetches the
+build's `module-build.tar.zst` with `lab build-get`, drops `vmlinux` (320 of
+340 MB, only needed for module BTF) and sends it as payload so the job builds
+`m1power.ko` on the Lab boot. If this host's network drops while waiting,
+`lab-collect` re-attaches instead of reading a job that is still running.
 
 ## Using the lab for power work (needs a Maintainer login)
 

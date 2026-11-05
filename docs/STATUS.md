@@ -96,6 +96,26 @@ Verified on the physical M1 this session:
   dark wake and re-slept the Mac); the guard now acts only on timers it armed.
   The USB-C PD controllers (`tps6598x`) woke an empty-port sleep early once
   (14.6 of 30 s) and appear as wake sources in others: a lead for sleep work.
+- dwc3-apple fix, A/B through the lab: two lab builds from the same commit
+  (`omacom/linux-aurora@b798f2b`), with the M1's own config, differing only by
+  [a one-line fix](https://github.com/malik-na/linux-aurora/commit/1618cc6d56af4859a22053972dd7e58cc86f5c59)
+  that sets the driver data in probe (`dwc3_core_probe()` only sets it at the
+  first cable, so `remove()` on a never-connected port dereferenced NULL).
+  Stock `7.2.11-labb798f2b0-4585` (job `j1105-082911-4aed`): unbinding the
+  unused port oopsed at the same address as on the installed kernel, then the
+  Mac rebooted back normally. Patched `7.2.11-lab1618cc6d-1a44` (retry
+  `j1105-085239-15ab`): clean unbind, job passed, omarchy-m-test 0 regressed.
+  The first patched run lost contact during boot-health because Wi-Fi dropped
+  for a couple of minutes (brcmfmac flowring timeouts 76 s after boot, and the
+  host lost its network at the same time); nothing from dwc3 in that boot.
+  Power: no `atc1_*` domain switched off with controller and PHY unbound (its
+  IOMMUs and display crossbar stay active), the awake A/B showed no effect
+  (-5 mW, 95% CI -17..+6) and one sleep each way gave 0.649 against 0.631 W.
+  Unbinding also left the Type-C controller unable to set its mux
+  (`failed to place Type-C mux in safe mode: -19`) until the port was rebound.
+  Freeing that complex needs runtime PM across the ATC block, not an unbind.
+- Two 90 s sleeps back to back in one job read to labd as one 3m14s sleep,
+  past its 2-minute notice; keep a job's total sleep under two minutes.
 - Direction (independent review, 2026-11-05): continue in-OS. m1n1 proxy mode
   cannot measure Linux idle, and neither it nor in-OS tuning reaches macOS's
   tens-of-mW SoC power collapse, which needs firmware-level resume support.

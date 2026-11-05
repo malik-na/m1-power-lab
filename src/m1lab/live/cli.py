@@ -615,7 +615,15 @@ def lab_collect(job: str, device: str | None = None, experiment: str = "probe") 
     import subprocess
 
     lab = lab_cli()
-    subprocess.run([lab, "wait", job])  # prints the job's events; exits 3 unless it passed
+    # `lab wait` prints the job's events and exits 0 (passed) or 3 (finished
+    # otherwise). Anything else means it lost labd (this host's network
+    # dropped): re-attach rather than read a job that is still running.
+    for attempt in range(60):
+        rc = subprocess.run([lab, "wait", job]).returncode
+        if rc in (0, 3):
+            break
+        out(f"lost labd while waiting for {job} (exit {rc}); re-attaching in 30 s")
+        time.sleep(30)
     test = LAB_EXPERIMENTS[experiment]
     fetched = subprocess.run([lab, "logs", job, f"test-{test}/result.json"], capture_output=True, text=True)
     if fetched.returncode != 0 or not fetched.stdout.strip():
