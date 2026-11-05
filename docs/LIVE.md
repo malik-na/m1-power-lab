@@ -156,9 +156,9 @@ the resume hook and the next boot (`m1power-kmod.service`) turn it back on, so
 a crash or power loss while asleep cannot leave the Mac offline. A radio you
 switched off yourself is never touched.
 
-Do not persist `aspm=powersupersave` with the Wi-Fi radio left on in sleep:
-with L1.1/L1.2 on, `brcmfmac` timed out entering D3 and aborted most suspends
-(see [STATUS](STATUS.md)).
+Do not persist `aspm=powersupersave`: with L1.1/L1.2 on, the BCM4378 Wi-Fi
+firmware wedges and `brcmfmac` then times out entering D3, aborting suspends,
+even when the radio is blocked for sleep (see [STATUS](STATUS.md)).
 
 Hyprland 0.56 evaluates `hyprctl dispatch` arguments as Lua; the `display`
 knob tries `dispatch dpms off` and falls back to `dispatch 'hl.dsp.dpms("off")'`.

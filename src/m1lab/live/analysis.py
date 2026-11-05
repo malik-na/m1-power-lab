@@ -136,10 +136,12 @@ def summarize_sleeps(entries: Sequence[dict[str, Any]]) -> dict[str, Any]:
     if dcin:
         out["dcin_w_weighted"] = round(_weighted(dcin, lambda e: e["dcin_w"]), 4)
         out["dcin_w_median"] = round(median(e["dcin_w"] for e in dcin), 4)
-    on_battery = [e for e in usable if not e.get("on_ac") and isinstance(e.get("battery_w"), (int, float))]
+    # On battery, prefer the SMC load accumulator (sleep_w): the gauge moves in
+    # coarse steps and read 0.48 W for a sleep the accumulator put at 0.62 W.
+    on_battery = [e for e in usable if not e.get("on_ac")]
     if on_battery:
         out["battery_count"] = len(on_battery)
-        out["battery_w_weighted"] = round(_weighted(on_battery, lambda e: e["battery_w"]), 4)
+        out["battery_w_weighted"] = round(_weighted(on_battery, sleep_watts), 4)
     battery = [e for e in usable if "battery_pct_per_hour" in e and not e.get("on_ac")]
     if battery:
         out["battery_pct_per_hour_median"] = round(median(e["battery_pct_per_hour"] for e in battery), 3)

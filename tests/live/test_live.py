@@ -825,3 +825,12 @@ def test_sleep_radio_off_is_restored_by_resume_or_next_boot(monkeypatch: pytest.
     radio["wifi"] = "off"
     assert agent.restore_sleep_radios() == {}
     assert radio["wifi"] == "off"
+
+
+def test_battery_standby_uses_load_accumulator_not_gauge() -> None:
+    entries = [
+        {"kind": "sleep", "slept_s": 600, "on_ac": False, "sleep_w": 0.615, "battery_w": 0.476, "dcin_w": 0.0},
+        {"kind": "sleep", "slept_s": 600, "on_ac": False, "sleep_w": 0.605, "battery_w": 0.70, "dcin_w": 0.0},
+    ]
+    summary = analysis.summarize_sleeps(entries)
+    assert summary["battery_w_weighted"] == pytest.approx(0.61)

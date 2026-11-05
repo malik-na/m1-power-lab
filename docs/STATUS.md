@@ -52,6 +52,16 @@ Verified on the physical M1 this session:
 - s2idle reaches CPU power-down: each P-core entered `CPU PD` once per sleep
   and stayed. The per-state s2idle *time* counters read near zero because
   sched_clock stops during s2idle, so the ledger counts entries instead.
+- Sleep A/B on battery, two pairs of 10-minute sleeps, Wi-Fi radio off while
+  asleep: substates on slept at 0.44 W, off at 0.61 W (-171 mW, 1.13 against
+  1.70% per hour). But the first suspend after switching the substates back
+  off failed: the Wi-Fi firmware had wedged (`brcmf_msgbuf_delete_flowring:
+  timed out`, query timeouts, the driver re-registered as a new phy) and its D3
+  handshake timed out even with the radio blocked. L1.1/L1.2 on this BCM4378
+  link is therefore not persisted; it is a brcmfmac bug worth reporting.
+  Blocking the radio during sleep saved nothing measurable (0.608 against
+  0.610 W), so the persisted tuning is Wi-Fi power save alone; a suspend
+  afterwards worked (0.615 W).
 - 45 of the 63 powered SoC domains stayed powered through a sleep. Most must
   (DRAM controllers `dcs*`, `mcc`, `aic`, `pmp`, `pms`, `sep`, `nub_*`); about
   ten are candidates: the external-display coprocessor (`dispext_*`) with no
