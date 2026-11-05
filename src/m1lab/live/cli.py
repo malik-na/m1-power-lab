@@ -536,7 +536,27 @@ def fetch_module_build(kernel: str, into: Path) -> Path | None:
         out(f"no module-build for {kernel} ({(proc.stderr or proc.stdout).strip()[:200]}); the job runs on macsmc-hwmon only")
         return None
     found = sorted(into.rglob("module-build.tar.zst"))
-    return found[0] if found else None
+    if not found:
+        return None
+    return slim_module_build(found[0])
+
+
+def slim_module_build(archive: Path) -> Path:
+    """Drop vmlinux (about 320 MB of the archive's 340, needed only for BTF
+    in out-of-tree modules), so the job payload uploads in seconds."""
+    import shutil
+    import subprocess
+
+    work = archive.parent / "slim"
+    shutil.rmtree(work, ignore_errors=True)
+    work.mkdir()
+    subprocess.run(["tar", "--zstd", "-xf", str(archive), "-C", str(work)], check=True)
+    (work / "build" / "vmlinux").unlink(missing_ok=True)
+    slim = archive.with_name("module-build-slim.tar.zst")
+    names = [name for name in ("IDENTITY.json", "input.config", "build") if (work / name).exists()]
+    subprocess.run(["tar", "-C", str(work), "--zstd", "-cf", str(slim), *names], check=True)
+    shutil.rmtree(work, ignore_errors=True)
+    return slim
 
 
 def cmd_lab_run(target: Target, args: argparse.Namespace) -> None:
