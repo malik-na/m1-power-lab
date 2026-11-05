@@ -1301,6 +1301,34 @@ class L1ssProfileKnob(Knob):
                 write(policy_path, policy)
 
 
+class WakeupKnob(Knob):
+    """Whether a device may wake the system (its power/wakeup attribute).
+    `wakeup:tps6598x` matches every device whose path contains that text, e.g.
+    the USB-C power-delivery controllers, which wake s2idle sleeps early."""
+
+    choices = ["enabled", "disabled"]
+    persistable = True
+
+    def __init__(self, pattern):
+        self.pattern = pattern
+        self.name = f"wakeup:{pattern}"
+        self.help = f"wakeup from sleep for devices matching {pattern}"
+
+    def _paths(self):
+        return [p for p in sysfs_power_files("wakeup") if self.pattern in p]
+
+    def supported(self):
+        return bool(self._paths())
+
+    def get(self):
+        values = {read(p) for p in self._paths()}
+        return values.pop() if len(values) == 1 else "mixed"
+
+    def set(self, value):
+        for path in self._paths():
+            write(path, value)
+
+
 def knob_registry():
     knobs = [
         ProfileKnob(),
@@ -1339,6 +1367,8 @@ def get_knob(name):
         return FreezeKnob(name.split(":", 1)[1])
     if name.startswith("usbport:"):
         return UsbPortKnob(name.split(":", 1)[1])
+    if name.startswith("wakeup:"):
+        return WakeupKnob(name.split(":", 1)[1])
     if name.startswith("pcielink:"):
         _, device, attr = name.split(":", 2)
         return PcieLinkKnob(device, attr)

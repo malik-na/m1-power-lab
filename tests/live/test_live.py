@@ -1079,3 +1079,17 @@ def test_pcielink_knob_restores_by_clearing_not_writing_zero(monkeypatch: pytest
     agent.restore_all()
     assert ("ATTR", "1") in writes and ("ATTR", "0") not in writes
     assert writes[-1] == ("/sys/module/pcie_aspm/parameters/policy", "default")
+
+
+def test_wakeup_knob_matches_devices_by_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    paths = ["/sys/devices/platform/x/0-0038/power_supply/tps6598x-source-psy-0-0038/power/wakeup",
+             "/sys/devices/platform/x/0-003f/power_supply/tps6598x-source-psy-0-003f/power/wakeup",
+             "/sys/devices/platform/soc/23e400000.smc/macsmc-input/power/wakeup"]
+    state = dict.fromkeys(paths, "enabled")
+    monkeypatch.setattr(agent, "sysfs_power_files", lambda name: paths)
+    monkeypatch.setattr(agent, "read", lambda path, default=None: state[path])
+    monkeypatch.setattr(agent, "write", lambda path, value: state.__setitem__(path, value))
+    knob = agent.get_knob("wakeup:tps6598x")
+    assert knob.get() == "enabled"
+    knob.set("disabled")
+    assert [state[p] for p in paths] == ["disabled", "disabled", "enabled"]
