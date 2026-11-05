@@ -114,6 +114,9 @@ Verified on the physical M1 this session:
   Unbinding also left the Type-C controller unable to set its mux
   (`failed to place Type-C mux in safe mode: -19`) until the port was rebound.
   Freeing that complex needs runtime PM across the ATC block, not an unbind.
+  The fix is proposed upstream as
+  [omacom/linux-aurora#365](https://github.com/omacom/linux-aurora/pull/365)
+  (`checkpatch.pl --strict` clean; same tree as the tested commit).
 - Two 90 s sleeps back to back in one job read to labd as one 3m14s sleep,
   past its 2-minute notice; keep a job's total sleep under two minutes.
 - Direction (independent review, 2026-11-05): continue in-OS. m1n1 proxy mode
