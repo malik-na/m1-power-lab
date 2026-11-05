@@ -1,5 +1,5 @@
 #!/bin/bash
-# CPU offline/online test for m1power/s2r-cpu-hotplug (HEAD 3ad71544619e).
+# CPU offline/online test for m1power/s2r-cpu-hotplug.
 # Runs as root on the M1 (lab run --script). Writes everything to
 # $MACLAB_OUT (or ./out). Never suspends: it does not touch /sys/power,
 # rtcwake, systemctl suspend/hibernate or any network configuration.
@@ -12,6 +12,11 @@
 #     3. every secondary down for 10 s, then up, 3 times
 #
 #   apple_cpu_hotplug=powerdown[-legacy] panic=10 oops=panic -> phase "powerdown"
+#     Only an m1n1 stage 2 older than v1.9.9 with powerdown-legacy really
+#     powers down. Otherwise the kernel must fall back to park and say why
+#     (debugfs powerdown_fallback; always for v1.9.9+, re-entry "mpidr"):
+#     the script checks that, reports "park fallback" and runs the park
+#     phase instead.
 #     1. cpu7 only (cpu4-6 stay online, so cpu7 is never the last core of
 #        its cluster): PD_CYCLES (default 1) offline/online cycles, with
 #        the per-cycle checks below. Re-run with PD_CYCLES=100 once 1 passes.
@@ -20,7 +25,7 @@
 #
 # After every stage: no new kernel warning/error lines, every CPU
 # stuck=0 status_timeouts=0 flush_timeouts=0, else stop at once.
-# Exit 0 = PASS, 1 = FAIL, 2 = SKIP (the requested mode is not active).
+# Exit 0 = PASS, 1 = FAIL, 2 = SKIP (cpu7 cannot power down).
 set -u
 CYCLES=${CYCLES:-100}
 PD_CYCLES=${PD_CYCLES:-1}
@@ -65,12 +70,26 @@ snap before
 cat "$dbg"
 
 mode=$(sed -n 's/^mode: //p' "$dbg")
+fallback=$(sed -n 's/^powerdown_fallback: //p' "$dbg")
+reentry=$(sed -n 's/^m1n1: .* reentry=//p' "$dbg")
 want=park
 grep -qw 'apple_cpu_hotplug=powerdown\(-legacy\)\?' /proc/cmdline && want=powerdown
-echo "requested: $want, active: $mode"
-if [ "$want" != "$mode" ]; then
-	echo "SKIP: powerdown requested but the kernel fell back to $mode (see the dmesg lines above: m1n1 version or reservation)"
-	exit 2
+echo "requested: $want, active: $mode, m1n1 re-entry: $reentry, fallback: ${fallback:-?}"
+[ -n "$fallback" ] || fail "debugfs has no powerdown_fallback line (old kernel?)"
+note=$mode
+if [ "$want" = powerdown ] && [ "$reentry" = mpidr ] && [ "$mode" != park ]; then
+	fail "powerdown active with m1n1 re-entry mpidr; it must fall back to park"
+fi
+if [ "$want" = powerdown ] && [ "$mode" = park ]; then
+	[ "$fallback" != - ] || fail "powerdown fell back to park without a reason"
+	dmesg | grep -q 'apple-cpu-hotplug: powerdown refused' ||
+		fail "no 'powerdown refused' line in dmesg"
+	echo "PARK FALLBACK: $fallback; running the park phase"
+	note="park fallback from powerdown: $fallback"
+elif [ "$want" != "$mode" ]; then
+	fail "requested $want but the kernel runs $mode"
+elif [ "$fallback" != - ]; then
+	fail "mode $mode but powerdown_fallback=$fallback"
 fi
 
 # --- helpers ---------------------------------------------------------------
@@ -213,4 +232,4 @@ dmesg > "$OUT/dmesg-after.txt"
 if dmesg | grep -E "may not have shut down|failed to come online|failed to boot|apple-cpu-hotplug: .*(power status|uart0|stuck|L1-clean|differ)|Oops|BUG:|SError"; then
 	fail "kernel reported a problem"
 fi
-echo "PASS ($mode)"
+echo "PASS ($note)"

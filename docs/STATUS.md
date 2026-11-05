@@ -292,10 +292,13 @@ waiting for the M1 (after the overnight batch):
   (sleeps only after an awake alarm proves the IRQ path; m1power's 75 s wake
   timer is the backup). Checker: ready.
 - CPU hotplug (`cpu_die`/`cpu_kill` for spin-table cores, park or PMGR
-  power-down): `m1power/s2r-cpu-hotplug` `3ad7154`, build `b1105-175451-a0c9`.
-  Park mode is safe to test. Power-down mode is held: with m1n1 v1.9.9+, a
-  restarted core runs on m1n1 heap stacks that Linux does not reserve
-  (silent memory corruption); a fix is in progress.
+  power-down): `m1power/s2r-cpu-hotplug` `c7d79cc`, build `b1105-185910-a771`.
+  Park mode is safe to test. Power-down is refused (falls back to park, with
+  the reason in debugfs) on m1n1 v1.9.9+ and unknown m1n1: a restarted core
+  would run on m1n1 stacks the kernel cannot prove are reserved. Only
+  `powerdown-legacy` on m1n1 older than v1.9.9 still powers cores down, and a
+  failed restart now blocks all further restarts (they share one m1n1 stack).
+  Test: [`target/lab/m1power-s2r-cpu-hotplug.sh`](../target/lab/m1power-s2r-cpu-hotplug.sh).
 - m1n1 hypervisor trace kit for macOS 13.5 sleep entry:
   [`tools/hv-trace-kit`](../tools/hv-trace-kit/RUNBOOK.md) (owner runbook:
   separate 13.5 volume, no firmware downgrade, 1TR for that volume only,
