@@ -109,7 +109,7 @@ def test_probe_rechecks_selected_port_and_usbfs_device(monkeypatch, tmp_path):
     monkeypatch.setattr(probe.os, "open", lambda path, flags: observed.append((path, flags)) or 77)
     monkeypatch.setattr(probe.os, "close", lambda fd: None)
     monkeypatch.setattr(probe.os, "fstat", lambda fd: SimpleNamespace(
-        st_mode=stat.S_IFCHR, st_rdev=os.makedev(189, 14),
+        st_mode=stat.S_IFCHR, st_rdev=os.makedev(189, 14), st_size=0, st_blksize=4096,
     ))
 
     def transfer(fd, kind, index, length):

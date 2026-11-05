@@ -329,3 +329,14 @@ def test_sse_invalid_cursor_requests_current_snapshot(browser, invalid_cursor):
         assert event["payload"]["reason"] == "event cursor is ahead of this session"
     else:
         assert event["cursor"] == ""
+
+
+def test_live_power_report_requires_owner_and_renders(browser, monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    _, request, _ = browser
+    status, _, _ = request("/api/live-report.html", identity="other@example.test")
+    assert status == 403
+    status, headers, body = request("/api/live-report.html")
+    assert status == 200
+    assert headers["Cache-Control"] == "no-store"
+    assert "<title>M1 Power Report</title>" in body

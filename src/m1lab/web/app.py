@@ -434,6 +434,19 @@ def create_app(
             },
         )
 
+    @app.get("/api/live-report.html")
+    async def live_report(owner: OwnerDependency) -> Response:
+        """The m1power report over results saved on this host (no target access)."""
+        try:
+            await facade.get_view("overview", owner)
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        from m1lab.live.remote import results_dir
+        from m1lab.live.report import render_report
+
+        content = await asyncio.to_thread(render_report, results_dir(), [])
+        return Response(content, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-store"})
+
     @app.get("/api/artifacts/{artifact_id}")
     async def artifact(artifact_id: str, owner: OwnerDependency) -> Response:
         try:

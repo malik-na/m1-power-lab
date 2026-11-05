@@ -349,7 +349,7 @@ def console_writes(monkeypatch):
     monkeypatch.setattr(native_boot.os, "write", write_console)
     monkeypatch.setattr(native_boot.os, "close", close_console)
     monkeypatch.setattr(native_boot.os, "fstat", lambda fd:
-                        SimpleNamespace(st_mode=stat.S_IFCHR, st_rdev=os.makedev(4, 0))
+                        SimpleNamespace(st_mode=stat.S_IFCHR, st_rdev=os.makedev(4, 0), st_size=0, st_blksize=4096)
                         if fd == fake_fd else original_fstat(fd))
     return writes, closes, flags
 
@@ -377,7 +377,7 @@ def test_console_overlay_is_large_anchored_allowlisted_and_separate(console_writ
 def test_console_overlay_refuses_anything_except_tty0(console_writes, monkeypatch, mode, device):
     writes, closes, flags = console_writes
     monkeypatch.setattr(native_boot.os, "fstat", lambda _fd:
-                        SimpleNamespace(st_mode=mode, st_rdev=os.makedev(*device)))
+                        SimpleNamespace(st_mode=mode, st_rdev=os.makedev(*device), st_size=0, st_blksize=4096))
     native_boot._console_overlay("capture", "configured")
     assert writes == [] and len(closes) == len(flags) == 1
 

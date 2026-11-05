@@ -1,5 +1,29 @@
 # M1 Power Lab
 
+## Live power work from an Omarchy Mac (`m1power`)
+
+The primary workflow now runs from an Omarchy Mac (developed on an M3 Max)
+against an M1 that runs Omarchy Linux itself, over SSH:
+
+```bash
+uv venv .venv && uv pip install --python .venv/bin/python -r requirements.lock
+uv pip install --python .venv/bin/python --no-deps -e .
+.venv/bin/m1power install            # agent, kernel module, wake timer, sleep ledger
+.venv/bin/m1power doctor             # what the target has and what is on
+.venv/bin/m1power watch              # live system/SoC power, idle residency, IRQs
+.venv/bin/m1power sweep --preset idle
+.venv/bin/m1power sleep --seconds 600 --repeat 3
+.venv/bin/m1power report
+```
+
+It reads every SMC key (including the DC-in energy accumulator, which keeps
+counting while the CPU sleeps), wakes the Mac from s2idle on a timer so sleep
+tests run unattended, A/B tests tunables with randomized paired blocks, keeps a
+ledger of every suspend, and can persist the winning settings. See
+[docs/LIVE.md](docs/LIVE.md).
+
+## Bare-metal harness (ThinkPad era)
+
 M1 Power Lab is a ThinkPad-hosted research workbench for investigating power management on an Apple M1 target through m1n1. It keeps scientific evidence, approvals, budgets, Codex jobs and target operations in one durable local application.
 
 The host application runs independently as a ThinkPad service. It supports bounded Codex analysis of retained evidence and a replay hardware adapter. A separate inspect-only helper can observe the connected m1n1 proxy; native experiment dispatch remains disabled until transport, capture and recovery are qualified.

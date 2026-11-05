@@ -23,6 +23,7 @@ dev = [
 
 [project.scripts]
 m1lab = "m1lab.cli:main"
+m1power = "m1lab.live.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/m1lab"]

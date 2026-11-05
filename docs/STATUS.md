@@ -2,6 +2,87 @@
 
 This file distinguishes implemented behavior from physical qualification.
 
+## 2026-11-05 Omarchy host and live M1 target
+
+The workbench now runs from an Omarchy MacBook Pro (M3 Max, aarch64) against
+an M1 MacBook Air that itself runs Omarchy (`linux-aurora` 7.2.11), over
+Tailscale SSH. The full host suite passes on the new host (517 passed, 1
+skipped, Python 3.14); four tests had stubbed `os.fstat` results without
+`st_size`, which Python 3.14 reads. See [LIVE](LIVE.md) for the workflow.
+
+Verified on the physical M1 this session:
+
+- `m1power.ko` builds against the installed headers and reads all 1642 SMC
+  keys. `zSPa` is a DC-in energy accumulator in mJ that keeps counting at 1 Hz
+  through s2idle (180 samples over a 183 s bracket that included a 163 s sleep).
+- The s2idle wake timer works: armed for 45 s at 07:52:07, the Mac suspended at
+  07:52:16 and resumed by itself at 07:52:52 through `m1power_waketimer`, with
+  no key press. Two failed designs are recorded in the module comments:
+  watchdog channel 2 ignores its interrupt enable, and channel 0 interrupts on
+  BARK, not BITE.
+- Idle sweep, display off, on USB-C power from the host, three randomized
+  pairs of 30 s blocks per knob: Wi-Fi power save on saved 186 mW of 1.247 W
+  (95% CI 127 to 244 mW). Power profile (performance/balanced/power-saver),
+  the teo idle governor, Bluetooth off, runtime PM on every device and pausing
+  quickshell showed no effect within about ±30 mW.
+- Second round, stacked on Wi-Fi power save, four pairs of 40 s blocks:
+  PCIe ASPM `powersupersave` (L1.1/L1.2 substates on the Wi-Fi link) saved
+  290 mW on USB power, but that run was unstable (one block's SD was 1.39 W);
+  on battery, three pairs gave 175 mW (95% CI 143 to 207 mW), the figure to
+  quote; the Wi-Fi radio off saved 484 mW (not usable
+  while the host controls the target over Wi-Fi); `lab-agent` costs 7 mW and
+  55 interrupts/s; pausing superwhisper had no effect once power save was on.
+- ASPM `powersupersave` was persisted, then withdrawn: with L1.1/L1.2 on the
+  Wi-Fi link, `brcmfmac` later timed out entering D3 during suspend
+  (`brcmf_pcie_pm_enter_D3 ... returns -5`), and the kernel aborted four of
+  six suspend attempts in a sleep A/B. Only Wi-Fi power save stays persisted.
+  With the substates back off, suspend succeeded again without reloading the
+  driver.
+- Sleep on USB-C power from the host: 0.47-0.48 W over 295 s sleeps with the
+  substates on, 0.70 W over an 86 s sleep without them. The awake part of each
+  bracket is about 0.5 s, so the gap is the substates themselves (roughly
+  230 mW in sleep too), not resume overhead.
+- On battery (cable unplugged), Wi-Fi power save on, display off: 1.136 W
+  idle; two 15-minute sleeps at 0.610 W by the SMC load accumulator (0.55 and
+  0.60 W by the battery gauge), 1.5-1.6% of this battery per hour. The pack
+  holds 36.5 Wh after 759 cycles, so that is about 2.6 days of standby.
+- `zSLa` is a system-load energy accumulator (mJ): on battery it advanced at
+  1.105 W while the gauge reported 1.116 W, and on USB power it equals DC-in.
+  Sleep power now comes from it; the battery gauge did not move at all in 30 s.
+- s2idle reaches CPU power-down: each P-core entered `CPU PD` once per sleep
+  and stayed. The per-state s2idle *time* counters read near zero because
+  sched_clock stops during s2idle, so the ledger counts entries instead.
+- 45 of the 63 powered SoC domains stayed powered through a sleep. Most must
+  (DRAM controllers `dcs*`, `mcc`, `aic`, `pmp`, `pms`, `sep`, `nub_*`); about
+  ten are candidates: the external-display coprocessor (`dispext_*`) with no
+  display attached, the second USB-C complex (`atc1_*`, nothing plugged in,
+  controller without runtime PM), the internal display coprocessor
+  (`disp0_*`), and the PCIe root (`apcie*`, `pcie_ref`).
+- Direction (independent review, 2026-11-05): continue in-OS. m1n1 proxy mode
+  cannot measure Linux idle, and neither it nor in-OS tuning reaches macOS's
+  tens-of-mW SoC power collapse, which needs firmware-level resume support.
+  If m1n1 is revisited, the first step is one attended session that reaches
+  proxy mode from the M3 (GET_CHIPID 0x8103) and chainloads back to Omarchy;
+  failure ends that path.
+- A four-reviewer adversarial review (two skeptics per finding) confirmed 34 of
+  35 findings in the new tooling. All were fixed, and the fixes were checked
+  independently; the module now tracks a per-fd SMC watch list and re-wakes a
+  suspend that a just-expired deadline would otherwise miss.
+
+### Hibernation
+
+Hibernation is not reachable on this hardware by configuration alone. The
+target kernel is built without `CONFIG_HIBERNATION`, and enabling it would hit
+`swsusp_arch_suspend()` in `arch/arm64/kernel/hibernate.c`, which refuses with
+"no mechanism to offline secondary CPUs": Apple silicon starts its CPUs through
+spin-table, whose `cpu_operations` have no `cpu_die`, so no CPU can be taken
+offline (the target has no `cpuN/online` files). Making it work needs a
+kernel-side CPU parking protocol that the restored image can release, plus
+restore paths for the RTKit coprocessors (DCP, ANS, SMC) whose firmware state
+the freshly booted kernel would not match. Until then `m1power standby`
+provides the practical half: periodic dark wakes from s2idle that power the
+Mac off cleanly when the battery runs low or it has slept too long.
+
 ## 2026-09-28 installed investigation workspace
 
 Release `1212afd` is installed on the ThinkPad as the enabled systemd service.
