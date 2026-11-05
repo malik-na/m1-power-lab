@@ -170,6 +170,39 @@ Verified on the physical M1 this session:
     -180 mW asleep (95% CI 177..182 mW), all four sleeps clean. Net for the
     day on battery: idle about 1.25 -> 0.81 W (display off), sleep 0.61 ->
     0.44 W, about 1.2% of this battery per hour, roughly 3.4 days of standby.
+- Wi-Fi power save was not staying on (2026-11-05 evening). Omarchy ships
+  `/etc/NetworkManager/conf.d/omarchy-wifi-powersave.conf` with
+  `wifi.powersave = 2`, and NetworkManager applies it at every connection,
+  including the reconnect after each resume; the sleep hook's re-apply ran
+  before that reconnect. So the tuned idle figure held only until the first
+  sleep. With the rest of the tuning on, power save off cost 140 mW (0.959
+  against 0.819 W, 95% CI 49..230 mW). `tune` now writes a later-sorting
+  drop-in (`zz-m1power-wifi-powersave.conf`, `wifi.powersave = 3`; Omarchy's
+  file is untouched, `tune revert` removes ours); verified on after a suspend.
+  `doctor` and every ledger entry now report tuned knobs that have lapsed.
+- Wi-Fi awake tail after traffic (`wifi_ps_ret_ms`, brcmfmac `pm2_sleep_ret`):
+  cfg80211 passes an unset timeout and brcmfmac clamps it to its 2000 ms
+  maximum (`cfg80211.c:3478`; the firmware read 0x7d0), so the chip stayed
+  awake 2 s after every packet. Only the wireless-extensions SIOCSIWPOWER
+  ioctl sets it; cfg80211 keeps it across reconnects. Paired idle A/Bs, all
+  pairs on one access point:
+  | A -> B | A W | B W | effect |
+  |---|---|---|---|
+  | 2000 -> 200 ms (5 pairs) | 0.864 | 0.636 | -229 mW, 95% CI -361..-96 (every pair lower) |
+  | 200 -> 50 ms (4 pairs) | 0.633 | 0.609 | -25 mW, 95% CI -44..-6 |
+  | 50 -> 10 ms (4 pairs) | 0.602 | 0.658 | no effect (+56, CI -144..+256) |
+  Cost at 50 ms: gateway ping at 1 Hz 5.3 ms average (max 7.0) against
+  3.3 ms at 2000 ms; a 25 MB download ran at 106-127 Mbit/s at every value.
+  Persisted at 50 ms and verified after a suspend and reconnect. Idle with
+  display off is now about 0.61 W (from 1.25 W this morning, 0.96 W in real
+  use before the power-save fix).
+- A six-lens source review (two adversarial reviewers per lever) ranked the
+  remaining levers ([review](evidence/2026-11-05-power-lever-review.md)): the
+  small peripheral, domain and waker levers add up to about 30-60 mW idle and
+  20 mW asleep; fabric/DCS performance states (PMP) and a real SoC deep sleep
+  are the only large ones. CPU idle is healthy (cores in `CPU PD` about 92%
+  of awake idle time). tps6598x never woke this boot (wakeup_count 0; 81 of
+  90 ledger sleeps ended by the wake timer, 1 by the lid or power button).
 - Direction (independent review, 2026-11-05): continue in-OS. m1n1 proxy mode
   cannot measure Linux idle, and neither it nor in-OS tuning reaches macOS's
   tens-of-mW SoC power collapse, which needs firmware-level resume support.
