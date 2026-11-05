@@ -65,6 +65,38 @@ While it is busy:
 
 `m1power doctor` shows the enrollment and whether the lab is busy now.
 
+## Running m1power through the lab (`m1power lab-run`)
+
+With `lab login` done (maclab's CLI, built from its repo with `go build
+./cmd/lab`):
+
+```bash
+m1power lab-run naeems-m1-airr                       # its known-good kernel
+m1power lab-run naeems-m1-airr --kernel <build-id>   # a lab kernel
+m1power lab-run naeems-m1-airr --no-wait             # then: m1power lab-collect <job>
+```
+
+It submits a `--script` test, `target/lab/m1power-probe.sh`, with the agent,
+the module source and a plan as payload. On the Lab boot the script builds and
+loads `m1power.ko` against that boot's headers (macsmc-hwmon only when there
+are none), runs `agent.py probe` (settle, idle capture with the display off,
+one self-waking sleep, watchdog channel snapshots), and leaves `result.json`
+for labd. The host waits for the job, fetches the file, saves it with the
+other results and prints it. The probe is the lab's own work, so it does not
+defer to the lab; m1power's installed services stay passive on that boot.
+
+First run, 2026-11-05, job `j1105-075658-7770` on `naeems-m1-airr`
+(7.2.11-14-1-ARCH, battery): pass. Idle 1.18 W with the display off (SoC
+0.57 W, untuned on the Lab boot). The Mac slept 85.6 s and resumed on the same
+boot, woken by the m1power timer, with lab-agent's 60 s watchdog on channel 1
+armed: `apple_wdt` stops across s2idle on Lab boots as on normal ones. labd
+logged its usual "the lab can't wake it" note, then "back on the same boot
+after 1m30s". The passing job became the Mac's omarchy-m-test reference, with
+`m1power` taint among its new kernel lines; the lab's after-tests screenshot
+timed out, possibly because the probe turned the display off.
+
+Keep `--sleep` under 120 s: longer sleeps in a job page a person.
+
 ## Using the lab for power work (needs a Maintainer login)
 
 None of this works without a Maintainer token for the labd instance

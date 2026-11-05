@@ -87,6 +87,15 @@ Verified on the physical M1 this session:
   `m1power standby set --check-every 2h --poweroff-below 10` (stored in
   `/etc/m1power/standby.json`). Persisted target state: Wi-Fi power save on
   (`m1power tune`), standby guard on, module and sleep ledger installed.
+- maclab: m1power now defers to the lab on the enrolled M1 (Lab boots, jobs,
+  pm_test cycles; see [MACLAB](MACLAB.md)), and `m1power lab-run` runs the
+  probe as a lab job. The first, `j1105-075658-7770`, passed: 1.18 W idle on
+  the Lab boot, and a real 85.6 s s2idle sleep that woke itself with the lab's
+  60 s watchdog armed, the first unattended real suspend in a maclab job. Two
+  dry runs before it found a guard bug (it treated the probe's timer wake as a
+  dark wake and re-slept the Mac); the guard now acts only on timers it armed.
+  The USB-C PD controllers (`tps6598x`) woke an empty-port sleep early once
+  (14.6 of 30 s) and appear as wake sources in others: a lead for sleep work.
 - Direction (independent review, 2026-11-05): continue in-OS. m1n1 proxy mode
   cannot measure Linux idle, and neither it nor in-OS tuning reaches macOS's
   tens-of-mW SoC power collapse, which needs firmware-level resume support.
