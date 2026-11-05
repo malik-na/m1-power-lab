@@ -1093,3 +1093,17 @@ def test_wakeup_knob_matches_devices_by_path(monkeypatch: pytest.MonkeyPatch) ->
     assert knob.get() == "enabled"
     knob.set("disabled")
     assert [state[p] for p in paths] == ["disabled", "disabled", "enabled"]
+
+
+def test_sleep_knobs_save_the_restore_value(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setattr(agent, "SLEEP_KNOBS_SAVED", tmp_path / "saved.json")
+    monkeypatch.setattr(agent, "SLEEP_RADIOS", tmp_path / "radios.json")
+    knob = agent.PcieLinkKnob("wifi", "l1_2_aspm")
+    sets = []
+    monkeypatch.setattr(knob, "get", lambda: "1")
+    monkeypatch.setattr(knob, "set", lambda value: sets.append(value))
+    monkeypatch.setattr(agent, "get_knob", lambda name: knob)
+    agent.apply_sleep_knobs({"pcielink:wifi:l1_2_aspm": "0"})
+    assert json.loads((tmp_path / "saved.json").read_text()) == {"pcielink:wifi:l1_2_aspm": "clear"}
+    agent.restore_sleep_knobs()
+    assert sets == ["0", "clear"]

@@ -153,6 +153,18 @@ Verified on the physical M1 this session:
     The lost-completion race is real but is not what stops this firmware: the
     firmware itself fails the D3 handshake on every fourth suspend with L1
     substates on, and P2 turns that into a recovery.
+  - Fix without a kernel change, as Broadcom's bcmdhd does around D3: the sleep
+    hook turns ASPM L1.1/L1.2 off just before each suspend (the PCI-PM
+    substates, used while the chip is in D3, stay on) and back on after
+    resume. On the installed `7.2.11-14-1-ARCH`, 15/15 stress suspends with the
+    macOS-like configuration live during the run, no D3 failure and no
+    firmware reload, where the same kernel failed on the fourth suspend
+    without the hook.
+  - Persisted on the M1 (`m1power tune`): `wifi_ps=on pcielink:wifi:clkpm=0
+    l1ss_profile=apple50 ltr_max_us=0x1008 aspm=powersupersave`, sleep-only
+    `pcielink:wifi:l1_1_aspm=0 pcielink:wifi:l1_2_aspm=0`. lspci confirms all
+    four substates, CMRT 25 us, threshold 87040 ns, T_PwrOn 50 us and LTR
+    0x10081008 on the link.
 - Direction (independent review, 2026-11-05): continue in-OS. m1n1 proxy mode
   cannot measure Linux idle, and neither it nor in-OS tuning reaches macOS's
   tens-of-mW SoC power collapse, which needs firmware-level resume support.

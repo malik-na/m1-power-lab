@@ -156,9 +156,23 @@ the resume hook and the next boot (`m1power-kmod.service`) turn it back on, so
 a crash or power loss while asleep cannot leave the Mac offline. A radio you
 switched off yourself is never touched.
 
-Do not persist `aspm=powersupersave`: with L1.1/L1.2 on, the BCM4378 Wi-Fi
-firmware wedges and `brcmfmac` then times out entering D3, aborting suspends,
-even when the radio is blocked for sleep (see [STATUS](STATUS.md)).
+L1 substates on the Wi-Fi link: `aspm=powersupersave` alone is not safe. With
+ASPM L1.1/L1.2 on through suspend, the BCM4378 firmware fails the D3
+handshake on every fourth suspend and the stock kernel aborts the suspend.
+The configuration that is safe on the stock kernel, and that saved 204 mW at
+idle, is:
+
+```bash
+m1power tune apply wifi_ps=on pcielink:wifi:clkpm=0 l1ss_profile=apple50 \
+    ltr_max_us=0x1008 aspm=powersupersave \
+    --sleep pcielink:wifi:l1_1_aspm=0 --sleep pcielink:wifi:l1_2_aspm=0
+```
+
+The `pcielink:` switches only remove states from the ASPM policy, and the
+kernel keeps a written 0 as a sticky disable; m1power restores them by
+clearing, never by writing 0 back. `m1power arm <name>` runs a link
+configuration end to end (context, power A/B, suspend stress) and
+`m1power stress` checks suspend reliability under any setting.
 
 Hyprland 0.56 evaluates `hyprctl dispatch` arguments as Lua; the `display`
 knob tries `dispatch dpms off` and falls back to `dispatch 'hl.dsp.dpms("off")'`.

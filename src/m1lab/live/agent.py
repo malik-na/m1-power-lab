@@ -1789,8 +1789,11 @@ def apply_sleep_knobs(knobs):
         try:
             knob = get_knob(name)
             if knob.supported():
-                saved[name] = knob.get()
-                if saved[name] != value:
+                current = knob.get()
+                # restore_value(), not the reading: for PCIe link switches a
+                # written-back 0 would be a sticky disable.
+                saved[name] = knob.restore_value()
+                if current != value:
                     if knob.kills_network:
                         radios = {}
                         try:
