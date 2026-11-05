@@ -180,6 +180,9 @@ after `--poweroff-after` (must be positive) asleep. Each decision is a
 lives in `/run/m1power`, so a reboot starts it fresh instead of acting on a
 stale sleep.
 
+`--max-dark-wakes N` is a testing aid: after N dark wakes the Mac stays awake
+instead of going back to sleep, so the host can reach it again.
+
 ## Hibernation
 
 The target kernel is built without `CONFIG_HIBERNATION`, and enabling it would

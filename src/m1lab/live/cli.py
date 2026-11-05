@@ -480,6 +480,7 @@ def cmd_standby(target: Target, args: argparse.Namespace) -> None:
         "poweroff_below_pct": args.poweroff_below,
         "poweroff_after_s": parse_duration(args.poweroff_after) if args.poweroff_after is not None else None,
         "sleep_knobs": dict(pair.split("=", 1) for pair in args.sleep_knob or []),
+        "max_dark_wakes": args.max_dark_wakes,
     }
     out(json.dumps(target.agent("standby", "set", "--spec", json.dumps(spec)), indent=1))
 
@@ -593,6 +594,7 @@ def build_parser() -> argparse.ArgumentParser:
     standby.add_argument("--poweroff-below", type=int, default=10, help="battery percent that triggers poweroff")
     standby.add_argument("--poweroff-after", help="power off after this long asleep on battery, e.g. 24h")
     standby.add_argument("--sleep-knob", action="append", help="KNOB=VALUE applied only while asleep")
+    standby.add_argument("--max-dark-wakes", type=int, help="testing aid: stay awake after this many dark wakes")
 
     domains = sub.add_parser("domains", help="SoC power domains (PMGR) and their devices")
     domains.add_argument("--all", action="store_true")

@@ -834,3 +834,16 @@ def test_battery_standby_uses_load_accumulator_not_gauge() -> None:
     ]
     summary = analysis.summarize_sleeps(entries)
     assert summary["battery_w_weighted"] == pytest.approx(0.61)
+
+
+def test_standby_stays_awake_after_max_dark_wakes(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setattr(agent, "STANDBY_STATE", tmp_path / "state.json")
+    monkeypatch.setattr(agent, "LEDGER", tmp_path / "ledger.jsonl")
+    monkeypatch.setattr(agent, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(agent, "battery", lambda: {"capacity": 80, "ac_online": 0})
+    monkeypatch.setattr(agent, "wakeup_sources", lambda: {})
+    commands = []
+    monkeypatch.setattr(agent, "sh", lambda *args, **kw: commands.append(args))
+    spec = {"poweroff_below_pct": 10, "max_dark_wakes": 1}
+    assert agent.standby_decide({"start_wall": 0}, spec) == "stay"
+    assert commands == [] and not (tmp_path / "state.json").exists()

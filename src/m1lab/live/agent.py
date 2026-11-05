@@ -1461,16 +1461,23 @@ def standby_decide(summary, spec):
     state["dark_wakes"] = state.get("dark_wakes", 0) + 1
     asleep_for = now - (state["asleep_since_wall"] or now)
     action = "resleep"
-    if not on_ac and bat.get("capacity") is not None and bat["capacity"] <= spec.get("poweroff_below_pct", 10):
+    if spec.get("max_dark_wakes") and state["dark_wakes"] >= int(spec["max_dark_wakes"]):
+        # Testing aid: after N dark wakes, stay awake so the host can reach the Mac.
+        action = "stay"
+    elif not on_ac and bat.get("capacity") is not None and bat["capacity"] <= spec.get("poweroff_below_pct", 10):
         action = "poweroff"
     elif not on_ac and spec.get("poweroff_after_s") and asleep_for >= spec["poweroff_after_s"]:
         action = "poweroff"
     state["last_action"] = action
-    if action == "poweroff":
+    if action in ("poweroff", "stay"):
         STANDBY_STATE.unlink(missing_ok=True)
     else:
         atomic_json(STANDBY_STATE, state)
     inputs = user_input_count()
+    if action == "stay":
+        ledger_append({"kind": "standby", "action": action, "capacity": bat.get("capacity"), "on_ac": on_ac,
+                       "asleep_for_s": round(asleep_for), "dark_wakes": state["dark_wakes"], "end_wall": now})
+        return action
     ledger_append({"kind": "standby", "action": action, "capacity": bat.get("capacity"), "on_ac": on_ac,
                    "asleep_for_s": round(asleep_for), "dark_wakes": state["dark_wakes"], "end_wall": now})
     # Never call systemctl synchronously from inside systemd-sleep. The
