@@ -847,6 +847,51 @@ class WifiPowerSaveKnob(Knob):
         return f"removed {self.NM_DROPIN}"
 
 
+class WifiPsTimeoutKnob(Knob):
+    """How long the Wi-Fi chip stays awake after traffic before it naps again
+    (brcmfmac's `pm2_sleep_ret`, ms). cfg80211 passes an unset timeout (-1)
+    and brcmfmac clamps it to its 2000 ms maximum (cfg80211.c, set_power_mgmt);
+    the firmware's own default is about 200 ms. nl80211 cannot set the
+    timeout, only the wireless-extensions SIOCSIWPOWER ioctl can. cfg80211
+    keeps it in the wdev, so later power-save changes and reconnects reuse it
+    until the driver re-registers the phy (a brcmfmac reload)."""
+
+    name = "wifi_ps_ret_ms"
+    help = "Wi-Fi awake time after traffic before power save naps (brcmfmac pm2_sleep_ret, ms)"
+    choices = None
+    SIOCSIWPOWER = 0x8B2C
+    IW_POWER_TIMEOUT = 0x2000
+    # brcmfmac vendor DCMD (OUI 0x001018, subcmd 1): WLC_GET_VAR "pm2_sleep_ret"
+    GET_ARGS = (["0x001018", "0x1"] + [f"0x{b:02x}" for b in (
+        b"\x06\x01\x00\x00\x10\x00\x00\x00\x14\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+        + b"pm2_sleep_ret\x00\x00\x00")])
+
+    def _iface(self):
+        return WifiPowerSaveKnob()._iface()
+
+    def supported(self):
+        return WifiPowerSaveKnob().supported()
+
+    def get(self):
+        out = sh("iw", "dev", self._iface(), "vendor", "recv", *self.GET_ARGS, check=True).stdout
+        data = bytes(int(x, 16) for x in out.split("vendor response:")[1].split("\n")[0].split())
+        return str(int.from_bytes(data[4:8], "little"))
+
+    def set(self, value):
+        import fcntl
+        import socket
+
+        ms = int(value)
+        if not 0 < ms <= 2000:
+            raise ValueError("wifi_ps_ret_ms takes 1..2000")
+        was_on = WifiPowerSaveKnob().get() == "on"
+        req = struct.pack("16siBBH8x", self._iface().encode(), ms * 1000, 0, 0, self.IW_POWER_TIMEOUT)
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            fcntl.ioctl(sock, self.SIOCSIWPOWER, req)  # also switches power save on
+        if not was_on:
+            WifiPowerSaveKnob().set("off")
+
+
 class RfkillKnob(Knob):
     def __init__(self, kind, kills_network):
         self.kind = kind
@@ -1391,6 +1436,7 @@ def knob_registry():
         SysfsKnob("timer_migration", "/proc/sys/kernel/timer_migration", "migrate timers to busy CPUs", ["0", "1"]),
         SysfsKnob("kbd_backlight", "/sys/class/leds/*kbd_backlight/brightness", "keyboard backlight level"),
         WifiPowerSaveKnob(),
+        WifiPsTimeoutKnob(),
         RfkillKnob("wlan", kills_network=True),
         RfkillKnob("bluetooth", kills_network=False),
         BacklightKnob(),

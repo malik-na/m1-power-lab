@@ -1179,3 +1179,21 @@ def test_ltr_knob_matches_hex_and_microsecond_spellings(monkeypatch: pytest.Monk
     knob = agent.LtrMaxLatencyKnob()
     monkeypatch.setattr(knob, "get", lambda: f"{agent.LtrMaxLatencyKnob.decode(0x1008):g}")
     assert knob.matches("0x1008") and knob.matches(knob.get()) and not knob.matches("0x1009")
+
+
+def test_wifi_ps_timeout_reads_the_firmware_iovar(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+
+    def fake_sh(*args, **kw):
+        calls.append(args)
+        return agent.argparse.Namespace(stdout="vendor response: 14 00 02 00 d0 07 00 00 73 6c 65 65 70 5f 72 65 \nvendor response: 00 00\n", returncode=0)
+
+    monkeypatch.setattr(agent, "sh", fake_sh)
+    monkeypatch.setattr(agent.WifiPowerSaveKnob, "_iface", lambda self: "wlan0")
+    assert agent.WifiPsTimeoutKnob().get() == "2000"
+    args = calls[0]
+    assert args[:5] == ("iw", "dev", "wlan0", "vendor", "recv")
+    payload = bytes(int(x, 16) for x in args[7:])
+    assert payload[:4] == (262).to_bytes(4, "little") and payload[20:] == b"pm2_sleep_ret\0\0\0"
+    with pytest.raises(ValueError):
+        agent.WifiPsTimeoutKnob().set("0")

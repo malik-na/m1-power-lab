@@ -25,6 +25,7 @@
  */
 #include <linux/debugfs.h>
 #include <linux/interrupt.h>
+#include <linux/delay.h>
 #include <linux/io.h>
 #include <linux/ktime.h>
 #include <linux/module.h>
@@ -40,6 +41,8 @@
 #include <linux/spinlock.h>
 #include <linux/suspend.h>
 #include <linux/mfd/macsmc.h>
+#include <linux/mfd/syscon.h>
+#include <linux/regmap.h>
 
 #define MAX_WATCH 128
 #define MAX_VALUE 64
@@ -253,6 +256,168 @@ static const struct file_operations smc_watch_fops = {
 #define STORM_LIMIT	64
 #define GRACE_TICKS	(3ULL * WDT_HZ)	/* re-wake chunk for a deadline lost to suspend entry */
 
+/* ------------------------------------------------------------------ pmgr */
+
+/*
+ * Hardware state of every PMGR power-state register in the device tree, read
+ * through the PMGR's own syscon regmap (the same, non-posted, accessor the
+ * pmgr-pwrstate driver uses); read-only. genpd reports what Linux asked for;
+ * these registers say what the hardware is doing, including domains that
+ * auto-PM gates on its own while genpd calls them "on".
+ *
+ *   pmgr_ps      one read now: target, actual, min, auto, flags per domain
+ *   pmgr_duty    100 reads 50 ms apart: share of reads gated (actual < 0xf)
+ *   pmgr_s2idle  the same snapshot, taken by the wake-timer interrupt while
+ *                the system was in s2idle (devices suspended)
+ */
+#define PMGR_MAX 160
+#define PMGR_DUTY_SAMPLES 100
+struct pmgr_dom {
+	struct regmap *map;
+	u32 offset;
+	const char *label;
+};
+static struct pmgr_dom pmgr_doms[PMGR_MAX];
+static int pmgr_count;
+static u32 pmgr_sleep_regs[PMGR_MAX];
+static u64 pmgr_sleep_at_ns, pmgr_sleep_snaps;
+static DEFINE_SPINLOCK(pmgr_lock);
+
+static void pmgr_init(void)
+{
+	struct device_node *np;
+
+	for_each_compatible_node(np, NULL, "apple,pmgr-pwrstate") {
+		struct device_node *parent;
+		struct regmap *map;
+		u32 offset;
+
+		if (pmgr_count >= PMGR_MAX)
+			break;
+		if (!of_device_is_available(np) || of_property_read_u32(np, "reg", &offset))
+			continue;
+		parent = of_get_parent(np);
+		map = parent ? syscon_node_to_regmap(parent) : ERR_PTR(-ENODEV);
+		of_node_put(parent);
+		if (IS_ERR(map))
+			continue;
+		pmgr_doms[pmgr_count].map = map;
+		pmgr_doms[pmgr_count].offset = offset;
+		if (of_property_read_string(np, "label", &pmgr_doms[pmgr_count].label))
+			pmgr_doms[pmgr_count].label = np->name;
+		pmgr_count++;
+	}
+}
+
+static u32 pmgr_read(int i)
+{
+	u32 v = 0;
+
+	if (regmap_read(pmgr_doms[i].map, pmgr_doms[i].offset, &v))
+		return U32_MAX;
+	return v;
+}
+
+static void pmgr_put(struct seq_file *m, int i, u32 v)
+{
+	if (v == U32_MAX) {
+		seq_printf(m, "%-16s read-error\n", pmgr_doms[i].label);
+		return;
+	}
+	seq_printf(m, "%-16s raw=%08x target=%x actual=%x min=%x auto=%d busy=%d was_clkgated=%d was_pwrgated=%d\n",
+		   pmgr_doms[i].label, v, v & 0xf, (v >> 4) & 0xf, (v >> 16) & 0xf,
+		   !!(v & BIT(28)), !!(v & BIT(11)), !!(v & BIT(9)), !!(v & BIT(8)));
+}
+
+static int pmgr_ps_show(struct seq_file *m, void *unused)
+{
+	int i;
+
+	for (i = 0; i < pmgr_count; i++)
+		pmgr_put(m, i, pmgr_read(i));
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(pmgr_ps);
+
+static int pmgr_duty_show(struct seq_file *m, void *unused)
+{
+	u16 *gated, *pwrgated;
+	int i, n;
+
+	gated = kcalloc(pmgr_count, sizeof(*gated), GFP_KERNEL);
+	pwrgated = kcalloc(pmgr_count, sizeof(*pwrgated), GFP_KERNEL);
+	if (!gated || !pwrgated) {
+		kfree(gated);
+		kfree(pwrgated);
+		return -ENOMEM;
+	}
+	for (n = 0; n < PMGR_DUTY_SAMPLES; n++) {
+		for (i = 0; i < pmgr_count; i++) {
+			u32 v = pmgr_read(i), actual = (v >> 4) & 0xf;
+
+			if (v == U32_MAX)
+				continue;
+			if (actual < 0xf)
+				gated[i]++;
+			if (actual == 0)
+				pwrgated[i]++;
+		}
+		if (msleep_interruptible(50))
+			break;
+	}
+	seq_printf(m, "# %d reads 50 ms apart; share of reads with actual < f (gated) and actual = 0 (power-gated)\n", n);
+	for (i = 0; i < pmgr_count; i++)
+		seq_printf(m, "%-16s gated=%3d%% pwrgated=%3d%%\n", pmgr_doms[i].label,
+			   n ? 100 * gated[i] / n : 0, n ? 100 * pwrgated[i] / n : 0);
+	kfree(gated);
+	kfree(pwrgated);
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(pmgr_duty);
+
+/* Called from the wake-timer interrupt while suspending (devices suspended
+ * when it fires inside s2idle). syscon regmaps use a spinlock, so this is
+ * safe in hard-IRQ context. */
+static void pmgr_snapshot_sleep(void)
+{
+	unsigned long flags;
+	int i;
+
+	spin_lock_irqsave(&pmgr_lock, flags);
+	for (i = 0; i < pmgr_count; i++)
+		pmgr_sleep_regs[i] = pmgr_read(i);
+	pmgr_sleep_at_ns = ktime_get_boottime_ns();
+	pmgr_sleep_snaps++;
+	spin_unlock_irqrestore(&pmgr_lock, flags);
+}
+
+static int pmgr_s2idle_show(struct seq_file *m, void *unused)
+{
+	unsigned long flags;
+	u32 *regs;
+	u64 at, snaps;
+	int i;
+
+	regs = kmalloc_array(PMGR_MAX, sizeof(*regs), GFP_KERNEL);
+	if (!regs)
+		return -ENOMEM;
+	spin_lock_irqsave(&pmgr_lock, flags);
+	memcpy(regs, pmgr_sleep_regs, sizeof(pmgr_sleep_regs));
+	at = pmgr_sleep_at_ns;
+	snaps = pmgr_sleep_snaps;
+	spin_unlock_irqrestore(&pmgr_lock, flags);
+	seq_printf(m, "# snapshots %llu, last at boottime %llu ns (now %llu)\n", snaps, at,
+		   ktime_get_boottime_ns());
+	if (snaps)
+		for (i = 0; i < pmgr_count; i++)
+			pmgr_put(m, i, regs[i]);
+	kfree(regs);
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(pmgr_s2idle);
+
+/* ------------------------------------------------------------ wake timer */
+
 static void __iomem *wdt_base;
 static int wdt_irq = -1;
 static bool wdt_irq_wake;
@@ -309,9 +474,10 @@ static irqreturn_t wdt_irq_handler(int irq, void *data)
 {
 	unsigned long flags;
 	u32 cur;
-	bool wake = false;
+	bool wake = false, snap;
 
 	spin_lock_irqsave(&timer_lock, flags);
+	snap = suspending;
 	cur = readl_relaxed(wdt_base + WDT_CUR(wd_channel));
 	fired_total++;
 	last_fire_boot_ns = ktime_get_boottime_ns();
@@ -366,6 +532,8 @@ static irqreturn_t wdt_irq_handler(int irq, void *data)
 	}
 out:
 	spin_unlock_irqrestore(&timer_lock, flags);
+	if (snap)
+		pmgr_snapshot_sleep();
 	if (wake)
 		pm_wakeup_ws_event(wake_ws, 2000, true);
 	return IRQ_HANDLED;
@@ -593,6 +761,7 @@ static int __init m1power_init(void)
 		return -EPROBE_DEFER;
 	}
 
+	pmgr_init();
 	root = debugfs_create_dir("m1power", NULL);
 	debugfs_create_file("smc_keys", 0400, root, NULL, &smc_keys_fops);
 	debugfs_create_file("smc_watch", 0600, root, NULL, &smc_watch_fops);
@@ -606,9 +775,14 @@ static int __init m1power_init(void)
 	}
 	if (wdt_base)
 		debugfs_create_file("wdt_regs", 0400, root, NULL, &wdt_regs_fops);
+	if (pmgr_count) {
+		debugfs_create_file("pmgr_ps", 0400, root, NULL, &pmgr_ps_fops);
+		debugfs_create_file("pmgr_duty", 0400, root, NULL, &pmgr_duty_fops);
+		debugfs_create_file("pmgr_s2idle", 0400, root, NULL, &pmgr_s2idle_fops);
+	}
 
-	pr_info("m1power: %u SMC keys (read-only), wake timer %s\n", smc->key_count,
-		wake_ws ? "ready" : "off");
+	pr_info("m1power: %u SMC keys (read-only), %d PMGR domains, wake timer %s\n",
+		smc->key_count, pmgr_count, wake_ws ? "ready" : "off");
 	return 0;
 }
 
