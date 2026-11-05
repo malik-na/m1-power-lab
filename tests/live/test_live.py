@@ -847,3 +847,167 @@ def test_standby_stays_awake_after_max_dark_wakes(monkeypatch: pytest.MonkeyPatc
     spec = {"poweroff_below_pct": 10, "max_dark_wakes": 1}
     assert agent.standby_decide({"start_wall": 0}, spec) == "stay"
     assert commands == [] and not (tmp_path / "state.json").exists()
+
+
+IDLE_LAB_AGENT = (
+    # pid, ppid, comm, cmdline, age in seconds
+    ("861", "1", "lab-agent", "/usr/local/bin/lab-agent run", 9000),
+    ("891", "861", "busctl", "busctl monitor --match type=signal,member=PrepareForSleep", 9000),
+    ("5236", "861", "systemd-inhibit", "systemd-inhibit --what=sleep --who=lab-agent --mode=delay sleep infinity", 9000),
+    ("5237", "5236", "sleep", "sleep infinity", 9000),
+)
+
+
+def _fake_lab(monkeypatch: pytest.MonkeyPatch, tmp_path, *, cmdline="root=/dev/x quiet", pm_test="[none] core devices",
+              procs=IDLE_LAB_AGENT, job_files=False, stale_job_files=False) -> None:
+    uptime = 10000.0
+    hz = agent.os.sysconf("SC_CLK_TCK")
+    files = {"/proc/cmdline": cmdline, "/sys/power/pm_test": pm_test, "/proc/uptime": f"{uptime} 1.0",
+             "/proc/stat": "cpu 1 2 3\nbtime 1700000000\n"}
+    for pid, ppid, comm, line, age in procs:
+        start_ticks = int((uptime - age) * hz)
+        fields = ["S", ppid] + ["0"] * 17 + [str(start_ticks)]
+        files[f"/proc/{pid}/comm"] = comm
+        files[f"/proc/{pid}/cmdline"] = line.replace(" ", "\0")
+        files[f"/proc/{pid}/stat"] = f"{pid} ({comm}) " + " ".join(fields)
+    real_read = agent.read
+    monkeypatch.setattr(agent, "read", lambda path, default=None: files.get(str(path), real_read(path, default)))
+    cgroup = tmp_path / "cgroup.procs"
+    cgroup.write_text("\n".join(p[0] for p in procs))
+    monkeypatch.setattr(agent, "LAB_AGENT_CGROUP", cgroup)
+    maclab = tmp_path / "maclab"
+    (maclab / "out").mkdir(parents=True)
+    (maclab / "jobs").mkdir()
+    if job_files:
+        (maclab / "out" / "c123").mkdir()
+        agent.os.utime(maclab / "out" / "c123", (1_800_000_000, 1_800_000_000))  # after btime
+    if stale_job_files:
+        (maclab / "out" / "c-old").mkdir()
+        agent.os.utime(maclab / "out" / "c-old", (1_600_000_000, 1_600_000_000))  # before btime
+    monkeypatch.setattr(agent, "MACLAB_DIR", maclab)
+
+
+def test_lab_activity_idle_lab_agent_is_not_activity(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    _fake_lab(monkeypatch, tmp_path)
+    assert agent.lab_activity() is None
+    assert not agent.lab_boot()
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        ({"cmdline": "root=/dev/x maclab.lab_boot=1 maclab.job=j1105"}, "Lab boot"),
+        ({"pm_test": "none core processors platform [devices] freezer"}, "pm_test=devices"),
+        ({"job_files": True}, "job files"),
+        ({"procs": IDLE_LAB_AGENT + (("999", "861", "bash", "bash /var/lib/maclab/test.sh", 30),)}, "lab-agent is running bash"),
+        ({"procs": IDLE_LAB_AGENT + (("998", "861", "systemd-inhibit", "systemd-inhibit --what=sleep --who=lab-agent --mode=block sleep infinity", 30),)}, "block inhibitor"),
+    ],
+)
+def test_lab_activity_detects_lab_work(monkeypatch: pytest.MonkeyPatch, tmp_path, kwargs, expected) -> None:
+    _fake_lab(monkeypatch, tmp_path, **kwargs)
+    assert expected in agent.lab_activity()
+
+
+def test_experiments_refuse_during_lab_work_unless_forced(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    _fake_lab(monkeypatch, tmp_path, procs=IDLE_LAB_AGENT + (("999", "861", "bash", "bash -c true", 30),))
+    with pytest.raises(SystemExit, match="lab may be using"):
+        agent.refuse_during_lab("an A/B experiment")
+    agent.refuse_during_lab("an A/B experiment", force=True)
+
+
+def test_standby_stays_awake_when_the_lab_is_working(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setattr(agent, "STANDBY_STATE", tmp_path / "state.json")
+    monkeypatch.setattr(agent, "LEDGER", tmp_path / "ledger.jsonl")
+    monkeypatch.setattr(agent, "STATE_DIR", tmp_path)
+    battery = {"capacity": 50, "ac_online": 0}
+    monkeypatch.setattr(agent, "battery", lambda: dict(battery))
+    monkeypatch.setattr(agent, "wakeup_sources", lambda: {})
+    commands = []
+    monkeypatch.setattr(agent, "sh", lambda *args, **kw: commands.append(args))
+    monkeypatch.setattr(agent, "lab_activity", lambda: "lab-agent is running bash (pid 999)")
+    # The lab is working: never put the Mac back to sleep under it...
+    assert agent.standby_decide({"start_wall": 0}, {"poweroff_below_pct": 10}) == "stay"
+    assert commands == []
+    assert agent.ledger_records()[-1]["reason"].startswith("lab-agent is running")
+    # ...but a critical battery still powers off cleanly rather than going flat.
+    battery["capacity"] = 5
+    assert agent.standby_decide({"start_wall": 0}, {"poweroff_below_pct": 10}) == "poweroff"
+
+
+def test_pm_test_cycles_are_not_counted_as_sleeps() -> None:
+    entries = [
+        {"kind": "sleep", "slept_s": 600, "sleep_w": 0.6, "pm_test": "none"},
+        {"kind": "sleep", "slept_s": 600, "sleep_w": 9.9, "pm_test": "devices"},
+    ]
+    assert analysis.summarize_sleeps(entries)["sleep_w_weighted"] == pytest.approx(0.6)
+
+
+def test_kmod_skips_lab_boots(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setattr(agent, "DEBUGFS", tmp_path / "debugfs")
+    monkeypatch.setattr(agent, "lab_boot", lambda: True)
+    assert agent.kmod_ensure() == {"loaded": False, "skipped": "maclab Lab boot"}
+
+
+def test_lab_activity_ignores_stale_job_dirs_and_short_probes(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    probe = ("997", "861", "systemctl", "systemctl is-system-running", 0.05)
+    _fake_lab(monkeypatch, tmp_path, stale_job_files=True, procs=IDLE_LAB_AGENT + (probe,))
+    assert agent.lab_activity() is None
+
+
+def test_tune_run_is_a_no_op_on_lab_boots(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setattr(agent, "lab_boot", lambda: True)
+    assert agent.tune_run()["skipped"] == "maclab Lab boot"
+
+
+def test_hook_is_passive_during_pm_test_cycles(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setattr(agent, "RUN_DIR", tmp_path)
+    monkeypatch.setattr(agent, "pm_test_mode", lambda: "devices")
+    monkeypatch.setattr(agent, "standby_spec", lambda: {"check_every_s": 300, "sleep_knobs": {"bt": "off"}})
+    applied = []
+    monkeypatch.setattr(agent, "apply_sleep_knobs", lambda knobs: applied.append(knobs))
+    monkeypatch.setattr(agent, "sleep_snapshot", lambda: {"boot": 1.0, "mono": 1.0, "wall": 1.0})
+    armed = []
+    monkeypatch.setattr(agent, "write", lambda path, value: armed.append((str(path), value)))
+    agent.run_hook("pre", "suspend")
+    assert applied == [] and not any("waketimer" in p for p, _ in armed)
+
+
+def test_ab_stops_when_the_lab_arrives_and_restores_the_knob(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    import argparse as _argparse
+
+    monkeypatch.setattr(agent, "JOURNAL", tmp_path / "journal.json")
+    values = {"x": "a"}
+
+    class Fake(agent.Knob):
+        name = "x"
+
+        def get(self):
+            return values["x"]
+
+        def set(self, value):
+            values["x"] = value
+
+    monkeypatch.setattr(agent, "get_knob", lambda name: Fake())
+    monkeypatch.setattr(agent, "arm_failsafe", lambda seconds, tag: "unit")
+    monkeypatch.setattr(agent, "disarm_failsafe", lambda unit: None)
+    monkeypatch.setattr(agent, "Sampler", lambda: object())
+    monkeypatch.setattr(agent, "battery", lambda: {})
+    monkeypatch.setattr(agent, "context_snapshot", lambda: {})
+    monkeypatch.setattr(agent.time, "sleep", lambda s: None)
+    calls = {"n": 0}
+
+    def measure(sampler, seconds, with_detail=True):
+        return [], {"sys_w": 1.0}
+
+    monkeypatch.setattr(agent, "measure_window", measure)
+
+    def activity():
+        calls["n"] += 1
+        return None if calls["n"] <= 3 else "lab-agent is running bash (pid 9)"
+
+    monkeypatch.setattr(agent, "lab_activity", activity)
+    ns = _argparse.Namespace(knob="x", a=None, b="b", pairs=4, settle=0, measure=0, seed=1, detail=False,
+                             keep_samples=False, out=None, force=False)
+    result = agent.run_ab(ns)
+    assert result["aborted"].startswith("lab:")
+    assert len(result["blocks"]) == 1 and values["x"] == "a"

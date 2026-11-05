@@ -618,6 +618,18 @@ def hyprctl(*args):
     return proc.stdout
 
 
+class LabArrived(Exception):
+    """The lab started using the Mac in the middle of an experiment."""
+
+
+def check_lab(force, where):
+    if force:
+        return
+    reason = lab_activity()
+    if reason:
+        raise LabArrived(f"{where}: {reason}")
+
+
 class Knob:
     name = ""
     help = ""
@@ -1103,6 +1115,7 @@ def disarm_failsafe(unit):
 
 
 def run_ab(args):
+    refuse_during_lab("an A/B experiment", getattr(args, "force", False))
     knob = get_knob(args.knob)
     if not knob.supported():
         raise SystemExit(f"knob {args.knob} is not supported here")
@@ -1136,19 +1149,24 @@ def run_ab(args):
         }
         touched = True
         journal_set(args.knob, a)
-        for index in range(args.pairs):
-            order = [a, b] if rng.random() < 0.5 else [b, a]
-            pair = {"index": index, "order": order}
-            for value in order:
-                journal_set(args.knob, value)
-                time.sleep(args.settle)
-                samples, summary = measure_window(sampler, args.measure, with_detail=args.detail)
-                pair["a" if value == a else "b"] = summary
-                if args.keep_samples:
-                    pair[("a" if value == a else "b") + "_samples"] = samples
-            result["blocks"].append(pair)
-            if args.out:
-                atomic_json(args.out, result | {"status": "running"})
+        try:
+            for index in range(args.pairs):
+                order = [a, b] if rng.random() < 0.5 else [b, a]
+                pair = {"index": index, "order": order}
+                for value in order:
+                    check_lab(getattr(args, "force", False), f"pair {index}")
+                    journal_set(args.knob, value)
+                    time.sleep(args.settle)
+                    samples, summary = measure_window(sampler, args.measure, with_detail=args.detail)
+                    pair["a" if value == a else "b"] = summary
+                    if args.keep_samples:
+                        pair[("a" if value == a else "b") + "_samples"] = samples
+                result["blocks"].append(pair)
+                if args.out:
+                    atomic_json(args.out, result | {"status": "running"})
+        except LabArrived as arrived:
+            # Stop, put the knob back (finally) and keep the completed pairs.
+            result["aborted"] = f"lab: {arrived}"
     finally:
         # Forget the knob and disarm the failsafe only once the knob is really
         # back: if restoring raises, its journal entry and the timers stay so
@@ -1161,7 +1179,7 @@ def run_ab(args):
                 journal_save(journal)
         if unit:
             disarm_failsafe(unit)
-    result["status"] = "complete"
+    result["status"] = "complete"  # terminal; "aborted" says why it ended early
     result["finished_wall"] = time.time()
     result["battery_end"] = battery()
     if args.out:
@@ -1461,11 +1479,19 @@ def standby_decide(summary, spec):
     state["dark_wakes"] = state.get("dark_wakes", 0) + 1
     asleep_for = now - (state["asleep_since_wall"] or now)
     action = "resleep"
-    if spec.get("max_dark_wakes") and state["dark_wakes"] >= int(spec["max_dark_wakes"]):
+    lab = lab_activity()
+    critical = not on_ac and bat.get("capacity") is not None and bat["capacity"] <= spec.get("poweroff_below_pct", 10)
+    if critical:
+        # A clean poweroff beats a flat battery, for the owner and for any lab
+        # job alike (a dead battery ends the job too, without a clean log).
+        action = "poweroff"
+    elif lab:
+        # A dark wake may have let lab-agent pick up a job: never put the Mac
+        # back to sleep under the lab.
+        action = "stay"
+    elif spec.get("max_dark_wakes") and state["dark_wakes"] >= int(spec["max_dark_wakes"]):
         # Testing aid: after N dark wakes, stay awake so the host can reach the Mac.
         action = "stay"
-    elif not on_ac and bat.get("capacity") is not None and bat["capacity"] <= spec.get("poweroff_below_pct", 10):
-        action = "poweroff"
     elif not on_ac and spec.get("poweroff_after_s") and asleep_for >= spec["poweroff_after_s"]:
         action = "poweroff"
     state["last_action"] = action
@@ -1476,7 +1502,8 @@ def standby_decide(summary, spec):
     inputs = user_input_count()
     if action == "stay":
         ledger_append({"kind": "standby", "action": action, "capacity": bat.get("capacity"), "on_ac": on_ac,
-                       "asleep_for_s": round(asleep_for), "dark_wakes": state["dark_wakes"], "end_wall": now})
+                       "asleep_for_s": round(asleep_for), "dark_wakes": state["dark_wakes"], "end_wall": now,
+                       "reason": lab or "max_dark_wakes"})
         return action
     ledger_append({"kind": "standby", "action": action, "capacity": bat.get("capacity"), "on_ac": on_ac,
                    "asleep_for_s": round(asleep_for), "dark_wakes": state["dark_wakes"], "end_wall": now})
@@ -1569,8 +1596,12 @@ def standby_act(action, input_count, since_mono_us=None, watch_s=STANDBY_WATCH_S
     off, unless someone uses the Mac during a short watch window."""
     reason = watch_user_input(watch_s) if watch_s else None
     now_inputs = user_input_count()
+    # The watch window also gives lab-agent time to reconnect and pick up work.
+    lab = lab_activity() if action != "poweroff" else None
     if reason:
         reason = f"user input: {reason}"
+    elif lab:
+        reason = f"lab: {lab}"
     elif now_inputs != int(input_count):
         reason = f"user input since decision ({input_count} -> {now_inputs})"
     elif since_mono_us is not None:
@@ -1598,6 +1629,140 @@ def standby_act(action, input_count, since_mono_us=None, watch_s=STANDBY_WATCH_S
     return record
 
 
+# --------------------------------------------------------- maclab coexistence
+#
+# The Mac may be enrolled in a maclab test lab (lab-agent.service). On a
+# Lab-owned Mac, Maintainers can boot a test kernel or run a job at any time,
+# and nothing in maclab stops the Mac suspending meanwhile. m1power therefore
+# stays passive whenever the lab is, or may be, using the Mac.
+
+MACLAB_DIR = Path("/var/lib/maclab")
+LAB_AGENT_CGROUP = Path("/sys/fs/cgroup/system.slice/lab-agent.service/cgroup.procs")
+# A child of lab-agent counts as work only once it has lived this long: an idle
+# lab-agent runs `systemctl is-system-running` and friends on every check-in.
+LAB_CHILD_MIN_AGE_S = 2.0
+
+
+def lab_boot():
+    """A maclab Lab boot (test kernel or job boot), from the kernel command line."""
+    words = (read("/proc/cmdline", "") or "").split()
+    return any(w == "maclab.lab_boot=1" or w.startswith("maclab.job=") for w in words)
+
+
+def pm_test_mode():
+    value = read("/sys/power/pm_test", "") or ""
+    match = re.search(r"\[(\S+)\]", value)
+    return match.group(1) if match else "none"
+
+
+def boot_time():
+    for line in (read("/proc/stat", "") or "").splitlines():
+        if line.startswith("btime "):
+            return int(line.split()[1])
+    return 0
+
+
+def process_age_s(pid):
+    """Seconds since the process started, or None."""
+    stat = read(f"/proc/{pid}/stat")
+    uptime = read("/proc/uptime")
+    if not stat or not uptime or ")" not in stat:
+        return None
+    try:
+        start_ticks = int(stat.rsplit(")", 1)[1].split()[19])
+        return float(uptime.split()[0]) - start_ticks / os.sysconf("SC_CLK_TCK")
+    except (IndexError, ValueError):
+        return None
+
+
+def process_cmdline(pid):
+    raw = read(f"/proc/{pid}/cmdline", "") or ""
+    return raw.replace("\0", " ").strip()
+
+
+def process_ppid(pid):
+    stat = read(f"/proc/{pid}/stat")
+    try:
+        return int(stat.rsplit(")", 1)[1].split()[1])
+    except (AttributeError, IndexError, ValueError):
+        return None
+
+
+def lab_agent_work(pids):
+    """Name a lab-agent child doing real work, or None. Its idle helpers are
+    the PrepareForSleep monitor (busctl monitor), the sleep delay lock
+    (systemd-inhibit --mode=delay) and the placeholder that lock runs."""
+    comms = {pid: read(f"/proc/{pid}/comm") for pid in pids}
+    for pid, comm in comms.items():
+        if not comm or comm == "lab-agent":
+            continue
+        cmdline = process_cmdline(pid)
+        if comm == "systemd-inhibit":
+            if "--mode=block" in cmdline:
+                return f"lab-agent holds a sleep block inhibitor (pid {pid})"
+            if "--mode=delay" in cmdline:
+                continue
+        if comm == "busctl" and " monitor" in f" {cmdline}":
+            continue
+        if comm == "sleep" and comms.get(str(process_ppid(pid))) == "systemd-inhibit":
+            continue
+        age = process_age_s(pid)
+        if age is not None and age < LAB_CHILD_MIN_AGE_S:
+            continue  # a routine check-in probe, not a command
+        return f"lab-agent is running {comm} (pid {pid})"
+    return None
+
+
+def lab_activity():
+    """Why the lab may be using the Mac right now, or None.
+
+    Checks the Lab-boot markers, maclab's pm_test suspend cycles, job output
+    directories created during this boot (an interrupted command leaves its
+    directory behind, so older ones mean nothing; maclab's own busy check
+    reads them the same way), and lab-agent children doing real work."""
+    if lab_boot():
+        return "maclab Lab boot"
+    if pm_test_mode() != "none":
+        return f"pm_test={pm_test_mode()} (maclab suspend-devices cycle)"
+    booted = boot_time()
+    for sub in ("out", "jobs"):
+        try:
+            entries = list((MACLAB_DIR / sub).iterdir())
+        except OSError:
+            entries = []
+        for entry in entries:
+            try:
+                if entry.stat().st_mtime >= booted:
+                    return f"maclab job files in {entry}"
+            except OSError:
+                continue
+    try:
+        pids = LAB_AGENT_CGROUP.read_text().split()
+    except OSError:
+        pids = []
+    return lab_agent_work(pids)
+
+
+def lab_status():
+    """What `doctor` shows about maclab enrollment and activity."""
+    status = {"enrolled": False}
+    try:
+        cfg = json.loads(Path("/etc/maclab/agent.json").read_text())
+        status = {"enrolled": True, "name": cfg.get("name"), "server": cfg.get("server"),
+                  "kind": (cfg.get("enrollment") or {}).get("kind")}
+    except (OSError, ValueError):
+        pass
+    status["lab_boot"] = lab_boot()
+    status["activity"] = lab_activity()
+    return status
+
+
+def refuse_during_lab(what, force=False):
+    reason = lab_activity()
+    if reason and not force:
+        raise SystemExit(f"refusing {what}: {reason}. The lab may be using this Mac; pass --force to override.")
+
+
 def run_hook(phase, operation):
     """systemd-sleep hook: bracket every suspend in the persistent ledger,
     apply sleep-only knobs, and run the standby guard."""
@@ -1605,9 +1770,13 @@ def run_hook(phase, operation):
     pre_file = RUN_DIR / "sleep-pre.json"
     spec = standby_spec()
     test_running = sleep_test_active()
+    # On a Lab boot or during maclab's pm_test cycles, only observe: no sleep
+    # knobs, no wake timer, no tuning and no standby decisions.
+    lab_passive = lab_boot() or pm_test_mode() != "none"
     if phase == "pre":
-        apply_sleep_knobs(sleep_knobs_for(spec, test_running))
-        if spec and not test_running:
+        if not lab_passive:
+            apply_sleep_knobs(sleep_knobs_for(spec, test_running))
+        if spec and not test_running and not lab_passive:
             if spec.get("check_every_s") and (DEBUGFS / "waketimer").exists() and not waketimer_armed():
                 try:
                     write(DEBUGFS / "waketimer", str(int(spec["check_every_s"])))
@@ -1634,8 +1803,12 @@ def run_hook(phase, operation):
         summary["test"] = test_running
         summary["standby"] = bool(spec)
         summary["waketimer_fired"] = "m1power_waketimer" in dict(summary["wake_sources"])
+        summary["lab_boot"] = lab_boot()
+        summary["pm_test"] = pm_test_mode()
         ledger_append(summary)
         pre_file.unlink(missing_ok=True)
+    if lab_passive:
+        return
     # Runtime knobs such as Wi-Fi power save can reset across suspend.
     if TUNE_SPEC.exists():
         try:
@@ -1658,6 +1831,7 @@ def run_hook(phase, operation):
 
 def run_sleep(args):
     """Arm the wake timer, suspend, wait for resume, return the ledger entry."""
+    refuse_during_lab("a sleep test", getattr(args, "force", False))
     if not Path(HOOK_PATH).exists():
         raise SystemExit("sleep hook is not installed: run `m1power install` first")
     has_timer = (DEBUGFS / "waketimer").exists()
@@ -1689,6 +1863,10 @@ def _run_sleep(args, has_timer, before, journal_before):
         journal_set(name, value)
     if args.settle:
         time.sleep(args.settle)
+    try:
+        check_lab(getattr(args, "force", False), "before suspend")
+    except LabArrived as arrived:
+        raise SystemExit(f"aborted, lab: {arrived}") from None
     if has_timer:
         write(DEBUGFS / "waketimer", str(args.seconds))
     mono0, boot0 = clocks()
@@ -1732,6 +1910,10 @@ KMOD_SRC = Path("/usr/local/src/m1power")
 
 
 def tune_run():
+    if lab_boot():
+        # Lab boots run a stock system, also for tune units written before
+        # the unit gained its ConditionKernelCommandLine guard.
+        return {"applied": {}, "errors": {}, "skipped": "maclab Lab boot"}
     spec = json.loads(TUNE_SPEC.read_text())
     applied, errors = {}, {}
     for name, value in spec.get("knobs", {}).items():
@@ -1778,6 +1960,18 @@ def restore_sleep_radios():
     return restored
 
 
+def write_tune_unit():
+    Path("/etc/systemd/system/m1power-tune.service").write_text(
+        "[Unit]\nDescription=Apply the m1power idle tuning\nAfter=multi-user.target NetworkManager.service power-profiles-daemon.service\n"
+        "# maclab Lab boots run a stock system so the lab's checks compare like with like.\n"
+        "ConditionKernelCommandLine=!maclab.lab_boot=1\n\n"
+        "[Service]\nType=oneshot\nExecStartPre=/usr/bin/sleep 5\n"
+        f"ExecStart=/usr/bin/python3 -I {AGENT_HOME}/agent.py tune run\nRemainAfterExit=yes\n\n"
+        "[Install]\nWantedBy=multi-user.target\n"
+    )
+    sh("systemctl", "daemon-reload")
+
+
 def tune_apply(spec_json):
     spec = json.loads(spec_json)
     knobs = spec.get("knobs", {})
@@ -1808,13 +2002,7 @@ def tune_apply(spec_json):
     TUNE_SPEC.parent.mkdir(parents=True, exist_ok=True)
     atomic_json(TUNE_SPEC, {"knobs": knobs, "sleep_knobs": sleep_knobs, "baseline": baseline,
                             "applied_wall": time.time(), "note": spec.get("note", "")})
-    Path("/etc/systemd/system/m1power-tune.service").write_text(
-        "[Unit]\nDescription=Apply the m1power idle tuning\nAfter=multi-user.target NetworkManager.service power-profiles-daemon.service\n\n"
-        "[Service]\nType=oneshot\nExecStartPre=/usr/bin/sleep 5\n"
-        f"ExecStart=/usr/bin/python3 -I {AGENT_HOME}/agent.py tune run\nRemainAfterExit=yes\n\n"
-        "[Install]\nWantedBy=multi-user.target\n"
-    )
-    sh("systemctl", "daemon-reload")
+    write_tune_unit()
     sh("systemctl", "enable", "m1power-tune.service")
     return tune_run() | {"baseline": baseline}
 
@@ -1851,10 +2039,19 @@ def kmod_ensure():
     """Build (if needed) and load the m1power module for the running kernel."""
     if (DEBUGFS / "smc_keys").exists():
         return {"loaded": True, "built": False}
+    if lab_boot():
+        # Lab test kernels ship no headers, and compiling during boot-health
+        # and omarchy-m-test would show up as a regression in the lab's checks.
+        return {"loaded": False, "skipped": "maclab Lab boot"}
     release = os.uname().release
     out_dir = AGENT_HOME / "kmod" / release
     ko = out_dir / "m1power.ko"
     built = False
+    if not ko.exists() and not Path(f"/usr/lib/modules/{release}/build/Makefile").exists():
+        return {"loaded": False, "skipped": f"no kernel headers for {release}"}
+    lab = lab_activity()
+    if not ko.exists() and lab:
+        return {"loaded": False, "skipped": f"not compiling while the lab works ({lab}); the next boot builds it"}
     if not ko.exists():
         build_dir = Path(f"/var/tmp/m1power-build-{release}")
         shutil.rmtree(build_dir, ignore_errors=True)
@@ -1903,6 +2100,7 @@ def info():
             "waketimer": (DEBUGFS / "waketimer").exists(),
         },
         "hook_installed": Path(HOOK_PATH).exists(),
+        "maclab": lab_status(),
         "tune": json.loads(TUNE_SPEC.read_text()) if TUNE_SPEC.exists() else None,
         "battery": battery(),
         "smc_now": parse_smc_lines(read(DEBUGFS / "smc_sensors", "") or "") if (DEBUGFS / "smc_sensors").exists() else Smc().read(),
@@ -1952,6 +2150,7 @@ def main(argv=None):
     ab.add_argument("--detail", action="store_true")
     ab.add_argument("--keep-samples", action="store_true")
     ab.add_argument("--out")
+    ab.add_argument("--force", action="store_true", help="run even while the maclab lab may be using the Mac")
     batch = sub.add_parser("batch", help="run a list of jobs from a JSON file, sequentially")
     batch.add_argument("spec")
     batch.add_argument("--out", required=True)
@@ -1963,15 +2162,17 @@ def main(argv=None):
     slp.add_argument("--set", nargs=2, action="append", metavar=("KNOB", "VALUE"))
     slp.add_argument("--restore", action="store_true")
     slp.add_argument("--out")
+    slp.add_argument("--force", action="store_true", help="run even while the maclab lab may be using the Mac")
     hook = sub.add_parser("hook")
     hook.add_argument("phase")
     hook.add_argument("operation", nargs="?", default="")
     ledger = sub.add_parser("ledger")
     ledger.add_argument("--last", type=int)
     tune = sub.add_parser("tune")
-    tune.add_argument("action", choices=["run", "apply", "revert", "show"])
+    tune.add_argument("action", choices=["run", "apply", "revert", "show", "refresh-unit"])
     tune.add_argument("--spec")
     sub.add_parser("kmod")
+    sub.add_parser("lab")
     standby = sub.add_parser("standby")
     standby.add_argument("action", choices=["set", "show", "off"])
     standby.add_argument("--spec")
@@ -2019,8 +2220,16 @@ def main(argv=None):
             emit(tune_apply(args.spec))
         elif args.action == "revert":
             emit(tune_revert())
+        elif args.action == "refresh-unit":
+            if TUNE_SPEC.exists():
+                write_tune_unit()
+                emit({"refreshed": True})
+            else:
+                emit({"refreshed": False})
         else:
             emit(json.loads(TUNE_SPEC.read_text()) if TUNE_SPEC.exists() else {})
+    elif args.cmd == "lab":
+        emit(lab_status())
     elif args.cmd == "kmod":
         # Runs early at every boot (m1power-kmod.service), with or without a
         # tune: the place to undo a radio left off by an interrupted sleep.
@@ -2096,6 +2305,12 @@ def run_batch(args):
         res["job_kind"] = kind
         results["jobs"].append(res)
         atomic_json(args.out, results)
+        error = str(res.get("error", ""))
+        lab_stop = res.get("aborted") or (error if ("aborted, lab" in error or "lab may be using" in error) else None)
+        if lab_stop:
+            # The lab has the Mac now: leave the remaining jobs undone.
+            results["aborted"] = f"stopped after job {len(results['jobs'])}: {lab_stop}"
+            break
     results["status"] = "complete"
     results["finished_wall"] = time.time()
     atomic_json(args.out, results)

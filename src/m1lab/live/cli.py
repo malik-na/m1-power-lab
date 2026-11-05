@@ -96,6 +96,11 @@ def cmd_doctor(target: Target, args: argparse.Namespace) -> None:
         out("  run `m1power install` to set up the module, wake timer and ledger")
     if info.get("journal"):
         out(f"  ! knobs changed and not restored: {info['journal']} (run `m1power restore`)")
+    lab = info.get("maclab") or {}
+    if lab.get("enrolled"):
+        state = lab.get("activity") or "idle"
+        out(f"maclab      enrolled as {lab.get('name')} ({lab.get('kind')}) at {lab.get('server')}; lab now: {state}")
+        out("            m1power stays passive on Lab boots and while lab-agent is working (no sleeps, guard stays awake)")
     out(f"cpuidle     {info['cpuidle']['driver']} / {info['cpuidle']['governor']}")
     out(f"domains on  {len(info['domains_on'])}: {' '.join(info['domains_on'])}")
     out("knobs:")
@@ -197,6 +202,15 @@ def cmd_restore(target: Target, args: argparse.Namespace) -> None:
     out(json.dumps(target.agent("restore")))
 
 
+def lab_guard(target: Target, args: argparse.Namespace, what: str) -> None:
+    """Refuse before touching anything when the maclab lab is using the Mac."""
+    if getattr(args, "force", False):
+        return
+    status = target.agent("lab") or {}
+    if status.get("activity"):
+        raise UsageError(f"not starting {what}: {status['activity']}. The maclab lab may be using the Mac; pass --force to override.")
+
+
 def ab_job(knob: str, b: str, args: argparse.Namespace, a: str | None = None) -> dict[str, Any]:
     job: dict[str, Any] = {
         "kind": "ab",
@@ -209,6 +223,8 @@ def ab_job(knob: str, b: str, args: argparse.Namespace, a: str | None = None) ->
     }
     if a is not None:
         job["a"] = a
+    if getattr(args, "force", False):
+        job["force"] = True
     return job
 
 
@@ -281,7 +297,9 @@ def ab_seconds(args: argparse.Namespace) -> float:
 
 
 def cmd_ab(target: Target, args: argparse.Namespace) -> None:
+    lab_guard(target, args, "the A/B test")
     result = run_batch(target, [ab_job(args.knob, args.b, args, args.a)], label=f"ab-{args.knob}", expected_s=ab_seconds(args))
+    print_aborted(result)
     print_ab_table(result["jobs"])
 
 
@@ -304,6 +322,7 @@ def cmd_sweep(target: Target, args: argparse.Namespace) -> None:
             continue
         jobs.append(ab_job(name, entry["b"], args))
     job_id = new_job_id("batch")
+    lab_guard(target, args, "the sweep")
     if args.display:
         jobs.insert(0, {"kind": "record", "duration": 1, "label": "display-context"})
         target.agent("knob", "display", args.display)
@@ -325,6 +344,14 @@ def cmd_sweep(target: Target, args: argparse.Namespace) -> None:
     if args.display:
         target.agent("restore")
     print_ab_table([j for j in result["jobs"] if j.get("job_kind") == "ab"])
+
+
+def print_aborted(result: dict[str, Any]) -> None:
+    if result.get("aborted"):
+        out(f"note: the run stopped early because the maclab lab started using the Mac ({result['aborted']})")
+    for job in result.get("jobs", []):
+        if job.get("aborted"):
+            out(f"note: {job.get('knob', job.get('job_kind'))} stopped early ({job['aborted']}); completed pairs are kept")
 
 
 def print_ab_table(jobs: list[dict[str, Any]]) -> None:
@@ -349,9 +376,10 @@ def print_ab_table(jobs: list[dict[str, Any]]) -> None:
 
 
 def cmd_sleep(target: Target, args: argparse.Namespace) -> None:
+    lab_guard(target, args, "the sleep test")
     jobs = []
     for _ in range(args.repeat):
-        job: dict[str, Any] = {"kind": "sleep", "seconds": args.seconds, "restore": True}
+        job: dict[str, Any] = {"kind": "sleep", "seconds": args.seconds, "restore": True, "force": getattr(args, "force", False)}
         if args.set:
             job["set"] = [list(pair.split("=", 1)) for pair in args.set]
         if args.manual_wake:
@@ -369,12 +397,13 @@ def cmd_sleep(target: Target, args: argparse.Namespace) -> None:
 def cmd_sleep_ab(target: Target, args: argparse.Namespace) -> None:
     import random
 
+    lab_guard(target, args, "the sleep A/B")
     jobs = []
     for _ in range(args.pairs):
         pair = [None, f"{args.knob}={args.value}"]
         random.shuffle(pair)
         for setting in pair:
-            job: dict[str, Any] = {"kind": "sleep", "seconds": args.seconds, "restore": True}
+            job: dict[str, Any] = {"kind": "sleep", "seconds": args.seconds, "restore": True, "force": getattr(args, "force", False)}
             if setting:
                 job["set"] = [setting.split("=", 1)]
             jobs.append(job)
@@ -557,9 +586,11 @@ def build_parser() -> argparse.ArgumentParser:
     ab.add_argument("knob")
     ab.add_argument("b", help="value to compare against the current one")
     ab.add_argument("--a", help="baseline value (default: current)")
+    ab.add_argument("--force", action="store_true", help="run even while the maclab lab may be using the Mac")
     timing(ab, 4, 15, 45)
 
     sweep = sub.add_parser("sweep", help="A/B every knob in a preset and rank the savings")
+    sweep.add_argument("--force", action="store_true", help="run even while the maclab lab may be using the Mac")
     sweep.add_argument("--preset", choices=sorted(PRESETS), default="idle")
     sweep.add_argument("--include", action="append", help="extra KNOB=VALUE, e.g. service:lab-agent=off")
     sweep.add_argument("--only", nargs="*")
@@ -567,12 +598,14 @@ def build_parser() -> argparse.ArgumentParser:
     timing(sweep, 3, 10, 30)
 
     sleep = sub.add_parser("sleep", help="unattended suspend test using the wake timer")
+    sleep.add_argument("--force", action="store_true", help="run even while the maclab lab may be using the Mac")
     sleep.add_argument("--seconds", type=int, default=300)
     sleep.add_argument("--repeat", type=int, default=1)
     sleep.add_argument("--set", action="append", help="KNOB=VALUE to apply during the sleep")
     sleep.add_argument("--manual-wake", action="store_true")
 
     sleep_ab = sub.add_parser("sleep-ab", help="paired sleeps with and without a knob change")
+    sleep_ab.add_argument("--force", action="store_true", help="run even while the maclab lab may be using the Mac")
     sleep_ab.add_argument("knob")
     sleep_ab.add_argument("value")
     sleep_ab.add_argument("--pairs", type=int, default=3)

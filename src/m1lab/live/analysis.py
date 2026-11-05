@@ -92,8 +92,10 @@ def verdict(effect: PairedEffect) -> str:
 
 
 def is_sleep(entry: dict[str, Any]) -> bool:
-    """Ledger records of other kinds (``standby`` dark-wake decisions) are not sleeps."""
-    return entry.get("kind", "sleep") == "sleep"
+    """A real sleep: not another ledger kind (``standby`` dark-wake decisions),
+    and not one of maclab's ``pm_test`` suspend-devices cycles, which freeze
+    and suspend devices for a few seconds without ever entering s2idle."""
+    return entry.get("kind", "sleep") == "sleep" and entry.get("pm_test", "none") == "none"
 
 
 def sleep_watts(entry: dict[str, Any]) -> float | None:

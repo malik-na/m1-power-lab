@@ -364,6 +364,8 @@ if [ "$new" != "$old" ]; then
 fi
 systemctl daemon-reload
 systemctl enable m1power-kmod.service >/dev/null 2>&1
+# rewrite the tune unit (if tuning is persisted) so it carries the Lab-boot guard
+cd /tmp && python3 -I {REMOTE_AGENT} tune refresh-unit >/dev/null
 cd /tmp && python3 -I {REMOTE_AGENT} kmod
 """
         out = self.run(f"bash -c {shlex.quote(script)}", input=buffer.getvalue(), timeout=900)

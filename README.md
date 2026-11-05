@@ -20,7 +20,10 @@ It reads every SMC key (including the DC-in energy accumulator, which keeps
 counting while the CPU sleeps), wakes the Mac from s2idle on a timer so sleep
 tests run unattended, A/B tests tunables with randomized paired blocks, keeps a
 ledger of every suspend, and can persist the winning settings. See
-[docs/LIVE.md](docs/LIVE.md).
+[docs/LIVE.md](docs/LIVE.md). On a Mac enrolled in a
+[maclab](https://github.com/chriskearney/maclab) test lab, m1power stays out
+of the lab's way; [docs/MACLAB.md](docs/MACLAB.md) covers that and how to run
+power work through the lab.
 
 ## Bare-metal harness (ThinkPad era)
 
