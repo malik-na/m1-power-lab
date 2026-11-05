@@ -165,6 +165,11 @@ Verified on the physical M1 this session:
     `pcielink:wifi:l1_1_aspm=0 pcielink:wifi:l1_2_aspm=0`. lspci confirms all
     four substates, CMRT 25 us, threshold 87040 ns, T_PwrOn 50 us and LTR
     0x10081008 on the link.
+  - Sleep with that tuning, paired 10-minute sleeps on battery: 0.443 and
+    0.441 W, against 0.622 and 0.621 W with the `default` ASPM policy:
+    -180 mW asleep (95% CI 177..182 mW), all four sleeps clean. Net for the
+    day on battery: idle about 1.25 -> 0.81 W (display off), sleep 0.61 ->
+    0.44 W, about 1.2% of this battery per hour, roughly 3.4 days of standby.
 - Direction (independent review, 2026-11-05): continue in-OS. m1n1 proxy mode
   cannot measure Linux idle, and neither it nor in-OS tuning reaches macOS's
   tens-of-mW SoC power collapse, which needs firmware-level resume support.
