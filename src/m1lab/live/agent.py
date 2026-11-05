@@ -2280,6 +2280,20 @@ def gateway():
     return out[out.index("via") + 1] if "via" in out else None
 
 
+def link_snapshot():
+    names = ("aspm", "pcielink:wifi:l1_1_aspm", "pcielink:wifi:l1_2_aspm", "pcielink:wifi:l1_1_pcipm",
+             "pcielink:wifi:l1_2_pcipm", "pcielink:wifi:clkpm", "l1ss_profile", "ltr_max_us", "wifi_ps")
+    snapshot = {}
+    for name in names:
+        try:
+            knob = get_knob(name)
+            if knob.supported():
+                snapshot[name] = knob.get()
+        except Exception:  # noqa: BLE001
+            continue
+    return snapshot
+
+
 def run_stress(args):
     """Suspend/resume cycles with Wi-Fi traffic in between; stops at the first
     failed suspend or Wi-Fi firmware error so a wedge is caught early."""
@@ -2310,6 +2324,10 @@ def run_stress(args):
                         knob.set(value)
                 except Exception as error:  # noqa: BLE001
                     cycle.setdefault("set_errors", {})[name] = str(error)
+            if index == 0:
+                # What the link really runs with: sticky sysfs disables can
+                # silently keep states off, so read it back once applied.
+                result["link_during"] = link_snapshot()
             cycle["ap_start"] = wifi_ap()
             gw = gateway()
             cycle["gateway"] = gw
@@ -2353,11 +2371,7 @@ def run_stress(args):
     result["summary"] = {"cycles": len(result["cycles"]), "ok": ok,
                          "cycles_with_wifi_errors": sum(1 for c in result["cycles"] if c["wifi_errors"]),
                          "cycles_with_critical": sum(1 for c in result["cycles"] if c.get("critical"))}
-    # What the link actually ran with (sticky sysfs disables can silently
-    # keep states off), read at the end of the run.
-    result["link_at_end"] = {n: get_knob(n).get() for n in ("aspm", "pcielink:wifi:l1_1_aspm", "pcielink:wifi:l1_2_aspm",
-                                                             "pcielink:wifi:l1_1_pcipm", "pcielink:wifi:l1_2_pcipm",
-                                                             "pcielink:wifi:clkpm") if get_knob(n).supported()}
+
     result["status"] = "complete"
     result["finished_wall"] = time.time()
     if args.out:

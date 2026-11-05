@@ -119,6 +119,30 @@ Verified on the physical M1 this session:
   (`checkpatch.pl --strict` clean; same tree as the tested commit).
 - Two 90 s sleeps back to back in one job read to labd as one 3m14s sleep,
   past its 2-minute notice; keep a job's total sleep under two minutes.
+- Wi-Fi link L1 substates, deeper (2026-11-05 afternoon):
+  - The per-link sysfs switches (`link/l1_*`, `clkpm`) can only remove states
+    from the ASPM policy, and writing 0 is a sticky disable in the ASPM core.
+    Two earlier "L1.1 only / L1.2 only" A/Bs measured default against default
+    and are void; the knobs now restore by clearing the disable.
+  - The Apple root port advertises Port T_POWER_ON and Common_Mode_Restore of
+    0, so Linux programs the endpoint's 6 us / 8 us and a 20 us L1.2
+    threshold; macOS uses root-port CMRT 25 us and threshold 87 us, writes
+    LTR max latency 0x1008 (Linux leaves 0) and never enables Clock PM here.
+  - macOS-like configuration (Clock PM off, CMRT 25 us, threshold 87 us,
+    T_POWER_ON 50 us, LTR max 0x1008, all four substates on): idle 1.010 ->
+    0.807 W, -204 mW (-20.2%, 95% CI -254..-153). The firmware still failed to
+    acknowledge D3 on the fifth suspend of a stress run, so timing, Clock PM
+    and LTR are not the cause.
+  - Cause found in the driver (Asahi-only code, confirmed by two independent
+    reviews): since f04be345ad51 brcmfmac's hard IRQ handler clears
+    `irq_ready` whenever it catches `mailboxint` still set, and the thread then
+    skips the rings for that interrupt. In MSI mode the firmware raises no
+    further MSI, so a completion that came with it (an ioctl response, the D3
+    ACK) is lost. Fixes on malik-na/linux-aurora: `fix/brcmfmac-irq-ready-v2`
+    (the handler masks without touching `irq_ready`; the thread unmasks
+    without setting it) and `fix/brcmfmac-d3-recovery-v2` (adds: a missed D3
+    ACK no longer aborts suspend without WoWL, and forces a firmware reload on
+    resume because the chip stays powered in s2idle). Lab A/B pending.
 - Direction (independent review, 2026-11-05): continue in-OS. m1n1 proxy mode
   cannot measure Linux idle, and neither it nor in-OS tuning reaches macOS's
   tens-of-mW SoC power collapse, which needs firmware-level resume support.

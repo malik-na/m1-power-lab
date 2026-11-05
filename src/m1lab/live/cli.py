@@ -512,8 +512,8 @@ def cmd_arm(target: Target, args: argparse.Namespace) -> None:
 
 def print_stress(result: dict[str, Any]) -> None:
     out(f"knobs at start: {result.get('knobs')}")
-    if result.get("link_at_end"):
-        out(f"link while stressed: {result['link_at_end']}")
+    if result.get("link_during"):
+        out(f"link while stressed: {result['link_during']}")
     for cycle in result.get("cycles", []):
         errors = len(cycle.get("critical", cycle.get("wifi_errors", [])))
         switched = cycle.get("ap_start") and cycle.get("ap_start") != cycle.get("ap_end")
