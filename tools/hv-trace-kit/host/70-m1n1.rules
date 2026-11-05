@@ -1,0 +1,14 @@
+# m1n1 proxy USB ACM devices (VID:PID 1209:316d).
+# Based on m1n1 udev/80-m1n1.rules (@70757dc), plus:
+#  - TAG+="uaccess": the logged-in seat user gets rw access, no group change.
+#    Must sort before 73-seat-late.rules, hence the 70- prefix.
+#  - ID_MM_DEVICE_IGNORE: keep ModemManager from probing the proxy with AT commands.
+# Install: sudo install -m644 70-m1n1.rules /etc/udev/rules.d/ && sudo udevadm control --reload
+# Remove:  sudo rm /etc/udev/rules.d/70-m1n1.rules && sudo udevadm control --reload
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="316d", GOTO="m1n1"
+GOTO="not_m1n1"
+LABEL="m1n1"
+ENV{ID_MM_DEVICE_IGNORE}="1"
+SUBSYSTEM=="tty", ATTRS{bInterfaceNumber}=="00", KERNEL=="ttyACM*", SYMLINK+="m1n1", TAG+="uaccess"
+SUBSYSTEM=="tty", ATTRS{bInterfaceNumber}=="02", KERNEL=="ttyACM*", SYMLINK+="m1n1-sec", TAG+="uaccess"
+LABEL="not_m1n1"

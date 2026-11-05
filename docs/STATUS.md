@@ -264,6 +264,48 @@ Verified on the physical M1 this session:
   35 findings in the new tooling. All were fixed, and the fixes were checked
   independently; the module now tracks a per-fd SMC watch list and re-wakes a
   suspend that a just-expired deadline would otherwise miss.
+- Wi-Fi PS-Poll (`wifi_pm` 2 -> 1, the firmware's PM_MAX mode, on top of the
+  50 ms tail): about -20 mW at idle (95% CI 6..35 mW). Deployed. Firmware
+  settings reset whenever Wi-Fi comes up, so `tune` now installs a
+  NetworkManager dispatcher hook (`90-m1power-tune`) that re-runs `tune run`
+  on every Wi-Fi up. New `tuneset` knob (tuned/stock) applies the whole
+  persisted tune spec or its baseline, for a whole-stack A/B (running in the
+  overnight batch `batch-223328-2126`).
+- PMGR gating tool: `m1power.ko` reads every PMGR power-state register
+  (debugfs `pmgr_ps`, `pmgr_duty` for 5 s duty cycles, `pmgr_s2idle` for a
+  snapshot taken inside s2idle) and can gate the unused Type-C PHY domains
+  (`pmgr_set`, labels `atc*`/`dispext*` only); knob `pmgr_atc1`.
+
+### Suspend-to-RAM groundwork (2026-11-05/06, nothing run on hardware yet)
+
+Real SoC sleep (macOS's "go hib", tens of mW) needs three things Linux lacks
+on t8103: a wake source that survives SoC-off, CPU power-down/restart, and the
+exact entry/wake register sequence. Prepared, independently checked, and
+waiting for the M1 (after the overnight batch):
+
+- PMU RTC alarm (Sera, SPMI slave 0xf, alarm block 0xd000-0xd00e) as a wake
+  source: `malik-na/linux-aurora@m1power/s2r-pmu-rtc` `7e874c1`, lab build
+  `b1105-175339-6471`, opt-in with `apple_t8103_pmu_alarm=1`. Read-modify-write
+  only, logs the firmware's alarm state before any write, SPMI storm guard,
+  refuses suspend if the line is dead. Test:
+  [`target/lab/m1power-s2r-rtcwake.sh`](../target/lab/m1power-s2r-rtcwake.sh)
+  (sleeps only after an awake alarm proves the IRQ path; m1power's 75 s wake
+  timer is the backup). Checker: ready.
+- CPU hotplug (`cpu_die`/`cpu_kill` for spin-table cores, park or PMGR
+  power-down): `m1power/s2r-cpu-hotplug` `3ad7154`, build `b1105-175451-a0c9`.
+  Park mode is safe to test. Power-down mode is held: with m1n1 v1.9.9+, a
+  restarted core runs on m1n1 heap stacks that Linux does not reserve
+  (silent memory corruption); a fix is in progress.
+- m1n1 hypervisor trace kit for macOS 13.5 sleep entry:
+  [`tools/hv-trace-kit`](../tools/hv-trace-kit/RUNBOOK.md) (owner runbook:
+  separate 13.5 volume, no firmware downgrade, 1TR for that volume only,
+  trace, undo and recovery).
+- Static sequence from Apple's public 13.5 kernelcache (j313): per-core
+  power-down, WDT/MCC/AIC/PMGR quiesce, S2R timer at `0x23d2c4000`, AP
+  wake-source mask at `0x23d004008..18`, wake-time and cluster restore. Kept
+  out of the public repo (`var/s2r-static/SEQUENCE.md`, git-ignored) because
+  it is derived from Apple's binary. Open: what re-enters the boot CPU after
+  SoC-off under a raw m1n1 boot object; only a trace or hardware test can say.
 
 ### Hibernation
 

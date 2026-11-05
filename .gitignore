@@ -10,3 +10,8 @@ build/
 *.egg-info/
 
 .review-findings.json
+
+# hv-trace-kit outputs (traces, and Apple kernelcache copies: never commit)
+tools/hv-trace-kit/runs/
+tools/hv-trace-kit/prep/
+tools/hv-trace-kit/kc/
