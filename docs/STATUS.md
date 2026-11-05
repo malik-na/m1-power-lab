@@ -239,6 +239,14 @@ Verified on the physical M1 this session:
   gating changed (DRAM controllers and fabric as before). The first baseline
   window read high, so a stock-kernel control of the same sequence is needed
   before crediting the PMP with any of the 42 mW.
+- PMP replication, three runs each, alternating, same sequence and windows
+  (before -> after the start step, same boot): PMP kernel -42, -27, -59 mW
+  (mean -43); stock control -> +69, -55, -39 mW (mean -8; `j1105-153339-9117`,
+  `-154859-785c`, `-155232-2cdf`; PMP `-151447-7dbc`, `-154719-3e5d`,
+  `-155048-25e6`). Difference about -35 mW with a standard error of about
+  40 mW: not significant; the PMP saves between 0 and roughly 50 mW at idle.
+  Device reports added nothing (-8, +5, -4 mW). Not deployed for idle; the
+  driver is kept for S2R, where macOS's sleep path talks to the PMP.
 - A six-lens source review (two adversarial reviewers per lever) ranked the
   remaining levers ([review](evidence/2026-11-05-power-lever-review.md)): the
   small peripheral, domain and waker levers add up to about 30-60 mW idle and
