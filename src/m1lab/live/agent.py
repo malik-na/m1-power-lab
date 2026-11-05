@@ -892,6 +892,61 @@ class WifiPsTimeoutKnob(Knob):
             WifiPowerSaveKnob().set("off")
 
 
+def brcmf_dcmd(iface, cmd, payload=b"", set_=False, buflen=None):
+    """brcmfmac vendor DCMD (nl80211 vendor OUI 0x001018, subcmd 1): a
+    firmware ioctl. Returns the first reply's payload bytes on a get."""
+    data = bytes(payload)
+    length = buflen if buflen is not None else len(data)
+    if not set_ and len(data) < length:
+        data += b"\0" * (length - len(data))
+    header = struct.pack("<IIIII", cmd, length, 20, 1 if set_ else 0, 0)
+    args = ["0x001018", "0x1"] + [f"0x{b:02x}" for b in header + data]
+    out = sh("iw", "dev", iface, "vendor", "send" if set_ else "recv", *args, check=True).stdout
+    if set_:
+        return b""
+    first = out.split("vendor response:")[1].split("\n")[0].split()
+    return bytes(int(x, 16) for x in first)[4:]
+
+
+class WifiFirmwareIntKnob(Knob):
+    """A brcmfmac firmware integer, set through the vendor DCMD: an ioctl
+    (get/set command pair) or an iovar (WLC_GET_VAR 262 / WLC_SET_VAR 263).
+    Firmware state is lost when the driver reloads the chip; `tune` re-applies
+    it at boot and resume, and drift reports it."""
+
+    WLC_GET_VAR, WLC_SET_VAR = 262, 263
+
+    def __init__(self, name, help, iovar=None, ioctl=None, choices=None):
+        self.name, self.help, self.iovar, self.ioctl, self.choices = name, help, iovar, ioctl, choices
+
+    def _iface(self):
+        return WifiPowerSaveKnob()._iface()
+
+    def supported(self):
+        if not WifiPowerSaveKnob().supported():
+            return False
+        try:
+            self.get()
+            return True
+        except Exception:  # noqa: BLE001 - firmware without this setting
+            return False
+
+    def get(self):
+        if self.ioctl:
+            reply = brcmf_dcmd(self._iface(), self.ioctl[0], b"", buflen=4)
+        else:
+            name = self.iovar.encode() + b"\0"
+            reply = brcmf_dcmd(self._iface(), self.WLC_GET_VAR, name, buflen=max(len(name), 4) + 4)
+        return str(int.from_bytes(reply[:4], "little", signed=True))
+
+    def set(self, value):
+        raw = int(value, 0).to_bytes(4, "little", signed=True)
+        if self.ioctl:
+            brcmf_dcmd(self._iface(), self.ioctl[1], raw, set_=True)
+        else:
+            brcmf_dcmd(self._iface(), self.WLC_SET_VAR, self.iovar.encode() + b"\0" + raw, set_=True)
+
+
 class RfkillKnob(Knob):
     def __init__(self, kind, kills_network):
         self.kind = kind
@@ -1445,6 +1500,9 @@ def knob_registry():
         SysfsKnob("kbd_backlight", "/sys/class/leds/*kbd_backlight/brightness", "keyboard backlight level"),
         WifiPowerSaveKnob(),
         WifiPsTimeoutKnob(),
+        # PM: 0 off, 1 PM_MAX (PS-Poll), 2 PM_FAST (what `power_save on` sets)
+        WifiFirmwareIntKnob("wifi_pm", "Wi-Fi firmware power-save mode: 0 off, 1 PM_MAX (PS-Poll), 2 PM_FAST", ioctl=(85, 86), choices=["0", "1", "2"]),
+        WifiFirmwareIntKnob("wifi_bcn_li_dtim", "Wi-Fi DTIM listen interval while asleep (0 = every DTIM)", iovar="bcn_li_dtim"),
         RfkillKnob("wlan", kills_network=True),
         RfkillKnob("bluetooth", kills_network=False),
         BacklightKnob(),

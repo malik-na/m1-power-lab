@@ -1197,3 +1197,51 @@ def test_wifi_ps_timeout_reads_the_firmware_iovar(monkeypatch: pytest.MonkeyPatc
     assert payload[:4] == (262).to_bytes(4, "little") and payload[20:] == b"pm2_sleep_ret\0\0\0"
     with pytest.raises(ValueError):
         agent.WifiPsTimeoutKnob().set("0")
+
+
+def test_display_knob_survives_a_toggling_dpms_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {"dpms": True}
+    calls = []
+
+    def fake_hyprctl(*args):
+        calls.append(args)
+        if args[:2] == ("monitors", "all"):
+            return json.dumps([{"dpmsStatus": state["dpms"], "disabled": False}])
+        if args == ("dispatch", "dpms", "off") or args == ("dispatch", "dpms", "on"):
+            state["dpms"] = not state["dpms"]  # Hyprland 0.56: old form toggles
+            return "ok"
+        if args[0] == "dispatch" and args[1].startswith("hl.dsp.dpms("):
+            state["dpms"] = '"on"' in args[1]
+            return "ok"
+        raise AssertionError(args)
+
+    monkeypatch.setattr(agent, "hyprctl", fake_hyprctl)
+    monkeypatch.setattr(agent.time, "sleep", lambda s: None)
+    knob = agent.DisplayKnob()
+    for value in ["off", "off", "on", "on", "off"]:
+        knob.set(value)
+        assert knob.get() == value
+
+
+def test_brcmf_dcmd_builds_iovar_get_and_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+
+    def fake_sh(*args, **kw):
+        calls.append(args)
+        return agent.argparse.Namespace(stdout="vendor response: 10 00 02 00 03 00 00 00 \n", returncode=0)
+
+    monkeypatch.setattr(agent, "sh", fake_sh)
+    monkeypatch.setattr(agent.WifiPowerSaveKnob, "_iface", lambda self: "wlan0")
+    knob = agent.WifiFirmwareIntKnob("wifi_bcn_li_dtim", "", iovar="bcn_li_dtim")
+    assert knob.get() == "3"
+    payload = bytes(int(x, 16) for x in calls[0][7:])
+    assert payload[:20] == bytes.fromhex("06010000" "10000000" "14000000" "00000000" "00000000")
+    assert payload[20:32] == b"bcn_li_dtim\0"
+    knob.set("3")
+    payload = bytes(int(x, 16) for x in calls[1][7:])
+    assert calls[1][4] == "send"
+    # matches the hand-checked WLC_SET_VAR string for bcn_li_dtim=3
+    assert payload.hex() == "07010000" "10000000" "14000000" "01000000" "00000000" + b"bcn_li_dtim\0".hex() + "03000000"
+    pm = agent.WifiFirmwareIntKnob("wifi_pm", "", ioctl=(85, 86))
+    pm.set("1")
+    assert bytes(int(x, 16) for x in calls[2][7:]).hex() == "56000000" "04000000" "14000000" "01000000" "00000000" "01000000"
