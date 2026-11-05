@@ -1257,3 +1257,17 @@ def test_wifi_firmware_knob_persists_through_a_dispatcher_hook(monkeypatch: pyte
     assert '"$2" = up' in text and "tune run" in text and hook.stat().st_mode & 0o111
     assert knob.persist("1") is None
     assert knob.unpersist() == f"removed {hook}" and not hook.exists()
+
+
+def test_tuneset_switches_every_tuned_knob_between_tuned_and_stock(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    store = {"aspm": "powersupersave", "wifi_ps": "on"}
+    knobs = {"aspm": _FakeKnob("aspm", store), "wifi_ps": _FakeKnob("wifi_ps", store)}
+    _use_journal(monkeypatch, tmp_path, knobs)
+    (tmp_path / "tune.json").write_text(json.dumps({"knobs": {"aspm": "powersupersave", "wifi_ps": "on"},
+                                                    "baseline": {"aspm": "default", "wifi_ps": "off"}}))
+    knob = agent.TuneSetKnob()
+    assert knob.get() == "tuned"
+    knob.set("stock")
+    assert store == {"aspm": "default", "wifi_ps": "off"} and knob.get() == "stock"
+    knob.set("tuned")
+    assert store == {"aspm": "powersupersave", "wifi_ps": "on"}

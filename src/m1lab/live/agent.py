@@ -1015,6 +1015,41 @@ class PmgrGateKnob(Knob):
             write(DEBUGFS / "pmgr_set", f"{label} {'0' if value == 'off' else 'f'}")
 
 
+class TuneSetKnob(Knob):
+    """The whole persisted tuning at once: `tuned` applies every tune knob,
+    `stock` puts each back to the baseline recorded when it was tuned. For a
+    paired A/B of the full stack against the untuned system."""
+
+    name = "tuneset"
+    help = "every persisted tune knob at its tuned value, or at its recorded stock baseline"
+    choices = ["tuned", "stock"]
+    persistable = False
+
+    def _spec(self):
+        return json.loads(TUNE_SPEC.read_text()) if TUNE_SPEC.exists() else {}
+
+    def supported(self):
+        return bool(self._spec().get("knobs"))
+
+    def get(self):
+        spec = self._spec()
+        tuned = all(get_knob(n).matches(v) for n, v in spec.get("knobs", {}).items())
+        if tuned:
+            return "tuned"
+        base = spec.get("baseline", {})
+        stock = all(get_knob(n).matches(base[n]) for n in spec.get("knobs", {}) if n in base)
+        return "stock" if stock else "mixed"
+
+    def set(self, value):
+        spec = self._spec()
+        values = spec.get("knobs", {}) if value == "tuned" else spec.get("baseline", {})
+        for name in spec.get("knobs", {}):
+            if name in values:
+                knob = get_knob(name)
+                if not knob.matches(values[name]):
+                    knob.set(values[name])
+
+
 class RfkillKnob(Knob):
     def __init__(self, kind, kills_network):
         self.kind = kind
@@ -1582,6 +1617,7 @@ def knob_registry():
         HyprOptionKnob("hypr_vfr", "misc:vfr", "Hyprland variable frame rate (render only on change)"),
         RuntimePmKnob(),
         PmgrGateKnob("atc1"),
+        TuneSetKnob(),
     ]
     return {k.name: k for k in knobs}
 
