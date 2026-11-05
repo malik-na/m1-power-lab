@@ -196,6 +196,26 @@ Verified on the physical M1 this session:
   Persisted at 50 ms and verified after a suspend and reconnect. Idle with
   display off is now about 0.61 W (from 1.25 W this morning, 0.96 W in real
   use before the power-save fix).
+- Display on (2026-11-05, normal boot, battery): a static image costs about
+  0.92 W with the backlight at 0 (1.77 against 0.85 W with the panel off),
+  of which the SoC rails (PHPC) are about 0.2 W; the rest is the panel's own
+  electronics and link. The backlight adds about 0.16 W at level 16, 0.39 W
+  at 40, 1.0 W at 100, 3.4 W at 200 and 4.9 W at 394 (nits). With the panel
+  on, no DCP or GPU interrupts fire (nothing redraws), but every DRAM
+  controller (`dcs0-7`) is ungated 100% of the time, against about 92% gated
+  with the panel off: scanout keeps DRAM awake. Hyprland 0.56 answers "ok" to
+  `dispatch dpms on|off` but toggles, which had voided an earlier display
+  A/B; the knob now checks the state it leaves.
+- DCP video power savings: Linux calls
+  `enable_disable_video_power_savings(0)` during DCP init
+  (`iomfb_template.c:2701, 2786`). A lab kernel with 1
+  (`malik-na/linux-aurora@m1power/dcp-video-power-savings`, `0903b4d`)
+  against the stock lab build of the same commit, panel on at backlight 16,
+  four pairs each: stock 2.29 W on / 0.97 W off (+1.32 W, job
+  `j1105-140358-32a4`), patched 2.29 / 0.99 W (+1.29 W, job
+  `j1105-140545-aa85`; one off block disturbed by a key press, SD 0.50).
+  No effect: DRAM gating with the panel on stayed at 0% and the firmware
+  logged nothing about idle savings.
 - A six-lens source review (two adversarial reviewers per lever) ranked the
   remaining levers ([review](evidence/2026-11-05-power-lever-review.md)): the
   small peripheral, domain and waker levers add up to about 30-60 mW idle and
