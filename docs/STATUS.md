@@ -228,6 +228,17 @@ Verified on the physical M1 this session:
   the new nodes and always-on flags were not live. Next: the module applies
   its nodes as a runtime overlay (`CONFIG_OF_OVERLAY=y`) on a boot with
   `pd_ignore_unused`.
+- PMP v1 started on the M1 under Linux (job `j1105-151447-7dbc`, lab kernel
+  `7.2.11-labf1f05ca2-9b06` from `m1power/pmp-v1-overlay` `f1f05ca`): the
+  boot option `apple_pmp_v1_hold=1` keeps `ps_pmp`/`ps_pms_sram` on, the module
+  applies its DT overlay, and the RTKit handshake completes (Startup,
+  Configure/ConfigureAck, Init1/Init2; the firmware logs "PMP started").
+  Device power reports (13 devices, DevPwr 0x20e) are accepted. Same-boot
+  idle, panel off, three 40 s windows each: 1.028 W before, 0.986 W with the
+  PMP running, 0.978 W with reports; SoC 0.555 -> 0.527 -> 0.520 W. No PMGR
+  gating changed (DRAM controllers and fabric as before). The first baseline
+  window read high, so a stock-kernel control of the same sequence is needed
+  before crediting the PMP with any of the 42 mW.
 - A six-lens source review (two adversarial reviewers per lever) ranked the
   remaining levers ([review](evidence/2026-11-05-power-lever-review.md)): the
   small peripheral, domain and waker levers add up to about 30-60 mW idle and
