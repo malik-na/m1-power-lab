@@ -216,6 +216,18 @@ Verified on the physical M1 this session:
   `j1105-140545-aa85`; one off block disturbed by a key press, SD 0.50).
   No effect: DRAM gating with the panel on stayed at 0% and the firmware
   logged nothing about idle savings.
+- Wi-Fi DTIM skipping (`wifi_bcn_li_dtim` 0 -> 3, access point DTIM 1 at
+  100 TU, on top of the 50 ms tail), five pairs: 0.615 against 0.606 W, no
+  effect (-9 mW, 95% CI -21..+3). Not deployed.
+- PMP v1 (the power-management coprocessor; nothing starts it on t8103
+  today, and Linux powers off `pms_sram`, which holds its firmware, at boot
+  as an unused domain): a lab kernel with a port of dd-dreams' v1 driver as
+  an on-demand module (`malik-na/linux-aurora@m1power/pmp-v1`, `73f98f1`, job
+  `j1105-144905-7bbc`) booted and passed, but the PMP never started: maclab
+  stages only the kernel, and the device tree comes from m1n1's payload, so
+  the new nodes and always-on flags were not live. Next: the module applies
+  its nodes as a runtime overlay (`CONFIG_OF_OVERLAY=y`) on a boot with
+  `pd_ignore_unused`.
 - A six-lens source review (two adversarial reviewers per lever) ranked the
   remaining levers ([review](evidence/2026-11-05-power-lever-review.md)): the
   small peripheral, domain and waker levers add up to about 30-60 mW idle and
