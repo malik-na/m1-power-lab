@@ -981,6 +981,78 @@ class FreezeKnob(Knob):
                 pass
 
 
+class UsbPortKnob(Knob):
+    """Unbind an unused USB-C port's controller and PHY so its ATC power
+    domains can switch off (the dwc3-apple controller has no runtime PM until
+    a cable connects). Refuses a port with anything plugged in. Experimental:
+    stock kernels oops unbinding dwc3-apple from a never-connected port
+    (dwc3_apple_remove NULL dereference); see docs/STATUS.md."""
+
+    choices = ["bound", "unbound"]
+    persistable = False
+    SAVE_DIR = RUN_DIR / "usbport"
+
+    def __init__(self, device):
+        self.device = device
+        self.name = f"usbport:{device}"
+        self.help = f"USB-C controller {device} and its PHY bound to their drivers"
+
+    def _dev(self):
+        return Path("/sys/bus/platform/devices") / self.device
+
+    def _phys(self):
+        """Platform devices behind the controller's phy supplier links."""
+        phys = []
+        for link in sorted(self._dev().glob("supplier:phy:phy-*")):
+            name = link.name.split("supplier:phy:phy-", 1)[1].rsplit(".", 1)[0]
+            if name not in phys:
+                phys.append(name)
+        return phys
+
+    def _port(self):
+        for link in self._dev().glob("consumer:typec:*"):
+            return link.name.split("consumer:typec:", 1)[1]
+        return None
+
+    def supported(self):
+        return self._dev().exists() and bool(self._phys() or (self.SAVE_DIR / f"{self.device}.json").exists())
+
+    def get(self):
+        return "bound" if (self._dev() / "driver").exists() else "unbound"
+
+    def _saved(self):
+        try:
+            return json.loads((self.SAVE_DIR / f"{self.device}.json").read_text())
+        except (OSError, ValueError):
+            return None
+
+    def set(self, value):
+        if value == self.get():
+            return
+        if value == "unbound":
+            port = self._port()
+            if port and Path(f"/sys/class/typec/{port}-partner").exists():
+                raise RuntimeError(f"{port} has something connected; refusing to unbind {self.device}")
+            phys = self._phys()
+            drivers = {self.device: Path(os.path.realpath(self._dev() / "driver")).name}
+            for phy in phys:
+                link = Path("/sys/bus/platform/devices") / phy / "driver"
+                if link.exists():
+                    drivers[phy] = Path(os.path.realpath(link)).name
+            atomic_json(self.SAVE_DIR / f"{self.device}.json", {"drivers": drivers, "order": [self.device] + phys})
+            for dev in [self.device] + phys:
+                if dev in drivers:
+                    write(f"/sys/bus/platform/drivers/{drivers[dev]}/unbind", dev)
+        else:
+            saved = self._saved()
+            if not saved:
+                raise RuntimeError(f"no record of the drivers {self.device} was unbound from")
+            for dev in reversed(saved["order"]):
+                driver = saved["drivers"].get(dev)
+                if driver and not (Path("/sys/bus/platform/devices") / dev / "driver").exists():
+                    write(f"/sys/bus/platform/drivers/{driver}/bind", dev)
+
+
 def knob_registry():
     knobs = [
         ProfileKnob(),
@@ -1014,6 +1086,8 @@ def get_knob(name):
         return ServiceKnob(name.split(":", 1)[1])
     if name.startswith("freeze:"):
         return FreezeKnob(name.split(":", 1)[1])
+    if name.startswith("usbport:"):
+        return UsbPortKnob(name.split(":", 1)[1])
     raise SystemExit(f"unknown knob {name!r}")
 
 

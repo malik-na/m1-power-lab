@@ -514,8 +514,8 @@ def cmd_standby(target: Target, args: argparse.Namespace) -> None:
     out(json.dumps(target.agent("standby", "set", "--spec", json.dumps(spec)), indent=1))
 
 
-LAB_PROBE = Path(__file__).resolve().parents[3] / "target" / "lab" / "m1power-probe.sh"
-LAB_PROBE_TEST = "m1power-probe"
+LAB_DIR = Path(__file__).resolve().parents[3] / "target" / "lab"
+LAB_EXPERIMENTS = {"probe": "m1power-probe", "atc1": "m1power-atc1"}
 
 
 def lab_cli() -> str:
@@ -527,6 +527,18 @@ def lab_cli() -> str:
     return path
 
 
+def fetch_module_build(kernel: str, into: Path) -> Path | None:
+    """The module-build archive of a lab build, for building m1power.ko on its Lab boot."""
+    import subprocess
+
+    proc = subprocess.run([lab_cli(), "build-get", kernel, "-o", str(into)], capture_output=True, text=True)
+    if proc.returncode != 0:
+        out(f"no module-build for {kernel} ({(proc.stderr or proc.stdout).strip()[:200]}); the job runs on macsmc-hwmon only")
+        return None
+    found = sorted(into.rglob("module-build.tar.zst"))
+    return found[0] if found else None
+
+
 def cmd_lab_run(target: Target, args: argparse.Namespace) -> None:
     import re
     import subprocess
@@ -534,22 +546,36 @@ def cmd_lab_run(target: Target, args: argparse.Namespace) -> None:
 
     from m1lab.live.remote import AGENT_SOURCE, KMOD_DIR
 
-    plan = {"settle_s": args.settle, "idle_s": args.idle, "sleep_s": args.sleep, "display": args.display}
+    script = LAB_DIR / f"{LAB_EXPERIMENTS[args.experiment]}.sh"
+    plan: dict[str, Any] = {"settle_s": args.settle, "idle_s": args.idle, "sleep_s": args.sleep, "display": args.display}
+    if args.experiment == "atc1":
+        plan = {"usb_device": args.usb_device, "pairs": args.pairs, "settle_s": 10, "measure_s": args.measure,
+                "sleep_s": args.sleep, "boot_settle_s": args.settle}
     with tempfile.TemporaryDirectory() as tmp:
         plan_path = Path(tmp) / "plan.json"
         plan_path.write_text(json.dumps(plan))
+        payload = {
+            "agent.py": AGENT_SOURCE,
+            "m1power.c": KMOD_DIR / "m1power.c",
+            "Makefile": KMOD_DIR / "Makefile",
+            "lib.sh": LAB_DIR / "lib.sh",
+            "plan.json": plan_path,
+        }
+        module_build = args.module_build
+        if module_build == "auto":
+            module_build = None
+            if args.kernel:
+                fetched = fetch_module_build(args.kernel, Path(tmp) / "build")
+                module_build = str(fetched) if fetched else None
+        if module_build:
+            payload["module-build.tar.zst"] = Path(module_build)
         command = [lab_cli(), "run", args.device]
         if args.kernel:
             command += ["--kernel", args.kernel]
-        command += [
-            "--script", str(LAB_PROBE),
-            "--payload", f"agent.py={AGENT_SOURCE}",
-            "--payload", f"m1power.c={KMOD_DIR / 'm1power.c'}",
-            "--payload", f"Makefile={KMOD_DIR / 'Makefile'}",
-            "--payload", f"plan.json={plan_path}",
-            "--script-timeout", f"{int(args.settle + args.idle + args.sleep + 600)}s",
-            "--no-wait",
-        ]
+        command += ["--script", str(script)]
+        for name, path in payload.items():
+            command += ["--payload", f"{name}={path}"]
+        command += ["--script-timeout", f"{int(args.timeout_min)}m", "--no-wait"]
         proc = subprocess.run(command, capture_output=True, text=True)
     if proc.returncode != 0:
         raise UsageError(f"lab run failed: {(proc.stderr or proc.stdout).strip()}")
@@ -558,19 +584,20 @@ def cmd_lab_run(target: Target, args: argparse.Namespace) -> None:
         raise UsageError(f"could not read the job id from: {proc.stdout.strip()}")
     job = match.group(1)
     where = f"with kernel {args.kernel}" if args.kernel else "(its known-good kernel)"
-    out(f"lab job {job} queued on {args.device} {where}")
+    out(f"lab job {job} ({args.experiment}) queued on {args.device} {where}")
     if args.no_wait:
-        out(f"collect it later with `m1power lab-collect {job}`")
+        out(f"collect it later with `m1power lab-collect {job} --experiment {args.experiment}`")
         return
-    lab_collect(job, args.device)
+    lab_collect(job, args.device, args.experiment)
 
 
-def lab_collect(job: str, device: str | None = None) -> None:
+def lab_collect(job: str, device: str | None = None, experiment: str = "probe") -> None:
     import subprocess
 
     lab = lab_cli()
     subprocess.run([lab, "wait", job])  # prints the job's events; exits 3 unless it passed
-    fetched = subprocess.run([lab, "logs", job, f"test-{LAB_PROBE_TEST}/result.json"], capture_output=True, text=True)
+    test = LAB_EXPERIMENTS[experiment]
+    fetched = subprocess.run([lab, "logs", job, f"test-{test}/result.json"], capture_output=True, text=True)
     if fetched.returncode != 0 or not fetched.stdout.strip():
         detail = fetched.stderr.strip() or "empty"
         raise UsageError(f"job {job} returned no probe result ({detail}); see `lab job {job}` and `lab logs {job}`")
@@ -578,9 +605,31 @@ def lab_collect(job: str, device: str | None = None) -> None:
     data["lab_job"] = job
     summary = subprocess.run([lab, "job", job], capture_output=True, text=True).stdout
     data["lab_job_summary"] = summary[-4000:]
-    saved = save_result("lab-probe", data, device or data.get("kernel", ""))
-    print_probe(data)
+    saved = save_result(f"lab-{experiment}", data, device or data.get("kernel", ""))
+    if experiment == "atc1":
+        print_atc1(data)
+    else:
+        print_probe(data)
     out(f"saved {saved}")
+
+
+def print_atc1(data: dict[str, Any]) -> None:
+    out(f"\nkernel {data.get('kernel')}  job {data.get('job')}  port {data.get('usb_device')}  module {data.get('module')}")
+    if data.get("oops"):
+        out("unbind: KERNEL OOPS (dwc3_apple_remove bug reproduced); the experiment stopped there")
+        return
+    out(f"unbind: clean (rc {data.get('unbind_rc')})")
+    bound = {line.split()[0]: line.split()[1] for line in data.get("domains_bound", []) if len(line.split()) > 1}
+    unbound = {line.split()[0]: line.split()[1] for line in data.get("domains_unbound", []) if len(line.split()) > 1}
+    changed = [f"{d} {bound.get(d)}->{unbound.get(d)}" for d in sorted(unbound) if bound.get(d) != unbound.get(d)]
+    out(f"domains that changed when unbound: {', '.join(changed) or 'none'}")
+    if data.get("ab"):
+        print_ab_table([data["ab"]])
+    for name in ("sleep_bound", "sleep_unbound"):
+        entry = data.get(name) or {}
+        if "slept_s" in entry:
+            out(f"{name}: slept {entry['slept_s']} s at {fmt_w(entry.get('sleep_w'))} W (woken by "
+                f"{', '.join(n for n, _ in entry.get('wake_sources', [])[:3])})")
 
 
 def print_probe(data: dict[str, Any]) -> None:
@@ -609,7 +658,7 @@ def print_probe(data: dict[str, Any]) -> None:
 
 
 def cmd_lab_collect(target: Target, args: argparse.Namespace) -> None:
-    lab_collect(args.job)
+    lab_collect(args.job, experiment=args.experiment)
 
 
 def cmd_domains(target: Target, args: argparse.Namespace) -> None:
@@ -735,8 +784,17 @@ def build_parser() -> argparse.ArgumentParser:
     lab_run.add_argument("--sleep", type=int, default=90, help="seconds of self-waking sleep (0 skips; >120 pages the lab)")
     lab_run.add_argument("--display", choices=["on", "off", "leave"], default="off")
     lab_run.add_argument("--no-wait", action="store_true")
-    lab_collect_p = sub.add_parser("lab-collect", help="wait for a lab probe job and fetch its result")
+    lab_run.add_argument("--experiment", choices=sorted(LAB_EXPERIMENTS), default="probe",
+                         help="probe: idle + sleep; atc1: unused USB-C port crash check and bound/unbound A/B")
+    lab_run.add_argument("--module-build", default="auto",
+                         help="module-build.tar.zst to build m1power.ko on the Lab boot ('auto': fetch it for --kernel)")
+    lab_run.add_argument("--usb-device", default="502280000.usb", help="atc1: the unused port's controller")
+    lab_run.add_argument("--pairs", type=int, default=3, help="atc1: A/B pairs")
+    lab_run.add_argument("--measure", type=float, default=30, help="atc1: seconds per block")
+    lab_run.add_argument("--timeout-min", type=float, default=30, help="script timeout in minutes")
+    lab_collect_p = sub.add_parser("lab-collect", help="wait for a lab job and fetch its result")
     lab_collect_p.add_argument("job")
+    lab_collect_p.add_argument("--experiment", choices=sorted(LAB_EXPERIMENTS), default="probe")
 
     domains = sub.add_parser("domains", help="SoC power domains (PMGR) and their devices")
     domains.add_argument("--all", action="store_true")
