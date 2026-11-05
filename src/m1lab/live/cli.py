@@ -599,7 +599,7 @@ def cmd_standby(target: Target, args: argparse.Namespace) -> None:
 
 
 LAB_DIR = Path(__file__).resolve().parents[3] / "target" / "lab"
-LAB_EXPERIMENTS = {"probe": "m1power-probe", "atc1": "m1power-atc1", "stress": "m1power-stress", "display": "m1power-display"}
+LAB_EXPERIMENTS = {"probe": "m1power-probe", "atc1": "m1power-atc1", "stress": "m1power-stress", "display": "m1power-display", "pmp": "m1power-pmp"}
 
 
 def lab_cli() -> str:
@@ -656,6 +656,9 @@ def cmd_lab_run(target: Target, args: argparse.Namespace) -> None:
         knobs = dict(pair.split("=", 1) for pair in args.set or [])
         plan = {"cycles": args.cycles, "awake_s": args.awake, "sleep_s": args.sleep, "boot_settle_s": args.settle,
                 "knobs": knobs or {"aspm": "powersupersave"}}
+    if args.experiment == "pmp":
+        plan = {"windows": args.pairs, "measure_s": args.measure, "after_settle_s": 45, "boot_settle_s": args.settle,
+                "modprobe_args": " ".join(args.set or [])}
     if args.experiment == "display":
         plan = {"pairs": args.pairs, "settle_s": 15, "measure_s": args.measure, "backlight": args.backlight,
                 "boot_settle_s": args.settle}
@@ -730,6 +733,17 @@ def lab_collect(job: str, device: str | None = None, experiment: str = "probe") 
     elif experiment == "stress":
         out(f"\nkernel {data.get('kernel', '?')}  job {job}")
         print_stress(data)
+    elif experiment == "pmp":
+        out(f"\nkernel {data.get('kernel', '?')}  job {job}  PMP started: {data.get('pmp_started')}")
+        for phase in ("before", "after"):
+            rows = data.get(phase) or []
+            watts = [r["sys_w"] for r in rows if isinstance(r.get("sys_w"), (int, float))]
+            socs = [r["soc_w"] for r in rows if isinstance(r.get("soc_w"), (int, float))]
+            if watts:
+                out(f"{phase:6}: system {sum(watts) / len(watts):.3f} W over {len(watts)} windows "
+                    f"({', '.join(f'{w:.3f}' for w in watts)}), SoC {sum(socs) / max(len(socs), 1):.3f} W")
+        for line in (data.get("dmesg_pmp") or [])[-12:]:
+            out(f"  {line}")
     elif experiment == "display":
         out(f"\nkernel {data.get('kernel', '?')}  job {job}")
         if data.get("ab"):
@@ -942,7 +956,7 @@ def build_parser() -> argparse.ArgumentParser:
     lab_run.add_argument("--timeout-min", type=float, default=30, help="script timeout in minutes")
     lab_run.add_argument("--cycles", type=int, default=15, help="stress: suspend cycles")
     lab_run.add_argument("--awake", type=float, default=30, help="stress: seconds awake with Wi-Fi traffic per cycle")
-    lab_run.add_argument("--set", action="append", help="stress: KNOB=VALUE for the run (default aspm=powersupersave)")
+    lab_run.add_argument("--set", action="append", help="stress: KNOB=VALUE for the run (default aspm=powersupersave); pmp: module parameters, e.g. dram_config=0")
     lab_collect_p = sub.add_parser("lab-collect", help="wait for a lab job and fetch its result")
     lab_collect_p.add_argument("job")
     lab_collect_p.add_argument("--experiment", choices=sorted(LAB_EXPERIMENTS), default="probe")
