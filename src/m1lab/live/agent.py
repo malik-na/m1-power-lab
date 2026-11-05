@@ -530,8 +530,25 @@ def process_deltas(before, after, seconds, limit=15):
     return rows[:limit]
 
 
+def wifi_ap():
+    """BSSID and SSID the Wi-Fi interface is associated with, e.g.
+    "16:ec:e4:5e:d0:42 iPhone", or "none". A pair of A/B blocks that spans a
+    change of access point (a router outage and a fallback hotspot, a roam)
+    measures the network change, not the knob, and is set aside."""
+    for path in glob.glob("/sys/class/net/*/phy80211"):
+        iface = path.split("/")[4]
+        out = sh("iw", "dev", iface, "link").stdout if shutil.which("iw") else ""
+        bssid = re.search(r"Connected to ([0-9a-f:]{17})", out)
+        ssid = re.search(r"SSID: (.*)", out)
+        if bssid:
+            return f"{bssid.group(1)} {ssid.group(1).strip() if ssid else ''}".strip()
+        return "none"
+    return "no-wifi"
+
+
 def measure_window(sampler, seconds, interval=1.0, with_detail=True, stream=None):
     """Sample for `seconds`; return samples plus a window summary."""
+    ap_start = wifi_ap()
     irq0 = interrupts() if with_detail else None
     procs0 = processes() if with_detail else None
     sampler.prev = None
@@ -552,6 +569,7 @@ def measure_window(sampler, seconds, interval=1.0, with_detail=True, stream=None
                 stream(sample)
     elapsed = time.monotonic() - start
     summary = summarize(samples)
+    summary["ap_start"], summary["ap_end"] = ap_start, wifi_ap()
     if with_detail:
         summary["top_irqs"] = top_deltas(irq0, interrupts(), elapsed)
         summary["top_wakers"] = process_deltas(procs0, processes(), elapsed)
@@ -1053,6 +1071,219 @@ class UsbPortKnob(Knob):
                     write(f"/sys/bus/platform/drivers/{driver}/bind", dev)
 
 
+def wifi_pci_device():
+    """BDF of the PCIe Wi-Fi function (the device behind the phy80211 netdev)."""
+    for path in glob.glob("/sys/class/net/*/phy80211"):
+        dev = os.path.realpath(str(Path(path).parent / "device"))
+        name = Path(dev).name
+        if re.match(r"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$", name):
+            return name
+    return None
+
+
+class PcieLinkKnob(Knob):
+    """One of a PCIe device's per-link ASPM switches (link/l1_1_aspm,
+    l1_2_aspm, l1_1_pcipm, l1_2_pcipm, clkpm, l1_aspm). `wifi` names the
+    Wi-Fi function, so `pcielink:wifi:l1_1_aspm`."""
+
+    choices = ["0", "1"]
+    persistable = True
+
+    def __init__(self, device, attr):
+        self.device, self.attr = device, attr
+        self.name = f"pcielink:{device}:{attr}"
+        self.help = f"PCIe link {attr} of {device}"
+
+    def _path(self):
+        bdf = wifi_pci_device() if self.device == "wifi" else self.device
+        return Path(f"/sys/bus/pci/devices/{bdf}/link/{self.attr}") if bdf else None
+
+    def supported(self):
+        path = self._path()
+        return bool(path and path.exists())
+
+    def get(self):
+        return read(self._path())
+
+    def set(self, value):
+        write(self._path(), value)
+
+
+class L1ssTimingKnob(Knob):
+    """T_POWER_ON in microseconds on both ends of the Wi-Fi link (L1 PM
+    Substates Control 2). The spec allows changing it only while L1.2 is
+    disabled, so the knob turns L1.2 off, writes both ends, and puts the
+    link switches back. The Apple root port reports no T_POWER_ON of its own,
+    so Linux programs the endpoint's 6 us."""
+
+    name = "l1ss_tpoweron_us"
+    help = "L1.2 exit time budget (T_POWER_ON, us) on the Wi-Fi link"
+    choices = None
+    persistable = True
+    SCALES = ((0, 2), (1, 10), (2, 100))
+
+    def _ends(self):
+        bdf = wifi_pci_device()
+        if not bdf:
+            return None, None
+        parent = Path(os.path.realpath(f"/sys/bus/pci/devices/{bdf}")).parent.name
+        return bdf, parent
+
+    def supported(self):
+        dev, parent = self._ends()
+        return bool(dev and parent and shutil.which("setpci") and Path(f"/sys/bus/pci/devices/{dev}/link").exists())
+
+    @staticmethod
+    def encode(us):
+        """Smallest encodable T_POWER_ON >= us, as the Control 2 register value."""
+        us = int(us)
+        for scale, unit in L1ssTimingKnob.SCALES:
+            value = -(-us // unit)
+            if value <= 31:
+                return (value << 3) | scale, value * unit
+        raise ValueError(f"T_POWER_ON {us} us is beyond 3100 us")
+
+    @staticmethod
+    def decode(reg):
+        scale, value = reg & 0x3, (reg >> 3) & 0x1F
+        unit = dict(L1ssTimingKnob.SCALES).get(scale, 0)
+        return value * unit
+
+    def _ctl2(self, bdf):
+        out = sh("setpci", "-s", bdf, "ECAP_L1PM+0x0c.l", check=True).stdout.strip()
+        return int(out, 16)
+
+    def get(self):
+        dev, _ = self._ends()
+        return str(self.decode(self._ctl2(dev)))
+
+    def set(self, value):
+        reg, _ = self.encode(value)
+        dev, parent = self._ends()
+        link = Path(f"/sys/bus/pci/devices/{dev}/link")
+        saved = {attr: read(link / attr) for attr in ("l1_2_aspm", "l1_2_pcipm")}
+        try:
+            for attr in saved:
+                if saved[attr] == "1":
+                    write(link / attr, "0")
+            for bdf in (parent, dev):  # upstream end first, as the ASPM core does
+                current = self._ctl2(bdf)
+                sh("setpci", "-s", bdf, f"ECAP_L1PM+0x0c.l={(current & ~0xFF) | reg:08x}", check=True)
+        finally:
+            for attr, old in saved.items():
+                if old == "1":
+                    write(link / attr, "1")
+
+
+class LtrMaxLatencyKnob(Knob):
+    """Max Snoop / No-Snoop Latency in the Wi-Fi function's LTR capability,
+    in microseconds. They cap the latency tolerance the device may report;
+    the root port enters ASPM L1.2 only when the reported tolerance exceeds
+    LTR_L1.2_THRESHOLD. On x86 firmware programs them (often ~3 ms); on this
+    Device Tree platform nothing does, so they read 0 and L1.2 is entered
+    only now and then."""
+
+    name = "ltr_max_us"
+    help = "LTR max snoop/no-snoop latency (us) the Wi-Fi device may report"
+    choices = None
+    persistable = True
+    # LTR latency encoding: value (bits 9:0) x 32^scale ns, scale 0..5
+    UNITS_NS = (1, 32, 1024, 32768, 1048576, 33554432)
+
+    @staticmethod
+    def encode(us):
+        ns = int(us) * 1000
+        for scale, unit in enumerate(LtrMaxLatencyKnob.UNITS_NS):
+            value = -(-ns // unit)
+            if value <= 0x3FF:
+                return (scale << 10) | value
+        raise ValueError(f"{us} us is beyond the LTR range")
+
+    @staticmethod
+    def decode(reg):
+        return (reg & 0x3FF) * LtrMaxLatencyKnob.UNITS_NS[min((reg >> 10) & 0x7, 5)] / 1000.0
+
+    def supported(self):
+        bdf = wifi_pci_device()
+        return bool(bdf and shutil.which("setpci") and sh("setpci", "-s", bdf, "ECAP_LTR+0x4.w").returncode == 0)
+
+    def get(self):
+        bdf = wifi_pci_device()
+        out = sh("setpci", "-s", bdf, "ECAP_LTR+0x4.w", "ECAP_LTR+0x6.w", check=True).stdout.split()
+        snoop, nosnoop = (int(x, 16) for x in out)
+        return f"{self.decode(snoop):g}" if snoop == nosnoop else f"{self.decode(snoop):g}/{self.decode(nosnoop):g}"
+
+    def set(self, value):
+        bdf = wifi_pci_device()
+        text = str(value).split("/")[0]
+        reg = int(text, 16) if text.lower().startswith("0x") else self.encode(float(text))
+        sh("setpci", "-s", bdf, f"ECAP_LTR+0x4.w={reg:04x}", f"ECAP_LTR+0x6.w={reg:04x}", check=True)
+
+
+class L1ssProfileKnob(Knob):
+    """L1.2 timing on both ends of the Wi-Fi link: Linux's values (copied
+    from the endpoint: CMRT 8 us, T_POWER_ON 6 us, threshold 20 us, because
+    the Apple root port advertises 0) or Apple's (root-port CMRT 25 us,
+    LTR_L1.2_THRESHOLD 85 x 1024 ns = 87 us, as macOS programs this link) with
+    a T_POWER_ON of 50 or 100 us. Timing may only change while L1.2 is off,
+    so the knob drops the ASPM policy to `default` (all substates off), writes
+    the root port first, then the endpoint, and restores the policy."""
+
+    name = "l1ss_profile"
+    help = "L1.2 timing on the Wi-Fi link: linux, apple50 or apple100"
+    choices = ["linux", "apple50", "apple100"]
+    persistable = True
+    SAVED = STATE_DIR / "l1ss-linux.json"
+    # (root CTL1 value, root mask, endpoint CTL1 value, endpoint mask, CTL2)
+    PROFILES = {
+        "apple50": (0x40551900, 0xE3FFFF00, 0x40550000, 0xE3FF0000, 0x29),
+        "apple100": (0x40801900, 0xE3FFFF00, 0x40800000, 0xE3FF0000, 0x0A),
+    }
+
+    def _ends(self):
+        return L1ssTimingKnob()._ends()
+
+    def supported(self):
+        return L1ssTimingKnob().supported()
+
+    def _read(self, bdf, reg):
+        return int(sh("setpci", "-s", bdf, f"ECAP_L1PM+{reg}.l", check=True).stdout.strip(), 16)
+
+    def get(self):
+        dev, parent = self._ends()
+        current = (self._read(parent, "8") & 0xE3FFFF00, self._read(dev, "8") & 0xE3FF0000, self._read(dev, "c") & 0xFF)
+        for name, (rp, _, ep, _, ctl2) in self.PROFILES.items():
+            if current == (rp, ep, ctl2):
+                return name
+        return "linux" if not self.SAVED.exists() or current == tuple(json.loads(self.SAVED.read_text())["key"]) else "custom"
+
+    def set(self, value):
+        dev, parent = self._ends()
+        if not self.SAVED.exists():
+            atomic_json(self.SAVED, {
+                "rp_ctl1": self._read(parent, "8"), "ep_ctl1": self._read(dev, "8"),
+                "rp_ctl2": self._read(parent, "c"), "ep_ctl2": self._read(dev, "c"),
+                "key": [self._read(parent, "8") & 0xE3FFFF00, self._read(dev, "8") & 0xE3FF0000, self._read(dev, "c") & 0xFF],
+            })
+        policy_path = "/sys/module/pcie_aspm/parameters/policy"
+        policy = re.search(r"\[(\S+)\]", read(policy_path)).group(1)
+        try:
+            if policy != "default":
+                write(policy_path, "default")  # every L1SS enable off on both ends
+            if value == "linux":
+                saved = json.loads(self.SAVED.read_text())
+                writes = [(parent, "8", saved["rp_ctl1"], 0xE3FFFF00), (dev, "8", saved["ep_ctl1"], 0xE3FF0000),
+                          (parent, "c", saved["rp_ctl2"], 0xFF), (dev, "c", saved["ep_ctl2"], 0xFF)]
+            else:
+                rp, rp_mask, ep, ep_mask, ctl2 = self.PROFILES[value]
+                writes = [(parent, "8", rp, rp_mask), (dev, "8", ep, ep_mask), (parent, "c", ctl2, 0xFF), (dev, "c", ctl2, 0xFF)]
+            for bdf, reg, val, mask in writes:
+                sh("setpci", "-s", bdf, f"ECAP_L1PM+{reg}.l={val & mask:08x}:{mask:08x}", check=True)
+        finally:
+            if policy != "default":
+                write(policy_path, policy)
+
+
 def knob_registry():
     knobs = [
         ProfileKnob(),
@@ -1072,6 +1303,9 @@ def knob_registry():
         BacklightKnob(),
         DisplayKnob(),
         HyprOptionKnob("hypr_animations", "animations:enabled", "Hyprland animations"),
+        L1ssTimingKnob(),
+        L1ssProfileKnob(),
+        LtrMaxLatencyKnob(),
         HyprOptionKnob("hypr_vfr", "misc:vfr", "Hyprland variable frame rate (render only on change)"),
         RuntimePmKnob(),
     ]
@@ -1088,6 +1322,9 @@ def get_knob(name):
         return FreezeKnob(name.split(":", 1)[1])
     if name.startswith("usbport:"):
         return UsbPortKnob(name.split(":", 1)[1])
+    if name.startswith("pcielink:"):
+        _, device, attr = name.split(":", 2)
+        return PcieLinkKnob(device, attr)
     raise SystemExit(f"unknown knob {name!r}")
 
 
@@ -1981,6 +2218,104 @@ def _run_sleep(args, has_timer, before, journal_before):
     return entry
 
 
+# ------------------------------------------------------------ suspend stress
+
+SUSPEND_STATS = Path("/sys/power/suspend_stats")
+WIFI_ERROR_PATTERNS = ("brcmf_pcie_pm_enter_D3", "Timeout on response", "timed out waiting for txstatus",
+                       "failed to suspend", "Some devices failed to suspend", "brcmf_cfg80211_set_power_mgmt: error",
+                       "query command", "Firmware has halted", "PCIe link", "AER")
+
+
+def suspend_counts():
+    return {name: read_int(SUSPEND_STATS / name, 0) for name in ("success", "fail", "failed_suspend")}
+
+
+def kernel_lines_since(cursor):
+    """Kernel log lines after a journal cursor, and the new cursor."""
+    args = ["journalctl", "-k", "-o", "short-monotonic", "--no-pager", "--show-cursor"]
+    args += [f"--after-cursor={cursor}"] if cursor else ["-n", "0"]
+    proc = sh(*args, timeout=30)
+    lines, new_cursor = [], cursor
+    for line in proc.stdout.splitlines():
+        if line.startswith("-- cursor: "):
+            new_cursor = line[len("-- cursor: "):]
+        elif line and not line.startswith("-- "):
+            lines.append(line)
+    return lines, new_cursor
+
+
+def gateway():
+    out = sh("ip", "route", "show", "default").stdout.split()
+    return out[out.index("via") + 1] if "via" in out else None
+
+
+def run_stress(args):
+    """Suspend/resume cycles with Wi-Fi traffic in between; stops at the first
+    failed suspend or Wi-Fi firmware error so a wedge is caught early."""
+    refuse_during_lab("a suspend stress test", getattr(args, "force", False))
+    if not (DEBUGFS / "waketimer").exists():
+        raise SystemExit("the m1power wake timer is needed for unattended cycles")
+    for name, value in (args.set or []):
+        journal_set(name, value)
+    result = {"kind": "stress", "agent": AGENT_VERSION, "cycles": [], "set": dict(args.set or []),
+              "knobs": {n: get_knob(n).get() for n in ("aspm", "l1ss_tpoweron_us", "pcielink:wifi:l1_1_aspm",
+                                                        "pcielink:wifi:l1_2_aspm", "pcielink:wifi:l1_1_pcipm",
+                                                        "pcielink:wifi:l1_2_pcipm", "wifi_ps")
+                        if get_knob(n).supported()},
+              "started_wall": time.time(), "status": "running"}
+    _, cursor = kernel_lines_since(None)
+    gw = gateway()
+    RUN_DIR.mkdir(parents=True, exist_ok=True)
+    SLEEP_TEST_MARK.write_text(str(os.getpid()))
+    try:
+        for index in range(args.cycles):
+            cycle = {"index": index, "ap_start": wifi_ap()}
+            # awake with traffic
+            ping = sh("ping", "-q", "-c", str(int(args.awake * 5)), "-i", "0.2", "-W", "1", gw, timeout=args.awake + 30) if gw else None
+            cycle["ping_loss"] = (re.search(r"(\d+(?:\.\d+)?)% packet loss", ping.stdout).group(1) if ping and "packet loss" in ping.stdout else None)
+            before = suspend_counts()
+            mono0, boot0 = clocks()
+            write(DEBUGFS / "waketimer", str(args.sleep))
+            sh("systemctl", "suspend", timeout=60)
+            outcome = "timeout"
+            deadline = time.monotonic() + args.sleep + 120
+            while time.monotonic() < deadline:
+                time.sleep(0.5)
+                now = suspend_counts()
+                if now["fail"] > before["fail"]:
+                    outcome = "failed"
+                    break
+                if now["success"] > before["success"]:
+                    outcome = "ok"
+                    break
+            mono1, boot1 = clocks()
+            cycle["outcome"] = outcome
+            cycle["ap_end"] = wifi_ap()
+            cycle["slept_s"] = round((boot1 - mono1) - (boot0 - mono0), 2)
+            write(DEBUGFS / "waketimer", "0")
+            time.sleep(args.settle)
+            lines, cursor = kernel_lines_since(cursor)
+            cycle["wifi_errors"] = [l for l in lines if any(p in l for p in WIFI_ERROR_PATTERNS)][:20]
+            result["cycles"].append(cycle)
+            if args.out:
+                atomic_json(args.out, result)
+            if outcome != "ok" or (cycle["wifi_errors"] and args.stop_on_error):
+                result["stopped"] = f"cycle {index}: {outcome}" + (f", {len(cycle['wifi_errors'])} Wi-Fi errors" if cycle["wifi_errors"] else "")
+                break
+    finally:
+        SLEEP_TEST_MARK.unlink(missing_ok=True)
+        if args.restore:
+            restore_knobs(set(dict(args.set or [])))
+    ok = sum(1 for c in result["cycles"] if c["outcome"] == "ok")
+    result["summary"] = {"cycles": len(result["cycles"]), "ok": ok,
+                         "cycles_with_wifi_errors": sum(1 for c in result["cycles"] if c["wifi_errors"])}
+    result["status"] = "complete"
+    result["finished_wall"] = time.time()
+    if args.out:
+        atomic_json(args.out, result)
+    return result
+
+
 # ----------------------------------------------------------- maclab probe
 
 
@@ -2364,6 +2699,16 @@ def main(argv=None):
     tune.add_argument("--spec")
     sub.add_parser("kmod")
     sub.add_parser("lab")
+    stress = sub.add_parser("stress", help="suspend/resume cycles with Wi-Fi traffic; stops at the first failure")
+    stress.add_argument("--cycles", type=int, default=10)
+    stress.add_argument("--awake", type=float, default=60)
+    stress.add_argument("--sleep", type=int, default=60)
+    stress.add_argument("--settle", type=float, default=8)
+    stress.add_argument("--set", nargs=2, action="append", metavar=("KNOB", "VALUE"))
+    stress.add_argument("--restore", action="store_true")
+    stress.add_argument("--stop-on-error", action="store_true")
+    stress.add_argument("--force", action="store_true")
+    stress.add_argument("--out")
     probe = sub.add_parser("probe", help="one settle/idle/sleep measurement, e.g. inside a maclab job")
     probe.add_argument("--plan")
     probe.add_argument("--out")
@@ -2424,6 +2769,9 @@ def main(argv=None):
             emit(json.loads(TUNE_SPEC.read_text()) if TUNE_SPEC.exists() else {})
     elif args.cmd == "lab":
         emit(lab_status())
+    elif args.cmd == "stress":
+        result = run_stress(args)
+        emit({"status": result["status"], "out": args.out} if args.out else result)
     elif args.cmd == "probe":
         result = run_probe(args)
         emit({"status": result["status"], "out": args.out} if args.out else result)
@@ -2490,6 +2838,22 @@ def run_batch(args):
                 for key, value in job.items():
                     setattr(ns, key, value)
                 res = run_sleep(ns)
+            elif kind == "set":
+                # Context for the following jobs (an experiment arm); journaled,
+                # so a later `restore` job or the failsafe puts it back.
+                applied = {}
+                for name, value in job.get("knobs", {}).items():
+                    journal_set(name, value)
+                    applied[name] = get_knob(name).get()
+                res = {"applied": applied}
+            elif kind == "restore":
+                res = restore_all()
+            elif kind == "stress":
+                ns = argparse.Namespace(cycles=10, awake=60, sleep=60, settle=8, set=None, restore=True,
+                                        stop_on_error=False, force=False, out=None)
+                for key, value in job.items():
+                    setattr(ns, key, value)
+                res = run_stress(ns)
             else:
                 res = {"error": f"unknown job kind {kind}"}
         except (Exception, SystemExit) as error:  # noqa: BLE001 - record and continue

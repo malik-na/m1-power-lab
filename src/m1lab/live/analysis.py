@@ -44,8 +44,18 @@ def paired_effect(a: Sequence[float], b: Sequence[float], metric: str) -> Paired
     return PairedEffect(metric, len(diffs), mean_a, mean_b, delta, low, high, percent)
 
 
+def same_network(block: dict[str, Any]) -> bool:
+    """Both blocks of a pair ran on one access point throughout. Older
+    results without access-point fields count as unchanged."""
+    aps = {block[side].get(key) for side in ("a", "b") for key in ("ap_start", "ap_end")}
+    aps.discard(None)
+    return len(aps) <= 1
+
+
 def analyze_ab(result: dict[str, Any]) -> dict[str, Any]:
-    blocks = [b for b in result.get("blocks", []) if "a" in b and "b" in b]
+    complete = [b for b in result.get("blocks", []) if "a" in b and "b" in b]
+    blocks = [b for b in complete if same_network(b)]
+    excluded = len(complete) - len(blocks)
     effects = {}
     for metric in METRICS:
         a = [b["a"].get(metric) for b in blocks]
@@ -57,6 +67,7 @@ def analyze_ab(result: dict[str, Any]) -> dict[str, Any]:
         "a": result.get("a"),
         "b": result.get("b"),
         "pairs": len(blocks),
+        "excluded_pairs": excluded,
         "effects": {k: asdict(v) | {"significant": v.significant} for k, v in effects.items()},
     }
     primary = effects.get("sys_w")
@@ -70,6 +81,8 @@ def analyze_ab(result: dict[str, Any]) -> dict[str, Any]:
             pass
     if primary:
         out["verdict"] = verdict(primary)
+        if excluded:
+            out["verdict"] += f"; {excluded} pair(s) set aside: the Wi-Fi network changed during them"
     a_last = blocks[-1]["a"] if blocks else {}
     b_last = blocks[-1]["b"] if blocks else {}
     out["idle_a"], out["idle_b"] = a_last.get("idle"), b_last.get("idle")

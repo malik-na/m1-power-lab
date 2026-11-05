@@ -1030,3 +1030,36 @@ def test_guard_ignores_timer_wakes_it_did_not_arm(monkeypatch: pytest.MonkeyPatc
     agent.run_hook("pre", "suspend")
     agent.run_hook("post", "suspend")
     assert decided == []
+
+
+@pytest.mark.parametrize(("us", "reg", "actual"), [(6, 0x18, 6), (7, 0x20, 8), (70, 0x39, 70), (200, 0xA1, 200), (400, 0x22, 400), (65, 0x39, 70)])
+def test_l1ss_tpoweron_encoding(us, reg, actual) -> None:
+    # The finest scale that fits is used, rounding up (65 us -> 7 x 10 us).
+    assert agent.L1ssTimingKnob.encode(us) == (reg, actual)
+    assert agent.L1ssTimingKnob.decode(reg) == actual
+
+
+def test_pcielink_knob_name_parsing() -> None:
+    knob = agent.get_knob("pcielink:wifi:l1_1_aspm")
+    assert isinstance(knob, agent.PcieLinkKnob)
+    assert (knob.device, knob.attr) == ("wifi", "l1_1_aspm")
+
+
+@pytest.mark.parametrize(("us", "reg"), [(0, 0x0000), (1, 0x03E8), (3145, 0x0C60), (100, 0x0862)])
+def test_ltr_latency_encoding(us, reg) -> None:
+    assert agent.LtrMaxLatencyKnob.encode(us) == reg
+    assert agent.LtrMaxLatencyKnob.decode(reg) >= us
+
+
+def test_pairs_spanning_a_network_switch_are_set_aside() -> None:
+    home, hotspot = "aa:aa:aa:aa:aa:aa Home", "bb:bb:bb:bb:bb:bb iPhone"
+
+    def block(a, b, ap_a=(home, home), ap_b=(home, home)):
+        return {"a": {"sys_w": a, "ap_start": ap_a[0], "ap_end": ap_a[1]},
+                "b": {"sys_w": b, "ap_start": ap_b[0], "ap_end": ap_b[1]}}
+
+    result = {"knob": "x", "a": "0", "b": "1", "blocks": [
+        block(1.12, 1.12), block(1.12, 1.12), block(1.12, 0.83, ap_b=(home, hotspot)), block(1.11, 1.12)]}
+    analyzed = analysis.analyze_ab(result)
+    assert analyzed["pairs"] == 3 and analyzed["excluded_pairs"] == 1
+    assert "set aside" in analyzed["verdict"]

@@ -447,6 +447,81 @@ def print_sleeps(entries: list[dict[str, Any]]) -> None:
         out(f"  {capacity:.1f} Wh, {which}: ~{analysis.days_of_standby(watts, capacity):.1f} days of standby ({basis})")
 
 
+def cmd_stress(target: Target, args: argparse.Namespace) -> None:
+    lab_guard(target, args, "the suspend stress test")
+    job_id = new_job_id("stress")
+    argv = ["stress", "--cycles", str(args.cycles), "--awake", str(args.awake), "--sleep", str(args.sleep), "--restore"]
+    for pair in args.set or []:
+        knob, _, value = pair.partition("=")
+        argv += ["--set", knob, value]
+    if args.stop_on_error:
+        argv.append("--stop-on-error")
+    if args.force:
+        argv.append("--force")
+    out_path = target.start_detached(job_id, *argv)
+    expected = args.cycles * (args.awake + args.sleep + 20)
+    out(f"started {job_id}: {args.cycles} cycles, about {expected / 60:.0f} min")
+    result = target.wait_detached(job_id, out_path, expected_s=expected, progress=progress)
+    end_progress()
+    saved = save_result("stress", result, "-".join(p.replace("=", "_").replace(":", "_") for p in args.set or []) or "baseline")
+    print_stress(result)
+    out(f"saved {saved}")
+
+
+ARMS: dict[str, dict[str, str]] = {
+    # Context knobs for each Wi-Fi link power arm. The A/B then compares the
+    # `default` ASPM policy with `powersupersave` inside that context, and the
+    # stress run uses `powersupersave`.
+    "macos50": {"pcielink:wifi:clkpm": "0", "l1ss_profile": "apple50", "ltr_max_us": "0x1008"},
+    "macos100": {"pcielink:wifi:clkpm": "0", "l1ss_profile": "apple100", "ltr_max_us": "0x1008"},
+    "noclkpm": {"pcielink:wifi:clkpm": "0"},
+    "pcipm-only": {"pcielink:wifi:clkpm": "0", "pcielink:wifi:l1_1_aspm": "0", "pcielink:wifi:l1_2_aspm": "0"},
+    "l11-only": {"pcielink:wifi:clkpm": "0", "pcielink:wifi:l1_2_aspm": "0", "pcielink:wifi:l1_2_pcipm": "0"},
+}
+
+
+def cmd_arm(target: Target, args: argparse.Namespace) -> None:
+    """One Wi-Fi link power arm: context, power A/B, suspend stress, restore."""
+    lab_guard(target, args, "the arm")
+    context = dict(ARMS[args.arm])
+    for pair in args.extra or []:
+        knob, _, value = pair.partition("=")
+        context[knob] = value
+    jobs: list[dict[str, Any]] = [{"kind": "set", "knobs": context}]
+    if args.pairs:
+        jobs.append({"kind": "ab", "knob": "aspm", "a": "default", "b": "powersupersave", "pairs": args.pairs,
+                     "settle": args.settle, "measure": args.measure, "detail": True})
+    if args.cycles:
+        jobs.append({"kind": "stress", "cycles": args.cycles, "awake": args.awake, "sleep": args.sleep,
+                     "set": [["aspm", "powersupersave"]], "restore": True})
+    jobs.append({"kind": "restore"})
+    expected = (args.pairs * 2 * (args.settle + args.measure) if args.pairs else 0) + args.cycles * (args.awake + args.sleep + 20) + 30
+    result = run_batch(target, jobs, label=f"arm-{args.arm}", expected_s=expected)
+    out(f"\narm {args.arm}: {context}")
+    set_job = result["jobs"][0]
+    out(f"applied: {set_job.get('applied', set_job.get('error'))}")
+    ab = [j for j in result["jobs"] if j.get("job_kind") == "ab"]
+    if ab:
+        print_ab_table(ab)
+    stress = [j for j in result["jobs"] if j.get("job_kind") == "stress"]
+    if stress:
+        print_stress(stress[0])
+    print_aborted(result)
+
+
+def print_stress(result: dict[str, Any]) -> None:
+    out(f"knobs: {result.get('knobs')}")
+    for cycle in result.get("cycles", []):
+        errors = len(cycle.get("wifi_errors", []))
+        switched = cycle.get("ap_start") and cycle.get("ap_start") != cycle.get("ap_end")
+        out(f"  cycle {cycle['index']:2}: {cycle['outcome']:8} slept {cycle.get('slept_s', 0):6.1f} s  ping loss {cycle.get('ping_loss')}%"
+            + (f"  network changed: {cycle['ap_start']} -> {cycle['ap_end']}" if switched else "")
+            + (f"  {errors} Wi-Fi error line(s): {cycle['wifi_errors'][0][:120]}" if errors else ""))
+    summary = result.get("summary", {})
+    out(f"{summary.get('ok')}/{summary.get('cycles')} suspends ok, {summary.get('cycles_with_wifi_errors')} cycle(s) with Wi-Fi errors"
+        + (f"; stopped: {result['stopped']}" if result.get("stopped") else ""))
+
+
 def cmd_ledger(target: Target, args: argparse.Namespace) -> None:
     records = target.agent("ledger", *(["--last", str(args.last)] if args.last else []))
     if isinstance(records, dict):
@@ -786,6 +861,25 @@ def build_parser() -> argparse.ArgumentParser:
     sleep_ab.add_argument("--pairs", type=int, default=3)
     sleep_ab.add_argument("--seconds", type=int, default=300)
 
+    stress = sub.add_parser("stress", help="suspend/resume cycles with Wi-Fi traffic (reliability of a setting)")
+    stress.add_argument("--cycles", type=int, default=10)
+    stress.add_argument("--awake", type=float, default=60, help="seconds awake with Wi-Fi traffic per cycle")
+    stress.add_argument("--sleep", type=int, default=60)
+    stress.add_argument("--set", action="append", help="KNOB=VALUE for the whole run (restored after)")
+    stress.add_argument("--stop-on-error", action="store_true", help="stop at the first Wi-Fi firmware error, not only failed suspends")
+    stress.add_argument("--force", action="store_true")
+
+    arm = sub.add_parser("arm", help="Wi-Fi link power arm: context knobs, policy A/B, suspend stress")
+    arm.add_argument("arm", choices=sorted(ARMS))
+    arm.add_argument("--extra", action="append", help="additional KNOB=VALUE context")
+    arm.add_argument("--pairs", type=int, default=3)
+    arm.add_argument("--settle", type=float, default=10)
+    arm.add_argument("--measure", type=float, default=30)
+    arm.add_argument("--cycles", type=int, default=15)
+    arm.add_argument("--awake", type=float, default=30)
+    arm.add_argument("--sleep", type=int, default=30)
+    arm.add_argument("--force", action="store_true")
+
     ledger = sub.add_parser("ledger", help="every suspend recorded on the target")
     ledger.add_argument("--last", type=int)
 
@@ -851,6 +945,8 @@ COMMANDS = {
     "sweep": cmd_sweep,
     "sleep": cmd_sleep,
     "sleep-ab": cmd_sleep_ab,
+    "stress": cmd_stress,
+    "arm": cmd_arm,
     "ledger": cmd_ledger,
     "tune": cmd_tune,
     "standby": cmd_standby,
