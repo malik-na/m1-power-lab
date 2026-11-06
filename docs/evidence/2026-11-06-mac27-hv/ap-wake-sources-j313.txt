@@ -1,0 +1,17 @@
+entries: 16
+ 12  word 0 bit 12  AOP.GPIO.IRQ4
+ 14  word 0 bit 14  AOP.GPIO.IRQ6
+ 26  word 0 bit 26  AOP.OutboxNotEmpty
+ 27  word 0 bit 27  AOP.CPUWakeupAP
+ 40  word 1 bit  8  NUB.WakeupAP
+ 47  word 1 bit 15  NUB.GPIO.IRQ6
+ 49  word 1 bit 17  NUB.APWatchdog
+ 50  word 1 bit 18  NUB.APWakeupTime
+ 54  word 1 bit 22  NUB.SPMI0Sw3IRQ
+ 64  word 2 bit  0  AOP.SPMI0Sw3IRQ
+ 76  word 2 bit 12  SMC.CPUWakeupAP
+ 81  word 2 bit 17  SMC.OutboxNotEmpty
+131  word 4 bit  3  ATC0.CIOWakeup
+132  word 4 bit  4  ATC1.CIOWakeup
+133  word 4 bit  5  ATC0.USBWakeup
+134  word 4 bit  6  ATC1.USBWakeup
