@@ -286,3 +286,22 @@ Gauge (SMC B0RM via m1n1, cable in: DC-in 0.04 W, so the M3 Max does not feed th
 (2.2 W) and the guest boot/login phase. First rough bracket for the 30 min of sleep: 40-70 mAh,
 i.e. **about 1-2 W** — far above a real suspend (macOS ~0.3 W). try36 is the control cycle (same
 phases, 2-min alarm) to subtract the boot/login cost properly.
+
+### try36-37: control cycle, the gauge is not a clean coulomb counter
+
+try36 (alarm now+120 s) never slept: macOS panicked at the entry, `RTBuddy(SMC): No response
+received in 20s, SMC not started? (4)`. Cause: the gauge reader run from m1n1 (`fw/smc.py`
+client) between cycles had left the SMC's RTKit session started; a WD1 reboot of the AP does not
+reset the SMC. Fixed by ending the session (`smc.stop()`), as m1n1's own smccli does.
+
+try37 (alarm now+120 s): commit 01:56:32, back 01:58:08 — the alarm (RTC second = alarm's,
+`alarm_ctrl` 0x41 -> 0x01). The trampoline's AON byte `nub-wake+0x20 >> 16` = **0x40** for the
+alarm wake; it was 0x00 for try35's ~30-min wake, so that word does carry the source (different
+bit, not yet decoded).
+
+Gauge readings (B0RM, mAh): 2847 @01:08:18, 2716 @01:46:40, 2726 @01:48:03 (+10 while
+discharging at 178 mA), 2714 @01:58:18 (only -12 across two guest boots and a panic). B0RM is
+the gauge's compensated "remaining capacity" and moves by +-10-15 mAh on its own, which is the
+size of the signal for a 30-min sleep. So tonight's 1-2 W bracket is **not reliable**; a defensible
+sleep-power number needs a sleep of hours (which needs the ~30-min wake source masked, or a
+handler that goes straight back to sleep) and possibly a raw-charge key instead of B0RM.
