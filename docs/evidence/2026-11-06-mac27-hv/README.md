@@ -380,3 +380,16 @@ So the login-screen sleep behaves differently (different wake policy or sleep ty
 identified); the long measurement goes back to the logged-in desktop. The handler's RTC byte is
 not reliable at 1-s granularity (reads can return a value ~20 s stale), so commit-to-wake by RTC
 needs the full counter read twice, not the low byte.
+
+Side-session findings on the login-screen sleep (from the try39/try42 traces, for the next
+build): (a) the loginwindow entry skips the DCP/DCPEXT SET_AP_POWER 0x20 (display-off) step
+and goes straight to 0x201, and runs slpw→slpa in 0.56 s vs 12.6 s from a user session (so the
+12 s was session quiesce, not trace overhead); (b) our wake record never reads nub-wake+0x28
+(sources 96-127) — the trampoline takes +0x1c/+0x20/+0x24 and the handler +0x2c — so a wake in
+96-127 is invisible by construction; read all five words first thing; (c) the PMU RTC appears to
+latch 0xd002..0xd007 on a read starting at 0xd002, and our 4-byte read at 0xd004 returns the
+latched copy (fresh in try39 where macOS never read 0xd002, stale in try42 where it read it 14
+times): read 6 bytes from 0xd002 and take bytes 2..5. (d) WD2 is loaded by the AON engine at the
+S2R-timer commit (count 0.10 s at the last-cpu snapshot), not by an AP write; a WD2 reset means
+the engine's completion condition went unmet with all AP steps done (try41, light trace: entry
+timing).
