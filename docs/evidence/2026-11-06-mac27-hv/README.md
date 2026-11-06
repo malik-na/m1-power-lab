@@ -346,3 +346,18 @@ The handler now records at the wake: nub-wake+0x2c (AON wake sources 128-135: 13
 133 ATC0 USB), the ACTUAL nibbles of ATC0_USB / ATC0_USB_AON / ATC0_COMMON, and WD2 CTRL. Mask
 for the port's wake sources, if needed later: set32(0x23d004018, 0x28) (ATC0 CIO+USB; 1 = masked,
 from AppleT8103PMGR::setAPWakeupSources, valid & ~enabled).
+
+**try39 result (02:24:40 → 02:49:15, hold off):** the 25-min sleep ran to the alarm with no early
+wake (RTC second 0xbd = alarm, `alarm_ctrl` 0x41→0x01, trampoline +0x20>>16 = 0x40, +0x2c = 0:
+no USB/CIO wake bits). Readback at the wake: ATC0_USB actual 0, ATC0_USB_AON actual 0,
+ATC0_COMMON actual 4, WD2 CTRL 0 (stopped by the hardware after a completed entry).
+
+Gauge: macOS's last B0RM poll before the entry = **2632 mAh** (t=153.8 s, awake at −205 mA);
+m1n1 read **2639 mAh** 10 s after the wake. −7 mAh over 1500 s — i.e. within the gauge's
+±15 mAh noise, **at most ~20 mAh / 25 min ≈ 50 mA ≈ 0.6 W, consistent with much less**. try35
+(hold on, same entry otherwise, line for line) drained 87–103 mAh in 30 min. So the E-cluster
+idle hold was the ~2 W: with it, PMP never saw the E cluster idle and left its rail and the
+fabric in idle inside a completed S2R; without it the SoC goes genuinely down.
+
+A precise number needs a multi-hour sleep (the gauge resolves ~1 mAh; an hour at 0.3 W is
+~25 mAh) or an inline USB-C meter with the battery parked at its 80 % charge limit (CHLS 0x5005).
