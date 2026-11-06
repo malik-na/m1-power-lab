@@ -98,6 +98,7 @@ CFG = {
     "reg3": _env_int("S2R_REG3", 0),           # pmgr reg[3]: no writes in try13, none in SEQUENCE.md
     "cluster": _env_int("S2R_CLUSTER", 0),     # E/P cluster blocks: run-2 option (see CPM_SERROR)
     "aic": _env_int("S2R_AIC", 0),             # AIC writes: very noisy, off by default
+    "aon": _env_int("S2R_AON", 1),             # AON PMGR/WDT/S2R-timer/nub-wake zones (0: SMC+SPMI only)
     "stop": _env_int("S2R_STOP", 0),           # hold the first write to a stop zone
     # Only the candidate words, not the 16 KiB page: every READ inside a HOOK
     # zone becomes a synchronous proxy round trip (hv/__init__.py:552-574).
@@ -374,7 +375,7 @@ class S2RTrace:
             r3 = self._checked_reg(pm, 3, E[3], "pmgr-reg3")
             if r3:
                 self._add(A, r3[0], r3[1], AS, "pmgr-reg3")
-        r1 = self._checked_reg(pm, 1, E[1], "aon-pmgr")
+        r1 = self._checked_reg(pm, 1, E[1], "aon-pmgr") if CFG["aon"] else None
         if r1:
             # ASYNC for the block (0x23d2dc100 is written after every PS change); UNBUF
             # only where a write can end the session: WDT and the S2R-timer commit.
@@ -382,7 +383,7 @@ class S2RTrace:
             for start, name in ((0x23d2b0000, "aon-wdt"), (0x23d2b8000, "aon-wdt-extra"),
                                 (0x23d2c4000, "aon-s2r-timer")):
                 self._add(A, start, 0x4000, U, name)
-        r4 = self._checked_reg(pm, 4, E[4], "nub-wake")
+        r4 = self._checked_reg(pm, 4, E[4], "nub-wake") if CFG["aon"] else None
         if r4:
             self._add(A, r4[0], r4[1], U, "nub-wake")
         if CFG["cluster"]:
