@@ -203,3 +203,21 @@ fails once the core gets there.
 
 Fix (m1n1 38266673): at the commit the gadget is only detached — iodevs unregistered,
 `DCTL.RUN_STOP` cleared with one write — no DART, no heap; sub-stage byte at 0x9f0b. try31 runs it.
+
+### try31: the hang is the first dwc3 register access
+
+With the minimal detach (m1n1 38266673) the bytes read **'L' + sub-stage 1**: the last core got
+to `usb_iodev_detach_all()` and never past its first MMIO write to the USB device controller
+(`DEVTEN`). Same reset, same timing. Also checked: on J313 macOS writes no WD2/reconfig alarm
+during the entry (only WD0/WD1 counters and the reconfig words to 0), so unlike Aura's phone the
+~5 s reset is not the AON reconfig watchdog; its owner is still unknown but moot if the core
+reaches its WFI.
+
+Why the controller is unreachable: on t8103 the guest parks the clkgen muxes (0x23b040140..154)
+*before* the commit, so by the time the last core runs, the dwc3 has no clock even though its
+PMGR domains (ATC0_USB 0x23d280098, ATC0_USB_AON 0x23d280088, ATC0_COMMON 0x23b700420 — hooked
+by m1n1 and held on; the guest asked for all three off) are still powered. Domain names were
+checked against the ADT; the earlier "AOP_MCA1/3" label for 0x23d280088/098 was wrong.
+
+try32 (m1n1 c7ee1e2f): no dwc3 access at all at the commit — drop the iodevs, apply the guest's
+PS words (which power the three ATC0 domains off), WFI.
