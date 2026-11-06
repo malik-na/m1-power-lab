@@ -303,8 +303,9 @@ waiting for the M1 (after the overnight batch):
   [`target/lab/m1power-s2r-rtcwake.sh`](../target/lab/m1power-s2r-rtcwake.sh)
   (sleeps only after an awake alarm proves the IRQ path; m1power's 75 s wake
   timer is the backup). **The PMU alarm woke the M1 from s2idle** (job
-  `j1106-054435-a51a`, kernel `f5035a3`, on AC): `pm_wakeup_irq` 120 (the RTC),
-  31 s for a 30 s alarm, backup timer not fired
+  `j1106-054435-a51a`, kernel `f5035a3`, on AC): `pm_wakeup_irq` 120 (the RTC's
+  SPMI child interrupt; the parent line AIC 343 is Linux IRQ 79), about 30 s
+  frozen for a 30 s alarm, backup timer not fired; independently confirmed
   ([result](evidence/2026-11-06-pmu-rtc/run3-j1106-054435-a51a.txt)). Run 1
   showed why the first kernel refused: on t8103 the SPMI NOTIFY reply bit
   never arrives, but peripheral interrupts do come in on AIC 343, so
