@@ -78,7 +78,8 @@ def _env_zones(name, default):
 CYC_OVRD_ENC = (3, 5, 15, 5, 0)   # CYC_OVRD_EL1, src/cpu_regs.h:533
 # Read on the faulting CPU after a guest SError (m1n1 src/exception.c:235-245, cpu_regs.h:502-544).
 SERR_REGS_COMMON = [("ISR_EL1", (3, 0, 12, 1, 0)), ("CYC_OVRD", CYC_OVRD_ENC),
-                    ("ACC_CFG", (3, 5, 15, 4, 0)), ("ACC_OVRD", (3, 5, 15, 6, 0))]
+                    ("ACC_CFG", (3, 5, 15, 4, 0)), ("ACC_OVRD", (3, 5, 15, 6, 0)),
+                    ("DPC_ERR_STS", (3, 5, 15, 0, 5))]   # I-side error unit; what macOS 27 panics on
 SERR_REGS_E = [("E_LSU_ERR_STS", (3, 3, 15, 2, 0)), ("E_FED_ERR_STS", (3, 4, 15, 0, 2)),
                ("E_MMU_ERR_STS", (3, 6, 15, 2, 0))]
 SERR_REGS_P = [("LSU_ERR_STS", (3, 3, 15, 0, 0)), ("FED_ERR_STS", (3, 4, 15, 0, 0)),
