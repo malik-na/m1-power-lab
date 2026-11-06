@@ -117,7 +117,7 @@ Nothing in this stage changes anything.
 2. Write down:
    - the ESP mount point (`/boot` or `/boot/efi`) and its **PARTUUID**. You will use the PARTUUID to find the same partition from 1TR;
    - which partition is the large Apple APFS container (normally the first big one; that is the main macOS);
-   - the firmware lines. The lab saw OS firmware `13.5` and system firmware `mBoot-20457...` (`LAB-INVENTORY.md:78-79`).
+   - the firmware lines. Checked 2026-11-06: `system-fw-version: 27.0`, `os-fw-version: 13.5`, `m1n1-stage2-version: bc79acc4-dirty`; ESP `/boot/efi` (PARTUUID `5bc75aee-87d2-4ae9-8a97-73305ca29aa0`) 192 MB free; main macOS container `nvme0n1p2` (163.5 GB).
 3. **[STOP POINT]** The ESP needs at least 150 MB free (the `df` line above). B5 copies the
    13.5 kernelcache (about 26 MB) and m1n1 onto it, and Omarchy's kernel and initramfs updates
    also land there if it is `/boot`. If it has less, stop and ask Claude.
@@ -139,7 +139,7 @@ Nothing in this stage changes anything.
 3. **[STOP POINT]** Check:
    - the APFS container that holds the main macOS has **at least 40 GB** "Capacity Not Allocated" (free). macOS 13.5 needs about 25-35 GB. The new volume shares this free space; no partition is resized;
    - `sw_vers` is **not** 13.5 or 14.8.3. If it is, the main volume could in principle be used directly, but the m1n1 docs advise against it; keep to the separate volume anyway;
-   - note the container's name (for example `disk3`) and the "System Firmware Version" (expect `mBoot-20457...`).
+   - note the container's name (for example `disk3`) and the "System Firmware Version" (the Asahi side reports system firmware 27.0; note macOS's exact string).
 
    If there is less than 40 GB free, free space inside the main macOS (delete files). Do not resize partitions. If that is not possible, stop.
 
@@ -167,7 +167,7 @@ Nothing in this stage changes anything.
   It only moves forward in version, never backwards, except through a full
   wipe (`glossary.md:112`, `dev-quickstart.md`: "Downgrade protected"). A
   macOS installer updates system firmware only when its own is newer. The
-  13.5 installer's system firmware is older than this Mac's `mBoot-20457`, so
+  13.5 installer's system firmware is older than this Mac's (27.0), so
   it leaves it alone. Step B6 checks this.
 - **What Apple allows.** Apple supports installing an older macOS that the Mac
   can run on a separate APFS volume; the M1 Air runs macOS 13. A Full Security
@@ -254,7 +254,7 @@ leave 1TR with no valid users (`m1n1-hypervisor.md:25-30`).
    sw_vers                                     # ProductVersion 13.5 (build 22G74)
    system_profiler SPHardwareDataType | grep -E 'System Firmware|OS Loader'
    ```
-   - "System Firmware Version" must be unchanged from A2 (`mBoot-20457...`).
+   - "System Firmware Version" must be unchanged from A2.
    - "OS Loader Version" should be the 13.5 one (`iBoot-8422.141.2`).
    - If the system firmware changed, stop and write down both values.
 2. Set the sleep options for run 1. They apply to this volume only (`-a` writes this volume's power settings):
@@ -368,6 +368,13 @@ stub keeps its own settings (`tethered-boot.md:57`, `introduction.md`,
 3. Hold the power button about 10 s until the Mac is off.
 
 ### C5. Get the kernelcache to the host (Omarchy once, then M3 Max, 15 min)
+
+**Already done (2026-11-06):** `kc/kernelcache-13.5.macho` was extracted from Apple's public
+13.5 (22G74) restore image for j313 (`kernelcache.release.mac13g`, Mach-O sha256
+`861adca1...`, Darwin 22.6.0 `RELEASE_ARM64_T8103`), the same build the installer puts in
+Preboot, and `session.sh check` passes. Skip this step unless B6 shows a build other than
+22G74.
+
 
 0. If the USB-C cable to the host is attached or a `session.sh console` is open, press Ctrl-C in
    that terminal and unplug the cable first. Opening the tty during boot stops the Asahi stage 1 in
