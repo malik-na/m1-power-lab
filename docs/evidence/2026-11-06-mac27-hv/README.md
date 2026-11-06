@@ -114,3 +114,27 @@ Also learned: with the lid closed, macOS sometimes never sleeps on its own after
 Next: find what kept the SoC awake inside the ~5 s window after the commit (m1n1 residue such as
 its watchdog core or idle loop, a refused PS write, or a missing step such as the PMU go-hib
 setting), then retry. Analysis running.
+
+### try27 and the diagnosis
+
+try27 applied macOS's requested power states for m1n1's protected USB/UART/SIO domains at the
+commit (m1n1 b4dc39c7): same result as try26, all 8 cores down at 22:30:38, m1n1 back on USB
+at 22:30:45 after a watchdog reset (PMU `wdog,reset_in_1`, boot_error_stage 0x50).
+
+What the trace comparison and Aura's history say:
+- The entry sequence is complete and identical to try23; J313 arms no "reconfig" watchdog
+  (no WD2 writes), so the ~4 s reset is not a macOS-armed timer.
+- m1n1 has nothing left running: no HV watchdog core, no idle m1n1 cores (all 8 were guest
+  cores), timers cleared per core, USB gadget shut down, the guest's PS values applied.
+- Aura's stage after the same signature was the **wake path**: the SoC does go down, then a wake
+  source (a pending SPMI/PMU or AIC wake bit, or a USB-AON wake) brings the boot core back at the
+  locked RVBAR, where only the hypervisor's own reset entry can resume the guest; anything else
+  hangs and the watchdog resets. We have no such entry: the locked RVBAR points at the unpatched
+  m1n1 70757dc image that Macintosh HD boots, not at the chainloaded patched one.
+- Not yet proven: whether the SoC actually powered off before the reset. Aura answered that with a
+  breadcrumb byte poked into PMU scratch from the RVBAR entry.
+
+Next (a real piece of work, Aura took ~15 commits): install the patched m1n1 as Macintosh HD's
+boot object so the locked RVBAR lands in it; run the guest from that image without chainloading;
+add an S2R wake entry (breadcrumb first, then restore the hypervisor state and re-enter SPTM's
+resume under emulation); then chase the wake bounces (pending AIC/SPMI wake bits, USB AON wake).
