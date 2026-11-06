@@ -305,3 +305,20 @@ the gauge's compensated "remaining capacity" and moves by +-10-15 mAh on its own
 size of the signal for a 30-min sleep. So tonight's 1-2 W bracket is **not reliable**; a defensible
 sleep-power number needs a sleep of hours (which needs the ~30-min wake source masked, or a
 handler that goes straight back to sleep) and possibly a raw-charge key instead of B0RM.
+
+### Correction (side-session review, verified): try35's sleep drew about 2.5 W
+
+The tracer caught macOS's own gauge poll just before the try35 commit: `READ_KEY <B0RM>` =
+0xb03 = **2819 mAh** at trace t=364.56 s (01:16:24; `s2r-trace-20261107-011020.jsonl`). After the
+wake m1n1 read **2716 mAh** at 01:46:40. That is 103 mAh across an interval that contains nothing
+but the sleep (1812 s by the PMU RTC: commit 0x2aa6f3, wake 0x2aae07): **~204 mA ≈ 2.5 W at
+12.24 V** — the same rate as m1n1 idle (2.2 W) and as the 01:08→01:16 boot phase (207 mA). Even
+with ±15 mAh of gauge noise that is 1.7–2.4 W. So with the cores off and the clocks parked the
+SoC is **not** in a suspend-power state: the PMU never dropped the rails. That is consistent with
+Aura's finding that a gated-but-still-enumerated USB gadget keeps the PMU from finishing the
+off, and it reframes the ~30-min wake: a chip that never fully went down.
+
+Also from the review: the "last core (8 of 8) going down" line reaches the host ~20 s after the
+real commit (RTC-based commit-to-wake is 1812 s in try35 and exactly 60 s in try33), so
+commit-to-wake must be measured by the PMU RTC, not host timestamps. The try33 "37 s" oddity
+was that latency, not the alarm.
