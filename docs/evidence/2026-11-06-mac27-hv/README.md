@@ -423,5 +423,5 @@ simply missed it: the trampoline keeps `+0x20` bits 16-23 (NUB.APWatchdog 49, NU
 50, NUB.SPMI0Sw3IRQ 54 — the RTC-alarm wakes showed as 0x40 = bit 22 = **NUB.SPMI0Sw3IRQ**, the
 PMU's interrupt) and `+0x24` bits 0-7 (AOP.SPMI0Sw3IRQ 64). Unrecorded until now: AOP.GPIO.IRQ4/6,
 AOP.OutboxNotEmpty, AOP.CPUWakeupAP, NUB.WakeupAP, NUB.GPIO.IRQ6, SMC.CPUWakeupAP,
-SMC.OutboxNotEmpty. The next build (m1n1 76…: see git) re-reads all five words in the handler and
+SMC.OutboxNotEmpty. The next build (m1n1 1aaf4e54) re-reads all five words in the handler and
 stores a 16-bit map in ADT order. Masks: word i at 0x23d004008 + 4*i, 1 = masked.
