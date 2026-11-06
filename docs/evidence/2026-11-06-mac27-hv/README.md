@@ -221,3 +221,25 @@ checked against the ADT; the earlier "AOP_MCA1/3" label for 0x23d280088/098 was 
 
 try32 (m1n1 c7ee1e2f): no dwc3 access at all at the commit — drop the iodevs, apply the guest's
 PS words (which power the three ATC0 domains off), WFI.
+
+### try32: first real sleep — no reset, and the first entry at the reset vector after it
+
+m1n1 c7ee1e2f (no dwc3 access at the commit). Commit at 00:20:11.9, "last core (8 of 8) going
+down", and **no reset**: the M1 stayed down. The M3 Max never saw a USB disconnect (the controller
+was gated without a detach). macOS's RTC alarm was ~15 min out (0x2a9d4f).
+
+- Opening the lid (00:4x), a key, a short power-button press: no visible reaction.
+- A ~10 s power-button hold restarted it. Post-mortem: fault bit 10 `btn_rst,btn_seq_reset`;
+  `alarm_ctrl` 0x41 -> **0x01** (the alarm's enable bit self-cleared: the alarm fired; RTC was
+  907 s past it); PMU scratch `0x9f04` = 0 (**note consumed**) and `0x9f0a` = **'Z'**.
+- 'Z' is written only by `hv_s2r_wake_entry()`, which is called only from `_cpu_reset_c` on the
+  boot CPU (startup.c:242), i.e. an entry at the locked RVBAR, never from a normal iBoot boot
+  (`_start_c`). So the SoC came back from the S2R state into the installed trampoline; the most
+  likely trigger is the 00:35 RTC alarm (enable bit cleared). The trampoline then jumped to the
+  chainloaded image's handler, whose `m1n1_main()` most likely hung on clocks macOS had parked —
+  hence no screen, no USB, and no reaction until the button reset.
+
+Also: macOS reads the u32 at PMU scratch 0x9f08 during boot and sleep entry (5 reads in try32),
+which overlapped the arm-time note. try33 (m1n1 6be234a0) writes the note only on the last core
+after the PS words, reprograms the RTC alarm to now+60 s at the commit, and the handler records
+the RTC second ('H' at 0x9f0c, second at 0x9f0b) and resets cleanly through WD1.
