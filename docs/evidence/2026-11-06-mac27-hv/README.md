@@ -138,3 +138,38 @@ Next (a real piece of work, Aura took ~15 commits): install the patched m1n1 as 
 boot object so the locked RVBAR lands in it; run the guest from that image without chainloading;
 add an S2R wake entry (breadcrumb first, then restore the hypervisor state and re-enter SPTM's
 resume under emulation); then chase the wake bounces (pending AIC/SPMI wake bits, USB AON wake).
+
+### try28: the patched m1n1 installed as the boot object; the wake path was never taken
+
+The trampoline build (m1n1 f5fecc0b, sha256 `08a8b8c8...`) was installed as Macintosh HD's boot
+object (one more Recovery trip: `kmutil configure-boot -c .../s2r/m1n1-s2r-wake.bin`), so the
+locked boot-CPU RVBAR (`0x210050000` = `0x1000080578c001`, bit 48 is a flag) points at the image
+that runs the hypervisor. The guest ran from that image without chainloading; at arm time the
+hypervisor wrote `'W'` + the handler address into PMU scratch `0x9f04..0x9f09`.
+
+Lid-closed sleep at 23:44:00, USB gone at 23:44:18-21, m1n1 back on USB at 23:44:24. After that:
+- PMU scratch `0x9f04..0x9f0d` = `57 40 29 5f 01 02 00 00 00 00`: the `'W'` note is **unconsumed**
+  and the breadcrumb bytes are zero. `_cpu_reset_c` of the installed image never ran.
+- m1n1 came up at a **new base** (`0x805f10000`, was `0x80578c000`): iBoot reloaded it. This was
+  a full reset through the boot ROM, not a warm wake at the RVBAR.
+- PMU fault log: bit 11 `wdog,reset_in_1` again; `boot_stage 0x30`, `boot_error_stage 0x50`;
+  RTC far before the alarm (`0x2a9268` vs `0x2a94d5`), `alarm_event 0`.
+- The AON block after the reboot: WD0/WD1/WD2 CTRL all 0 (WD1 alarm 120 s and WD2 alarm 90 s are
+  iBoot leftovers), `0x23d2c4000` (S2R timer commit) still reads 1.
+
+So the "bounce wake into an image without a handler" theory is wrong for the M1: the boot core
+never came back at the reset vector. Something pulls the PMU's reset input within about a second
+of the cores going down (`reset_in_1`), and the PMU performs a full reset.
+
+Candidates: the SMC (it was told `slpw`/`slpa` and `SET_AP_POWER 0x201`; a Mac SMC may reset an AP
+that does not reach the sleep state in time), an AON watchdog macOS leaves armed across the entry
+(WD1 CTRL is not written in the captured sequence; WD0 is disabled at +0x0c = 0), or the SoC's own
+sleep logic asserting reset_in because the PMU was not prepared for sleep.
+
+### try29: spin test (m1n1 e4cb5e3c)
+
+Diagnostic build: the last core does the whole tail (other cores powered off, USB off, deferred PS
+words applied) and then **spins instead of sleeping**, writing `'S'`, a tenths-of-a-second counter
+and the AON WDT CTRL nibbles into PMU scratch `0x9f0a..0x9f0d`, and reboots itself through WD1
+after 25 s (`'R'`). An external timer shows up as a counter that stopped early; surviving the 25 s
+means the sleep step itself causes the reset.
