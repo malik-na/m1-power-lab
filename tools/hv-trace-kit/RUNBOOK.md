@@ -247,6 +247,23 @@ leave 1TR with no valid users (`m1n1-hypervisor.md:25-30`).
    1. Make a USB installer with `sudo "/Applications/Install macOS Ventura.app/Contents/Resources/createinstallmedia" --volume /Volumes/<16GB+ USB stick>`. **[DISK]** This erases the USB stick.
    2. Boot it from Startup Options.
    3. Pick `macOS135` as the target.
+6. **Tried 2026-11-06.** The app refused to open on 27.0.1, so the USB route above was used. The
+   installer then stopped several times with "Failed to download required installer asset (SFR)".
+   The clock was correct. What we found:
+   - Apple's asset server (`gdmf.apple.com/v2/assets`) answers an SFR request for J313AP with
+     only the newest firmware, **27.2 (26B123)**, whatever version is asking. The 13.5 SFR zip is
+     still on `updates.cdn-apple.com`, but it is no longer offered. Apple still signs the 13.5 OS
+     (TSS `STATUS=0`). So any install from now on, of any version, moves the system firmware to 27.2.
+     Firmware never goes backwards.
+   - The installer needs the network to fetch that firmware. Before a retry, from Utilities >
+     Terminal in the installer:
+     `date -u; curl -sS -o /dev/null -w 'gs:%{http_code}\n' https://gs.apple.com/`.
+     After a failure, Window > Installer Log, search "SFR".
+   - AsahiLinux/docs#274 (2026-07) installed 14.8.3 from a createinstallmedia stick on a 26.6
+     host, so older installers can take newer firmware. Whether 13.5 accepts the 27.2 package is
+     unknown.
+   - The macOS 14.8.3 SFR is also no longer offered. Apple still serves full installers for
+     14.8.9 and 13.7.8, but neither is a documented m1n1 guest.
 
 ### B4. Setup Assistant in 13.5 (10 min)
 
