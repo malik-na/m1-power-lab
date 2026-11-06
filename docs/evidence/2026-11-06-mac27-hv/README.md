@@ -185,3 +185,21 @@ The deferred PS list is harmless: 0x23d280088/098 are AOP_MCA1/3 (ADT), not the 
 
 The private watchdog analysis notes that Aura's A18 Pro resets also "came 5 s after the commit";
 Aura later reached a real 0.109 W suspend. What they changed is the next thing to read.
+
+### try30: stage markers — the last core hangs in m1n1's own USB teardown
+
+A plain `p.reboot()` showed iBoot clears PMU scratch byte 0x9f0d at every boot but leaves
+0x9f0a..0x9f0c alone, so the scratch layout became: 0x9f0a a stage letter, 0x9f0b/0x9f0c data
+(m1n1 5b051e91). The last core writes 'L' when it enters the commit tail, 'U' after
+`usb_iodev_shutdown()`, 'P' after the deferred PS words; the UART console is muted at 'L'
+(`uart_putbyte()` spins forever on a gated UART).
+
+Result (00:09): **'L' only.** The SPMI write worked, then `usb_iodev_shutdown()` never came back
+(its dwc3 stop, DART unmap and frees), so the last core never reached its final WFI, the SoC never
+slept, and the ~5 s external timer reset it — the same signature as try26-29. The spin test
+(try29) never started for the same reason. So the "5 s reset" is a consequence of our own hang,
+not a hardware mystery; which timer it is (SMC most likely) only matters if the real sleep still
+fails once the core gets there.
+
+Fix (m1n1 38266673): at the commit the gadget is only detached — iodevs unregistered,
+`DCTL.RUN_STOP` cleared with one write — no DART, no heap; sub-stage byte at 0x9f0b. try31 runs it.
