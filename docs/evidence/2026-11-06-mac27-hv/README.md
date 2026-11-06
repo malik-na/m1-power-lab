@@ -393,3 +393,26 @@ times): read 6 bytes from 0xd002 and take bytes 2..5. (d) WD2 is loaded by the A
 S2R-timer commit (count 0.10 s at the last-cpu snapshot), not by an AP write; a WD2 reset means
 the engine's completion condition went unmet with all AP steps done (try41, light trace: entry
 timing).
+
+### try43: 30-minute sleep from the desktop — drain within noise; the ~30-min wake is a fixed timer
+
+try43 (try39's recipe: logged-in desktop, full trace, hold off; alarm 10800 s): commit 03:13:06,
+woke at **03:42:57 = 1791 s later — the same 1791 s as try35**, alarm still armed, 'Z'+'H', WD2
+CTRL 0, ATC0_USB/AON actual 0, COMMON 4, and +0x1c/+0x20/+0x24/+0x2c all zero. So an exact
+~29.85-min timer wakes the SoC regardless of the E-cluster hold, and its source is in wake
+sources 96-127 (nub-wake+0x28), the one word we never read. The next build (m1n1 f3354310)
+records +0x28 and reads the PMU RTC as 6 bytes from 0xd002.
+
+Gauge: macOS's last poll before the entry **2556 mAh** (t=74 s, B0AC −218 mA awake); m1n1 read
+**2554 mAh** 10 s after the wake. **2 mAh over 1791 s ≈ 4 mA ≈ 0.05 W** — with the gauge's ±15 mAh
+that is 0.05 ± 0.36 W. Together with try39 (−7 mAh / 1500 s) the two independent sleeps give a
+drain indistinguishable from zero at this resolution, with an upper bound of roughly 0.3–0.4 W —
+at or below Linux s2idle on this M1 (0.440 W, the only other measured low-power state here).
+A tighter number needs the 30-min timer masked first (then a multi-hour sleep).
+
+Status at 03:45: the M1 Air does suspend-to-RAM under m1n1 with the captured macOS sequence
+plus m1n1's three additions (per-core EL2 timer/vFIQ clear, iodev drop without touching the
+clockless dwc3, deferred PS words for its protected domains) and **without** the E-cluster idle
+hold; it wakes on the RTC alarm, the lid, or the 30-min timer, lands in the installed trampoline
+and the surviving hypervisor image. Not done: resuming the guest, the 30-min wake source, the
+login-screen entry, and the light-trace WD2 reset (entry timing).

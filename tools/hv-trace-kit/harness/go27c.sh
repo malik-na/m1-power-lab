@@ -18,7 +18,8 @@ if [ "${CHAIN:-1}" = 1 ]; then
   sleep 3; until M1N1DEVICE=$(m1dev) && [ "$(stat -c %Y $M1N1DEVICE)" != "$old" ]; do sleep 0.5; done
   export M1N1DEVICE; sleep 4; echo "proxy device after chainload $M1N1DEVICE"
 fi
-echo "start $(date +%T)"
+export M1N1_NO_ECL_HOLD=${M1N1_NO_ECL_HOLD:-}
+echo "start $(date +%T) NO_ECL_HOLD=${M1N1_NO_ECL_HOLD}"
 cd $R; rm -f $S/hvin; mkfifo $S/hvin
 ( exec 3>$S/hvin; sleep 7200 ) &
 timeout 3600 $PY -u /home/naeem/m1n1/proxyclient/tools/run_guest.py --sptm-mode ${MODE:-emulation} "$@" -m $S/arm_wdt.py ${EXTRA_M:+-m $EXTRA_M} \
