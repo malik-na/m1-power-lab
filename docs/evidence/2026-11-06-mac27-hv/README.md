@@ -314,11 +314,35 @@ wake m1n1 read **2716 mAh** at 01:46:40. That is 103 mAh across an interval that
 but the sleep (1812 s by the PMU RTC: commit 0x2aa6f3, wake 0x2aae07): **~204 mA ≈ 2.5 W at
 12.24 V** — the same rate as m1n1 idle (2.2 W) and as the 01:08→01:16 boot phase (207 mA). Even
 with ±15 mAh of gauge noise that is 1.7–2.4 W. So with the cores off and the clocks parked the
-SoC is **not** in a suspend-power state: the PMU never dropped the rails. That is consistent with
-Aura's finding that a gated-but-still-enumerated USB gadget keeps the PMU from finishing the
-off, and it reframes the ~30-min wake: a chip that never fully went down.
+SoC is **not** in a suspend-power state: the PMU never dropped the rails. (Review correction: Aura's HEAD code comment says only that a powered
+ATC0 USB AON domain is an armed *wake source*; "the PMU never finishes the SoC off" is the
+inference in Aura's commit 1820814 message, J700, not a measured mechanism. In try35 the M3 Max
+kept the M1's gadget enumerated for the whole 30 min — the first USB loss was the WD1 reset at
+the wake — so the gadget was never disconnected, only its domains were written off.)
 
 Also from the review: the "last core (8 of 8) going down" line reaches the host ~20 s after the
 real commit (RTC-based commit-to-wake is 1812 s in try35 and exactly 60 s in try33), so
 commit-to-wake must be measured by the PMU RTC, not host timestamps. The try33 "37 s" oddity
 was that latency, not the alarm.
+
+### try38 (aborted: lid closed at boot) and the WD2 answer
+
+try38 booted with the lid still closed, so macOS slept before the harness armed; the old
+"Skip: msr ACC_OVRD" path ran and the hypervisor exited. Its last-cpu snapshot settles the
+5-second question: at the commit **WD2 is armed — alarm 0x07270e00 (5.000 s @ 24 MHz), CTRL 4**
+(`run-try38.out`), exactly Aura's "reconfig watchdog" on the J700. It only looked unarmed before
+because every earlier read of that block was after a reboot or at arm time. try26-31 reset at
+~5.5 s because the last core hung before the entry completed; try32-37 slept for minutes, so
+after a completed entry WD2 is stopped or cleared by the hardware hand-off.
+
+### try39: E-cluster idle hold off (m1n1 99b4ef37 / 21fc1d5a)
+
+Review found a suspect that had been compiled in all night: `HV_HOLD_ECLUSTER_IDLE` (added for
+the retention-WFI SError that WFI_MODE 2 later fixed) drops every E-cluster idle report the
+guest writes to 0x23b738004, so PMP never sees both clusters idle — a plausible reason for a
+completed S2R entry that still draws ~2 W (cluster rail and fabric left in idle, not off). try39
+runs with the hold off (`M1N1_NO_ECL_HOLD=1`, default 0 in C), 25-min alarm, cable in, lid closed.
+The handler now records at the wake: nub-wake+0x2c (AON wake sources 128-135: 131 ATC0 CIO,
+133 ATC0 USB), the ACTUAL nibbles of ATC0_USB / ATC0_USB_AON / ATC0_COMMON, and WD2 CTRL. Mask
+for the port's wake sources, if needed later: set32(0x23d004018, 0x28) (ATC0 CIO+USB; 1 = masked,
+from AppleT8103PMGR::setAPWakeupSources, valid & ~enabled).
