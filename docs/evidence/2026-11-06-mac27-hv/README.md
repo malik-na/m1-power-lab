@@ -93,3 +93,24 @@ try23 (lid closed, auto sleep, tracer armed) then ran the whole entry in about 0
 Raw files (local, gitignored): `var/mac27-trace-20261106/try23/` (JSONL trace, hv log, console, `sleep-entry-timeline.txt`), `try22/` (panic stackshot).
 
 Next: let the hardware really sleep under the hypervisor (pass the final ACC_OVRD/CYC_OVRD through, drop m1n1's USB link at the commit, as aura did) and see whether the RTC alarm wakes it; and turn this sequence into the Linux suspend-to-RAM checklist.
+
+## Update, late evening: first real hardware sleep attempts (try24-26)
+
+m1n1 gained an experimental "real S2R pass-through" (local branch, commits b2c8453d, e4a5fdfe): the
+guest's final ACC_OVRD and CYC_OVRD(DISABLE_WFI_RET) writes reach the hardware, each core stops
+its EL2/guest timers, the last core shuts m1n1's USB gadget down, and the guest's CPU self-disable
+bits are passed through.
+
+| Try | What happened | Evidence |
+|---|---|---|
+| 24 | Never slept: macOS held sleep with `kPMDKNotReady` after a 6-min pause I caused. | console |
+| 25 | Cores 1-3 powered off for real; m1n1 then panicked trying to rendezvous the off cores; the other cores stayed stuck in m1n1 and the SoC never powered down (needed a power-button hold). Fixed: powered-off cores leave the rendezvous. | hv log; PMU: boot_error_count 2, btn reset |
+| 26 | Whole entry ran; all 8 cores went down with USB off; **about 4 s later the SoC was reset by the watchdog** (PMU fault_shadow `wdog,reset_in_1`, boot_error_stage 0x50, RTC far before the alarm, alarm_event 0). The PMU never cut power. | `runs/.../try26/postmortem-after-try26-*.txt`, trace in `var/mac27-trace-20261106/try26/` |
+
+Also learned: with the lid closed, macOS sometimes never sleeps on its own after boot
+(`kPMDKNotReady`, a DriverKit driver not reporting ready); Apple menu > Sleep works. The
+`pmu_postmortem.py` Sera read was broken (raw ADT slave id) and is fixed (6966dcd).
+
+Next: find what kept the SoC awake inside the ~5 s window after the commit (m1n1 residue such as
+its watchdog core or idle loop, a refused PS write, or a missing step such as the PMU go-hib
+setting), then retry. Analysis running.
