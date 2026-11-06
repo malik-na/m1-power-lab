@@ -1,0 +1,439 @@
+<meta charset="utf-8">
+<title>M1 Power Lab Report</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a single lab-notebook column, ~68ch wide, with wider "bench" blocks for charts and diagrams. */
+:root {
+  --bg: #f6f7f8;
+  --surface: #ffffff;
+  --ink: #12161c;
+  --ink-2: #4b5360;
+  --ink-3: #7a8290;
+  --line: #e1e4e9;
+  --accent: #2a78d6;      /* measured power, the lab's own result */
+  --target: #eb6834;      /* the prize: SoC sleep */
+  --past: #8a8f99;        /* stock baseline, de-emphasised */
+  --good: #1a8a4a;  --good-bg: #e5f4ea;
+  --warn: #a76a00;  --warn-bg: #fbf0d9;
+  --bad:  #c23a3a;  --bad-bg:  #fbe6e6;
+  --info-bg: #e7f0fb;
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1216; --surface: #171b21; --ink: #eef1f4; --ink-2: #b4bbc6; --ink-3: #858d99; --line: #2a3039;
+    --accent: #3987e5; --target: #d95926; --past: #7d828c;
+    --good: #4cc27a; --good-bg: #16301f; --warn: #e0a83a; --warn-bg: #33280f; --bad: #ef7676; --bad-bg: #3a1a1a; --info-bg: #172638;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1216; --surface: #171b21; --ink: #eef1f4; --ink-2: #b4bbc6; --ink-3: #858d99; --line: #2a3039;
+  --accent: #3987e5; --target: #d95926; --past: #7d828c;
+  --good: #4cc27a; --good-bg: #16301f; --warn: #e0a83a; --warn-bg: #33280f; --bad: #ef7676; --bad-bg: #3a1a1a; --info-bg: #172638;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font: 400 16px/1.6 var(--f-body); }
+.wrap { max-width: 960px; margin: 0 auto; padding-block: 40px 72px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 56px; }
+section { display: grid; gap: 18px; min-width: 0; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.1rem, 5vw, 3.1rem); line-height: 1.05; font-weight: 700; }
+h2 { font-size: 1.6rem; line-height: 1.2; font-weight: 700; }
+h3 { font-size: 1.08rem; font-weight: 700; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font: 600 0.74rem/1 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+.lede { font-size: 1.12rem; color: var(--ink-2); }
+.mono { font-family: var(--f-mono); font-size: 0.88em; }
+.muted { color: var(--ink-3); }
+code { font-family: var(--f-mono); font-size: 0.86em; background: var(--line); padding: 1px 5px; border-radius: 4px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; min-width: 0; }
+.scroll { overflow-x: auto; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* header */
+header { display: grid; gap: 16px; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 18px; font: 500 0.82rem var(--f-mono); color: var(--ink-2); }
+.meta span::before { content: "▸ "; color: var(--ink-3); }
+
+/* stat strip */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 4px; align-content: start; }
+.stat .v { font: 700 1.9rem/1.1 var(--f-display); font-variant-numeric: tabular-nums; }
+.stat .l { font-size: 0.86rem; color: var(--ink-2); }
+
+/* watts chart */
+.chart { display: grid; gap: 4px; }
+.row { display: grid; grid-template-columns: minmax(120px, 230px) 1fr; gap: 14px; align-items: center; padding: 8px 0; position: relative; }
+.row .name { font-weight: 600; font-size: 0.95rem; line-height: 1.25; }
+.row .name small { display: block; font-weight: 400; color: var(--ink-3); font-size: 0.8rem; }
+.track { position: relative; height: 24px; margin-right: 76px; }
+.bar { position: absolute; left: 0; top: 0; height: 24px; border-radius: 0 4px 4px 0; }
+.bar.past { background: var(--past); }
+.bar.now { background: var(--accent); }
+.bar.goal { background: repeating-linear-gradient(135deg, var(--target) 0 3px, transparent 3px 7px); border: 2px solid var(--target); border-left: 0; box-sizing: border-box; }
+.val { position: absolute; top: 2px; font: 600 0.88rem var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink); }
+.axis { display: grid; grid-template-columns: minmax(120px, 230px) 1fr; gap: 14px; }
+.ticks { position: relative; height: 20px; border-top: 1px solid var(--line); margin-right: 76px; }
+.ticks span { position: absolute; top: 4px; transform: translateX(-50%); font: 400 0.74rem var(--f-mono); color: var(--ink-3); }
+.ticks span:first-child { transform: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.84rem; color: var(--ink-2); }
+.sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+.sw.past { background: var(--past); } .sw.now { background: var(--accent); }
+.sw.goal { border: 2px solid var(--target); background: repeating-linear-gradient(135deg, var(--target) 0 2px, transparent 2px 5px); box-sizing: border-box; }
+.tip { position: fixed; z-index: 20; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 0.82rem; padding: 6px 9px; border-radius: 6px; max-width: 260px; line-height: 1.35; }
+.row[data-tip] { cursor: default; }
+.row[data-tip]:hover .bar { filter: brightness(1.08); }
+
+/* explainer split */
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+
+/* chips */
+.chip { display: inline-flex; align-items: center; gap: 5px; font: 600 0.72rem/1 var(--f-mono); letter-spacing: 0.04em; text-transform: uppercase; padding: 4px 7px; border-radius: 999px; white-space: nowrap; }
+.chip.ok { color: var(--good); background: var(--good-bg); }
+.chip.dead { color: var(--bad); background: var(--bad-bg); }
+.chip.weak { color: var(--warn); background: var(--warn-bg); }
+.chip.info { color: var(--accent); background: var(--info-bg); }
+
+/* timeline */
+.tl { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.tl > li { display: grid; grid-template-columns: 34px 1fr; gap: 14px; position: relative; padding-bottom: 22px; }
+.tl > li::before { content: ""; position: absolute; left: 16px; top: 30px; bottom: 0; width: 2px; background: var(--line); }
+.tl > li:last-child::before { display: none; }
+.tl .n { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font: 600 0.85rem var(--f-mono); background: var(--surface); border: 2px solid var(--line); color: var(--ink-2); }
+.tl li.dead .n { border-color: var(--bad); color: var(--bad); }
+.tl li.ok .n { border-color: var(--good); color: var(--good); }
+.tl li.now .n { border-color: var(--target); color: var(--target); }
+.tl .body { display: grid; gap: 6px; min-width: 0; padding-top: 4px; }
+.tl .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tl .body p { color: var(--ink-2); font-size: 0.95rem; }
+.fixlist { margin: 4px 0 0; padding-left: 18px; color: var(--ink-2); font-size: 0.93rem; display: grid; gap: 4px; }
+
+/* diagram */
+.diagram svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.diagram text { font-family: var(--f-body); fill: var(--ink); }
+.diagram .sm { font-size: 12px; fill: var(--ink-2); }
+.diagram .mono { font-family: var(--f-mono); font-size: 11px; fill: var(--ink-3); }
+
+/* table */
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 0.92rem; }
+th, td { text-align: left; padding: 10px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 0.74rem var(--f-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ci { position: relative; height: 14px; width: 150px; margin-top: 4px; }
+.ci .zero { position: absolute; left: 0; top: 0; bottom: 0; width: 1px; background: var(--ink-3); }
+.ci .rng { position: absolute; top: 6px; height: 2px; background: var(--accent); opacity: 0.5; }
+.ci .pt { position: absolute; top: 2px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--surface); }
+.ci.ns .pt { background: var(--past); } .ci.ns .rng { background: var(--past); }
+
+/* attempts */
+.stages { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; margin: 10px 0 6px; }
+.stages div { font: 500 0.7rem/1.2 var(--f-mono); padding: 6px 5px; text-align: center; background: var(--good-bg); color: var(--good); border-radius: 3px; }
+.stages div.x { background: var(--bad-bg); color: var(--bad); font-weight: 600; }
+.stages div.no { background: var(--line); color: var(--ink-3); }
+.attempts { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+.att { display: grid; gap: 8px; align-content: start; }
+.att p { font-size: 0.93rem; color: var(--ink-2); }
+
+/* lists, grids */
+.qs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 10px; }
+.qs li { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font-size: 0.93rem; display: grid; gap: 4px; }
+.qs li b { font-weight: 600; }
+.tools { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.tool { border-top: 2px solid var(--ink); padding-top: 10px; display: grid; gap: 4px; align-content: start; }
+.tool h3 { font-size: 1rem; }
+.tool p { font-size: 0.88rem; color: var(--ink-2); }
+.next { counter-reset: n; list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.next li { counter-increment: n; display: grid; grid-template-columns: 30px 1fr; gap: 10px; max-width: 72ch; }
+.next li::before { content: counter(n); font: 700 1.2rem/1.3 var(--f-display); color: var(--target); }
+.leads { display: grid; gap: 6px; padding-left: 18px; margin: 0; color: var(--ink-2); font-size: 0.93rem; }
+footer { font-size: 0.82rem; color: var(--ink-3); border-top: 1px solid var(--line); padding-top: 16px; }
+
+@media (max-width: 560px) {
+  .row, .axis { grid-template-columns: 1fr; gap: 6px; }
+  .axis > div:first-child { display: none; }
+  .stages div { font-size: 0.62rem; padding: 5px 2px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bar { transition: filter .15s; }
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Status report · 6 November 2026</div>
+  <h1>M1 Power Lab: from 1.1 W toward 0.1 W</h1>
+  <p class="lede">The goal is to make a 2020 MacBook Air (M1, J313) running Omarchy Linux draw as little power as possible. Kernel, bootloader, drivers and firmware are all fair game. macOS is not the benchmark. We use it only to learn how Apple puts this chip to sleep.</p>
+  <div class="meta"><span>Target: M1 Air · Omarchy · linux-aurora 7.2.11</span><span>Bench: M3 Max running Linux</span><span>Branch: omarchy-live-power</span></div>
+</header>
+
+<section aria-labelledby="watts">
+  <div class="eyebrow">Where the watts went</div>
+  <h2 id="watts">Idle power is down 44%. Sleep is the next big prize.</h2>
+  <p>All figures are whole-system power on battery with the panel off. They come from a randomized overnight run of 6 pairs and 6 sleeps. The last bar is a different machine: an A18 Pro MacBook Neo asleep in macOS, measured by the aurora-silicon project. It shows what real SoC sleep is worth.</p>
+  <div class="panel">
+    <div class="chart" id="wchart" role="img" aria-label="Bar chart of watts: stock idle 1.096 W, tuned idle 0.617 W, Linux s2idle sleep 0.440 W, macOS asleep on A18 Pro 0.109 W">
+      <div class="row" data-tip="Stock kernel and settings, panel off. 6 pairs, 4 min each.">
+        <div class="name">Idle, stock<small>panel off, untuned</small></div>
+        <div class="track"><div class="bar past" style="width:calc(1.096/1.2*100%)"></div><span class="val" style="left:calc(1.096/1.2*100% + 8px)">1.096 W</span></div>
+      </div>
+      <div class="row" data-tip="Same pairs, lab tuning on. Saves 479 mW (95% CI 404–554). Every pair agreed.">
+        <div class="name">Idle, tuned<small>PCIe ASPM + Wi-Fi power save</small></div>
+        <div class="track"><div class="bar now" style="width:calc(0.617/1.2*100%)"></div><span class="val" style="left:calc(0.617/1.2*100% + 8px)">0.617 W</span></div>
+      </div>
+      <div class="row" data-tip="6 × 45 min sleeps, every one 0.4395–0.4405 W. 1.22% battery per hour.">
+        <div class="name">Linux sleep (s2idle)<small>CPUs off, SoC still powered</small></div>
+        <div class="track"><div class="bar now" style="width:calc(0.440/1.2*100%)"></div><span class="val" style="left:calc(0.440/1.2*100% + 8px)">0.440 W</span></div>
+      </div>
+      <div class="row" data-tip="Reference only: macOS asleep on an A18 Pro MacBook Neo (aurora-silicon). Real SoC power-down.">
+        <div class="name">Target: real SoC sleep<small>macOS asleep, A18 Pro reference</small></div>
+        <div class="track"><div class="bar goal" style="width:calc(0.109/1.2*100%)"></div><span class="val" style="left:calc(0.109/1.2*100% + 8px)">0.109 W</span></div>
+      </div>
+    </div>
+    <div class="axis"><div></div><div class="ticks"><span style="left:0">0</span><span style="left:25%">0.3</span><span style="left:50%">0.6</span><span style="left:75%">0.9</span><span style="left:100%">1.2 W</span></div></div>
+    <div class="legend" style="margin-top:10px"><span><i class="sw past"></i>Stock baseline</span><span><i class="sw now"></i>Measured on the M1 with the lab's work</span><span><i class="sw goal"></i>Reference from another machine</span></div>
+  </div>
+  <div class="stats">
+    <div class="stat"><span class="v">−479 mW</span><span class="l">idle saving from the tuning, 95% CI 404–554</span></div>
+    <div class="stat"><span class="v">1.22 %/h</span><span class="l">battery drain asleep, 6 of 6 sleeps clean</span></div>
+    <div class="stat"><span class="v">≈3.4 days</span><span class="l">standby on the current Linux sleep</span></div>
+    <div class="stat"><span class="v">≈0.33 W</span><span class="l">left on the table if the SoC could truly power down</span></div>
+  </div>
+</section>
+
+<section aria-labelledby="why">
+  <div class="eyebrow">Why sleep is stuck at 0.44 W</div>
+  <h2 id="why">Linux freezes the CPUs. macOS turns the whole chip off.</h2>
+  <div class="split">
+    <div class="panel" style="display:grid;gap:8px">
+      <span class="chip info" style="justify-self:start">What Linux does today</span>
+      <p><b>s2idle</b> parks every CPU in power-down for 100% of the sleep. The rest of the system-on-chip stays powered: memory controllers, fabric and coprocessors. 45 of 63 powered SoC domains stayed on through a sleep. Knob tweaks cannot fix that. The ranked lever review put all the remaining small levers together at about 30–60 mW idle and about 20 mW asleep.</p>
+    </div>
+    <div class="panel" style="display:grid;gap:8px">
+      <span class="chip ok" style="justify-self:start">What real sleep needs</span>
+      <p><b>Suspend-to-RAM</b> means DRAM in self-refresh, the SoC powered off, and the chip woken by a reset into a resume stub. Linux on the M1 lacks three pieces: a wake source that survives SoC-off, CPU power-down and restart, and the exact register sequence Apple uses on the way in and out.</p>
+    </div>
+  </div>
+  <div class="panel scroll">
+    <table>
+      <thead><tr><th>Groundwork for real sleep</th><th>State</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td>PMU RTC alarm as wake source</td><td><span class="chip ok">Works</span></td><td>Woke the M1 from s2idle on its own. Kernel branch <code>m1power/s2r-pmu-rtc</code>. Still unknown whether it wakes a fully powered-down SoC.</td></tr>
+        <tr><td>CPU hotplug</td><td><span class="chip weak">Park only</span></td><td>Park mode passed 100 offline/online cycles per core. True power-down needs a clean m1n1 at v1.6.1 or older. The installed build reports <code>bc79acc4-dirty</code>.</td></tr>
+        <tr><td>PMP power-management coprocessor</td><td><span class="chip ok">Starts</span></td><td>Boots under Linux (branch <code>m1power/pmp-v1-overlay</code>). Saves about 35 ± 40 mW at idle, which is not significant. Kept because macOS's sleep path talks to it.</td></tr>
+        <tr><td>Entry/wake sequence</td><td><span class="chip weak">Static only</span></td><td>Reverse-engineered statically from Apple's macOS 13.5 kernel for this model. Kept private. A live trace would confirm it.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section aria-labelledby="route">
+  <div class="eyebrow">The macOS trace route, today</div>
+  <h2 id="route">Watch macOS fall asleep, one register write at a time</h2>
+  <p>The plan is to run macOS as a guest under m1n1, Asahi's bootloader and hypervisor. m1n1 traps and logs every hardware access while macOS goes to sleep. Today was mostly about getting a macOS that would boot under it.</p>
+  <div class="panel">
+    <ol class="tl">
+      <li class="dead"><span class="n">1</span><div class="body"><div class="head"><h3>Install macOS 13.5 on its own volume</h3><span class="chip dead">Dead end</span></div><p>13.5 is the version m1n1's hypervisor supports on M1. Its installer app refused to run on the M1's macOS 27.0.1.</p></div></li>
+      <li class="dead"><span class="n">2</span><div class="body"><div class="head"><h3>USB installer: "Failed to download required installer asset (SFR)"</h3><span class="chip dead">Dead end</span></div><p>It failed repeatedly. Apple's update server now gives every installer only the newest firmware package (27.2), even though Apple still signs 13.5. Firmware never goes backwards. macOS 14.8.3 has the same problem.</p></div></li>
+      <li class="ok"><span class="n">3</span><div class="body"><div class="head"><h3>Pivot: run the existing macOS 27.0.1 under m1n1</h3><span class="chip ok">Done</span></div><p>m1n1 became the boot loader of Macintosh HD, with Permissive security set in Recovery. It took three Recovery attempts, because Recovery pairs with the default OS.</p></div></li>
+      <li class="dead"><span class="n">4</span><div class="body"><div class="head"><h3>New wall: SPTM/TXM</h3><span class="chip dead">Upstream modes fail</span></div><p>macOS 27 is the first macOS that uses Apple's newer kernel security layer on the M1. Neither of m1n1's SPTM modes works there. Nested mode needs a CPU feature (FEAT_NV2) the M1 lacks. Emulation mode traps ERET through FEAT_FGT, which the M1 also lacks. Running natively hangs without a word, because SPTM reads an EL2 register and spins.</p></div></li>
+      <li class="ok"><span class="n">5</span><div class="body"><div class="head"><h3>Patch m1n1 for the M1</h3><span class="chip ok">5 fixes</span></div><p>On the local branch <code>m1power/m1-sptm-native</code>:</p>
+        <ul class="fixlist">
+          <li>Rewrite every ERET in the guest images into a call into m1n1, and emulate it there.</li>
+          <li>Virtualize the M1's single memory-controller lock region.</li>
+          <li>Pass the guest's AMX enable through to hardware. This fixed a panic right after login.</li>
+          <li>Run 4K-page (Rosetta) processes unshadowed.</li>
+          <li>Skip an error-handler hook the M1 does not have.</li>
+        </ul></div></li>
+      <li class="ok"><span class="n">6</span><div class="body"><div class="head"><h3>macOS 27.0.1 boots to the desktop as an m1n1 guest</h3><span class="chip ok">First, as far as we know</span></div><p>The sleep tracer records the hardware traffic. A hardware watchdog armed before each start turns any hang into an automatic reboot.</p></div></li>
+      <li class="now"><span class="n">7</span><div class="body"><div class="head"><h3>Sleep fails at core power-down</h3><span class="chip weak">Under investigation</span></div><p>Three tries, all failing at the same stage. Details below.</p></div></li>
+    </ol>
+  </div>
+</section>
+
+<section aria-labelledby="block">
+  <div class="eyebrow">What's blocking us</div>
+  <h2 id="block">One idle efficiency core faults on the way down</h2>
+  <p>In every attempt, macOS tells the SMC it is going to sleep. It power-cycles the keyboard/trackpad SPI domain a few times, then one idle E-core faults. The first try also showed NVMe, USB-C accessory power and the display powering down cleanly before the fault.</p>
+  <div class="attempts">
+    <div class="panel att">
+      <div class="head" style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><h3>Attempt 1</h3><span class="chip dead">SError in hypervisor</span></div>
+      <div class="stages" aria-label="Stages reached"><div>SMC told</div><div>SPI cycled</div><div>Cores idle</div><div class="x">E-core fault</div><div class="no">SoC off</div></div>
+      <p>The hypervisor caught a hardware SError while the core sat in idle (retention mode). Resuming raised it again, so wake was impossible. The trace logged 284k events, and 90% of them were one register toggling 2,000 times a second.</p>
+    </div>
+    <div class="panel att">
+      <div class="head" style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><h3>Attempt 2</h3><span class="chip dead">Theory dead</span></div>
+      <div class="stages"><div>SMC told</div><div>SPI cycled</div><div>Cores idle</div><div class="x">E-core fault</div><div class="no">SoC off</div></div>
+      <p>This try held back the E-cluster idle report from the PMP. Nothing changed. The same SError hit at the same stage.</p>
+    </div>
+    <div class="panel att">
+      <div class="head" style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><h3>Attempt 3</h3><span class="chip weak">Fault is real</span></div>
+      <div class="stages"><div>SMC told</div><div>SPI cycled</div><div>Cores idle</div><div class="x">E-core fault</div><div class="no">SoC off</div></div>
+      <p>SErrors went to macOS this time. Its own handler panicked with <span class="mono">DPC err (UNKNOWN:multiple) on E-core</span>. The fault is real hardware, not something the hypervisor made up. The trace was cut down to a small set of zones.</p>
+    </div>
+  </div>
+  <div class="panel" style="display:grid;gap:8px;border-color:var(--target)">
+    <span class="chip info" style="justify-self:start;color:var(--target);background:var(--warn-bg)">Current lead</span>
+    <p>The cores run with m1n1's idle and power settings, because m1n1 blocks macOS's writes to the core power registers. One example is <code>ACC_CFG=0xd</code> at boot. macOS 13 tolerated this. macOS 27's sleep entry may not. A multi-agent analysis of Apple's error handler and the three traces is running now.</p>
+  </div>
+</section>
+
+<section aria-labelledby="bench">
+  <div class="eyebrow">The bench</div>
+  <h2 id="bench">Two machines, one cable, one tailnet</h2>
+  <div class="panel diagram scroll">
+    <svg viewBox="0 0 760 330" role="img" aria-label="Diagram: the M3 Max host connects to the M1 Air by a USB-C cable for the m1n1 proxy and hypervisor console, and over Tailscale for maclab, SSH and Taildrop">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink-3)"/></marker>
+      </defs>
+      <!-- host -->
+      <rect x="20" y="40" width="250" height="250" rx="12" fill="var(--surface)" stroke="var(--line)" stroke-width="1.5"/>
+      <text x="40" y="72" font-size="18" font-weight="700" style="font-family:var(--f-display)">M3 Max</text>
+      <text x="40" y="92" class="sm">bench host · Omarchy Linux</text>
+      <rect x="40" y="110" width="210" height="32" rx="6" fill="var(--info-bg)"/><text x="52" y="131" font-size="13">m1n1 proxy + hv-trace-kit</text>
+      <rect x="40" y="150" width="210" height="32" rx="6" fill="var(--info-bg)"/><text x="52" y="171" font-size="13">maclab server (build kernels)</text>
+      <rect x="40" y="190" width="210" height="32" rx="6" fill="var(--info-bg)"/><text x="52" y="211" font-size="13">analysis agents · reports</text>
+      <text x="40" y="262" class="mono">power read from SMC accumulators</text>
+      <!-- target -->
+      <rect x="490" y="40" width="250" height="250" rx="12" fill="var(--surface)" stroke="var(--line)" stroke-width="1.5"/>
+      <text x="510" y="72" font-size="18" font-weight="700" style="font-family:var(--f-display)">M1 Air (J313)</text>
+      <text x="510" y="92" class="sm">target · two boot paths</text>
+      <rect x="510" y="110" width="210" height="52" rx="6" fill="var(--good-bg)"/><text x="522" y="131" font-size="13">Omarchy, linux-aurora</text><text x="522" y="150" class="sm">m1power toolkit, lab agent</text>
+      <rect x="510" y="172" width="210" height="52" rx="6" fill="var(--warn-bg)"/><text x="522" y="193" font-size="13">macOS 27.0.1 as m1n1 guest</text><text x="522" y="212" class="sm">watchdog armed before start</text>
+      <text x="510" y="262" class="mono">the subject of every watt</text>
+      <!-- links -->
+      <line x1="270" y1="126" x2="488" y2="190" stroke="var(--target)" stroke-width="2" marker-end="url(#ar)"/>
+      <rect x="318" y="134" width="124" height="38" rx="5" fill="var(--bg)"/>
+      <text x="380" y="150" text-anchor="middle" font-size="12.5" font-weight="600">USB-C cable</text>
+      <text x="380" y="166" text-anchor="middle" class="mono">m1n1 proxy, trace</text>
+      <line x1="270" y1="166" x2="488" y2="136" stroke="var(--accent)" stroke-width="2" marker-end="url(#ar)" marker-start="url(#ar)"/>
+      <rect x="320" y="88" width="122" height="38" rx="5" fill="var(--bg)"/>
+      <text x="380" y="104" text-anchor="middle" font-size="12.5" font-weight="600">Tailscale</text>
+      <text x="380" y="120" text-anchor="middle" class="mono">SSH, maclab, Taildrop</text>
+      <text x="380" y="252" text-anchor="middle" class="sm">maclab reboots into a lab kernel</text>
+      <text x="380" y="268" text-anchor="middle" class="sm">and back, with a no-contact deadline</text>
+    </svg>
+  </div>
+</section>
+
+<section aria-labelledby="levers">
+  <div class="eyebrow">Levers tried</div>
+  <h2 id="levers">What each knob was worth</h2>
+  <p>Paired, randomized A/B blocks with 95% confidence intervals. The dot is the saving in mW, the line is the CI, and the left edge is zero. Grey means not significant.</p>
+  <div class="panel scroll">
+    <table id="levertable">
+      <thead><tr><th>Lever</th><th>Saving</th><th>Effect (0–260 mW)</th><th>Verdict</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <p class="muted" style="font-size:0.88rem">The whole stack measured together saves 479 mW at idle. Individual knob figures came from different days and starting points, so they do not add up exactly.</p>
+</section>
+
+<section aria-labelledby="grey">
+  <div class="eyebrow">Grey areas</div>
+  <h2 id="grey">Open questions</h2>
+  <ul class="qs">
+    <li><b>What is the "DPC" core error?</b><span class="muted">And which register holds it.</span></li>
+    <li><b>Can macOS 27 sleep under any hypervisor on M1?</b><span class="muted">Nobody has reported it.</span></li>
+    <li><b>Is there a 5-second AON watchdog?</b><span class="muted">Aura hit one on the A18 Pro. Slow trapping trips it.</span></li>
+    <li><b>Does m1n1's USB link keep the chip on?</b><span class="muted">On the A18 Pro, the PMU never powered off while the hypervisor's USB stayed up.</span></li>
+    <li><b>Panel on costs 3.2 W, not ~1.9 W</b><span class="muted">The extra ~1.3 W is not identified yet.</span></li>
+    <li><b>Does PS-Poll really save anything?</b><span class="muted">Pooled about −17 mW. Weak evidence.</span></li>
+    <li><b>CPU power-down vs park</b><span class="muted">Blocked on the installed m1n1 build (bc79acc4-dirty).</span></li>
+    <li><b>Is Apple's PMP firmware needed for Linux S2R?</b><span class="muted">Or can Linux bypass it?</span></li>
+    <li><b>"PS fpwm1: Failed to reach power state"</b><span class="muted">Logged on every resume. Harmless so far, not investigated.</span></li>
+    <li><b>Reboot the M1 remotely from the M3 Max</b><span class="muted">Possible via tuxvdmtool. Needs a module rebuild. Untested.</span></li>
+  </ul>
+</section>
+
+<section aria-labelledby="leads">
+  <div class="eyebrow">From the aurora-silicon survey</div>
+  <h2 id="leads">Useful leads from a neighbouring project</h2>
+  <p>Nothing in that org runs macOS 27 under a hypervisor on M1, and nothing in it does suspend-to-RAM on M1. Still, a few pieces carry over:</p>
+  <ul class="leads">
+    <li><b>Aura's 10-step macOS sleep sequence</b> captured on the A18 Pro. It is a ready checklist for the M1.</li>
+    <li><b>tuxvdmtool</b> reboots the M1 over USB-C with no button presses.</li>
+    <li><b>A Wi-Fi resume-wedge recovery script</b> that reloads the driver after a bad resume.</li>
+    <li><b>Neural Engine runtime-PM numbers</b>: 107–173 mW if the ANE is held on.</li>
+    <li><b>An unmerged kernel patch</b> that puts idle USB-C port controllers to sleep.</li>
+  </ul>
+</section>
+
+<section aria-labelledby="tools">
+  <div class="eyebrow">Toolbox</div>
+  <h2 id="tools">What the lab runs on</h2>
+  <div class="tools">
+    <div class="tool"><h3>m1power</h3><p>On-device toolkit with knobs, a tune spec, a sleep ledger and a standby guard. Fixed today: a settle loop re-applies knobs until every one holds.</p></div>
+    <div class="tool"><h3>maclab</h3><p>Remote lab that builds and boots kernels on the M1 and reboots back by a deadline if contact is lost. It once replayed a stale job overnight.</p></div>
+    <div class="tool"><h3>hv-trace-kit</h3><p>m1n1 hypervisor tracer for the sleep path. It has async and unbuffered zones, a PMU post-mortem reader and a kernelcache unwrapper.</p></div>
+    <div class="tool"><h3>m1n1</h3><p>Asahi's bootloader and hypervisor, on a locally patched branch for SPTM on the M1.</p></div>
+    <div class="tool"><h3>Hardware watchdog</h3><p>Armed before each guest start, so a hang turns into a reboot.</p></div>
+    <div class="tool"><h3>Tailscale + Taildrop</h3><p>SSH and file transfer between the bench and the Mac.</p></div>
+    <div class="tool"><h3>USB-C cable</h3><p>Connects M3 Max and M1 Air for the m1n1 proxy and the trace stream.</p></div>
+    <div class="tool"><h3>Multi-agent research</h3><p>Parallel reviewers and analysts. Models are matched to task difficulty.</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="next">
+  <div class="eyebrow">Next steps</div>
+  <h2 id="next">Short list</h2>
+  <ol class="next">
+    <li><span>Identify the E-core "DPC" error. Then test the lead by letting macOS 27 own the core power registers, starting with the boot-time write m1n1 blocks today.</span></li>
+    <li><span>Keep the trace lean so the power-down stays fast, and drop m1n1's USB link at the sleep commit to rule out the A18 Pro failure modes.</span></li>
+    <li><span>Set up tuxvdmtool so the bench can reboot the M1 without a hand on the power button.</span></li>
+    <li><span>Decode the captured entry sequence and compare it with Aura's 10 steps and the static 13.5 sequence. That becomes the checklist for Linux suspend-to-RAM.</span></li>
+    <li><span>Quick wins on the side: check whether the Neural Engine is held on, and find the extra 1.3 W with the panel on.</span></li>
+  </ol>
+</section>
+
+<footer>Source: the project log and evidence notes in the m1-power-lab repository, as of 6 November 2026. Power figures were measured on the M1 Air's own SMC energy accumulators. The 0.109 W figure was measured by the aurora-silicon project on different hardware. No Apple binary content appears here.</footer>
+</div>
+
+<div class="tip" id="tip" hidden></div>
+
+<script>
+(function(){
+  // savings in mW (positive = lower power); lo/hi = 95% CI where known
+  var L = [
+    ["Wi-Fi awake tail 2000 → 200 ms", 229, 96, 361, "Kept (50 ms)", "ok", "per-packet awake tail shortened"],
+    ["PCIe ASPM + L1 substates, macOS-like timings", 204, 153, 254, "Kept", "ok", "also −180 mW asleep; substates dropped around suspend to dodge a Wi-Fi firmware D3 bug"],
+    ["Wi-Fi power save on", 186, 127, 244, "Kept", "ok", "NetworkManager reset it after every resume until a later drop-in fixed it"],
+    ["Wi-Fi awake tail 200 → 50 ms", 25, 6, 44, "Kept", "ok", "50 → 10 ms showed no effect"],
+    ["Wi-Fi PS-Poll", 17, 6, 27, "Kept, weak", "weak", "pooled from two tests; second test alone not significant"],
+    ["PMP coprocessor started", 35, -5, 75, "Kept for S2R", "weak", "about 35 ± 40 mW, not significant"],
+    ["Wi-Fi DTIM skipping", 9, -3, 21, "Rejected", "dead", "not significant"],
+    ["Unbind 2nd USB-C controller (after oops fix)", 5, -6, 17, "Rejected", "dead", "driver fix proposed upstream; no domain powered off"],
+    ["DCP video power savings flag", 0, null, null, "Rejected", "dead", "no change with panel on or off"],
+    ["Power profile, idle governor, BT off, runtime PM", 0, null, null, "Rejected", "dead", "no effect within about ±30 mW"]
+  ];
+  var tb = document.querySelector("#levertable tbody"), MAX = 260;
+  function pct(v){ return Math.max(0, Math.min(100, v / MAX * 100)); }
+  L.forEach(function(r){
+    var sig = r[2] !== null && r[2] > 0;
+    var ci = '<div class="ci' + (sig ? '' : ' ns') + '"><span class="zero"></span>' +
+      (r[2] !== null ? '<span class="rng" style="left:' + pct(r[2]) + '%;width:' + (pct(r[3]) - pct(r[2])) + '%"></span>' : '') +
+      '<span class="pt" style="left:' + pct(r[1]) + '%"></span></div>';
+    var s = r[1] === 0 ? '≈ 0' : '−' + r[1] + ' mW';
+    var c = r[2] !== null ? '<br><span class="muted" style="font-size:0.8rem">CI ' + r[2] + '…' + r[3] + '</span>' : '';
+    var tr = document.createElement("tr");
+    tr.innerHTML = '<td>' + r[0] + '<br><span class="muted" style="font-size:0.82rem">' + r[6] + '</span></td><td class="num">' + s + c + '</td><td>' + ci + '</td><td><span class="chip ' + r[5] + '">' + r[4] + '</span></td>';
+    tb.appendChild(tr);
+  });
+  var tip = document.getElementById("tip");
+  document.querySelectorAll("[data-tip]").forEach(function(el){
+    el.addEventListener("mousemove", function(e){
+      tip.textContent = el.getAttribute("data-tip"); tip.hidden = false;
+      var x = Math.min(e.clientX + 14, window.innerWidth - 280);
+      tip.style.left = x + "px"; tip.style.top = (e.clientY + 14) + "px";
+    });
+    el.addEventListener("mouseleave", function(){ tip.hidden = true; });
+  });
+})();
+</script>
