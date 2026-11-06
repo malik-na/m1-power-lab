@@ -181,28 +181,42 @@ Nothing in this stage changes anything.
   Omarchy and all data. A DFU "revive" only reinstalls the current firmware
   and recovery. Neither gives you a 13.5 volume next to the others.
 
-### B1. Get the 13.5 installer (main macOS, 20-40 min download)
+### B1. Get the 13.5 installer (main macOS, 20-60 min download, 11.9 GB)
 
-1. Try Apple's catalog first:
+Checked 2026-11-06: Apple's update catalog no longer offers 13.5 (its only macOS 13
+installer is 13.7.8, 22H730, which the m1n1 hypervisor does not support), so
+`softwareupdate --fetch-full-installer --full-installer-version 13.5` will fail. Use the
+archived package the m1n1 docs link (`m1n1-hypervisor.md:39-47`). archive.org is a
+third-party mirror, so the package is checked twice before it is opened.
+
+1. Download it in the main macOS (Safari, or Terminal):
    ```sh
-   softwareupdate --list-full-installers | grep -E '13\.5\b'
-   softwareupdate --fetch-full-installer --full-installer-version 13.5
+   cd ~/Downloads
+   curl -L -o InstallAssistant.pkg https://archive.org/download/install-assistant_20240930/InstallAssistant.pkg
    ```
-   This puts "Install macOS Ventura.app" in `/Applications`. Copy it somewhere
-   first if you want to keep it; it deletes itself after one install.
-2. If the catalog no longer offers 13.5, use the archived `InstallAssistant.pkg`
-   that the m1n1 docs link (`m1n1-hypervisor.md:39-47`, archive.org item
-   `install-assistant_20240930`). archive.org is a third-party mirror, so check
-   the package before you open it:
+2. Check it is the archived file (size 11934300398 bytes):
    ```sh
-   pkgutil --check-signature ~/Downloads/InstallAssistant.pkg   # must say "Apple Software" / signed by Apple
+   shasum -a 1 InstallAssistant.pkg   # must be 9ceeac3a75aaf3d6e477990caaf2c695f31624e2
    ```
-   **[STOP POINT]** If it is not signed by Apple, delete it and stop. If it is,
-   open it; it extracts "Install macOS Ventura.app" into `/Applications`.
-3. Check the app:
+3. Check that Apple signed it:
+   ```sh
+   pkgutil --check-signature InstallAssistant.pkg   # must say "Status: signed by a certificate trusted by macOS"
+                                                     # and the chain must be Software Update / Apple
+   ```
+   **[STOP POINT]** If either check fails, delete it and stop.
+4. Open the package. It extracts "Install macOS Ventura.app" into `/Applications`.
+5. Check the app:
    ```sh
    codesign -dv --verbose=2 "/Applications/Install macOS Ventura.app" 2>&1 | grep Authority   # Apple authorities only
+   defaults read "/Applications/Install macOS Ventura.app/Contents/Info.plist" DTPlatformVersion 2>/dev/null; \
+     /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "/Applications/Install macOS Ventura.app/Contents/Info.plist"
    ```
+   Copy the app somewhere first if you want to keep it; it deletes itself after one install.
+
+**Signing is only known by trying.** The installer asks Apple to personalize 13.5 for this
+Mac during B3. Public "signed" lists (ipsw.me) mark every macOS build as signed and cannot be
+trusted for this. If B3 stops with a personalization or "could not be verified" error, that
+is the answer: stop there (B0).
 
 ### B2. Add the volume (main macOS, 2 min). **[DISK]**
 
