@@ -108,12 +108,15 @@ CFG = {
     # read-to-clear. pmu_postmortem.py reads them after the reboot instead.
     "snap_wake": _env_int("S2R_SNAP_WAKE", 0),
     "cyc_read": _env_int("S2R_CYC_READ", 1),   # read CYC_OVRD_EL1 back in the exit-cpu hook
+    "dcp": _env_int("S2R_DCP", 1),             # trace the DCP/DCPEXT RTKit mailboxes too
 }
 
 # Fallback addresses (t8103) used only if the live ADT lacks a node.
 FALLBACK = {
     "smc": 0x23e400000,       # t8103.dtsi:1301-1305
     "pmp": 0x23bc00000,       # PMP mailbox 0x23bc08000 = base + 0x8000
+    "dcp": 0x231c00000,       # display coprocessor ASC (J313 ADT /arm-io/dcp)
+    "dcpext": 0x271c00000,    # external-display coprocessor ASC (/arm-io/dcpext)
 }
 
 # Expected /arm-io/pmgr reg[] on t8103 (J313 ADT, fabric/adt.pkl). A zone is
@@ -249,7 +252,7 @@ class S2RTrace:
         if kind == "spmi":
             self._spmi(evt, base, region, write, data)
             return
-        if kind in ("smc", "pmp"):
+        if kind in ("smc", "pmp", "dcp", "dcpext"):
             self._mbox(evt, base, region, kind, write, data)
             return
         if kind == "sram":
@@ -290,6 +293,8 @@ class S2RTrace:
             mgmt_hot = "mgmt" in o and o.get("mgmt") in ("SET_AP_POWER", "SET_IOP_POWER", "IOP_POWER_ACK")
             smc_hot = o.get("smc") in ("WRITE_KEY", "RW_KEY") or "sram_addr" in o
             self.say(1 if (mgmt_hot or smc_hot or kind == "pmp") else 2, o["text"])
+            if kind in ("dcp", "dcpext") and o.get("ep") == 0:
+                self.say(1, o["text"])
             if "sram_addr" in o and self.armed:
                 self._add_sram_zone()
 
@@ -318,7 +323,10 @@ class S2RTrace:
 
     def add_always(self):
         """Mailboxes only: cheap, needed from boot to learn the SMC SRAM address."""
-        for kind, node in (("smc", "smc"), ("pmp", "pmp")):
+        kinds = [("smc", "smc"), ("pmp", "pmp")]
+        if CFG["dcp"]:
+            kinds += [("dcp", "dcp"), ("dcpext", "dcpext")]
+        for kind, node in kinds:
             b = self._asc_base(node, FALLBACK[kind])
             self._add(S2R_IDENT_ALWAYS, b + 0x8800, 0x10, TraceMode.ASYNC, f"{kind}-mbox",
                       kind=kind, write=True, read=False, base=b)
