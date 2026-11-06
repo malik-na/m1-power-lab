@@ -76,6 +76,14 @@ def _env_zones(name, default):
 
 
 CYC_OVRD_ENC = (3, 5, 15, 5, 0)   # CYC_OVRD_EL1, src/cpu_regs.h:533
+# Read on the faulting CPU after a guest SError (m1n1 src/exception.c:235-245, cpu_regs.h:502-544).
+SERR_REGS_COMMON = [("ISR_EL1", (3, 0, 12, 1, 0)), ("CYC_OVRD", CYC_OVRD_ENC),
+                    ("ACC_CFG", (3, 5, 15, 4, 0)), ("ACC_OVRD", (3, 5, 15, 6, 0))]
+SERR_REGS_E = [("E_LSU_ERR_STS", (3, 3, 15, 2, 0)), ("E_FED_ERR_STS", (3, 4, 15, 0, 2)),
+               ("E_MMU_ERR_STS", (3, 6, 15, 2, 0))]
+SERR_REGS_P = [("LSU_ERR_STS", (3, 3, 15, 0, 0)), ("FED_ERR_STS", (3, 4, 15, 0, 0)),
+               ("MMU_ERR_STS", (3, 6, 15, 0, 0))]
+CLUSTER_STATE = 0x23b738000       # +4 E, +8 P cluster state report (held in C, see hv_cpu_power.c)
 
 S2R_IDENT_ALWAYS = "S2R"
 S2R_IDENT_ARMED = "S2R-ARM"
@@ -85,13 +93,16 @@ CFG = {
     "arm_at_start": _env_int("S2R_ARM_AT_START", 0),
     "console": _env_int("S2R_CONSOLE", 1),     # 0 quiet, 1 decoded/AON/SoC-level, 2 everything
     "pmgr": _env_int("S2R_PMGR", 1),           # PMGR power-state block (reg[0])
-    "clkgen": _env_int("S2R_CLKGEN", 1),       # clock generator (reg[2])
+    "clkgen": _env_int("S2R_CLKGEN", 1),       # clkgen mux page only (P1-P5); 2 = whole reg[2]
+    "reg3": _env_int("S2R_REG3", 0),           # pmgr reg[3]: no writes in try13, none in SEQUENCE.md
     "cluster": _env_int("S2R_CLUSTER", 0),     # E/P cluster blocks: run-2 option (see CPM_SERROR)
     "aic": _env_int("S2R_AIC", 0),             # AIC writes: very noisy, off by default
     "stop": _env_int("S2R_STOP", 0),           # hold the first write to a stop zone
     # Only the candidate words, not the 16 KiB page: every READ inside a HOOK
     # zone becomes a synchronous proxy round trip (hv/__init__.py:552-574).
-    "stop_zones": _env_zones("S2R_STOP_ZONES", [(0x23d2d4000, 0x10)]),
+    # t8103 S2R timer = pmgr reg[1] + 0x44000 (var/s2r-static/SEQUENCE.md P15, U6);
+    # 0x23d2d4000 was the J700 offset (0x2d4000) misapplied.
+    "stop_zones": _env_zones("S2R_STOP_ZONES", [(0x23d2c4000, 0x10)]),
     # Wake-block reads are off in the guest: the +0x28..0x44 words may be
     # read-to-clear. pmu_postmortem.py reads them after the reboot instead.
     "snap_wake": _env_int("S2R_SNAP_WAKE", 0),
@@ -338,21 +349,30 @@ class S2RTrace:
             r0 = self._checked_reg(pm, 0, E[0], "pmgr")
             if r0:
                 self._add(A, r0[0], r0[1], AS, "pmgr")
-                # UNBUF sub-pages: only inside a validated reg[0]
-                for start, name in ((0x23b71c000, "pmgr-pwrgate"), (0x23b768000, "pmgr-cllt?"),
-                                    (0x23b780000, "pmgr-cluster-ctl?")):
+                # UNBUF sub-pages: the t8103 quiesceHW registers (var/s2r-static/SEQUENCE.md):
+                # 0x23b718000/4 cluster PS (P9/P10), 0x23b71c080/8 CPM gating (P8),
+                # 0x23b74c200 SEP PG (P14). Only inside a validated reg[0].
+                for start, name in ((0x23b718000, "pmgr-cluster-ps"), (0x23b71c000, "pmgr-pwrgate"),
+                                    (0x23b74c000, "pmgr-seppg")):
                     self._add(A, start, 0x4000, U, name)
         if CFG["clkgen"]:
             r2 = self._checked_reg(pm, 2, E[2], "clkgen")
             if r2:
-                self._add(A, r2[0], r2[1], AS, "clkgen")
-                self._add(A, 0x23b040000, 0x4000, U, "clkgen-mux?")
-        r3 = self._checked_reg(pm, 3, E[3], "pmgr-reg3")
-        if r3:
-            self._add(A, r3[0], r3[1], AS, "pmgr-reg3")
+                if CFG["clkgen"] >= 2:
+                    self._add(A, r2[0], r2[1], AS, "clkgen")
+                self._add(A, 0x23b040000, 0x4000, U, "clkgen-mux")    # P1-P5 0x23b040140..154
+        if CFG["reg3"]:
+            r3 = self._checked_reg(pm, 3, E[3], "pmgr-reg3")
+            if r3:
+                self._add(A, r3[0], r3[1], AS, "pmgr-reg3")
         r1 = self._checked_reg(pm, 1, E[1], "aon-pmgr")
         if r1:
-            self._add(A, r1[0], r1[1], U, "aon-pmgr")       # includes WDT 0x23d2b0000/0x23d2b8000
+            # ASYNC for the block (0x23d2dc100 is written after every PS change); UNBUF
+            # only where a write can end the session: WDT and the S2R-timer commit.
+            self._add(A, r1[0], r1[1], AS, "aon-pmgr")
+            for start, name in ((0x23d2b0000, "aon-wdt"), (0x23d2b8000, "aon-wdt-extra"),
+                                (0x23d2c4000, "aon-s2r-timer")):
+                self._add(A, start, 0x4000, U, name)
         r4 = self._checked_reg(pm, 4, E[4], "nub-wake")
         if r4:
             self._add(A, r4[0], r4[1], U, "nub-wake")
@@ -479,6 +499,8 @@ class S2RTrace:
             try:
                 if isinstance(s, str) and any(t in s for t in self.TEE_TAGS):
                     self.rec("hvlog", text=s, cpu=hv.ctx.cpu_id if hv.ctx else None)
+                    if "SERROR" in s:
+                        self.serr_regs()
             except Exception:
                 pass
 
@@ -512,6 +534,27 @@ class S2RTrace:
             return orig_exit(cpu)
 
         hv.p.hv_exit_cpu = exit_cpu
+
+    def serr_regs(self):
+        """Error-status sysregs of the CPU that took a guest SError (we run in its proxy
+        context, like print_l2c_regs), plus the cluster state reports PMP sees."""
+        hv = self.hv
+        ctx = hv.ctx
+        p_core = bool(ctx and (ctx.mpidr >> 16) & 1)
+        regs = {}
+        for name, enc in SERR_REGS_COMMON + (SERR_REGS_P if p_core else SERR_REGS_E):
+            try:
+                regs[name] = f"{hv.u.mrs(enc):#x}"
+            except Exception as e:
+                regs[name] = f"ERR {e}"
+        for off in (4, 8):
+            try:
+                regs[f"{CLUSTER_STATE + off:#x}"] = f"{hv.p.read32(CLUSTER_STATE + off):#x}"
+            except Exception as e:
+                regs[f"{CLUSTER_STATE + off:#x}"] = f"ERR {e}"
+        self.rec("serr", text="error status on the faulting core", regs=regs,
+                 cpu=ctx.cpu_id if ctx else None)
+        print("[s2r] SError regs: " + " ".join(f"{k}={v}" for k, v in regs.items()))
 
     def status(self):
         print(f"[s2r] log {self.path}  armed={self.armed}  records={self.seq}")

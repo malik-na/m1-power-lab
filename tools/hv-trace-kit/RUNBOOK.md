@@ -584,7 +584,7 @@ Work down this list. None of the steps in this plan touch the NOR system firmwar
 
 - PMGR power states, power gates and the candidate cluster-control and CLLT pages;
 - the clock generator;
-- AON PMGR, including the S2R-timer candidate `0x23d2d4000` and the watchdog pages `0x23d2b0000`/`0x23d2b8000`;
+- AON PMGR, including the S2R-timer commit `0x23d2c4000` (pmgr reg[1] + 0x44000; `0x23d2d4000` was the J700 offset misapplied) and the watchdog pages `0x23d2b0000`/`0x23d2b8000`;
 - the wake block `0x23d004000` (writes only);
 - both SPMI buses, with decoded Sera PMU commands, as far as the AP issues them;
 - the SMC and PMP mailboxes;
@@ -649,7 +649,7 @@ watchdog. R4 has a variant without it.
 ### R4. Further runs (same session, if time allows)
 
 - **Stop mode: `S2R_STOP=1 $S ./session.sh guest`.**
-  - The first write into `S2R_STOP_ZONES` is held, a snapshot is taken and a shell opens. The default zone is the 16 bytes at the S2R-timer candidate, `0x23d2d4000`.
+  - The first write into `S2R_STOP_ZONES` is held, a snapshot is taken and a shell opens. The default zone is the 16 bytes at the S2R-timer commit, `0x23d2c4000`.
   - `S2R.drop_next=True` drops the write; Ctrl-D performs it.
   - Use it to confirm the S2R timer address. Stay under about 3 s in the shell, because a reconfiguration watchdog may already be armed.
   - Keep the zones small. **Every read inside a HOOK zone becomes a synchronous proxy round trip** (`hv/__init__.py:552-574`), and status polling there brings back the slowdown aura PR #70 measured.
