@@ -78,9 +78,24 @@ def prop(node, name, default=None):
 def first(v, default):
     if v is None:
         return default
+    if isinstance(v, (bytes, bytearray)):
+        # raw ADT property: the first little-endian u32 (e.g. an SPMI slave id)
+        return struct.unpack_from("<I", v.ljust(4, b"\0"), 0)[0] if v else default
     if isinstance(v, (list, tuple)):
         return v[0] if v else default
     return v
+
+
+def pair(v, default):
+    """(reg, size) from an ADT property that may be a list, raw bytes or a bare int."""
+    if isinstance(v, (bytes, bytearray)):
+        v = list(struct.unpack(f"<{len(v) // 4}I", v[:len(v) // 4 * 4])) if len(v) >= 4 else None
+    if v is None:
+        return tuple(default)
+    if isinstance(v, int):
+        return (v, default[1])
+    v = list(v)
+    return tuple((v + list(default))[:2])
 
 
 def read_block(spmi, slave, reg, size):
@@ -117,8 +132,8 @@ try:
     names = fault_names(node)
     regions = {
         "leg_scrpad": (first(prop(node, "info-leg_scrpad"), 0x9f00), 0x10),
-        "fault_log": tuple((prop(node, "info-fault_log") or [0xd200, 4])[:2]),
-        "fault_shadow(ADT)": tuple((prop(node, "info-fault_shadow") or [0xa47b, 0x10])[:2]),
+        "fault_log": pair(prop(node, "info-fault_log"), [0xd200, 4]),
+        "fault_shadow(ADT)": pair(prop(node, "info-fault_shadow"), [0xa47b, 0x10]),
         "fault_shadow(DT 0xa67b)": (0xa67b, 0x10),
         "rtc_alarm block 0xd000": (0xd000, 0x10),
         "rtc_scrpad/offset": (first(prop(node, "info-rtc_scrpad"), 0xd100), 0x8),
@@ -153,7 +168,7 @@ try:
     node = u.adt["/arm-io/nub-spmi1/spmi-simetra"]
     slave = first(getattr(node, "reg", None), 0xf)
     spmi1 = SPMI(u, "/arm-io/nub-spmi1")
-    fl = tuple((prop(node, "info-fault_log") or [0x1800, 2])[:2])
+    fl = pair(prop(node, "info-fault_log"), [0x1800, 2])
     raw = read_block(spmi1, slave, fl[0], fl[1])
     res["simetra"]["fault_log"] = raw.hex()
     bits = decode_bits(raw, fault_names(node))
