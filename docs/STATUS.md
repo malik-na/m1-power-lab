@@ -276,6 +276,18 @@ Verified on the physical M1 this session:
   snapshot taken inside s2idle) and can gate the unused Type-C PHY domains
   (`pmgr_set`, labels `atc*`/`dispext*` only); knob `pmgr_atc1`.
 
+- Overnight run 2026-11-05/06 ([report](evidence/2026-11-06-night/README.md)),
+  on battery, panel off: the whole tuning against stock (`tuneset`, 6 pairs)
+  is 0.617 against 1.096 W, a saving of 479 mW (95% CI 404..554), every pair
+  agreeing. Six 45 min sleeps: 0.440 W each, 1.22 %/h, all woken by the wake
+  timer. PS-Poll replication not significant (PS-Poll +10 mW, CI -32..+52; two
+  pairs disturbed by SoC spikes); pooled with the first test by inverse
+  variance it saves about 17 mW (roughly 6..27) and stays deployed. The tuned arm ran without PS-Poll because
+  turning Wi-Fi power save on resets the firmware PM mode; `tuneset` and
+  `tune run` now re-apply until every knob holds. maclab re-sent a finished
+  job at 05:19 after a server outage and rebooted the Mac, cutting the last
+  idle record.
+
 ### Suspend-to-RAM groundwork (2026-11-05/06, nothing run on hardware yet)
 
 Real SoC sleep (macOS's "go hib", tens of mW) needs three things Linux lacks

@@ -1,0 +1,3426 @@
+{
+ "agent": 3,
+ "jobs": [
+  {
+   "agent": 3,
+   "context": {
+    "ac": 0,
+    "backlight": "16",
+    "battery_status": "Discharging",
+    "display": "off",
+    "kernel": "7.2.11-14-1-ARCH",
+    "load": "0.00 0.03 0.06 1/489 10583"
+   },
+   "domains_on": [
+    "aic",
+    "ans2",
+    "apcie",
+    "apcie_gp",
+    "apcie_st",
+    "atc0_common",
+    "atc0_pcie",
+    "atc0_usb",
+    "atc0_usb_aon",
+    "atc1_common",
+    "atc1_pcie",
+    "atc1_usb",
+    "atc1_usb_aon",
+    "audio_p",
+    "dcs0",
+    "dcs1",
+    "dcs2",
+    "dcs3",
+    "dcs4",
+    "dcs5",
+    "dcs6",
+    "dcs7",
+    "debug",
+    "debug_auth",
+    "debug_usb",
+    "disp0_cpu0",
+    "disp0_fe",
+    "dispext_cpu0",
+    "dispext_fe",
+    "dpa0",
+    "dwi",
+    "fpwm1",
+    "gfx",
+    "gpio",
+    "i2c0",
+    "i2c1",
+    "i2c3",
+    "imx",
+    "mca2",
+    "mcc",
+    "msg",
+    "nub_aon",
+    "nub_fabric",
+    "nub_gpio",
+    "nub_spmi0",
+    "nub_spmi1",
+    "nub_sram",
+    "pcie_ref",
+    "pmp",
+    "pms",
+    "pms_busif",
+    "rmx",
+    "sbr",
+    "sep",
+    "sio",
+    "sio_adma",
+    "sio_busif",
+    "sio_cpu",
+    "smx",
+    "soc_dpe",
+    "spi_p",
+    "uart0",
+    "uart_p"
+   ],
+   "job_kind": "record",
+   "kind": "record",
+   "label": "night-idle-start",
+   "started_wall": 1793898213.7772253,
+   "summary": {
+    "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+    "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+    "bat_sysfs_w": 0.6161,
+    "ctxt_s": 574.2547,
+    "dcin_acc_w": 0.0,
+    "idle": {
+     "e": {
+      "deep": 0.8864,
+      "wfi": 0.1023
+     },
+     "p": {
+      "deep": 0.9878,
+      "wfi": 0.01
+     }
+    },
+    "irq_s": 531.0882,
+    "load_acc_w": 0.6087,
+    "mhz": {
+     "e": 608,
+     "p": 756
+    },
+    "n": 1800,
+    "soc_w": 0.5232,
+    "sys_w": 0.6247,
+    "sys_w_sd": 0.2716,
+    "top_irqs": [
+     [
+      "37 Level arch_timer",
+      384.07
+     ],
+     [
+      "IPI1 call interrupts",
+      117.48
+     ],
+     [
+      "40 Level 23e408000.mbox-recv",
+      12.63
+     ],
+     [
+      "122 Edge brcmf_pcie_intr",
+      5.89
+     ],
+     [
+      "IPI0 Rescheduling interrupts",
+      5.62
+     ],
+     [
+      "44 Level 24a408000.mbox-recv",
+      2.57
+     ],
+     [
+      "86 Level nvme-apple",
+      2.33
+     ],
+     [
+      "IPI5 work interrupts",
+      0.59
+     ]
+    ],
+    "top_wakers": [
+     {
+      "comm": "rcu_preempt",
+      "cpu_pct": 0.019,
+      "pid": 15,
+      "wakeups_s": 21.09
+     },
+     {
+      "comm": "python3",
+      "cpu_pct": 1.057,
+      "pid": 6850,
+      "wakeups_s": 13.18
+     },
+     {
+      "comm": "dbus-broker",
+      "cpu_pct": 0.051,
+      "pid": 796,
+      "wakeups_s": 11.98
+     },
+     {
+      "comm": "irq/122-brcmf_pcie_intr",
+      "cpu_pct": 0.024,
+      "pid": 769,
+      "wakeups_s": 5.72
+     },
+     {
+      "comm": "systemd",
+      "cpu_pct": 0.293,
+      "pid": 1,
+      "wakeups_s": 5.04
+     },
+     {
+      "comm": "systemd-oomd",
+      "cpu_pct": 0.109,
+      "pid": 683,
+      "wakeups_s": 4.23
+     },
+     {
+      "comm": "herdr",
+      "cpu_pct": 0.247,
+      "pid": 1282,
+      "wakeups_s": 3.98
+     },
+     {
+      "comm": "systemd-logind",
+      "cpu_pct": 0.036,
+      "pid": 807,
+      "wakeups_s": 3.8
+     },
+     {
+      "comm": "systemd-journal",
+      "cpu_pct": 0.111,
+      "pid": 508,
+      "wakeups_s": 3.33
+     },
+     {
+      "comm": "Hyprland",
+      "cpu_pct": 0.016,
+      "pid": 1233,
+      "wakeups_s": 3.18
+     },
+     {
+      "comm": "kworker/u35:1-rtkit-24ac00000.aop",
+      "cpu_pct": 0.003,
+      "pid": 189,
+      "wakeups_s": 2.57
+     },
+     {
+      "comm": "exe",
+      "cpu_pct": 0.003,
+      "pid": 1620,
+      "wakeups_s": 2.5
+     },
+     {
+      "comm": "psimon",
+      "cpu_pct": 0.001,
+      "pid": 6140,
+      "wakeups_s": 2.36
+     },
+     {
+      "comm": "omarchy-audio-a",
+      "cpu_pct": 0.131,
+      "pid": 1146,
+      "wakeups_s": 2.29
+     },
+     {
+      "comm": "kworker/3:0-events",
+      "cpu_pct": 0.007,
+      "pid": 5008,
+      "wakeups_s": 2.23
+     }
+    ]
+   }
+  },
+  {
+   "a": "tuned",
+   "agent": 3,
+   "b": "stock",
+   "battery_end": {
+    "ac_online": 0,
+    "capacity": 58,
+    "charge_behaviour": "[auto] auto-discharge",
+    "charge_control_end_threshold": 100,
+    "charge_now": 1770000,
+    "current_now": -94000,
+    "cycle_count": 759,
+    "energy_full": 36537000,
+    "energy_now": 20178000,
+    "power_now": -1087000,
+    "status": "Discharging",
+    "voltage_now": 11573000
+   },
+   "battery_start": {
+    "ac_online": 0,
+    "capacity": 59,
+    "charge_behaviour": "[auto] auto-discharge",
+    "charge_control_end_threshold": 100,
+    "charge_now": 1782000,
+    "current_now": -51000,
+    "cycle_count": 759,
+    "energy_full": 36297600,
+    "energy_now": 20314800,
+    "power_now": -592000,
+    "status": "Discharging",
+    "voltage_now": 11616000
+   },
+   "blocks": [
+    {
+     "a": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.6068,
+      "ctxt_s": 419.8596,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.9061,
+        "wfi": 0.0855
+       },
+       "p": {
+        "deep": 0.9945,
+        "wfi": 0.0047
+       }
+      },
+      "irq_s": 379.5667,
+      "load_acc_w": 0.5913,
+      "mhz": {
+       "e": 608,
+       "p": 722
+      },
+      "n": 240,
+      "soc_w": 0.5025,
+      "sys_w": 0.6051,
+      "sys_w_sd": 0.0399,
+      "top_irqs": [
+       [
+        "37 Level arch_timer",
+        287.91
+       ],
+       [
+        "IPI1 call interrupts",
+        71.53
+       ],
+       [
+        "40 Level 23e408000.mbox-recv",
+        11.96
+       ],
+       [
+        "122 Edge brcmf_pcie_intr",
+        3.47
+       ],
+       [
+        "IPI0 Rescheduling interrupts",
+        2.67
+       ],
+       [
+        "44 Level 24a408000.mbox-recv",
+        2.57
+       ],
+       [
+        "86 Level nvme-apple",
+        0.27
+       ]
+      ],
+      "top_wakers": [
+       {
+        "comm": "rcu_preempt",
+        "cpu_pct": 0.012,
+        "pid": 15,
+        "wakeups_s": 16.61
+       },
+       {
+        "comm": "python3",
+        "cpu_pct": 1.054,
+        "pid": 6850,
+        "wakeups_s": 13.32
+       },
+       {
+        "comm": "systemd",
+        "cpu_pct": 0.142,
+        "pid": 1,
+        "wakeups_s": 5.86
+       },
+       {
+        "comm": "kworker/0:3-events",
+        "cpu_pct": 0.008,
+        "pid": 593,
+        "wakeups_s": 4.8
+       },
+       {
+        "comm": "systemd-oomd",
+        "cpu_pct": 0.096,
+        "pid": 683,
+        "wakeups_s": 4.01
+       },
+       {
+        "comm": "herdr",
+        "cpu_pct": 0.229,
+        "pid": 1282,
+        "wakeups_s": 3.98
+       },
+       {
+        "comm": "irq/122-brcmf_pcie_intr",
+        "cpu_pct": 0.012,
+        "pid": 769,
+        "wakeups_s": 3.33
+       },
+       {
+        "comm": "Hyprland",
+        "cpu_pct": 0.017,
+        "pid": 1233,
+        "wakeups_s": 3.18
+       },
+       {
+        "comm": "kworker/u35:1-rtkit-24ac00000.aop",
+        "cpu_pct": 0.004,
+        "pid": 189,
+        "wakeups_s": 2.58
+       },
+       {
+        "comm": "exe",
+        "cpu_pct": 0.0,
+        "pid": 1620,
+        "wakeups_s": 2.5
+       },
+       {
+        "comm": "owed",
+        "cpu_pct": 0.017,
+        "pid": 1483,
+        "wakeups_s": 2.0
+       },
+       {
+        "comm": "kcompactd0",
+        "cpu_pct": 0.0,
+        "pid": 65,
+        "wakeups_s": 1.99
+       },
+       {
+        "comm": "psimon",
+        "cpu_pct": 0.0,
+        "pid": 6140,
+        "wakeups_s": 1.96
+       },
+       {
+        "comm": "kworker/5:0-events",
+        "cpu_pct": 0.004,
+        "pid": 6542,
+        "wakeups_s": 1.82
+       },
+       {
+        "comm": "dbus-broker",
+        "cpu_pct": 0.008,
+        "pid": 796,
+        "wakeups_s": 1.24
+       }
+      ]
+     },
+     "b": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 1.1122,
+      "ctxt_s": 435.5696,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.9053,
+        "wfi": 0.0859
+       },
+       "p": {
+        "deep": 0.994,
+        "wfi": 0.0052
+       }
+      },
+      "irq_s": 383.9375,
+      "load_acc_w": 1.0905,
+      "mhz": {
+       "e": 610,
+       "p": 732
+      },
+      "n": 240,
+      "soc_w": 0.5523,
+      "sys_w": 1.1143,
+      "sys_w_sd": 0.0247,
+      "top_irqs": [
+       [
+        "37 Level arch_timer",
+        289.11
+       ],
+       [
+        "IPI1 call interrupts",
+        75.04
+       ],
+       [
+        "40 Level 23e408000.mbox-recv",
+        11.94
+       ],
+       [
+        "IPI0 Rescheduling interrupts",
+        3.27
+       ],
+       [
+        "44 Level 24a408000.mbox-recv",
+        2.57
+       ],
+       [
+        "122 Edge brcmf_pcie_intr",
+        2.45
+       ],
+       [
+        "86 Level nvme-apple",
+        0.55
+       ]
+      ],
+      "top_wakers": [
+       {
+        "comm": "rcu_preempt",
+        "cpu_pct": 0.017,
+        "pid": 15,
+        "wakeups_s": 17.33
+       },
+       {
+        "comm": "python3",
+        "cpu_pct": 1.042,
+        "pid": 6850,
+        "wakeups_s": 12.9
+       },
+       {
+        "comm": "kworker/0:3-events",
+        "cpu_pct": 0.017,
+        "pid": 593,
+        "wakeups_s": 4.44
+       },
+       {
+        "comm": "systemd",
+        "cpu_pct": 0.137,
+        "pid": 1,
+        "wakeups_s": 4.38
+       },
+       {
+        "comm": "systemd-oomd",
+        "cpu_pct": 0.1,
+        "pid": 683,
+        "wakeups_s": 4.0
+       },
+       {
+        "comm": "herdr",
+        "cpu_pct": 0.229,
+        "pid": 1282,
+        "wakeups_s": 3.99
+       },
+       {
+        "comm": "Hyprland",
+        "cpu_pct": 0.021,
+        "pid": 1233,
+        "wakeups_s": 3.18
+       },
+       {
+        "comm": "omarchy-audio-a",
+        "cpu_pct": 0.158,
+        "pid": 1146,
+        "wakeups_s": 2.95
+       },
+       {
+        "comm": "kworker/u35:1-rtkit-24ac00000.aop",
+        "cpu_pct": 0.0,
+        "pid": 189,
+        "wakeups_s": 2.57
+       },
+       {
+        "comm": "exe",
+        "cpu_pct": 0.004,
+        "pid": 1620,
+        "wakeups_s": 2.5
+       },
+       {
+        "comm": "irq/122-brcmf_pcie_intr",
+        "cpu_pct": 0.004,
+        "pid": 769,
+        "wakeups_s": 2.45
+       },
+       {
+        "comm": "psimon",
+        "cpu_pct": 0.004,
+        "pid": 6140,
+        "wakeups_s": 2.05
+       },
+       {
+        "comm": "kcompactd0",
+        "cpu_pct": 0.0,
+        "pid": 65,
+        "wakeups_s": 1.98
+       },
+       {
+        "comm": "owed",
+        "cpu_pct": 0.021,
+        "pid": 1483,
+        "wakeups_s": 1.78
+       },
+       {
+        "comm": "kworker/3:0-events",
+        "cpu_pct": 0.0,
+        "pid": 5008,
+        "wakeups_s": 1.45
+       }
+      ]
+     },
+     "index": 0,
+     "order": [
+      "stock",
+      "tuned"
+     ]
+    },
+    {
+     "a": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.5985,
+      "ctxt_s": 465.2396,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.8996,
+        "wfi": 0.0891
+       },
+       "p": {
+        "deep": 0.9886,
+        "wfi": 0.0067
+       }
+      },
+      "irq_s": 434.7212,
+      "load_acc_w": 0.5904,
+      "mhz": {
+       "e": 611,
+       "p": 747
+      },
+      "n": 240,
+      "soc_w": 0.5235,
+      "sys_w": 0.6325,
+      "sys_w_sd": 0.495,
+      "top_irqs": [
+       [
+        "37 Level arch_timer",
+        327.72
+       ],
+       [
+        "IPI1 call interrupts",
+        82.09
+       ],
+       [
+        "40 Level 23e408000.mbox-recv",
+        11.99
+       ],
+       [
+        "122 Edge brcmf_pcie_intr",
+        5.52
+       ],
+       [
+        "IPI0 Rescheduling interrupts",
+        4.26
+       ],
+       [
+        "44 Level 24a408000.mbox-recv",
+        2.57
+       ],
+       [
+        "86 Level nvme-apple",
+        1.3
+       ],
+       [
+        "IPI5 work interrupts",
+        0.24
+       ]
+      ],
+      "top_wakers": [
+       {
+        "comm": "rcu_preempt",
+        "cpu_pct": 0.017,
+        "pid": 15,
+        "wakeups_s": 19.29
+       },
+       {
+        "comm": "python3",
+        "cpu_pct": 1.054,
+        "pid": 6850,
+        "wakeups_s": 13.85
+       },
+       {
+        "comm": "irq/122-brcmf_pcie_intr",
+        "cpu_pct": 0.021,
+        "pid": 769,
+        "wakeups_s": 5.27
+       },
+       {
+        "comm": "kworker/0:3-events",
+        "cpu_pct": 0.008,
+        "pid": 593,
+        "wakeups_s": 4.51
+       },
+       {
+        "comm": "systemd-oomd",
+        "cpu_pct": 0.096,
+        "pid": 683,
+        "wakeups_s": 4.0
+       },
+       {
+        "comm": "herdr",
+        "cpu_pct": 0.367,
+        "pid": 1282,
+        "wakeups_s": 3.99
+       },
+       {
+        "comm": "Hyprland",
+        "cpu_pct": 0.017,
+        "pid": 1233,
+        "wakeups_s": 3.19
+       },
+       {
+        "comm": "systemd",
+        "cpu_pct": 0.137,
+        "pid": 1,
+        "wakeups_s": 2.8
+       },
+       {
+        "comm": "omarchy-audio-a",
+        "cpu_pct": 0.179,
+        "pid": 1146,
+        "wakeups_s": 2.79
+       },
+       {
+        "comm": "kworker/1:2-events",
+        "cpu_pct": 0.008,
+        "pid": 7750,
+        "wakeups_s": 2.65
+       },
+       {
+        "comm": "kworker/u35:1-rtkit-24ac00000.aop",
+        "cpu_pct": 0.0,
+        "pid": 189,
+        "wakeups_s": 2.57
+       },
+       {
+        "comm": "exe",
+        "cpu_pct": 0.004,
+        "pid": 1620,
+        "wakeups_s": 2.5
+       },
+       {
+        "comm": "kworker/u32:2-msgbuf_txflow",
+        "cpu_pct": 0.004,
+        "pid": 1395,
+        "wakeups_s": 2.36
+       },
+       {
+        "comm": "psimon",
+        "cpu_pct": 0.0,
+        "pid": 6140,
+        "wakeups_s": 2.17
+       },
+       {
+        "comm": "kworker/5:0-events",
+        "cpu_pct": 0.0,
+        "pid": 6542,
+        "wakeups_s": 2.04
+       }
+      ]
+     },
+     "b": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 1.1083,
+      "ctxt_s": 422.0808,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.9038,
+        "wfi": 0.0877
+       },
+       "p": {
+        "deep": 0.9934,
+        "wfi": 0.0044
+       }
+      },
+      "irq_s": 382.6421,
+      "load_acc_w": 1.0891,
+      "mhz": {
+       "e": 608,
+       "p": 724
+      },
+      "n": 240,
+      "soc_w": 0.5463,
+      "sys_w": 1.1128,
+      "sys_w_sd": 0.0172,
+      "top_irqs": [
+       [
+        "37 Level arch_timer",
+        288.29
+       ],
+       [
+        "IPI1 call interrupts",
+        75.75
+       ],
+       [
+        "40 Level 23e408000.mbox-recv",
+        11.94
+       ],
+       [
+        "44 Level 24a408000.mbox-recv",
+        2.57
+       ],
+       [
+        "IPI0 Rescheduling interrupts",
+        2.57
+       ],
+       [
+        "122 Edge brcmf_pcie_intr",
+        2.09
+       ],
+       [
+        "86 Level nvme-apple",
+        0.23
+       ]
+      ],
+      "top_wakers": [
+       {
+        "comm": "rcu_preempt",
+        "cpu_pct": 0.017,
+        "pid": 15,
+        "wakeups_s": 16.67
+       },
+       {
+        "comm": "python3",
+        "cpu_pct": 1.042,
+        "pid": 6850,
+        "wakeups_s": 13.31
+       },
+       {
+        "comm": "systemd-oomd",
+        "cpu_pct": 0.1,
+        "pid": 683,
+        "wakeups_s": 4.01
+       },
+       {
+        "comm": "herdr",
+        "cpu_pct": 0.225,
+        "pid": 1282,
+        "wakeups_s": 3.98
+       },
+       {
+        "comm": "kworker/1:2-events",
+        "cpu_pct": 0.004,
+        "pid": 7750,
+        "wakeups_s": 3.6
+       },
+       {
+        "comm": "kworker/0:3-events",
+        "cpu_pct": 0.017,
+        "pid": 593,
+        "wakeups_s": 3.55
+       },
+       {
+        "comm": "Hyprland",
+        "cpu_pct": 0.017,
+        "pid": 1233,
+        "wakeups_s": 3.19
+       },
+       {
+        "comm": "kworker/u35:1-rtkit-24ac00000.aop",
+        "cpu_pct": 0.0,
+        "pid": 189,
+        "wakeups_s": 2.57
+       },
+       {
+        "comm": "exe",
+        "cpu_pct": 0.004,
+        "pid": 1620,
+        "wakeups_s": 2.5
+       },
+       {
+        "comm": "irq/122-brcmf_pcie_intr",
+        "cpu_pct": 0.004,
+        "pid": 769,
+        "wakeups_s": 2.09
+       },
+       {
+        "comm": "systemd",
+        "cpu_pct": 0.137,
+        "pid": 1,
+        "wakeups_s": 2.05
+       },
+       {
+        "comm": "psimon",
+        "cpu_pct": 0.0,
+        "pid": 6140,
+        "wakeups_s": 2.03
+       },
+       {
+        "comm": "kcompactd0",
+        "cpu_pct": 0.0,
+        "pid": 65,
+        "wakeups_s": 1.98
+       },
+       {
+        "comm": "owed",
+        "cpu_pct": 0.017,
+        "pid": 1483,
+        "wakeups_s": 1.52
+       },
+       {
+        "comm": "tailscaled",
+        "cpu_pct": 0.042,
+        "pid": 889,
+        "wakeups_s": 1.35
+       }
+      ]
+     },
+     "index": 1,
+     "order": [
+      "tuned",
+      "stock"
+     ]
+    },
+    {
+     "a": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.5958,
+      "ctxt_s": 424.755,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.912,
+        "wfi": 0.0781
+       },
+       "p": {
+        "deep": 0.993,
+        "wfi": 0.0045
+       }
+      },
+      "irq_s": 372.5758,
+      "load_acc_w": 0.6231,
+      "mhz": {
+       "e": 609,
+       "p": 739
+      },
+      "n": 240,
+      "soc_w": 0.5139,
+      "sys_w": 0.6368,
+      "sys_w_sd": 0.5549,
+      "top_irqs": [
+       [
+        "37 Level arch_timer",
+        288.47
+       ],
+       [
+        "IPI1 call interrupts",
+        62.76
+       ],
+       [
+        "40 Level 23e408000.mbox-recv",
+        11.94
+       ],
+       [
+        "IPI0 Rescheduling interrupts",
+        3.52
+       ],
+       [
+        "122 Edge brcmf_pcie_intr",
+        3.47
+       ],
+       [
+        "44 Level 24a408000.mbox-recv",
+        2.57
+       ],
+       [
+        "IPI5 work interrupts",
+        0.26
+       ],
+       [
+        "86 Level nvme-apple",
+        0.22
+       ]
+      ],
+      "top_wakers": [
+       {
+        "comm": "rcu_preempt",
+        "cpu_pct": 0.017,
+        "pid": 15,
+        "wakeups_s": 17.55
+       },
+       {
+        "comm": "python3",
+        "cpu_pct": 1.05,
+        "pid": 6850,
+        "wakeups_s": 13.48
+       },
+       {
+        "comm": "kworker/0:3-events",
+        "cpu_pct": 0.017,
+        "pid": 593,
+        "wakeups_s": 4.35
+       },
+       {
+        "comm": "systemd-oomd",
+        "cpu_pct": 0.096,
+        "pid": 683,
+        "wakeups_s": 4.01
+       },
+       {
+        "comm": "herdr",
+        "cpu_pct": 0.225,
+        "pid": 1282,
+        "wakeups_s": 3.98
+       },
+       {
+        "comm": "irq/122-brcmf_pcie_intr",
+        "cpu_pct": 0.017,
+        "pid": 769,
+        "wakeups_s": 3.29
+       },
+       {
+        "comm": "Hyprland",
+        "cpu_pct": 0.017,
+        "pid": 1233,
+        "wakeups_s": 3.2
+       },
+       {
+        "comm": "kworker/3:0-events",
+        "cpu_pct": 0.004,
+        "pid": 5008,
+        "wakeups_s": 2.66
+       },
+       {
+        "comm": "kworker/u35:1-rtkit-24ac00000.aop",
+        "cpu_pct": 0.0,
+        "pid": 189,
+        "wakeups_s": 2.57
+       },
+       {
+        "comm": "exe",
+        "cpu_pct": 0.004,
+        "pid": 1620,
+        "wakeups_s": 2.5
+       },
+       {
+        "comm": "quickshell",
+        "cpu_pct": 0.054,
+        "pid": 1296,
+        "wakeups_s": 2.3
+       },
+       {
+        "comm": "systemd",
+        "cpu_pct": 0.121,
+        "pid": 1,
+        "wakeups_s": 2.12
+       },
+       {
+        "comm": "tailscaled",
+        "cpu_pct": 0.037,
+        "pid": 889,
+        "wakeups_s": 2.06
+       },
+       {
+        "comm": "psimon",
+        "cpu_pct": 0.004,
+        "pid": 6140,
+        "wakeups_s": 2.0
+       },
+       {
+        "comm": "kcompactd0",
+        "cpu_pct": 0.0,
+        "pid": 65,
+        "wakeups_s": 1.98
+       }
+      ]
+     },
+     "b": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.994,
+      "ctxt_s": 432.5013,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.9067,
+        "wfi": 0.0841
+       },
+       "p": {
+        "deep": 0.9925,
+        "wfi": 0.0058
+       }
+      },
+      "irq_s": 394.7504,
+      "load_acc_w": 0.9575,
+      "mhz": {
+       "e": 611,
+       "p": 733
+      },
+      "n": 240,
+      "soc_w": 0.5471,
+      "sys_w": 0.9787,
+      "sys_w_sd": 0.1696,
+      "top_irqs": [
+       [
+        "37 Level arch_timer",
+        290.36
+       ],
+       [
+        "IPI1 call interrupts",
+        84.87
+       ],
+       [
+        "40 Level 23e408000.mbox-recv",
+        11.94
+       ],
+       [
+        "IPI0 Rescheduling interrupts",
+        3.17
+       ],
+       [
+        "44 Level 24a408000.mbox-recv",
+        2.57
+       ],
+       [
+        "122 Edge brcmf_pcie_intr",
+        2.07
+       ],
+       [
+        "86 Level nvme-apple",
+        0.66
+       ],
+       [
+        "IPI5 work interrupts",
+        0.02
+       ]
+      ],
+      "top_wakers": [
+       {
+        "comm": "rcu_preempt",
+        "cpu_pct": 0.012,
+        "pid": 15,
+        "wakeups_s": 17.74
+       },
+       {
+        "comm": "python3",
+        "cpu_pct": 1.05,
+        "pid": 6850,
+        "wakeups_s": 13.0
+       },
+       {
+        "comm": "systemd-oomd",
+        "cpu_pct": 0.096,
+        "pid": 683,
+        "wakeups_s": 4.01
+       },
+       {
+        "comm": "herdr",
+        "cpu_pct": 0.225,
+        "pid": 1282,
+        "wakeups_s": 3.98
+       },
+       {
+        "comm": "Hyprland",
+        "cpu_pct": 0.017,
+        "pid": 1233,
+        "wakeups_s": 3.2
+       },
+       {
+        "comm": "omarchy-audio-a",
+        "cpu_pct": 0.171,
+        "pid": 1146,
+        "wakeups_s": 3.12
+       },
+       {
+        "comm": "kworker/u35:1-rtkit-24ac00000.aop",
+        "cpu_pct": 0.0,
+        "pid": 189,
+        "wakeups_s": 2.57
+       },
+       {
+        "comm": "exe",
+        "cpu_pct": 0.0,
+        "pid": 1620,
+        "wakeups_s": 2.5
+       },
+       {
+        "comm": "tailscaled",
+        "cpu_pct": 0.046,
+        "pid": 889,
+        "wakeups_s": 2.22
+       },
+       {
+        "comm": "irq/122-brcmf_pcie_intr",
+        "cpu_pct": 0.004,
+        "pid": 769,
+        "wakeups_s": 2.07
+       },
+       {
+        "comm": "systemd",
+        "cpu_pct": 0.154,
+        "pid": 1,
+        "wakeups_s": 2.06
+       },
+       {
+        "comm": "dbus-broker",
+        "cpu_pct": 0.012,
+        "pid": 796,
+        "wakeups_s": 2.06
+       },
+       {
+        "comm": "kcompactd0",
+        "cpu_pct": 0.0,
+        "pid": 65,
+        "wakeups_s": 1.99
+       },
+       {
+        "comm": "psimon",
+        "cpu_pct": 0.0,
+        "pid": 6140,
+        "wakeups_s": 1.99
+       },
+       {
+        "comm": "kworker/3:0-events",
+        "cpu_pct": 0.0,
+        "pid": 5008,
+        "wakeups_s": 1.69
+       }
+      ]
+     },
+     "index": 2,
+     "order": [
+      "stock",
+      "tuned"
+     ]
+    },
+    {
+     "a": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.5936,
+      "ctxt_s": 429.8562,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.8948,
+        "wfi": 0.0963
+       },
+       "p": {
+        "deep": 0.9952,
+        "wfi": 0.0048
+       }
+      },
+      "irq_s": 386.1354,
+      "load_acc_w": 0.5895,
+      "mhz": {
+       "e": 605,
+       "p": 724
+      },
+      "n": 240,
+      "soc_w": 0.4993,
+      "sys_w": 0.6011,
+      "sys_w_sd": 0.0372,
+      "top_irqs": [
+       [
+        "37 Level arch_timer",
+        299.71
+       ],
+       [
+        "IPI1 call interrupts",
+        66.93
+       ],
+       [
+        "40 Level 23e408000.mbox-recv",
+        11.94
+       ],
+       [
+        "122 Edge brcmf_pcie_intr",
+        3.2
+       ],
+       [
+        "44 Level 24a408000.mbox-recv",
+        2.57
+       ],
+       [
+        "IPI0 Rescheduling interrupts",
+        2.35
+       ],
+       [
+        "86 Level nvme-apple",
+        0.23
+       ]
+      ],
+      "top_wakers": [
+       {
+        "comm": "rcu_preempt",
+        "cpu_pct": 0.017,
+        "pid": 15,
+        "wakeups_s": 16.61
+       },
+       {
+        "comm": "python3",
+        "cpu_pct": 1.05,
+        "pid": 6850,
+        "wakeups_s": 13.82
+       },
+       {
+        "comm": "systemd-oomd",
+        "cpu_pct": 0.1,
+        "pid": 683,
+        "wakeups_s": 4.01
+       },
+       {
+        "comm": "herdr",
+        "cpu_pct": 0.225,
+        "pid": 1282,
+        "wakeups_s": 3.98
+       },
+       {
+        "comm": "kworker/0:3-events",
+        "cpu_pct": 0.004,
+        "pid": 593,
+        "wakeups_s": 3.97
+       },
+       {
+        "comm": "Hyprland",
+        "cpu_pct": 0.017,
+        "pid": 1233,
+        "wakeups_s": 3.17
+       },
+       {
+        "comm": "irq/122-brcmf_pcie_intr",
+        "cpu_pct": 0.008,
+        "pid": 769,
+        "wakeups_s": 3.03
+       },
+       {
+        "comm": "kworker/u35:1-rtkit-24ac00000.aop",
+        "cpu_pct": 0.0,
+        "pid": 189,
+        "wakeups_s": 2.57
+       },
+       {
+        "comm": "exe",
+        "cpu_pct": 0.004,
+        "pid": 1620,
+        "wakeups_s": 2.5
+       },
+       {
+        "comm": "systemd",
+        "cpu_pct": 0.142,
+        "pid": 1,
+        "wakeups_s": 2.42
+       },
+       {
+        "comm": "kworker/1:2-events",
+        "cpu_pct": 0.004,
+        "pid": 7750,
+        "wakeups_s": 2.05
+       },
+       {
+        "comm": "owed",
+        "cpu_pct": 0.021,
+        "pid": 1483,
+        "wakeups_s": 2.0
+       },
+       {
+        "comm": "kcompactd0",
+        "cpu_pct": 0.0,
+        "pid": 65,
+        "wakeups_s": 1.99
+       },
+       {
+        "comm": "psimon",
+        "cpu_pct": 0.0,
+        "pid": 6140,
+        "wakeups_s": 1.97
+       },
+       {
+        "comm": "kworker/2:1-events",
+        "cpu_pct": 0.008,
+        "pid": 98,
+        "wakeups_s": 1.95
+       }
+      ]
+     },
+     "b": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 1.1092,
+      "ctxt_s": 446.4479,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.8941,
+        "wfi": 0.0971
+       },
+       "p": {
+        "deep": 0.9944,
+        "wfi": 0.0046
+       }
+      },
+      "irq_s": 397.7258,
+      "load_acc_w": 1.0928,
+      "mhz": {
+       "e": 608,
+       "p": 722
+      },
+      "n": 240,
+      "soc_w": 0.5453,
+      "sys_w": 1.1172,
+      "sys_w_sd": 0.026,
+      "top_irqs": [
+       [
+        "37 Level arch_timer",
+        299.21
+       ],
+       [
+        "IPI1 call interrupts",
+        79.46
+       ],
+       [
+        "40 Level 23e408000.mbox-recv",
+        11.94
+       ],
+       [
+        "IPI0 Rescheduling interrupts",
+        2.7
+       ],
+       [
+        "44 Level 24a408000.mbox-recv",
+        2.57
+       ],
+       [
+        "122 Edge brcmf_pcie_intr",
+        2.02
+       ],
+       [
+        "86 Level nvme-apple",
+        0.65
+       ]
+      ],
+      "top_wakers": [
+       {
+        "comm": "rcu_preempt",
+        "cpu_pct": 0.012,
+        "pid": 15,
+        "wakeups_s": 17.2
+       },
+       {
+        "comm": "python3",
+        "cpu_pct": 1.042,
+        "pid": 6850,
+        "wakeups_s": 12.51
+       },
+       {
+        "comm": "systemd-oomd",
+        "cpu_pct": 0.1,
+        "pid": 683,
+        "wakeups_s": 4.0
+       },
+       {
+        "comm": "herdr",
+        "cpu_pct": 0.225,
+        "pid": 1282,
+        "wakeups_s": 3.98
+       },
+       {
+        "comm": "kworker/0:3-events",
+        "cpu_pct": 0.008,
+        "pid": 593,
+        "wakeups_s": 3.65
+       },
+       {
+        "comm": "omarchy-audio-a",
+        "cpu_pct": 0.158,
+        "pid": 1146,
+        "wakeups_s": 3.45
+       },
+       {
+        "comm": "Hyprland",
+        "cpu_pct": 0.012,
+        "pid": 1233,
+        "wakeups_s": 3.2
+       },
+       {
+        "comm": "tailscaled",
+        "cpu_pct": 0.042,
+        "pid": 889,
+        "wakeups_s": 2.58
+       },
+       {
+        "comm": "kworker/u35:1-rtkit-24ac00000.aop",
+        "cpu_pct": 0.0,
+        "pid": 189,
+        "wakeups_s": 2.58
+       },
+       {
+        "comm": "exe",
+        "cpu_pct": 0.004,
+        "pid": 1620,
+        "wakeups_s": 2.5
+       },
+       {
+        "comm": "kworker/3:0-events",
+        "cpu_pct": 0.008,
+        "pid": 5008,
+        "wakeups_s": 2.29
+       },
+       {
+        "comm": "irq/122-brcmf_pcie_intr",
+        "cpu_pct": 0.004,
+        "pid": 769,
+        "wakeups_s": 2.02
+       },
+       {
+        "comm": "kcompactd0",
+        "cpu_pct": 0.0,
+        "pid": 65,
+        "wakeups_s": 1.98
+       },
+       {
+        "comm": "psimon",
+        "cpu_pct": 0.0,
+        "pid": 6140,
+        "wakeups_s": 1.96
+       },
+       {
+        "comm": "pipewire",
+        "cpu_pct": 0.037,
+        "pid": 1117,
+        "wakeups_s": 1.67
+       }
+      ]
+     },
+     "index": 3,
+     "order": [
+      "stock",
+      "tuned"
+     ]
+    },
+    {
+     "a": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.5929,
+      "ctxt_s": 487.0242,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.8951,
+        "wfi": 0.0937
+       },
+       "p": {
+        "deep": 0.9915,
+        "wfi": 0.0062
+       }
+      },
+      "irq_s": 443.9879,
+      "load_acc_w": 0.5816,
+      "mhz": {
+       "e": 610,
+       "p": 719
+      },
+      "n": 240,
+      "soc_w": 0.525,
+      "sys_w": 0.6299,
+      "sys_w_sd": 0.5479,
+      "top_irqs": [
+       [
+        "37 Level arch_timer",
+        331.37
+       ],
+       [
+        "IPI1 call interrupts",
+        88.83
+       ],
+       [
+        "40 Level 23e408000.mbox-recv",
+        11.99
+       ],
+       [
+        "122 Edge brcmf_pcie_intr",
+        5.32
+       ],
+       [
+        "IPI0 Rescheduling interrupts",
+        3.61
+       ],
+       [
+        "44 Level 24a408000.mbox-recv",
+        2.57
+       ],
+       [
+        "86 Level nvme-apple",
+        0.9
+       ],
+       [
+        "IPI5 work interrupts",
+        0.26
+       ]
+      ],
+      "top_wakers": [
+       {
+        "comm": "rcu_preempt",
+        "cpu_pct": 0.017,
+        "pid": 15,
+        "wakeups_s": 19.31
+       },
+       {
+        "comm": "python3",
+        "cpu_pct": 1.054,
+        "pid": 6850,
+        "wakeups_s": 12.97
+       },
+       {
+        "comm": "omarchy-audio-a",
+        "cpu_pct": 0.158,
+        "pid": 1146,
+        "wakeups_s": 9.85
+       },
+       {
+        "comm": "irq/122-brcmf_pcie_intr",
+        "cpu_pct": 0.025,
+        "pid": 769,
+        "wakeups_s": 5.15
+       },
+       {
+        "comm": "systemd-oomd",
+        "cpu_pct": 0.104,
+        "pid": 683,
+        "wakeups_s": 4.01
+       },
+       {
+        "comm": "herdr",
+        "cpu_pct": 0.362,
+        "pid": 1282,
+        "wakeups_s": 3.99
+       },
+       {
+        "comm": "kworker/0:3-events",
+        "cpu_pct": 0.004,
+        "pid": 593,
+        "wakeups_s": 3.42
+       },
+       {
+        "comm": "Hyprland",
+        "cpu_pct": 0.017,
+        "pid": 1233,
+        "wakeups_s": 3.2
+       },
+       {
+        "comm": "tailscaled",
+        "cpu_pct": 0.042,
+        "pid": 889,
+        "wakeups_s": 2.75
+       },
+       {
+        "comm": "kworker/u35:1-rtkit-24ac00000.aop",
+        "cpu_pct": 0.0,
+        "pid": 189,
+        "wakeups_s": 2.57
+       },
+       {
+        "comm": "quickshell",
+        "cpu_pct": 0.054,
+        "pid": 1296,
+        "wakeups_s": 2.55
+       },
+       {
+        "comm": "exe",
+        "cpu_pct": 0.004,
+        "pid": 1620,
+        "wakeups_s": 2.5
+       },
+       {
+        "comm": "kworker/u32:0-msgbuf_txflow",
+        "cpu_pct": 0.004,
+        "pid": 8954,
+        "wakeups_s": 2.2
+       },
+       {
+        "comm": "systemd",
+        "cpu_pct": 0.142,
+        "pid": 1,
+        "wakeups_s": 2.17
+       },
+       {
+        "comm": "kcompactd0",
+        "cpu_pct": 0.0,
+        "pid": 65,
+        "wakeups_s": 1.99
+       }
+      ]
+     },
+     "b": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 1.11,
+      "ctxt_s": 408.4254,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.9127,
+        "wfi": 0.0792
+       },
+       "p": {
+        "deep": 0.9956,
+        "wfi": 0.0043
+       }
+      },
+      "irq_s": 374.1904,
+      "load_acc_w": 1.0847,
+      "mhz": {
+       "e": 608,
+       "p": 719
+      },
+      "n": 240,
+      "soc_w": 0.5402,
+      "sys_w": 1.1085,
+      "sys_w_sd": 0.0179,
+      "top_irqs": [
+       [
+        "37 Level arch_timer",
+        277.89
+       ],
+       [
+        "IPI1 call interrupts",
+        77.9
+       ],
+       [
+        "40 Level 23e408000.mbox-recv",
+        11.94
+       ],
+       [
+        "44 Level 24a408000.mbox-recv",
+        2.57
+       ],
+       [
+        "IPI0 Rescheduling interrupts",
+        2.54
+       ],
+       [
+        "122 Edge brcmf_pcie_intr",
+        1.93
+       ],
+       [
+        "86 Level nvme-apple",
+        0.31
+       ]
+      ],
+      "top_wakers": [
+       {
+        "comm": "rcu_preempt",
+        "cpu_pct": 0.017,
+        "pid": 15,
+        "wakeups_s": 16.75
+       },
+       {
+        "comm": "python3",
+        "cpu_pct": 1.042,
+        "pid": 6850,
+        "wakeups_s": 12.73
+       },
+       {
+        "comm": "systemd-oomd",
+        "cpu_pct": 0.096,
+        "pid": 683,
+        "wakeups_s": 4.0
+       },
+       {
+        "comm": "herdr",
+        "cpu_pct": 0.225,
+        "pid": 1282,
+        "wakeups_s": 3.98
+       },
+       {
+        "comm": "Hyprland",
+        "cpu_pct": 0.017,
+        "pid": 1233,
+        "wakeups_s": 3.17
+       },
+       {
+        "comm": "kworker/0:3-events",
+        "cpu_pct": 0.008,
+        "pid": 593,
+        "wakeups_s": 2.82
+       },
+       {
+        "comm": "kworker/u35:1-rtkit-24ac00000.aop",
+        "cpu_pct": 0.004,
+        "pid": 189,
+        "wakeups_s": 2.57
+       },
+       {
+        "comm": "exe",
+        "cpu_pct": 0.0,
+        "pid": 1620,
+        "wakeups_s": 2.5
+       },
+       {
+        "comm": "psimon",
+        "cpu_pct": 0.0,
+        "pid": 6140,
+        "wakeups_s": 2.02
+       },
+       {
+        "comm": "kcompactd0",
+        "cpu_pct": 0.004,
+        "pid": 65,
+        "wakeups_s": 1.98
+       },
+       {
+        "comm": "irq/122-brcmf_pcie_intr",
+        "cpu_pct": 0.004,
+        "pid": 769,
+        "wakeups_s": 1.93
+       },
+       {
+        "comm": "kworker/1:2-events",
+        "cpu_pct": 0.004,
+        "pid": 7750,
+        "wakeups_s": 1.91
+       },
+       {
+        "comm": "kworker/2:1-events",
+        "cpu_pct": 0.008,
+        "pid": 98,
+        "wakeups_s": 1.87
+       },
+       {
+        "comm": "dbus-broker",
+        "cpu_pct": 0.008,
+        "pid": 796,
+        "wakeups_s": 1.56
+       },
+       {
+        "comm": "owed",
+        "cpu_pct": 0.017,
+        "pid": 1483,
+        "wakeups_s": 1.5
+       }
+      ]
+     },
+     "index": 4,
+     "order": [
+      "tuned",
+      "stock"
+     ]
+    },
+    {
+     "a": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.5992,
+      "ctxt_s": 427.3121,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.911,
+        "wfi": 0.0801
+       },
+       "p": {
+        "deep": 0.9939,
+        "wfi": 0.0046
+       }
+      },
+      "irq_s": 388.4808,
+      "load_acc_w": 0.5855,
+      "mhz": {
+       "e": 607,
+       "p": 718
+      },
+      "n": 240,
+      "soc_w": 0.4972,
+      "sys_w": 0.5984,
+      "sys_w_sd": 0.0373,
+      "top_irqs": [
+       [
+        "37 Level arch_timer",
+        285.32
+       ],
+       [
+        "IPI1 call interrupts",
+        82.55
+       ],
+       [
+        "40 Level 23e408000.mbox-recv",
+        11.94
+       ],
+       [
+        "IPI0 Rescheduling interrupts",
+        3.24
+       ],
+       [
+        "122 Edge brcmf_pcie_intr",
+        3.11
+       ],
+       [
+        "44 Level 24a408000.mbox-recv",
+        2.57
+       ],
+       [
+        "86 Level nvme-apple",
+        0.65
+       ]
+      ],
+      "top_wakers": [
+       {
+        "comm": "rcu_preempt",
+        "cpu_pct": 0.017,
+        "pid": 15,
+        "wakeups_s": 17.02
+       },
+       {
+        "comm": "python3",
+        "cpu_pct": 1.058,
+        "pid": 6850,
+        "wakeups_s": 13.95
+       },
+       {
+        "comm": "systemd-oomd",
+        "cpu_pct": 0.096,
+        "pid": 683,
+        "wakeups_s": 4.0
+       },
+       {
+        "comm": "herdr",
+        "cpu_pct": 0.229,
+        "pid": 1282,
+        "wakeups_s": 3.98
+       },
+       {
+        "comm": "Hyprland",
+        "cpu_pct": 0.012,
+        "pid": 1233,
+        "wakeups_s": 3.18
+       },
+       {
+        "comm": "irq/122-brcmf_pcie_intr",
+        "cpu_pct": 0.008,
+        "pid": 769,
+        "wakeups_s": 2.96
+       },
+       {
+        "comm": "systemd",
+        "cpu_pct": 0.146,
+        "pid": 1,
+        "wakeups_s": 2.87
+       },
+       {
+        "comm": "omarchy-audio-a",
+        "cpu_pct": 0.171,
+        "pid": 1146,
+        "wakeups_s": 2.85
+       },
+       {
+        "comm": "kworker/u35:1-rtkit-24ac00000.aop",
+        "cpu_pct": 0.004,
+        "pid": 189,
+        "wakeups_s": 2.57
+       },
+       {
+        "comm": "exe",
+        "cpu_pct": 0.004,
+        "pid": 1620,
+        "wakeups_s": 2.5
+       },
+       {
+        "comm": "kworker/1:2-events",
+        "cpu_pct": 0.004,
+        "pid": 7750,
+        "wakeups_s": 2.11
+       },
+       {
+        "comm": "psimon",
+        "cpu_pct": 0.0,
+        "pid": 6140,
+        "wakeups_s": 2.0
+       },
+       {
+        "comm": "kcompactd0",
+        "cpu_pct": 0.0,
+        "pid": 65,
+        "wakeups_s": 1.99
+       },
+       {
+        "comm": "kworker/2:1-events",
+        "cpu_pct": 0.0,
+        "pid": 98,
+        "wakeups_s": 1.83
+       },
+       {
+        "comm": "tailscaled",
+        "cpu_pct": 0.046,
+        "pid": 889,
+        "wakeups_s": 1.8
+       }
+      ]
+     },
+     "b": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 1.1092,
+      "ctxt_s": 442.9179,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.895,
+        "wfi": 0.0948
+       },
+       "p": {
+        "deep": 0.9854,
+        "wfi": 0.0045
+       }
+      },
+      "irq_s": 422.6629,
+      "load_acc_w": 1.1173,
+      "mhz": {
+       "e": 609,
+       "p": 722
+      },
+      "n": 240,
+      "soc_w": 0.5684,
+      "sys_w": 1.1445,
+      "sys_w_sd": 0.4368,
+      "top_irqs": [
+       [
+        "37 Level arch_timer",
+        322.07
+       ],
+       [
+        "IPI1 call interrupts",
+        80.9
+       ],
+       [
+        "40 Level 23e408000.mbox-recv",
+        11.94
+       ],
+       [
+        "IPI0 Rescheduling interrupts",
+        3.19
+       ],
+       [
+        "44 Level 24a408000.mbox-recv",
+        2.57
+       ],
+       [
+        "122 Edge brcmf_pcie_intr",
+        2.29
+       ],
+       [
+        "86 Level nvme-apple",
+        0.31
+       ],
+       [
+        "IPI5 work interrupts",
+        0.25
+       ]
+      ],
+      "top_wakers": [
+       {
+        "comm": "rcu_preempt",
+        "cpu_pct": 0.012,
+        "pid": 15,
+        "wakeups_s": 17.49
+       },
+       {
+        "comm": "python3",
+        "cpu_pct": 1.05,
+        "pid": 6850,
+        "wakeups_s": 12.85
+       },
+       {
+        "comm": "kworker/0:3-events",
+        "cpu_pct": 0.004,
+        "pid": 593,
+        "wakeups_s": 4.48
+       },
+       {
+        "comm": "systemd-oomd",
+        "cpu_pct": 0.096,
+        "pid": 683,
+        "wakeups_s": 4.01
+       },
+       {
+        "comm": "herdr",
+        "cpu_pct": 0.225,
+        "pid": 1282,
+        "wakeups_s": 3.98
+       },
+       {
+        "comm": "Hyprland",
+        "cpu_pct": 0.017,
+        "pid": 1233,
+        "wakeups_s": 3.17
+       },
+       {
+        "comm": "kworker/1:2-events",
+        "cpu_pct": 0.017,
+        "pid": 7750,
+        "wakeups_s": 2.85
+       },
+       {
+        "comm": "kworker/u35:1-rtkit-24ac00000.aop",
+        "cpu_pct": 0.004,
+        "pid": 189,
+        "wakeups_s": 2.57
+       },
+       {
+        "comm": "tailscaled",
+        "cpu_pct": 0.037,
+        "pid": 889,
+        "wakeups_s": 2.51
+       },
+       {
+        "comm": "exe",
+        "cpu_pct": 0.004,
+        "pid": 1620,
+        "wakeups_s": 2.5
+       },
+       {
+        "comm": "quickshell",
+        "cpu_pct": 0.054,
+        "pid": 1296,
+        "wakeups_s": 2.33
+       },
+       {
+        "comm": "irq/122-brcmf_pcie_intr",
+        "cpu_pct": 0.004,
+        "pid": 769,
+        "wakeups_s": 2.26
+       },
+       {
+        "comm": "psimon",
+        "cpu_pct": 0.0,
+        "pid": 6140,
+        "wakeups_s": 2.22
+       },
+       {
+        "comm": "owed",
+        "cpu_pct": 0.021,
+        "pid": 1483,
+        "wakeups_s": 2.0
+       },
+       {
+        "comm": "kcompactd0",
+        "cpu_pct": 0.004,
+        "pid": 65,
+        "wakeups_s": 1.99
+       }
+      ]
+     },
+     "index": 5,
+     "order": [
+      "tuned",
+      "stock"
+     ]
+    }
+   ],
+   "context": {
+    "ac": 0,
+    "backlight": "16",
+    "battery_status": "Discharging",
+    "display": "off",
+    "kernel": "7.2.11-14-1-ARCH",
+    "load": "0.00 0.03 0.06 1/489 10595"
+   },
+   "finished_wall": 1793903616.7910957,
+   "job_kind": "ab",
+   "kind": "ab",
+   "knob": "tuneset",
+   "measure_s": 240,
+   "original": "tuned",
+   "pairs": 6,
+   "settle_s": 60,
+   "started_wall": 1793900013.8832724,
+   "status": "complete"
+  },
+  {
+   "a": "1",
+   "agent": 3,
+   "b": "2",
+   "battery_end": {
+    "ac_online": 0,
+    "capacity": 57,
+    "charge_behaviour": "[auto] auto-discharge",
+    "charge_control_end_threshold": 100,
+    "charge_now": 1737000,
+    "current_now": -54000,
+    "cycle_count": 759,
+    "energy_full": 36309000,
+    "energy_now": 19801800,
+    "power_now": -625000,
+    "status": "Discharging",
+    "voltage_now": 11580000
+   },
+   "battery_start": {
+    "ac_online": 0,
+    "capacity": 58,
+    "charge_behaviour": "[auto] auto-discharge",
+    "charge_control_end_threshold": 100,
+    "charge_now": 1770000,
+    "current_now": -94000,
+    "cycle_count": 759,
+    "energy_full": 36537000,
+    "energy_now": 20178000,
+    "power_now": -1087000,
+    "status": "Discharging",
+    "voltage_now": 11573000
+   },
+   "blocks": [
+    {
+     "a": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.5783,
+      "ctxt_s": 423.2942,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.9017,
+        "wfi": 0.0899
+       },
+       "p": {
+        "deep": 0.9942,
+        "wfi": 0.0042
+       }
+      },
+      "irq_s": 391.2817,
+      "load_acc_w": 0.5737,
+      "mhz": {
+       "e": 604,
+       "p": 731
+      },
+      "n": 120,
+      "soc_w": 0.4997,
+      "sys_w": 0.5844,
+      "sys_w_sd": 0.0182
+     },
+     "b": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.5988,
+      "ctxt_s": 426.6867,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.8888,
+        "wfi": 0.1026
+       },
+       "p": {
+        "deep": 0.9945,
+        "wfi": 0.0045
+       }
+      },
+      "irq_s": 384.6875,
+      "load_acc_w": 0.5897,
+      "mhz": {
+       "e": 607,
+       "p": 713
+      },
+      "n": 120,
+      "soc_w": 0.5002,
+      "sys_w": 0.6014,
+      "sys_w_sd": 0.0405
+     },
+     "index": 0,
+     "order": [
+      "2",
+      "1"
+     ]
+    },
+    {
+     "a": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.5834,
+      "ctxt_s": 421.4733,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.9021,
+        "wfi": 0.0894
+       },
+       "p": {
+        "deep": 0.991,
+        "wfi": 0.0041
+       }
+      },
+      "irq_s": 387.1683,
+      "load_acc_w": 0.5731,
+      "mhz": {
+       "e": 604,
+       "p": 711
+      },
+      "n": 120,
+      "soc_w": 0.4987,
+      "sys_w": 0.5838,
+      "sys_w_sd": 0.0177
+     },
+     "b": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.5915,
+      "ctxt_s": 427.6417,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.9012,
+        "wfi": 0.0904
+       },
+       "p": {
+        "deep": 0.9984,
+        "wfi": 0.0047
+       }
+      },
+      "irq_s": 397.36,
+      "load_acc_w": 0.5885,
+      "mhz": {
+       "e": 606,
+       "p": 737
+      },
+      "n": 120,
+      "soc_w": 0.5024,
+      "sys_w": 0.5991,
+      "sys_w_sd": 0.0302
+     },
+     "index": 1,
+     "order": [
+      "1",
+      "2"
+     ]
+    },
+    {
+     "a": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.5802,
+      "ctxt_s": 464.2742,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.9065,
+        "wfi": 0.0804
+       },
+       "p": {
+        "deep": 0.9996,
+        "wfi": 0.0062
+       }
+      },
+      "irq_s": 443.09,
+      "load_acc_w": 0.5763,
+      "mhz": {
+       "e": 613,
+       "p": 741
+      },
+      "n": 120,
+      "soc_w": 0.5922,
+      "sys_w": 0.6616,
+      "sys_w_sd": 0.7766
+     },
+     "b": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.5886,
+      "ctxt_s": 416.3183,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.9074,
+        "wfi": 0.0843
+       },
+       "p": {
+        "deep": 0.9951,
+        "wfi": 0.0043
+       }
+      },
+      "irq_s": 366.9767,
+      "load_acc_w": 0.5788,
+      "mhz": {
+       "e": 606,
+       "p": 712
+      },
+      "n": 120,
+      "soc_w": 0.4992,
+      "sys_w": 0.5945,
+      "sys_w_sd": 0.0312
+     },
+     "index": 2,
+     "order": [
+      "1",
+      "2"
+     ]
+    },
+    {
+     "a": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.578,
+      "ctxt_s": 426.6392,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.9025,
+        "wfi": 0.0893
+       },
+       "p": {
+        "deep": 0.9946,
+        "wfi": 0.0044
+       }
+      },
+      "irq_s": 364.4975,
+      "load_acc_w": 0.5673,
+      "mhz": {
+       "e": 603,
+       "p": 700
+      },
+      "n": 120,
+      "soc_w": 0.4975,
+      "sys_w": 0.5834,
+      "sys_w_sd": 0.0172
+     },
+     "b": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.5813,
+      "ctxt_s": 440.2192,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.8966,
+        "wfi": 0.0946
+       },
+       "p": {
+        "deep": 0.9929,
+        "wfi": 0.0044
+       }
+      },
+      "irq_s": 382.69,
+      "load_acc_w": 0.5812,
+      "mhz": {
+       "e": 604,
+       "p": 713
+      },
+      "n": 120,
+      "soc_w": 0.4987,
+      "sys_w": 0.5983,
+      "sys_w_sd": 0.0309
+     },
+     "index": 3,
+     "order": [
+      "2",
+      "1"
+     ]
+    },
+    {
+     "a": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.5763,
+      "ctxt_s": 433.4667,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.9032,
+        "wfi": 0.0881
+       },
+       "p": {
+        "deep": 0.9946,
+        "wfi": 0.0047
+       }
+      },
+      "irq_s": 386.7917,
+      "load_acc_w": 0.5729,
+      "mhz": {
+       "e": 605,
+       "p": 718
+      },
+      "n": 120,
+      "soc_w": 0.4985,
+      "sys_w": 0.5839,
+      "sys_w_sd": 0.0198
+     },
+     "b": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.5953,
+      "ctxt_s": 437.58,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.9014,
+        "wfi": 0.0895
+       },
+       "p": {
+        "deep": 0.992,
+        "wfi": 0.0054
+       }
+      },
+      "irq_s": 395.05,
+      "load_acc_w": 0.5836,
+      "mhz": {
+       "e": 608,
+       "p": 702
+      },
+      "n": 120,
+      "soc_w": 0.4999,
+      "sys_w": 0.5996,
+      "sys_w_sd": 0.0572
+     },
+     "index": 4,
+     "order": [
+      "2",
+      "1"
+     ]
+    },
+    {
+     "a": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.5802,
+      "ctxt_s": 438.645,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.9095,
+        "wfi": 0.0782
+       },
+       "p": {
+        "deep": 0.9945,
+        "wfi": 0.0053
+       }
+      },
+      "irq_s": 395.9058,
+      "load_acc_w": 0.5737,
+      "mhz": {
+       "e": 611,
+       "p": 725
+      },
+      "n": 120,
+      "soc_w": 0.6099,
+      "sys_w": 0.655,
+      "sys_w_sd": 0.7798
+     },
+     "b": {
+      "ap_end": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "ap_start": "30:4f:75:bd:7f:e1 Airtel_Naeem Malik",
+      "bat_sysfs_w": 0.5762,
+      "ctxt_s": 429.4933,
+      "dcin_acc_w": 0.0,
+      "idle": {
+       "e": {
+        "deep": 0.9152,
+        "wfi": 0.0762
+       },
+       "p": {
+        "deep": 0.9943,
+        "wfi": 0.0048
+       }
+      },
+      "irq_s": 380.1858,
+      "load_acc_w": 0.5889,
+      "mhz": {
+       "e": 606,
+       "p": 720
+      },
+      "n": 120,
+      "soc_w": 0.4946,
+      "sys_w": 0.5989,
+      "sys_w_sd": 0.0457
+     },
+     "index": 5,
+     "order": [
+      "1",
+      "2"
+     ]
+    }
+   ],
+   "context": {
+    "ac": 0,
+    "backlight": "16",
+    "battery_status": "Discharging",
+    "display": "off",
+    "kernel": "7.2.11-14-1-ARCH",
+    "load": "0.06 0.03 0.00 1/486 15772"
+   },
+   "finished_wall": 1793905417.782899,
+   "job_kind": "ab",
+   "kind": "ab",
+   "knob": "wifi_pm",
+   "measure_s": 120,
+   "original": "2",
+   "pairs": 6,
+   "settle_s": 30,
+   "started_wall": 1793903616.8446949,
+   "status": "complete"
+  },
+  {
+   "battery_delta_wh": -0.3306,
+   "battery_full_wh": 36.309,
+   "battery_pct_per_hour": 1.215,
+   "battery_status": "Discharging",
+   "battery_w": 0.4412,
+   "bracket_s": 2697.692,
+   "dcin_j": 0.0,
+   "dcin_w": 0.0,
+   "domains_stayed_on": [
+    "aic",
+    "apcie",
+    "apcie_gp",
+    "atc0_common",
+    "atc0_pcie",
+    "atc0_usb",
+    "atc0_usb_aon",
+    "atc1_common",
+    "atc1_pcie",
+    "atc1_usb",
+    "atc1_usb_aon",
+    "dcs0",
+    "dcs1",
+    "dcs2",
+    "dcs3",
+    "dcs4",
+    "dcs5",
+    "dcs6",
+    "dcs7",
+    "debug",
+    "debug_auth",
+    "debug_usb",
+    "disp0_cpu0",
+    "disp0_fe",
+    "dispext_cpu0",
+    "dispext_fe",
+    "dwi",
+    "imx",
+    "mcc",
+    "msg",
+    "nub_aon",
+    "nub_fabric",
+    "nub_gpio",
+    "nub_spmi0",
+    "nub_spmi1",
+    "nub_sram",
+    "pcie_ref",
+    "pmp",
+    "pms",
+    "pms_busif",
+    "rmx",
+    "sbr",
+    "sep",
+    "smx",
+    "soc_dpe"
+   ],
+   "end_wall": 1793908124.624306,
+   "irqs_during": [
+    [
+     "44 Level 24a408000.mbox-recv",
+     6938
+    ],
+    [
+     "37 Level arch_timer",
+     1546
+    ],
+    [
+     "IPI1 call interrupts",
+     1424
+    ],
+    [
+     "105 Level pasemi_apple_i2c",
+     337
+    ],
+    [
+     "IPI0 Rescheduling interrupts",
+     141
+    ],
+    [
+     "86 Level nvme-apple",
+     124
+    ],
+    [
+     "40 Level 23e408000.mbox-recv",
+     87
+    ],
+    [
+     "87 Level 23510c000.spi",
+     82
+    ],
+    [
+     "63 Level 277408000.mbox-recv",
+     42
+    ],
+    [
+     "124 Level m1power-waketimer",
+     16
+    ],
+    [
+     "103 Level pasemi_apple_i2c",
+     6
+    ],
+    [
+     "104 Level pasemi_apple_i2c",
+     6
+    ]
+   ],
+   "job_kind": "sleep",
+   "kind": "sleep",
+   "lab_boot": false,
+   "load_w": 0.4395,
+   "on_ac": false,
+   "operation": "suspend",
+   "pm_test": "none",
+   "requested_s": 2700,
+   "s2idle_cpus_pd": 1.0,
+   "s2idle_pd_entries": {
+    "0": 6957,
+    "1": 71,
+    "2": 1,
+    "3": 1,
+    "4": 1,
+    "5": 1,
+    "6": 1,
+    "7": 1
+   },
+   "sleep_w": 0.4395,
+   "sleep_w_source": "smc_load",
+   "slept_s": 2696.766,
+   "smc_samples": 0,
+   "standby": true,
+   "start_wall": 1793905426.9333382,
+   "test": true,
+   "tune": true,
+   "tune_drift": {
+    "wifi_pm": {
+     "now": "2",
+     "want": "1"
+    }
+   },
+   "wake_sources": [
+    [
+     "m1power_waketimer",
+     1
+    ]
+   ],
+   "waketimer_fired": true
+  },
+  {
+   "battery_delta_wh": -0.3306,
+   "battery_full_wh": 36.275,
+   "battery_pct_per_hour": 1.221,
+   "battery_status": "Discharging",
+   "battery_w": 0.443,
+   "bracket_s": 2686.706,
+   "dcin_j": 0.0,
+   "dcin_w": 0.0,
+   "domains_stayed_on": [
+    "aic",
+    "apcie",
+    "apcie_gp",
+    "atc0_common",
+    "atc0_pcie",
+    "atc0_usb",
+    "atc0_usb_aon",
+    "atc1_common",
+    "atc1_pcie",
+    "atc1_usb",
+    "atc1_usb_aon",
+    "dcs0",
+    "dcs1",
+    "dcs2",
+    "dcs3",
+    "dcs4",
+    "dcs5",
+    "dcs6",
+    "dcs7",
+    "debug",
+    "debug_auth",
+    "debug_usb",
+    "disp0_cpu0",
+    "disp0_fe",
+    "dispext_cpu0",
+    "dispext_fe",
+    "dwi",
+    "imx",
+    "mcc",
+    "msg",
+    "nub_aon",
+    "nub_fabric",
+    "nub_gpio",
+    "nub_spmi0",
+    "nub_spmi1",
+    "nub_sram",
+    "pcie_ref",
+    "pmp",
+    "pms",
+    "pms_busif",
+    "rmx",
+    "sbr",
+    "sep",
+    "smx",
+    "soc_dpe"
+   ],
+   "end_wall": 1793910834.6958468,
+   "irqs_during": [
+    [
+     "IPI1 call interrupts",
+     8219
+    ],
+    [
+     "44 Level 24a408000.mbox-recv",
+     6910
+    ],
+    [
+     "37 Level arch_timer",
+     1780
+    ],
+    [
+     "105 Level pasemi_apple_i2c",
+     337
+    ],
+    [
+     "86 Level nvme-apple",
+     179
+    ],
+    [
+     "IPI0 Rescheduling interrupts",
+     110
+    ],
+    [
+     "87 Level 23510c000.spi",
+     82
+    ],
+    [
+     "40 Level 23e408000.mbox-recv",
+     51
+    ],
+    [
+     "63 Level 277408000.mbox-recv",
+     42
+    ],
+    [
+     "124 Level m1power-waketimer",
+     16
+    ],
+    [
+     "103 Level pasemi_apple_i2c",
+     6
+    ],
+    [
+     "104 Level pasemi_apple_i2c",
+     6
+    ]
+   ],
+   "job_kind": "sleep",
+   "kind": "sleep",
+   "lab_boot": false,
+   "load_w": 0.4401,
+   "on_ac": false,
+   "operation": "suspend",
+   "pm_test": "none",
+   "requested_s": 2700,
+   "s2idle_cpus_pd": 1.0,
+   "s2idle_pd_entries": {
+    "0": 6928,
+    "1": 3,
+    "2": 1,
+    "3": 6913,
+    "4": 1,
+    "5": 1,
+    "6": 1,
+    "7": 1
+   },
+   "sleep_w": 0.4401,
+   "sleep_w_source": "smc_load",
+   "slept_s": 2685.723,
+   "smc_samples": 0,
+   "standby": true,
+   "start_wall": 1793908147.9905777,
+   "test": true,
+   "tune": true,
+   "tune_drift": {},
+   "wake_sources": [
+    [
+     "m1power_waketimer",
+     1
+    ]
+   ],
+   "waketimer_fired": true
+  },
+  {
+   "battery_delta_wh": -0.3306,
+   "battery_full_wh": 36.263,
+   "battery_pct_per_hour": 1.222,
+   "battery_status": "Discharging",
+   "battery_w": 0.443,
+   "bracket_s": 2686.551,
+   "dcin_j": 0.0,
+   "dcin_w": 0.0,
+   "domains_stayed_on": [
+    "aic",
+    "apcie",
+    "apcie_gp",
+    "atc0_common",
+    "atc0_pcie",
+    "atc0_usb",
+    "atc0_usb_aon",
+    "atc1_common",
+    "atc1_pcie",
+    "atc1_usb",
+    "atc1_usb_aon",
+    "dcs0",
+    "dcs1",
+    "dcs2",
+    "dcs3",
+    "dcs4",
+    "dcs5",
+    "dcs6",
+    "dcs7",
+    "debug",
+    "debug_auth",
+    "debug_usb",
+    "disp0_cpu0",
+    "disp0_fe",
+    "dispext_cpu0",
+    "dispext_fe",
+    "dwi",
+    "imx",
+    "mcc",
+    "msg",
+    "nub_aon",
+    "nub_fabric",
+    "nub_gpio",
+    "nub_spmi0",
+    "nub_spmi1",
+    "nub_sram",
+    "pcie_ref",
+    "pmp",
+    "pms",
+    "pms_busif",
+    "rmx",
+    "sbr",
+    "sep",
+    "smx",
+    "soc_dpe"
+   ],
+   "end_wall": 1793913544.7648737,
+   "irqs_during": [
+    [
+     "IPI1 call interrupts",
+     8041
+    ],
+    [
+     "44 Level 24a408000.mbox-recv",
+     6910
+    ],
+    [
+     "37 Level arch_timer",
+     1807
+    ],
+    [
+     "105 Level pasemi_apple_i2c",
+     337
+    ],
+    [
+     "IPI0 Rescheduling interrupts",
+     203
+    ],
+    [
+     "86 Level nvme-apple",
+     156
+    ],
+    [
+     "87 Level 23510c000.spi",
+     82
+    ],
+    [
+     "40 Level 23e408000.mbox-recv",
+     47
+    ],
+    [
+     "63 Level 277408000.mbox-recv",
+     42
+    ],
+    [
+     "124 Level m1power-waketimer",
+     16
+    ],
+    [
+     "103 Level pasemi_apple_i2c",
+     6
+    ],
+    [
+     "104 Level pasemi_apple_i2c",
+     6
+    ]
+   ],
+   "job_kind": "sleep",
+   "kind": "sleep",
+   "lab_boot": false,
+   "load_w": 0.44,
+   "on_ac": false,
+   "operation": "suspend",
+   "pm_test": "none",
+   "requested_s": 2700,
+   "s2idle_cpus_pd": 1.0,
+   "s2idle_pd_entries": {
+    "0": 6924,
+    "1": 4,
+    "2": 1,
+    "3": 6909,
+    "4": 1,
+    "5": 1,
+    "6": 1,
+    "7": 1
+   },
+   "sleep_w": 0.44,
+   "sleep_w_source": "smc_load",
+   "slept_s": 2685.605,
+   "smc_samples": 0,
+   "standby": true,
+   "start_wall": 1793910858.2146611,
+   "test": true,
+   "tune": true,
+   "tune_drift": {},
+   "wake_sources": [
+    [
+     "m1power_waketimer",
+     1
+    ]
+   ],
+   "waketimer_fired": true
+  },
+  {
+   "battery_delta_wh": -0.3306,
+   "battery_full_wh": 36.252,
+   "battery_pct_per_hour": 1.222,
+   "battery_status": "Discharging",
+   "battery_w": 0.443,
+   "bracket_s": 2686.534,
+   "dcin_j": 0.0,
+   "dcin_w": 0.0,
+   "domains_stayed_on": [
+    "aic",
+    "apcie",
+    "apcie_gp",
+    "atc0_common",
+    "atc0_pcie",
+    "atc0_usb",
+    "atc0_usb_aon",
+    "atc1_common",
+    "atc1_pcie",
+    "atc1_usb",
+    "atc1_usb_aon",
+    "dcs0",
+    "dcs1",
+    "dcs2",
+    "dcs3",
+    "dcs4",
+    "dcs5",
+    "dcs6",
+    "dcs7",
+    "debug",
+    "debug_auth",
+    "debug_usb",
+    "disp0_cpu0",
+    "disp0_fe",
+    "dispext_cpu0",
+    "dispext_fe",
+    "dwi",
+    "imx",
+    "mcc",
+    "msg",
+    "nub_aon",
+    "nub_fabric",
+    "nub_gpio",
+    "nub_spmi0",
+    "nub_spmi1",
+    "nub_sram",
+    "pcie_ref",
+    "pmp",
+    "pms",
+    "pms_busif",
+    "rmx",
+    "sbr",
+    "sep",
+    "smx",
+    "soc_dpe"
+   ],
+   "end_wall": 1793916254.8482268,
+   "irqs_during": [
+    [
+     "44 Level 24a408000.mbox-recv",
+     6909
+    ],
+    [
+     "37 Level arch_timer",
+     1470
+    ],
+    [
+     "IPI1 call interrupts",
+     1110
+    ],
+    [
+     "105 Level pasemi_apple_i2c",
+     337
+    ],
+    [
+     "IPI0 Rescheduling interrupts",
+     250
+    ],
+    [
+     "86 Level nvme-apple",
+     208
+    ],
+    [
+     "87 Level 23510c000.spi",
+     82
+    ],
+    [
+     "40 Level 23e408000.mbox-recv",
+     51
+    ],
+    [
+     "63 Level 277408000.mbox-recv",
+     42
+    ],
+    [
+     "124 Level m1power-waketimer",
+     16
+    ],
+    [
+     "103 Level pasemi_apple_i2c",
+     6
+    ],
+    [
+     "104 Level pasemi_apple_i2c",
+     6
+    ]
+   ],
+   "job_kind": "sleep",
+   "kind": "sleep",
+   "lab_boot": false,
+   "load_w": 0.4402,
+   "on_ac": false,
+   "operation": "suspend",
+   "pm_test": "none",
+   "requested_s": 2700,
+   "s2idle_cpus_pd": 1.0,
+   "s2idle_pd_entries": {
+    "0": 6928,
+    "1": 60,
+    "2": 1,
+    "3": 1,
+    "4": 1,
+    "5": 1,
+    "6": 1,
+    "7": 1
+   },
+   "sleep_w": 0.4402,
+   "sleep_w_source": "smc_load",
+   "slept_s": 2685.628,
+   "smc_samples": 0,
+   "standby": true,
+   "start_wall": 1793913568.3139408,
+   "test": true,
+   "tune": true,
+   "tune_drift": {},
+   "wake_sources": [
+    [
+     "m1power_waketimer",
+     1
+    ]
+   ],
+   "waketimer_fired": true
+  },
+  {
+   "battery_delta_wh": -0.3306,
+   "battery_full_wh": 36.286,
+   "battery_pct_per_hour": 1.221,
+   "battery_status": "Discharging",
+   "battery_w": 0.443,
+   "bracket_s": 2686.696,
+   "dcin_j": 0.0,
+   "dcin_w": 0.0,
+   "domains_stayed_on": [
+    "aic",
+    "apcie",
+    "apcie_gp",
+    "atc0_common",
+    "atc0_pcie",
+    "atc0_usb",
+    "atc0_usb_aon",
+    "atc1_common",
+    "atc1_pcie",
+    "atc1_usb",
+    "atc1_usb_aon",
+    "dcs0",
+    "dcs1",
+    "dcs2",
+    "dcs3",
+    "dcs4",
+    "dcs5",
+    "dcs6",
+    "dcs7",
+    "debug",
+    "debug_auth",
+    "debug_usb",
+    "disp0_cpu0",
+    "disp0_fe",
+    "dispext_cpu0",
+    "dispext_fe",
+    "dwi",
+    "imx",
+    "mcc",
+    "msg",
+    "nub_aon",
+    "nub_fabric",
+    "nub_gpio",
+    "nub_spmi0",
+    "nub_spmi1",
+    "nub_sram",
+    "pcie_ref",
+    "pmp",
+    "pms",
+    "pms_busif",
+    "rmx",
+    "sbr",
+    "sep",
+    "smx",
+    "soc_dpe"
+   ],
+   "end_wall": 1793918964.890882,
+   "irqs_during": [
+    [
+     "IPI1 call interrupts",
+     7936
+    ],
+    [
+     "44 Level 24a408000.mbox-recv",
+     6910
+    ],
+    [
+     "37 Level arch_timer",
+     1798
+    ],
+    [
+     "105 Level pasemi_apple_i2c",
+     337
+    ],
+    [
+     "IPI0 Rescheduling interrupts",
+     218
+    ],
+    [
+     "86 Level nvme-apple",
+     157
+    ],
+    [
+     "87 Level 23510c000.spi",
+     82
+    ],
+    [
+     "40 Level 23e408000.mbox-recv",
+     47
+    ],
+    [
+     "63 Level 277408000.mbox-recv",
+     42
+    ],
+    [
+     "124 Level m1power-waketimer",
+     16
+    ],
+    [
+     "103 Level pasemi_apple_i2c",
+     6
+    ],
+    [
+     "104 Level pasemi_apple_i2c",
+     6
+    ]
+   ],
+   "job_kind": "sleep",
+   "kind": "sleep",
+   "lab_boot": false,
+   "load_w": 0.4405,
+   "on_ac": false,
+   "operation": "suspend",
+   "pm_test": "none",
+   "requested_s": 2700,
+   "s2idle_cpus_pd": 1.0,
+   "s2idle_pd_entries": {
+    "0": 6924,
+    "1": 6909,
+    "2": 5,
+    "3": 2,
+    "4": 2,
+    "5": 1,
+    "6": 2,
+    "7": 2
+   },
+   "sleep_w": 0.4405,
+   "sleep_w_source": "smc_load",
+   "slept_s": 2685.767,
+   "smc_samples": 0,
+   "standby": true,
+   "start_wall": 1793916278.196663,
+   "test": true,
+   "tune": true,
+   "tune_drift": {},
+   "wake_sources": [
+    [
+     "m1power_waketimer",
+     1
+    ]
+   ],
+   "waketimer_fired": true
+  },
+  {
+   "battery_delta_wh": -0.3306,
+   "battery_full_wh": 36.263,
+   "battery_pct_per_hour": 1.221,
+   "battery_status": "Discharging",
+   "battery_w": 0.4427,
+   "bracket_s": 2688.534,
+   "dcin_j": 0.0,
+   "dcin_w": 0.0,
+   "domains_stayed_on": [
+    "aic",
+    "apcie",
+    "apcie_gp",
+    "atc0_common",
+    "atc0_pcie",
+    "atc0_usb",
+    "atc0_usb_aon",
+    "atc1_common",
+    "atc1_pcie",
+    "atc1_usb",
+    "atc1_usb_aon",
+    "dcs0",
+    "dcs1",
+    "dcs2",
+    "dcs3",
+    "dcs4",
+    "dcs5",
+    "dcs6",
+    "dcs7",
+    "debug",
+    "debug_auth",
+    "debug_usb",
+    "disp0_cpu0",
+    "disp0_fe",
+    "dispext_cpu0",
+    "dispext_fe",
+    "dwi",
+    "imx",
+    "mcc",
+    "msg",
+    "nub_aon",
+    "nub_fabric",
+    "nub_gpio",
+    "nub_spmi0",
+    "nub_spmi1",
+    "nub_sram",
+    "pcie_ref",
+    "pmp",
+    "pms",
+    "pms_busif",
+    "rmx",
+    "sbr",
+    "sep",
+    "smx",
+    "soc_dpe"
+   ],
+   "end_wall": 1793921674.9613383,
+   "irqs_during": [
+    [
+     "IPI1 call interrupts",
+     8067
+    ],
+    [
+     "44 Level 24a408000.mbox-recv",
+     6915
+    ],
+    [
+     "37 Level arch_timer",
+     1714
+    ],
+    [
+     "105 Level pasemi_apple_i2c",
+     337
+    ],
+    [
+     "IPI0 Rescheduling interrupts",
+     278
+    ],
+    [
+     "86 Level nvme-apple",
+     198
+    ],
+    [
+     "87 Level 23510c000.spi",
+     82
+    ],
+    [
+     "40 Level 23e408000.mbox-recv",
+     51
+    ],
+    [
+     "63 Level 277408000.mbox-recv",
+     42
+    ],
+    [
+     "124 Level m1power-waketimer",
+     16
+    ],
+    [
+     "103 Level pasemi_apple_i2c",
+     6
+    ],
+    [
+     "104 Level pasemi_apple_i2c",
+     6
+    ]
+   ],
+   "job_kind": "sleep",
+   "kind": "sleep",
+   "lab_boot": false,
+   "load_w": 0.4399,
+   "on_ac": false,
+   "operation": "suspend",
+   "pm_test": "none",
+   "requested_s": 2700,
+   "s2idle_cpus_pd": 1.0,
+   "s2idle_pd_entries": {
+    "0": 6933,
+    "1": 6918,
+    "2": 4,
+    "3": 1,
+    "4": 1,
+    "5": 1,
+    "6": 1,
+    "7": 1
+   },
+   "sleep_w": 0.4399,
+   "sleep_w_source": "smc_load",
+   "slept_s": 2687.589,
+   "smc_samples": 0,
+   "standby": true,
+   "start_wall": 1793918986.4264328,
+   "test": true,
+   "tune": true,
+   "tune_drift": {},
+   "wake_sources": [
+    [
+     "m1power_waketimer",
+     1
+    ]
+   ],
+   "waketimer_fired": true
+  }
+ ],
+ "kind": "batch",
+ "started_wall": 1793898213.6382706,
+ "status": "running"
+}
