@@ -11,8 +11,9 @@ brk() {  # interrupt the guest and wait for the shell prompt
 after() { tail -n +$(( $(grep -n "Type ^D to start" $O 2>/dev/null | tail -1 | cut -d: -f1) + 1 )) $O; }
 until [ -f $O ] && { grep -q Jumping $O || after | grep -q Traceback; }; do sleep 1; done
 grep -q Jumping $O || { echo "boot failed"; exit 1; }
-sz=$(stat -c %s ../vuart.log)
-timeout 200 bash -c "until tail -c +$sz ../vuart.log | tr -d '\0' | grep -qa launchd; do sleep 2; done"
+# arm early (Jumping + ARM_DELAY s): with the lid closed macOS sleeps from the login screen
+# within ~1 min of boot, before launchd shows on the console
+sleep ${ARM_DELAY:-25}
 brk; printf 'p.write32(0x23d2b0000 + 0x1c, 0); print("WDT off", hex(p.read32(0x23d2b0000 + 0x1c)))\ns2r_arm("%s")\n%bcont()\n' "$T" "${ARM_EXTRA:-}" > $HVIN
 echo "armed $(date +%T)"
 timeout 1200 bash -c "until grep -q 77706c73 $O; do sleep 1; done" || { echo "no sleep within 20 min"; exit 1; }

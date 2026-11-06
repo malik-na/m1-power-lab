@@ -361,3 +361,22 @@ fabric in idle inside a completed S2R; without it the SoC goes genuinely down.
 
 A precise number needs a multi-hour sleep (the gauge resolves ~1 mAh; an hour at 0.3 W is
 ~25 mAh) or an inline USB-C meter with the battery parked at its 80 % charge limit (CHLS 0x5005).
+
+### try40-42: sleeping from the login screen does not hold
+
+try40/41/42 were launched with the lid closed so macOS sleeps by itself from the login screen
+(the harness now arms 25 s after the kernel jump, no console dependency; `ARM_DELAY`).
+- try40: slept before the arm (old Skip path) — nothing learned.
+- try41 (hold off, light trace: SMC+SPMI zones only, `S2R_AON=0 S2R_PMGR=0 S2R_CLKGEN=0 S2R_DCP=0`,
+  alarm 10800 s): commit 03:02:15, m1n1 back 03:02:26 — the **5-second WD2 reset** (fault
+  `wdog,reset_in_1`, note unconsumed, stage 'P', new base). Our side completed; the SoC did not
+  reach the state that stops WD2.
+- try42 (hold off, try39's full trace, alarm 10800 s): commit 03:06:14, slept, then a **real wake
+  ~40 s later** ('Z'+'H', WD2 CTRL 0, ATC0_USB/AON actual 0, COMMON 4) with the alarm still armed
+  and no USB/CIO bits (+0x2c = 0, +0x20>>16 = 0): an unidentified wake source, like try35's.
+
+try39 — same build, same trace, but asleep from a **logged-in desktop** — ran 25 min to the alarm.
+So the login-screen sleep behaves differently (different wake policy or sleep type, not yet
+identified); the long measurement goes back to the logged-in desktop. The handler's RTC byte is
+not reliable at 1-s granularity (reads can return a value ~20 s stale), so commit-to-wake by RTC
+needs the full counter read twice, not the low byte.
