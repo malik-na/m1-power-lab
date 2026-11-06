@@ -311,7 +311,13 @@ waiting for the M1 (after the overnight batch):
   snapshot (`v1.6.1-47-g...`), `-dirty` or unknown builds restart cores on
   per-CPU stacks the kernel has no stable way to prove are reserved. A failed
   restart blocks all further restarts (legacy restarts share one m1n1 stack).
-  The lab M1's m1n1 banner says v1.6.1, but its build provenance is unverified.
+  Park mode passed on the M1 (job `j1106-001327-77a3`,
+  [logs](evidence/2026-11-06-cpu-hotplug-park/hotplug.log)): cpu1-7 offline
+  and online 100 times each, the P cluster together 10 times, all secondaries
+  down for 10 s three times; no stuck core, no flush timeout, 0 power-downs.
+  The M1's m1n1 stage 2 reports `bc79acc4-dirty` (not v1.6.1), so power-down
+  is refused there, as intended. Real power-down needs either that build
+  identified or the kernel to verify m1n1's per-CPU restart stacks.
   Test: [`target/lab/m1power-s2r-cpu-hotplug.sh`](../target/lab/m1power-s2r-cpu-hotplug.sh).
 - m1n1 hypervisor trace kit for macOS 13.5 sleep entry:
   [`tools/hv-trace-kit`](../tools/hv-trace-kit/RUNBOOK.md) (owner runbook:

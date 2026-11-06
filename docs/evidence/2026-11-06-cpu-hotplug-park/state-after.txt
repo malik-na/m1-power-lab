@@ -1,0 +1,12 @@
+mode: park
+powerdown_fallback: -
+m1n1: bc79acc4-dirty reentry=unknown
+uart0_powered: 1
+restarts_blocked: 0
+cpu1 mpidr=0x1 bit=0x2 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=103 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=mode
+cpu2 mpidr=0x2 bit=0x4 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=103 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=mode
+cpu3 mpidr=0x3 bit=0x8 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=103 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=mode
+cpu4 mpidr=0x10100 bit=0x10 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=113 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=mode
+cpu5 mpidr=0x10101 bit=0x20 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=113 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=mode
+cpu6 mpidr=0x10102 bit=0x40 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=113 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=mode
+cpu7 mpidr=0x10103 bit=0x80 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=113 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=mode

@@ -1,0 +1,2 @@
+[    0.000000] apple-cpu-hotplug: m1n1 stage 2 bc79acc4-dirty, re-entry unknown
+[    0.000000] apple-cpu-hotplug: CPU offline enabled, mode park

@@ -1,0 +1,41 @@
+== 2026-11-06T05:47:07+05:30 7.2.11-labfffde008-e6a7
+root=UUID=4f4d5801-524f-4f54-8000-000000000001 rw rootflags=subvol=@,x-systemd.device-timeout=0 zswap.enabled=0 rootfstype=btrfs user4k=on rd.luks.name=40cdb445-cb30-468f-b16a-c3e2a90235a4=root rd.luks.key=40cdb445-cb30-468f-b16a-c3e2a90235a4=/etc/cryptsetup-keys.d/root.key quiet splash loglevel=0 systemd.show_status=false rd.udev.log_level=0 vt.global_cursor_default=0 plymouth.ignore-serial-consoles panic=10 systemd.watchdog_sec=0 watchdog.open_timeout=180 maclab.lab_boot=1 apple_cpu_hotplug=park maclab.job=j1106-001327-77a3
+[    0.000000] apple-cpu-hotplug: m1n1 stage 2 bc79acc4-dirty, re-entry unknown
+[    0.000000] apple-cpu-hotplug: CPU offline enabled, mode park
+/sys/class/watchdog/watchdog0:  state= timeout=
+mode: park
+powerdown_fallback: -
+m1n1: bc79acc4-dirty reentry=unknown
+uart0_powered: 1
+restarts_blocked: 0
+cpu1 mpidr=0x1 bit=0x2 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=0 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=-
+cpu2 mpidr=0x2 bit=0x4 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=0 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=-
+cpu3 mpidr=0x3 bit=0x8 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=0 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=-
+cpu4 mpidr=0x10100 bit=0x10 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=0 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=-
+cpu5 mpidr=0x10101 bit=0x20 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=0 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=-
+cpu6 mpidr=0x10102 bit=0x40 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=0 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=-
+cpu7 mpidr=0x10103 bit=0x80 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=0 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=-
+requested: park (park), active: park, m1n1 re-entry: unknown, fallback: -
+== park 1: cpu1..7 x100 each
+cpu1 ok (100 cycles)
+cpu2 ok (100 cycles)
+cpu3 ok (100 cycles)
+cpu4 ok (100 cycles)
+cpu5 ok (100 cycles)
+cpu6 ok (100 cycles)
+cpu7 ok (100 cycles)
+== park 2: P cluster down together x10
+== park 3: all secondaries down 10 s x3
+mode: park
+powerdown_fallback: -
+m1n1: bc79acc4-dirty reentry=unknown
+uart0_powered: 1
+restarts_blocked: 0
+cpu1 mpidr=0x1 bit=0x2 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=103 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=mode
+cpu2 mpidr=0x2 bit=0x4 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=103 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=mode
+cpu3 mpidr=0x3 bit=0x8 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=103 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=mode
+cpu4 mpidr=0x10100 bit=0x10 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=113 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=mode
+cpu5 mpidr=0x10101 bit=0x20 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=113 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=mode
+cpu6 mpidr=0x10102 bit=0x40 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=113 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=mode
+cpu7 mpidr=0x10103 bit=0x80 state=running stuck=0 can_powerdown=0 rvbar=0x0 parks=113 powerdowns=0 restarts=0 status_timeouts=0 flush_timeouts=0 dmp_restores=0 reg_mismatches=0 last_park_reason=mode
+PASS (park)
