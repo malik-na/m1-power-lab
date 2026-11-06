@@ -268,3 +268,21 @@ Open: the wake came ~37 s after the commit, not 60 (the RTC read at the commit o
 granularity; the handler overwrote the trampoline's AON wake-status bytes, so the wake source is
 inferred from the cleared alarm enable); resuming the guest (restore the hypervisor state and
 re-enter SPTM's resume path) is not started; sleep power not yet measured.
+
+### try34-35: wake sources and a first power bracket
+
+try34 (m1n1 f8d9c788, alarm now+3600 s): commit 01:04:28, back at 01:08:08 — the user had
+opened the lid; 'Z'+'H', alarm still armed. **Lid open is a working wake source** through the
+same path.
+
+try35 (m1n1 0c8a821b: the handler keeps the trampoline's AON bytes and adds the RTC second and
+nub-wake+0x1c in the note slot; alarm now+3600 s): commit 01:16:39, lid closed throughout, back at
+**01:46:30 — 1791 s after the commit, 1788 s before the alarm**. An unknown source wakes the SoC
+~30 min into the sleep; the AON words recorded (+0x1c, +0x20>>16, +0x24) were all zero, so they
+are not the wake-reason registers (better pick needed).
+
+Gauge (SMC B0RM via m1n1, cable in: DC-in 0.04 W, so the M3 Max does not feed the M1):
+2847 mAh at 01:08:18, 2716 mAh at 01:46:40 — 131 mAh over 38 min, of which ~7 min were m1n1 idle
+(2.2 W) and the guest boot/login phase. First rough bracket for the 30 min of sleep: 40-70 mAh,
+i.e. **about 1-2 W** — far above a real suspend (macOS ~0.3 W). try36 is the control cycle (same
+phases, 2-min alarm) to subtract the boot/login cost properly.
