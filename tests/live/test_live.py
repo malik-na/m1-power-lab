@@ -1271,3 +1271,30 @@ def test_tuneset_switches_every_tuned_knob_between_tuned_and_stock(monkeypatch: 
     assert store == {"aspm": "default", "wifi_ps": "off"} and knob.get() == "stock"
     knob.set("tuned")
     assert store == {"aspm": "powersupersave", "wifi_ps": "on"}
+
+
+class _ClobberingKnob(_FakeKnob):
+    """Like turning Wi-Fi power save on, which resets the firmware PM mode."""
+
+    def __init__(self, name, store, clobbers, to):
+        super().__init__(name, store)
+        self.clobbers, self.to = clobbers, to
+
+    def set(self, value):
+        super().set(value)
+        self.store[self.clobbers] = self.to
+
+
+def test_tuneset_and_tune_run_reapply_knobs_a_later_knob_reset(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    store = {"wifi_pm": "2", "wifi_ps": "off"}
+    knobs = {"wifi_pm": _FakeKnob("wifi_pm", store), "wifi_ps": _ClobberingKnob("wifi_ps", store, "wifi_pm", "2")}
+    _use_journal(monkeypatch, tmp_path, knobs)
+    monkeypatch.setattr(agent, "lab_boot", lambda: False)
+    monkeypatch.setattr(agent, "restore_sleep_radios", lambda: {})
+    (tmp_path / "tune.json").write_text(json.dumps({"knobs": {"wifi_pm": "1", "wifi_ps": "on"},
+                                                    "baseline": {"wifi_pm": "2", "wifi_ps": "off"}}))
+    agent.TuneSetKnob().set("tuned")
+    assert store == {"wifi_pm": "1", "wifi_ps": "on"}
+    store.update({"wifi_pm": "2", "wifi_ps": "off"})
+    agent.tune_run()
+    assert store == {"wifi_pm": "1", "wifi_ps": "on"} and agent.tune_drift() == {}

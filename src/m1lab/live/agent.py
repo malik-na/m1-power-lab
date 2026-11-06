@@ -1015,6 +1015,34 @@ class PmgrGateKnob(Knob):
             write(DEBUGFS / "pmgr_set", f"{label} {'0' if value == 'off' else 'f'}")
 
 
+def settle_knobs(values, skip=lambda knob: False, passes=3):
+    """Set each knob to its value, then re-check and set again until all hold.
+
+    Some settings reset others: turning Wi-Fi power save on puts the firmware
+    back in PM_FAST, undoing `wifi_pm`. A later pass re-applies whatever an
+    earlier set undid, whatever order the spec lists them in. Returns
+    {name: error} for knobs that could not be set; a knob that raises is not
+    retried.
+    """
+    errors = {}
+    for _ in range(passes):
+        changed = False
+        for name, value in values.items():
+            if name in errors:
+                continue
+            try:
+                knob = get_knob(name)
+                if skip(knob) or not knob.supported() or knob.matches(value):
+                    continue
+                knob.set(value)
+                changed = True
+            except Exception as error:  # noqa: BLE001
+                errors[name] = str(error)
+        if not changed:
+            break
+    return errors
+
+
 class TuneSetKnob(Knob):
     """The whole persisted tuning at once: `tuned` applies every tune knob,
     `stock` puts each back to the baseline recorded when it was tuned. For a
@@ -1043,11 +1071,7 @@ class TuneSetKnob(Knob):
     def set(self, value):
         spec = self._spec()
         values = spec.get("knobs", {}) if value == "tuned" else spec.get("baseline", {})
-        for name in spec.get("knobs", {}):
-            if name in values:
-                knob = get_knob(name)
-                if not knob.matches(values[name]):
-                    knob.set(values[name])
+        settle_knobs({name: values[name] for name in spec.get("knobs", {}) if name in values})
 
 
 class RfkillKnob(Knob):
@@ -2812,15 +2836,16 @@ def tune_run():
         return {"applied": {}, "errors": {}, "skipped": "maclab Lab boot"}
     spec = json.loads(TUNE_SPEC.read_text())
     applied, errors, persisted = {}, {}, {}
+    # Never cut the network at boot or resume (an older spec may hold one).
+    errors.update(settle_knobs(spec.get("knobs", {}), skip=lambda knob: knob.kills_network))
     for name, value in spec.get("knobs", {}).items():
+        if name in errors:
+            continue
         try:
             knob = get_knob(name)
             if knob.kills_network:
-                # Never cut the network at boot or resume (an older spec may hold one).
                 errors[name] = "kills the network; not applied"
                 continue
-            if knob.supported() and not knob.matches(value):
-                knob.set(value)
             note = knob.persist(value)
             if note:
                 persisted[name] = note
