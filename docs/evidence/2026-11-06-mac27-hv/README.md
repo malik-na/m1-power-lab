@@ -173,3 +173,15 @@ words applied) and then **spins instead of sleeping**, writing `'S'`, a tenths-o
 and the AON WDT CTRL nibbles into PMU scratch `0x9f0a..0x9f0d`, and reboots itself through WD1
 after 25 s (`'R'`). An external timer shows up as a counter that stopped early; surviving the 25 s
 means the sleep step itself causes the reset.
+
+Result (23:55): same reset. Last traced write (RTC alarm) at 23:55:27.2, m1n1 back on USB at
+23:55:39.2, a gap of 12.0 s; try28's gap was 11.7 s. A plain `p.reboot()` through WD1 measures
+6.3 s from USB-gone to m1n1-back, so in both tries the SoC lived **about 5.5 s after the commit**,
+whether the last core slept or spun. The scratch bytes came back all zero ('W' at 0x9f04 still
+unconsumed), so either the spin loop was never reached, its SPMI writes failed, or iBoot clears
+those bytes (tested next). At arm time macOS had no AON watchdog armed (WD0/WD1/WD2 CTRL = 0,
+boot-arg `wdt=-1`), so the ~5 s timer is outside the AON WDT block: SMC, PMU, or the S2R engine.
+The deferred PS list is harmless: 0x23d280088/098 are AOP_MCA1/3 (ADT), not the SPMI link.
+
+The private watchdog analysis notes that Aura's A18 Pro resets also "came 5 s after the commit";
+Aura later reached a real 0.109 W suspend. What they changed is the next thing to read.
