@@ -1,0 +1,64 @@
+VERDICT SPMI interrupt is dead (polling): no sleep
+
+== kernel
+7.2.11-lab7e874c1b-264d
+root=UUID=4f4d5801-524f-4f54-8000-000000000001 rw rootflags=subvol=@,x-systemd.device-timeout=0 zswap.enabled=0 rootfstype=btrfs user4k=on rd.luks.name=40cdb445-cb30-468f-b16a-c3e2a90235a4=root rd.luks.key=40cdb445-cb30-468f-b16a-c3e2a90235a4=/etc/cryptsetup-keys.d/root.key quiet splash loglevel=0 systemd.show_status=false rd.udev.log_level=0 vt.global_cursor_default=0 plymouth.ignore-serial-consoles panic=10 systemd.watchdog_sec=0 watchdog.open_timeout=180 maclab.lab_boot=1 apple_t8103_pmu_alarm=1 maclab.job=j1106-002226-5eb4
+== fixup, SPMI and RTC messages
+[    0.021734] t8103-pmu-alarm: /soc/spmi@23d0d9300: interrupt AIC 343 added; /soc/smc@23e400000/rtc: alarm cells 0xd000/0xd008/0xd00c/0xd00e and SPMI interrupt 2, wakeup-source
+[    4.151879] spmi spmi-0: NOTIFY not delivered (wrong AIC line or NOTIFY bit): polling from now on, peripheral interrupts cannot wake
+[    4.152367] macsmc-rtc macsmc-rtc: firmware alarm state: ctrl 0x41 alarm 0x953b26e0 event 0x00 mask 0x00, counter 2725604 s
+[    4.152523] macsmc-rtc macsmc-rtc: disarmed the alarm firmware left armed
+[    4.171812] macsmc-rtc macsmc-rtc: PMU alarm on IRQ 121, with event register (read only), wake source
+[    4.190414] macsmc-rtc macsmc-rtc: registered as rtc0
+[    4.190755] macsmc-rtc macsmc-rtc: setting system clock to 2026-11-06T00:25:37 UTC (1793924737)
+== live DT
+#address-cells
+compatible
+#interrupt-cells
+interrupt-controller
+interrupt-parent
+interrupts
+name
+phandle
+pmic@f
+reg
+#size-cells
+#address-cells
+boot-error-count@9f02,0
+boot-error-stage@9f03
+boot-stage@9f01
+compatible
+fault-shadow@a67b
+name
+panic-count@9f02,4
+pm-setting@d001
+rtc-alarm@d008
+rtc-alarm-event@d00c
+rtc-alarm-mask@d00e
+rtc-ctrl@d000
+rtc-offset@d100
+shutdown-flag@9f0f,3
+#size-cells
+socd@ab00
+ 00 00 00 00 00 00 01 57 00 00 00 04
+== interrupts
+ 121:          0          0          0          0          0          0          0          0  apple_spmi              2 Edge      macsmc-rtc
+spmi irq_stats (/sys/bus/platform/devices/23d0d9300.spmi/irq_stats): irq 88 entries 0 empty 0 notify_irq 0 dead_irq 0
+mem_sleep: [s2idle]
+== rtc /sys/class/rtc/rtc0 (macsmc-rtc), irq 121
+macsmc-rtc macsmc-rtc
+wakeup: enabled
+== PMU before (/sys/bus/nvmem/devices/spmi_nvmem3)
+0xd000-0xd00b:  01 02 d4 6f f5 96 29 00 e0 26 3b 95  0xd00e:  01
+== awake alarm, +5 s
+wakealarm set: 1793924759
+0xd000-0xd00b:  41 02 ca 74 f5 96 29 00 fa 96 29 00  0xd00e:  00
+wakealarm after: ''
+rtc irq 121: 0 -> 1
+spmi irq_stats: irq 88 entries 1 empty 0 notify_irq 0 dead_irq 0
+== PMU after the awake alarm
+0xd000-0xd00b:  03 02 66 78 fd 96 29 00 fa 96 29 00  0xd00e:  01
+0xd00c:  01
+== new kernel messages
+[   25.775371] macsmc-rtc macsmc-rtc: alarm IRQ: ctrl 0x03 event 0x01 counter 2725626 s alarm 2725626 s armed 1: fired
+[pmu-rtc] STOP: SPMI interrupt is dead (polling): no sleep

@@ -111,8 +111,11 @@ echo "== new kernel messages"; dmesg_since "$n0"
 # Gate: sleep only on a proven alarm path.
 [ "$c1" -ge $((c0 + 1)) ] || stop "awake alarm raised no RTC interrupt ($c0 -> $c1): no sleep"
 dmesg_since "$n0" | grep -q 'alarm IRQ: .*: fired' || stop "RTC interrupt came but the driver did not take it as the alarm: no sleep"
-dmesg | grep -qE 'NOTIFY not delivered|interrupt [0-9]+ stuck' && stop "SPMI interrupt is dead (polling): no sleep"
+# NOTIFY (reply) delivery is not needed: t8103 polls for replies. What the
+# wake needs is the parent line delivering peripheral interrupts.
+dmesg | grep -qE 'interrupt [0-9]+ stuck' && stop "SPMI interrupt was masked for a storm: no sleep"
 spmi_stats | grep -q 'dead_irq 0' || stop "SPMI irq_stats missing or dead_irq set: no sleep"
+spmi_stats | grep -q 'line_live 1' || stop "SPMI parent line has not delivered an interrupt (line_live 0): no sleep"
 [ "$(cat "$RTC/device/power/wakeup" 2>/dev/null)" = enabled ] || stop "RTC wakeup not enabled: no sleep"
 [ -e /sys/power/pm_wakeup_irq ] || stop "no /sys/power/pm_wakeup_irq to tell the wake source: no sleep"
 log "awake alarm passed"
