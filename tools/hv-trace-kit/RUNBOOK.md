@@ -208,8 +208,7 @@ third-party mirror, so the package is checked twice before it is opened.
 5. Check the app:
    ```sh
    codesign -dv --verbose=2 "/Applications/Install macOS Ventura.app" 2>&1 | grep Authority   # Apple authorities only
-   defaults read "/Applications/Install macOS Ventura.app/Contents/Info.plist" DTPlatformVersion 2>/dev/null; \
-     /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "/Applications/Install macOS Ventura.app/Contents/Info.plist"
+   /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "/Applications/Install macOS Ventura.app/Contents/Info.plist"   # installer app version (18.x for 13.5)
    ```
    Copy the app somewhere first if you want to keep it; it deletes itself after one install.
 
