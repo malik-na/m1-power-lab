@@ -243,3 +243,28 @@ Also: macOS reads the u32 at PMU scratch 0x9f08 during boot and sleep entry (5 r
 which overlapped the arm-time note. try33 (m1n1 6be234a0) writes the note only on the last core
 after the PS words, reprograms the RTC alarm to now+60 s at the commit, and the handler records
 the RTC second ('H' at 0x9f0c, second at 0x9f0b) and resets cleanly through WD1.
+
+### try33: full round trip — real sleep, RTC-alarm wake, trampoline, handler in the surviving image
+
+m1n1 6be234a0: the note is written by the last core after its PS words; the RTC alarm is
+reprogrammed at the commit to now+60 s; the handler reached through the trampoline writes the RTC
+second and 'H' and resets through WD1.
+
+Commit 00:56:43 ("last core (8 of 8) going down"), host saw the USB device go at 00:57:20.7,
+m1n1 back on USB at 00:57:27.0 (a 6.4 s WD1 boot, i.e. our own reset). PMU afterwards:
+- `0x9f04` = 0 (note consumed), `0x9f0a` = **'Z'** (installed image's trampoline ran),
+  `0x9f0c` = **'H'** (the chainloaded hypervisor image, still in DRAM, ran its handler),
+  `0x9f0b` = 0x82 = the RTC second at the wake, **equal to the alarm's low byte** (0x2aa282);
+  `alarm_ctrl` 0x41 -> 0x01 (alarm consumed); fault log `wdog,reset_in_1` = the handler's WD1 reset.
+
+So on the M1 Air under m1n1: the SoC enters suspend-to-RAM, DRAM contents survive, the PMU RTC
+alarm wakes it, the boot CPU comes up at the locked RVBAR in the installed image, the trampoline
+hands over to the image that ran the hypervisor, and that image executes. The whole entry is the
+captured macOS sequence plus three things m1n1 had to do: clear its per-core EL2 timers and vFIQ,
+drop its USB iodevs without touching the dwc3 (clockless by then), and apply the guest's deferred
+PS words for the domains it had protected.
+
+Open: the wake came ~37 s after the commit, not 60 (the RTC read at the commit or the alarm
+granularity; the handler overwrote the trampoline's AON wake-status bytes, so the wake source is
+inferred from the cleared alarm enable); resuming the guest (restore the hypervisor state and
+re-enter SPTM's resume path) is not started; sleep power not yet measured.
