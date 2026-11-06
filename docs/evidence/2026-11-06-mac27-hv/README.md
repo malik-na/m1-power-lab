@@ -284,7 +284,7 @@ are not the wake-reason registers (better pick needed).
 Gauge (SMC B0RM via m1n1, cable in: DC-in 0.04 W, so the M3 Max does not feed the M1):
 2847 mAh at 01:08:18, 2716 mAh at 01:46:40 — 131 mAh over 38 min, of which ~7 min were m1n1 idle
 (2.2 W) and the guest boot/login phase. First rough bracket for the 30 min of sleep: 40-70 mAh,
-i.e. **about 1-2 W** — far above a real suspend (macOS ~0.3 W). try36 is the control cycle (same
+i.e. **about 1-2 W** — far above a real suspend (not measured on this M1 under macOS; the only measured low-power state here is Linux s2idle at 0.440 W, so this is ~5x that and about m1n1 idle). try36 is the control cycle (same
 phases, 2-min alarm) to subtract the boot/login cost properly.
 
 ### try36-37: control cycle, the gauge is not a clean coulomb counter
@@ -312,7 +312,7 @@ The tracer caught macOS's own gauge poll just before the try35 commit: `READ_KEY
 0xb03 = **2819 mAh** at trace t=364.56 s (01:16:24; `s2r-trace-20261107-011020.jsonl`). After the
 wake m1n1 read **2716 mAh** at 01:46:40. That is 103 mAh across an interval that contains nothing
 but the sleep (1812 s by the PMU RTC: commit 0x2aa6f3, wake 0x2aae07): **~204 mA ≈ 2.5 W at
-12.24 V** — the same rate as m1n1 idle (2.2 W) and as the 01:08→01:16 boot phase (207 mA). Even
+12.24 V** — the same rate as m1n1 idle (2.2 W), as the 01:08→01:16 boot phase (207 mA), and about 5x Linux s2idle on this M1 (0.440 W). Correcting for the gauge's +16 mAh load-compensation jump at display-off gives 173 mA ≈ 2.1 W, so 2.1–2.5 W. Even
 with ±15 mAh of gauge noise that is 1.7–2.4 W. So with the cores off and the clocks parked the
 SoC is **not** in a suspend-power state: the PMU never dropped the rails. (Review correction: Aura's HEAD code comment says only that a powered
 ATC0 USB AON domain is an armed *wake source*; "the PMU never finishes the SoC off" is the
