@@ -15,3 +15,12 @@ entries: 16
 132  word 4 bit  4  ATC1.CIOWakeup
 133  word 4 bit  5  ATC0.USBWakeup
 134  word 4 bit  6  ATC1.USBWakeup
+ap-wake-source-flags absent
+ap-wake-sources-disable absent
+ap-wake-interrupts absent
+ap-wake-source-valid-masks absent
+mask word 0 (0x23d004008) = 0x00000000   status +0x1c = 0x00000000
+mask word 1 (0x23d00400c) = 0x00000040   status +0x20 = 0x00000000
+mask word 2 (0x23d004010) = 0x00000000   status +0x24 = 0x00000000
+mask word 3 (0x23d004014) = 0x00000000   status +0x28 = 0x00000000
+mask word 4 (0x23d004018) = 0x00000000   status +0x2c = 0x00000000
