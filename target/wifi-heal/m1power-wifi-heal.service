@@ -1,0 +1,7 @@
+[Unit]
+Description=Un-stick the Wi-Fi when the gateway stops answering (m1power)
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/m1power-wifi-heal wlan0

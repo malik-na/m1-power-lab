@@ -1,0 +1,30 @@
+#!/bin/bash
+# m1power-wifi-heal: un-stick the M1 Air's Wi-Fi (brcmfmac, BCM4378) when it is
+# associated but the gateway no longer answers.
+#
+# Seen on 2026-11-07 after suspend attempts and forced resets: wlan0 stays
+# associated with a strong signal and keeps transmitting, but nothing comes
+# back (100% loss to the gateway), across reboots. Turning Wi-Fi power save
+# off and on again clears it at once (stuck power-save state between the
+# M1 and the access point). Power save stays on otherwise, so this costs no
+# idle power and changes no setting: it only acts when the link is broken,
+# and it puts power save back the way it found it.
+set -u
+IF=${1:-wlan0}
+log() { logger -t m1power-wifi-heal -- "$*"; }
+reach() { ping -c "$1" -W 1 -I "$IF" "$GW" >/dev/null 2>&1; }
+
+iw dev "$IF" link 2>/dev/null | grep -q '^Connected' || exit 0
+GW=$(ip -4 route show default dev "$IF" 2>/dev/null | awk '{print $3; exit}')
+[ -n "$GW" ] || exit 0
+reach 3 && exit 0
+reach 3 && exit 0
+
+ps=$(iw dev "$IF" get power_save 2>/dev/null | awk '{print $3}')
+log "gateway $GW unreachable on $IF while associated (power save ${ps:-?}): cycling power save"
+iw dev "$IF" set power_save off
+sleep 1
+[ "$ps" = on ] && iw dev "$IF" set power_save on
+sleep 1
+if reach 3; then log "gateway $GW reachable again (power save ${ps:-?})"
+else log "gateway $GW still unreachable after the cycle"; fi
