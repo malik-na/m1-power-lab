@@ -30,8 +30,22 @@ def wdt_state(tag=""):
     print(f"[s2r-real] AON WDT {tag}: WD0 cnt/alarm/ctl {p.read32(b):#x}/{p.read32(b+4):#x}/{p.read32(b+0xc):#x}  "
           f"WD1 {p.read32(b+0x10):#x}/{p.read32(b+0x14):#x}/{p.read32(b+0x1c):#x}  WD2 {p.read32(b+0x20):#x}/{p.read32(b+0x24):#x}/{p.read32(b+0x2c):#x}  "
           f"extra 8008/800c/8020 {p.read32(0x23d2b8008):#x}/{p.read32(0x23d2b800c):#x}/{p.read32(0x23d2b8020):#x}  s2r-timer {p.read32(0x23d2c4000):#x}")
-def real_s2r_on(spin=0, alarm=0, mask=()):
+_CLKGEN = (0x23b040140, 0x23b040144, 0x23b040148, 0x23b04014c, 0x23b040154)  # muxes macOS parks (= 0x80100000) before the commit
+def real_s2r_on(spin=0, alarm=0, mask=(), wake="reset"):
     p.write32(_A_CNT, 0); _slots.clear()
+    try:
+        # wake="proxy": the handler keeps the hypervisor image alive, restores these clkgen words,
+        # powers the ATC0 USB path back up and runs the proxy (no guest entry yet)
+        a = _base + _sym("hv_s2r_clkgen")
+        vals = [p.read32(r) for r in _CLKGEN]
+        for i, (r, v) in enumerate(zip(_CLKGEN, vals)):
+            p.write64(a + 16 * i, r); p.write64(a + 16 * i + 8, v)
+        p.write32(_base + _sym("hv_s2r_clkgen_count"), len(_CLKGEN))
+        p.write32(_base + _sym("hv_s2r_wake_mode"), {"reset": 0, "proxy": 1}[wake])
+        print(f"[s2r-real] wake mode {wake}; clkgen at arm: " + " ".join(f"{r:#x}={v:#x}" for r, v in zip(_CLKGEN, vals)))
+    except KeyError:
+        if wake != "reset":
+            print("[s2r-real] this m1n1 build has no wake modes")
     try:
         p.write32(_base + _sym("hv_s2r_alarm_secs"), alarm)
         print(f"[s2r-real] RTC alarm at the commit: {'now + %d s' % alarm if alarm else 'left as macOS set it'}")
