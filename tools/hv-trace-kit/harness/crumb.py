@@ -7,8 +7,14 @@ print("PMU 0x9f00..0f:", " ".join("%02x" % x for x in b))
 st = chr(b[10]) if 32 <= b[10] < 127 else b[10]
 if b[4] == ord('H'):
     names = ["AOP.GPIO.IRQ4","AOP.GPIO.IRQ6","AOP.OutboxNotEmpty","AOP.CPUWakeupAP","NUB.WakeupAP","NUB.GPIO.IRQ6","NUB.APWatchdog","NUB.APWakeupTime","NUB.SPMI0Sw3IRQ","AOP.SPMI0Sw3IRQ","SMC.CPUWakeupAP","SMC.OutboxNotEmpty","ATC0.CIOWakeup","ATC1.CIOWakeup","ATC0.USBWakeup","ATC1.USBWakeup"]
-    m = b[5] | (b[9] << 8); en = b[6] | (b[7] << 8)
-    print("  handler ran: wake sources SET = %s (map %#06x); ENABLED at wake = %s (%#06x); ATC0_COMMON actual %x; WD2 CTRL %x; trampoline +0x20>>16 = %#04x, +0x24 = %#04x" % ([n for k, n in enumerate(names) if m >> k & 1] or ["none"], m, [n for k, n in enumerate(names) if en >> k & 1] or ["none"], en, b[8] & 0xf, b[8] >> 4, b[11], b[12]))
+    if b[10] == ord('Z'):   # builds up to 330cba51: 'H', map lo, en lo, en hi, nibbles, map hi; trampoline bytes intact
+        m = b[5] | (b[9] << 8); en = b[6] | (b[7] << 8)
+        print("  handler ran: wake sources SET = %s (map %#06x); ENABLED at wake = %s (%#06x); ATC0_COMMON actual %x; WD2 CTRL %x; trampoline +0x20>>16 = %#04x, +0x24 = %#04x" % ([n for k, n in enumerate(names) if m >> k & 1] or ["none"], m, [n for k, n in enumerate(names) if en >> k & 1] or ["none"], en, b[8] & 0xf, b[8] >> 4, b[11], b[12]))
+    else:                   # later builds: 'H', map lo, map hi, count<<6 | ep, cmd, event code (4 bytes LE)
+        m = b[5] | (b[6] << 8); cnt = b[7] >> 6; ep = b[7] & 0x3f
+        evt = b[9] | (b[10] << 8) | (b[11] << 16) | (b[12] << 24)
+        epname = {0x3f: "no message pending", 0x3e: "mailbox unreadable (all-ones)", 0x3d: "no mailbox address"}.get(ep, "ep %#x" % ep)
+        print("  handler ran: wake sources SET = %s (map %#06x); SMC outbox: %s, %d message(s) drained, first: cmd %#04x event code %#010x" % ([n for k, n in enumerate(names) if m >> k & 1] or ["none"], m, epname, cnt, b[8], evt))
 print("  0x9f04:", chr(b[4]) if 32 <= b[4] < 127 else b[4], " stage 0x9f0a:", st, " 0x9f0b:", b[11], " 0x9f0c: %#04x" % b[12], " (0x9f0d is iBoot's)")
 r = [s.read8(0xf, 0xd000 + i) for i in range(12)]
 rtc = r[4] | r[5] << 8 | r[6] << 16 | r[7] << 24; al = r[8] | r[9] << 8 | r[10] << 16 | r[11] << 24

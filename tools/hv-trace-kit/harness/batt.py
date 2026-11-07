@@ -10,5 +10,8 @@ def rd(k):
 print("time", time.strftime("%H:%M:%S"))
 for k in ("B0RM", "B0FC", "B0AC", "B0AV", "B0CT", "BRSC", "CHLS", "AC-W", "D0VR", "PSTR", "PPBR", "PDTR", "PHPC", "PSBR"):
     v, t = rd(k); print("%s (%s) = %s" % (k, t, v))
+# the first B0RM after a wake can be a stale gauge sample: read it again 30 s later
+time.sleep(30)
+v, t = rd("B0RM"); print("time %s" % time.strftime("%H:%M:%S")); print("B0RM again (+30 s) = %s" % v)
 smc.stop()
 print("smc stopped")
