@@ -17,11 +17,23 @@ reach() { ping -c "$1" -W 1 -I "$IF" "$GW" >/dev/null 2>&1; }
 iw dev "$IF" link 2>/dev/null | grep -q '^Connected' || exit 0
 GW=$(ip -4 route show default dev "$IF" 2>/dev/null | awk '{print $3; exit}')
 [ -n "$GW" ] || exit 0
-reach 3 && exit 0
-reach 3 && exit 0
+# Healthy: the gateway answers and fast. A stuck power-save state shows either as no
+# replies at all or as replies held back for seconds (avg RTT well over 300 ms).
+slow() {
+	local avg
+	avg=$(ping -c 4 -i 0.3 -W 2 -I "$IF" "$GW" 2>/dev/null | awk -F/ '/^rtt/{print int($5)}')
+	[ -z "$avg" ] && return 0
+	[ "$avg" -gt 300 ]
+}
+if reach 3 || reach 3; then
+	slow || exit 0
+	why="answering slowly (avg RTT over 300 ms)"
+else
+	why="unreachable"
+fi
 
 ps=$(iw dev "$IF" get power_save 2>/dev/null | awk '{print $3}')
-log "gateway $GW unreachable on $IF while associated (power save ${ps:-?}): cycling power save"
+log "gateway $GW $why on $IF while associated (power save ${ps:-?}): cycling power save"
 iw dev "$IF" set power_save off
 sleep 1
 [ "$ps" = on ] && iw dev "$IF" set power_save on
