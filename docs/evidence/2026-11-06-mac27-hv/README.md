@@ -452,3 +452,21 @@ over 2409 s, of which ~2 mAh is the awake tail and m1n1's 10 s: **~15 mAh / 40 m
 — all within the gauge's noise of zero, upper bound still ~0.3–0.4 W.
 
 try45 (started 11:00): the same login-screen recipe with alarm 10800 s, for a ±0.07 W number.
+
+### try45: the login-screen early wake has a name — SMC.OutboxNotEmpty at 41 s
+
+try45 (same login-screen recipe as try44, alarm 10800 s): commit 10:58:19, USB down 10:59:00
+= **41 s later**, handler record: wake sources set = **SMC.OutboxNotEmpty (81)** only (map 0x0800),
+enabled = all 16, WD2 CTRL 0, trampoline +0x20>>16 = 0, alarm still armed (RTC−alarm −10748 s).
+This is the "login-screen sleep wakes after ~40 s" seen in try36/38/40 — the SMC put a message
+in its outbox to the AP and that is an enabled wake source. try44 (same recipe) held 2400 s, so
+whatever the SMC wants to say is not deterministic. Note for the desktop timer: SMC.OutboxNotEmpty
+is one of its four candidates too.
+
+The post-wake m1n1 cannot read that message: by the time the WD1 reset has run and m1n1 is back,
+iBoot has talked to the SMC and the outbox is empty (an unfiltered batt.py run showed a clean
+RTKit start). Reading it means the wake handler draining the SMC mailbox before the reset.
+
+Next: m1n1 330cba51 adds `hv_s2r_wake_mask_or[5]`, ORed into the mask words at the last core
+(after macOS's own setAPWakeupSources); `real_s2r_on(mask=[81])`. try46 = login-screen recipe,
+alarm 10800 s, SMC.OutboxNotEmpty masked.
