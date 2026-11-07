@@ -22,7 +22,7 @@ export M1N1_NO_ECL_HOLD=${M1N1_NO_ECL_HOLD:-}
 echo "start $(date +%T) NO_ECL_HOLD=${M1N1_NO_ECL_HOLD}"
 cd $R; rm -f $S/hvin; mkfifo $S/hvin
 ( exec 3>$S/hvin; sleep 7200 ) &
-timeout 3600 $PY -u /home/naeem/m1n1/proxyclient/tools/run_guest.py --sptm-mode ${MODE:-emulation} "$@" -m $S/arm_wdt.py ${EXTRA_M:+-m $EXTRA_M} \
+timeout ${GUEST_TIMEOUT:-14400} $PY -u /home/naeem/m1n1/proxyclient/tools/run_guest.py --sptm-mode ${MODE:-emulation} "$@" -m $S/arm_wdt.py ${EXTRA_M:+-m $EXTRA_M} \
   -p $K/kc/sptm27/sptm.macho -t $K/kc/sptm27/txm.macho -l hv-$T.log $K/kc/kernelcache-27.macho \
   -- "${BOOTARGS:-debug=0x14e serial=3 apcie=0xfffffffe -enable-kprintf-spam wdt=-1 clpc=0 -v}" > run-$T.out 2>&1 < $S/hvin
 echo "run_guest exit $? $(date +%T)"
