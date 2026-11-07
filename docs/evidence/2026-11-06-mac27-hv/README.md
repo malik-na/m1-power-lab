@@ -641,3 +641,34 @@ arm-time values. The register is lock-protected; the SoC's event log recorded ou
 event-log handler panics on it once its interrupt is enabled at the wake. try49's probes showed the
 DART and dwc3 work with the muxes still parked, so in resume mode the wake path now leaves them for
 macOS's own restoreClockConfig. (Console log: runs/20261106/mac27/vuart-try53.log.)
+
+### try54: a full S2R round trip inside macOS — wake, restore, all eight cores back, then sleep again
+
+try54 (bd6a43d4, resume mode without the clkgen restore; new routine: lid open at boot, the user
+closes it once armed — slpw 35 s later, no missed clamshell trigger). Commit 17:02:32, alarm wake
+17:07:33, host back 17:07:34, nonce matched, cpu0 re-entered at 0x81f714000. macOS then, with no
+panic:
+
+1. ran its wake restore on cpu0 (HID/EHID passes, enableCPUComplex 0x23b718000/004 = 0xf, the
+   pwrgates, the PMGR PS traffic through the Python hooks, 0x23b71c080/88);
+2. **started all seven secondaries** through CPUSTART (+4 / +8 for the E cluster, +4 / +c for the
+   P cluster); each one came up lazily into m1n1's spin loop and entered the guest at the reset
+   page (the lazy start, after macOS powered the cluster, is what makes the P cluster work);
+3. reported itself awake: SMC MBSE = 0x616b6177, PMU boot_stage = 0xfe (the "running" value it
+   also writes at a cold boot);
+4. found the clamshell still closed ("PMRD: clamshell closed 1 … ac 1") and **went back to sleep
+   by itself**: MBSE 'slpw', the full quiesce chain, boot_stage 0x50, MBSE 'slpa', every core
+   taking its sleep WFI path, the AON engine arming WD2 (0x07270e00, CTRL 4).
+
+The second sleep was not passed through to the hardware (`hv_s2r_reset_after_wake()` clears
+`hv_real_s2r`), so the hypervisor treated the cores' power-down as an exit, and WD2 reset the SoC
+5 s later (17:07:57). Console: runs/20261106/mac27/vuart-try54.log (the post-wake console was not
+captured: the logger reattached only after macOS had gone back to sleep).
+
+So the suspend-to-RAM round trip works end to end under the hypervisor on the M1 Air: real SoC
+power-off with DRAM retained, RTC wake, the hypervisor survives and reconnects, macOS's own wake
+path restores the hardware, brings every core back and runs until it decides to sleep again.
+Next: re-arm the pass-through after a resume (so macOS can sleep and wake repeatedly), wake it
+somewhere it stays awake (lid open + an input event, or the alarm with the lid open), capture the
+full post-wake console and MMIO trace of the restore, and turn both traces into the Linux
+suspend/resume sequence.
