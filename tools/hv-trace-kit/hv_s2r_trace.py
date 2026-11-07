@@ -110,6 +110,16 @@ CFG = {
     "snap_wake": _env_int("S2R_SNAP_WAKE", 0),
     "cyc_read": _env_int("S2R_CYC_READ", 1),   # read CYC_OVRD_EL1 back in the exit-cpu hook
     "dcp": _env_int("S2R_DCP", 1),             # trace the DCP/DCPEXT RTKit mailboxes too
+    "aop": _env_int("S2R_AOP", 1),             # trace the AOP RTKit mailbox too
+    # group-3 bisection: "0" no hook, "pass" hook installed but transparent, "1" block the
+    # AOP's ep0 SET_AP_POWER/SET_IOP_POWER (swapped for a PING, its PONG relabelled as the ack)
+    "block_aop": os.environ.get("S2R_BLOCK_AOP", "0"),
+    # combined bisection run: comma list of groups to block ("aop,pmp,smc,mcc");
+    # mailbox groups swap ep0 SET_AP_POWER/SET_IOP_POWER for a PING (PONG relabelled
+    # as the ack); "smc" also swaps WRITE_KEY MBSE/WKTP for a READ_KEY of the same key
+    # (reply relabelled as a clean WRITE_KEY result); "mcc" swallows the cache-off writes
+    # (M1-M3) and fakes the flush poll (M4)
+    "block": [g for g in os.environ.get("S2R_BLOCK", "").split(",") if g],
 }
 
 # Fallback addresses (t8103) used only if the live ADT lacks a node.
@@ -118,6 +128,7 @@ FALLBACK = {
     "pmp": 0x23bc00000,       # PMP mailbox 0x23bc08000 = base + 0x8000
     "dcp": 0x231c00000,       # display coprocessor ASC (J313 ADT /arm-io/dcp)
     "dcpext": 0x271c00000,    # external-display coprocessor ASC (/arm-io/dcpext)
+    "aop": 0x24a400000,       # always-on processor ASC (/arm-io/aop reg[0]; t8103.dtsi aop_mbox@24a408000)
 }
 
 # Expected /arm-io/pmgr reg[] on t8103 (J313 ADT, fabric/adt.pkl). A zone is
@@ -253,7 +264,7 @@ class S2RTrace:
         if kind == "spmi":
             self._spmi(evt, base, region, write, data)
             return
-        if kind in ("smc", "pmp", "dcp", "dcpext"):
+        if kind in ("smc", "pmp", "dcp", "dcpext", "aop"):
             self._mbox(evt, base, region, kind, write, data)
             return
         if kind == "sram":
@@ -294,7 +305,7 @@ class S2RTrace:
             mgmt_hot = "mgmt" in o and o.get("mgmt") in ("SET_AP_POWER", "SET_IOP_POWER", "IOP_POWER_ACK")
             smc_hot = o.get("smc") in ("WRITE_KEY", "RW_KEY") or "sram_addr" in o
             self.say(1 if (mgmt_hot or smc_hot or kind == "pmp") else 2, o["text"])
-            if kind in ("dcp", "dcpext") and o.get("ep") == 0:
+            if kind in ("dcp", "dcpext", "aop") and o.get("ep") == 0:
                 self.say(1, o["text"])
             if "sram_addr" in o and self.armed:
                 self._add_sram_zone()
@@ -327,6 +338,8 @@ class S2RTrace:
         kinds = [("smc", "smc"), ("pmp", "pmp")]
         if CFG["dcp"]:
             kinds += [("dcp", "dcp"), ("dcpext", "dcpext")]
+        if CFG["aop"]:
+            kinds += [("aop", "aop")]
         for kind, node in kinds:
             b = self._asc_base(node, FALLBACK[kind])
             self._add(S2R_IDENT_ALWAYS, b + 0x8800, 0x10, TraceMode.ASYNC, f"{kind}-mbox",
@@ -428,6 +441,8 @@ class S2RTrace:
                 self.hv.add_tracer(zone, A, TraceMode.HOOK, None, self._stop_w, region="stop")
                 self.armed_zones.append(zone)
                 self.zone_names.append((A, start, size, "HOOK", "stop"))
+        if CFG["block"] or CFG["block_aop"] in ("pass", "1"):
+            self._arm_blocks()
         self.armed = True
         self.rec("arm", text=note or "armed", zones=[(i, f"{s:#x}", f"{z:#x}", m, n)
                                                     for i, s, z, m, n in self.zone_names])
@@ -442,6 +457,187 @@ class S2RTrace:
         self.armed = False
         self.rec("disarm", text="disarmed")
         print("[s2r] disarmed")
+
+    # ------------------------------------------------- bisection: mailbox blocks
+    PING = 0x0030000000000000 | 0xA0B5        # RTKit mgmt PING (type 3), payload tag
+    SMC_BLOCK_KEYS = (0x4d425345, 0x574b5450)  # 'MBSE', 'WKTP'
+
+    def _arm_blocks(self):
+        groups = list(CFG["block"])
+        if CFG["block_aop"] in ("pass", "1") and "aop" not in groups:
+            groups.append("aop")
+        self.blk = {}
+        A = S2R_IDENT_ARMED
+        for kind in ("aop", "pmp", "smc"):
+            if kind not in groups:
+                continue
+            b = self._asc_base(kind, FALLBACK[kind])
+            if b != FALLBACK[kind]:
+                self._refuse(f"{kind}-block", f"ASC at {b:#x}, expected {FALLBACK[kind]:#x}; not installed")
+                continue
+            mode = "pass" if CFG["block_aop"] == "pass" and kind == "aop" and "aop" not in CFG["block"] else "1"
+            st = {"base": b, "mode": mode, "m0": None, "fake": None, "smc": {}}
+            self.blk[kind] = st
+            for start, rd, wr in ((b + 0x8800, None, self._blk_w), (b + 0x8830, self._blk_r, None)):
+                zone = irange(start, 0x10)
+                self.hv.add_tracer(zone, A, TraceMode.HOOK, rd, wr, region=f"{kind}-block", bkind=kind)
+                self.armed_zones.append(zone)
+                self.zone_names.append((A, start, 0x10, "HOOK", f"{kind}-block"))
+            self.rec("note", text=f"{kind}-block installed, mode {mode}")
+            print(f"[s2r] {kind.upper()} block installed at {b + 0x8800:#x}/{b + 0x8830:#x}, mode {mode}")
+        if "mcc" in groups:
+            self._arm_mcc_block()
+
+    def _blk_send(self, kind, m0, m1):
+        """What goes to the IOP for one A2I message (msg0); records every swap."""
+        st = self.blk[kind]
+        if st["mode"] != "1":
+            return m0
+        ep = m1 & 0xff
+        typ = (m0 >> 52) & 0xff
+        if ep == 0 and typ in (0xb, 0x6) and (m0 & 0xffff) == 0x201:   # sleep-side only
+            st["fake"] = ((0xb if typ == 0xb else 0x7) << 52) | (m0 & 0xffff)
+            name = "SET_AP_POWER" if typ == 0xb else "SET_IOP_POWER"
+            self.rec(f"{kind}-block", text=f"{kind} {name} {m0 & 0xffff:#x} swapped for PING", msg0=f"{m0:#x}")
+            print(f"[s2r] {kind}-block: {name} {m0 & 0xffff:#x} -> PING")
+            return self.PING
+        if kind == "smc" and ep == 0x20 and (m0 & 0xff) == 0x11 and (m0 >> 32) in self.SMC_BLOCK_KEYS:
+            mid = (m0 >> 12) & 0xf
+            st["smc"][mid] = m0
+            key = (m0 >> 32).to_bytes(4, "big").decode(errors="replace")
+            self.rec("smc-block", text=f"WRITE_KEY {key} (id {mid:#x}) swapped for READ_KEY", msg0=f"{m0:#x}")
+            print(f"[s2r] smc-block: WRITE_KEY {key} id {mid:#x} -> READ_KEY")
+            return (m0 & ~0xff) | 0x10
+        return m0
+
+    def _blk_relabel(self, kind, m0, m1):
+        """Relabel a reply to a swapped message; returns the new msg0 or None."""
+        st = self.blk[kind]
+        ep = m1 & 0xff
+        if ep == 0 and st["fake"] is not None and ((m0 >> 52) & 0xff) == 4:
+            fake, st["fake"] = st["fake"], None
+            self.rec(f"{kind}-fake", text=f"{kind} PONG {m0:#x} relabelled as {fake:#x}", msg0=f"{m0:#x}")
+            print(f"[s2r] {kind}-fake: PONG {m0:#x} -> {fake:#x}")
+            return fake
+        if kind == "smc" and ep == 0x20 and (m0 & 0xff) != 0x18:
+            mid = (m0 >> 12) & 0xf
+            if mid in st["smc"]:
+                st["smc"].pop(mid)
+                fake = m0 & 0xf000          # the WRITE_KEY reply: id only, result 0, size 0
+                self.rec("smc-fake", text=f"READ_KEY reply {m0:#x} relabelled as {fake:#x}", msg0=f"{m0:#x}")
+                print(f"[s2r] smc-fake: reply {m0:#x} -> {fake:#x}")
+                return fake
+        return None
+
+    def _blk_w(self, addr, val, width, bkind=None, **kw):
+        st = self.blk[bkind]
+        b = st["base"]
+        try:
+            if width == 128:
+                nv = list(val)        # handle_vm_hook_mapped passes the whole data list
+                nv[0] = self._blk_send(bkind, nv[0], nv[1])
+                self.hv.u.write(addr, nv, 128)
+                return
+            if addr == b + 0x8800:
+                st["m0"] = val
+                self.hv.u.write(addr, val, width)
+                return
+            if addr == b + 0x8808 and st["m0"] is not None:
+                n0 = self._blk_send(bkind, st["m0"], val)
+                if n0 != st["m0"]:
+                    self.hv.u.write(b + 0x8800, n0, 64)
+                st["m0"] = None
+            self.hv.u.write(addr, val, width)
+        except Exception as e:
+            print(f"[s2r] {bkind}-block write error {e}; passing through")
+            self.rec("block-error", text=f"{bkind} write {e}")
+            self.hv.u.write(addr, val, width)
+
+    def _blk_r(self, addr, width, bkind=None, **kw):
+        v = self.hv.u.read(addr, width)
+        try:
+            st = self.blk[bkind]
+            if addr != st["base"] + 0x8830:
+                return v
+            wide = not isinstance(v, int)
+            if not wide:
+                # a 64-bit msg0 read: the endpoint is in msg1, still unread; only the
+                # mgmt PONG (ep 0, type 4) and SMC replies are recognisable from msg0
+                m1 = 0 if ((v >> 52) & 0xff) == 4 else 0x20
+                n0 = self._blk_relabel(bkind, v, m1)
+                return v if n0 is None else n0
+            n0 = self._blk_relabel(bkind, v[0], v[1])
+            if n0 is None:
+                return v
+            nv = list(v)
+            nv[0] = n0
+            return nv
+        except Exception as e:
+            print(f"[s2r] {bkind}-block read error {e}; passing through")
+            self.rec("block-error", text=f"{bkind} read {e}")
+        return v
+
+    # ------------------------------------------------- bisection: MCC (M1-M4) block
+    MCC_BCAST = (0x20010000c, 0x200100014)
+    MCC_ENABLE = 0x200001c00
+    MCC_STATUS = tuple(0x200001c04 + n * 0x40000 for n in range(4))
+
+    def _arm_mcc_block(self):
+        self.mcc = {"bcast_held": [], "blocked": False, "faked": 0}
+        A = S2R_IDENT_ARMED
+        for a in self.MCC_BCAST + (self.MCC_ENABLE,):
+            zone = irange(a, 4)
+            self.hv.add_tracer(zone, A, TraceMode.HOOK, None, self._mcc_w, region="mcc-block")
+            self.armed_zones.append(zone)
+            self.zone_names.append((A, a, 4, "HOOK", "mcc-block"))
+        for a in self.MCC_STATUS:
+            zone = irange(a, 4)
+            self.hv.add_tracer(zone, A, TraceMode.HOOK, self._mcc_r, None, region="mcc-block")
+            self.armed_zones.append(zone)
+            self.zone_names.append((A, a, 4, "HOOK", "mcc-block"))
+        self.rec("note", text="mcc-block installed")
+        print("[s2r] MCC block installed (broadcast, plane cache enable, 4 status words)")
+
+    def _mcc_w(self, addr, val, width, **kw):
+        m = self.mcc
+        try:
+            if addr in self.MCC_BCAST:
+                if val:                        # broadcast on: hold until we know why
+                    m["bcast_held"].append((addr, val, width))
+                    return
+                if m["blocked"]:               # broadcast off after a swallowed ways-off
+                    self.rec("mcc-block", text=f"broadcast off {addr:#x} swallowed")
+                    return
+                self.hv.u.write(addr, val, width)
+                return
+            if addr == self.MCC_ENABLE:
+                if val == 0:                   # M2: all ways off -> swallow, cache stays on
+                    m["blocked"] = True
+                    m["bcast_held"] = []
+                    self.rec("mcc-block", text="MCC ways-off write (0x200001c00 = 0) swallowed; BLOCKED")
+                    print("[s2r] mcc-block: ways-off swallowed (cache stays on)")
+                    return
+                for a, v, w in m["bcast_held"]:   # a re-enable: replay the held broadcast first
+                    self.hv.u.write(a, v, w)
+                m["bcast_held"] = []
+                m["blocked"] = False
+                self.hv.u.write(addr, val, width)
+                return
+            self.hv.u.write(addr, val, width)
+        except Exception as e:
+            print(f"[s2r] mcc-block write error {e}; passing through")
+            self.rec("block-error", text=f"mcc write {e}")
+            self.hv.u.write(addr, val, width)
+
+    def _mcc_r(self, addr, width, **kw):
+        v = self.hv.u.read(addr, width)
+        if self.mcc["blocked"] and isinstance(v, int):
+            self.mcc["faked"] += 1
+            if self.mcc["faked"] <= 8:
+                self.rec("mcc-fake", text=f"status {addr:#x} {v:#x} -> {v & ~0x7fe0:#x}")
+                print(f"[s2r] mcc-fake: {addr:#x} {v:#x} -> {v & ~0x7fe0:#x}")
+            return v & ~0x7fe0             # data [14:10] and tag [9:5] counts read as flushed
+        return v
 
     # -------------------------------------------------------------- stop mode
     def _stop_w(self, addr, val, width, **kw):

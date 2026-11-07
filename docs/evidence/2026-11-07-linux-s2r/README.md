@@ -58,3 +58,56 @@ Stage 2, the resume: Linux writes the m1n1 wake note ('W' + the physical address
 calls `cpu_resume`) before the commit, and the resident m1n1 at the locked RVBAR must be one that
 honours it (our trampoline build) — on this Mac that means installing it as the Omarchy volume's boot
 object, a Recovery step for the owner. Then: devices back, the long sleep for the power number.
+
+## Runs 3–12 (2026-11-07/08): the wake never reaches the boot CPU
+
+Stage 2 work replaced the ESP stage-2 m1n1 with a build whose reset path handles the wake (omacom
+bc79acc4 + m1power commits, local tree `~/Work/m1n1-omacom-s2r`), installed with
+`target/lab/install-stage2-wake.sh`. Every Linux run below entered S2R cleanly (stage `g`, no WD2
+reset, alarm fired) and rebooted at **commit + ~181 s** (the WD1 dead-man):
+
+| Test | Change | Result |
+|---|---|---|
+| 3 | wake note in `_cpu_reset_c` | no wake mark — the note check ran after UART output |
+| 4–6 | note before any UART output; then `cpu_reset` without `debug_putc`; then cable out | no `v` mark |
+| 7 | dead-man off | the M1 stayed down until a long press: nothing restarts it without WD1 |
+| 8 | WD1 "progress meter" at each reset-path stage | 181.0 s: **not even the first instruction at the RVBAR ran**; the final `wfi` did not return |
+| 9 | macOS SMC sleep handshake (MBSE slpw, WKTP=2, slpa, AP 0x201 — all acked) + MCC M1–M4 flush | 181.2 s |
+| 10 | + `pd_ignore_unused` (pms_sram etc. stay on) | 181.2 s |
+| 11 | + DRAM retention probe | inconclusive: the probe page is lost in a plain WD1 reset too |
+| 12 | nub-spmi IRQ words as macOS leaves them; RVBAR pre-check | 181.4 s; the RVBAR page is reserved and byte-identical to the stage-2 image |
+
+## Bisection from the working macOS case (macOS 27 under the m1n1 hypervisor)
+
+Each run blocks one group of macOS's sleep messages in the hypervisor (the message is swapped for a
+harmless RTKit PING / SMC READ_KEY and the real reply relabelled, so macOS still completes the sleep);
+`tools/hv-trace-kit/hv_s2r_trace.py`, `S2R_BLOCK=aop,pmp,smc,mcc`. Each valid run's log shows the swap
+and the faked reply before `slpa`.
+
+| Run | Blocked | Result |
+|---|---|---|
+| try56 | nothing (baseline) | slept, woke at the alarm (wake source 54), resumed |
+| try57 | nothing; AOP mailbox traced | woke; the AOP's only sleep message is ep0 SET_AP_POWER 0x201 (between slpw and slpa) |
+| try58 | AOP | invalid: hook bug (128-bit data list), nothing blocked |
+| try59 | AOP SET_AP_POWER 0x201 | **woke** — AOP ruled out |
+| try60 | AOP + PMP + SMC + MCC | invalid: macOS panicked (MBSE `panb`) before `slpa` |
+| try61 | AOP + PMP + SMC | invalid: macOS panicked right after the PMP 0x201 pair was swapped — the PMP block is detected |
+| try62 | SMC: MBSE slpw/slpa, WKTP, SET_AP_POWER 0x201 | **woke** — the SMC handshake ruled out |
+
+## The reconfig engine's wake sequences
+
+The AON reconfig SRAM (0x23df00000, 128 KiB, locked by iBoot) was dumped read-only from the m1n1 proxy
+and decoded (12 sequences; layout as PongoOS's A11 recfg, table at SRAM + 0, entries PA >> 4). No
+sequence touches the CPU implementation registers, IORVBAR, CPU_START or the cluster power states, so
+the boot CPU is **not** released by the reconfig engine. The progress registers (0x23d2b8028/8040) are
+cleared by a WD1 reset, so they cannot be read after a failed wake. The dump and decode stay private
+(`var/recfg/`).
+
+## Where this leaves it
+
+Ruled out: the stage-2 reset path, the RVBAR page, the cable, the dead-man, the SMC handshake (both
+ways), the AOP, the MCC flush, the PMU alarm programming and the nub-spmi IRQ setup. The one candidate
+that neither side has tested is the **PMP**: Linux never starts it (pms_sram is off from boot), macOS
+runs it and idles it at sleep, and macOS will not complete a sleep with the PMP idle pair blocked. The
+next test would be Linux with the PMP running (m1power/pmp-v1-overlay) and idled as macOS does, plus a
+no-sleep diff of the registers the wake sequences poll, Linux vs macOS at the commit.
