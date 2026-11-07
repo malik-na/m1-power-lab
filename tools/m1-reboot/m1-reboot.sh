@@ -18,5 +18,14 @@ if ! sudo -n test -e /sys/kernel/debug/usb/tipd/2-08/command; then
 	fi
 	sleep 3
 fi
-# The M1 is on the M3 Max's "USB-C Right" port (partner identity 0x05ac, USB host capable).
-sudo -n env RUST_LOG=info "$TUX" -c Right $CMD
+# Use the M3 Max port whose Type-C partner is a Mac (id_header 0xd50005ac: Apple, USB host
+# capable); serial works only on "USB-C Left Back" (and needs a cable with SBU wires).
+PORT=""
+for p in /sys/class/typec/port*-partner; do
+	[ "$(cat "$p/identity/id_header" 2>/dev/null)" = 0xd50005ac ] || continue
+	dev=$(basename "$(readlink -f "${p%-partner}/device")")
+	PORT=$(tr -d '\0' < /sys/bus/spmi/devices/$dev/of_node/connector/label 2>/dev/null | sed 's/^USB-C //')
+done
+[ -n "$PORT" ] || { echo "no Mac found on any USB-C port" >&2; exit 1; }
+echo "M1 on: $PORT"
+sudo -n env RUST_LOG=info "$TUX" -c "$PORT" $CMD
