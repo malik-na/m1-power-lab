@@ -596,3 +596,34 @@ What stage one does not do yet: the host-side Python session dies with the USB l
 the guest is not re-entered. Stage two: keep the host session across the link drop, bring the
 seven secondaries back into m1n1's spin loop, re-arm EL2 on cpu0 without re-seeding the SPTM's
 per-CPU SPRR/GXF state, and enter the guest at the SPTM reset page (entry & ~0xfff).
+
+### try50–52: stage two — macOS re-entered after a real S2R, runs its restore, then panics
+
+Stage two (m1n1 ffb206f7 → bd6a43d4): the host session survives the USB drop (run_guest catches
+the SerialException only when `real_s2r_on(wake="resume")` expected it, reopens 1209:316d, `nop()`
+first, resumes only if a 64-bit nonce written at arm time is still in the image), then calls
+`hv_s2r_resume_guest(pc, flags)`: hv/S2R/exception bookkeeping reset, every core's SPTM-emulation
+state re-seeded with the boot-time seed plus the boot CPU's CTRR/CTXR values, the secondaries'
+alive flags forgotten, EL2 re-armed on cpu0 like a secondary, entry at the SPTM reset page (the
+address every secondary got). Secondaries are started lazily, when the guest's CPUSTART comes.
+
+- **try50** never slept: the chainload silently did not take (the M3 Max's xHCI re-enumerated at
+  that moment) and the old installed image ran; calling our ELF's addresses into it crashed. The
+  launcher now checks the running version against the uploaded build and retries.
+- **try51**: reconnect, nonce check and the resume call worked; starting the secondaries at the
+  wake raised an SError on core 4 (L2C_ERR_ADR 0x211050000 = its impl register): **the P cluster
+  is unpowered at the wake** until macOS's restoreHW powers it. A review also found that
+  restarting the secondaries overwrote their RVBARs with m1n1's vectors, which the CPUSTART hook
+  reads back on M1. Both fixed (lazy start, recorded reset page).
+- **try52** (bd6a43d4; slept 16:34:21 after a lid cycle, alarm wake 16:39:21): host back at
+  16:39:22, nonce matched, **cpu0 re-entered macOS at 0x81f030000**. macOS then ran its own wake
+  restore on cpu0: HID/EHID/ACC sysregs, **`enableCPUComplex` (0x23b718000/004 = 0xf, both
+  clusters on)**, 0x23b71c000/040 = 0x80000000, the AON PMGR, PMGR PS read/writes for UART0/SIO/
+  ATC0 (served by the Python hooks), 0x23b71c080/88, **PMU boot_stage 0x40**, the AON watchdog
+  disarm (WD1 CTRL 0, 8008 = 0) — then **SMC MBSE = 'panb' (panic begin)**, NESN, boot_stage
+  0x46. cpu0 now sits in xnu's halt loop (`wfe` at _start+0xc). The panic text was not captured:
+  the macOS serial console (second CDC channel) was not being logged, and a memory scan found no
+  runtime panic string. Next cycle: log the console channel across the drop.
+
+So the S2R round trip now goes sleep → hardware wake → live hypervisor on USB → macOS's own wake
+code running and restoring hardware; what is left is whatever its restore trips over.
