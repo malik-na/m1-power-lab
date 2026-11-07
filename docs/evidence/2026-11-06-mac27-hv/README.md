@@ -492,3 +492,33 @@ message's endpoint, command byte and event code (msg0 >> 32) in the note; with n
 the note carries the enabled map instead (the proof that a requested mask reached the hardware).
 Note layout now: 'H', status map lo/hi, count<<6 | ep, cmd (0xff = no message), 4 bytes event code
 or enabled map. `crumb.py` decodes both layouts.
+
+### try46: 3-hour sleep from the login screen, SMC.OutboxNotEmpty masked — held to the alarm
+
+try46 (2026-11-07, build 330cba51, login-screen recipe, `real_s2r_on(alarm=10800, mask=[81])`):
+commit 11:03:23 host (PMU RTC 0x2b308e), woke on the alarm at 14:03:23 — **10810 s by the RTC**
+(alarm 0x2b5abe, handler read 0x2b5ac8). Handler record: set = NUB.SPMI0Sw3IRQ only; **enabled =
+0xf7ff, i.e. bit 11 (SMC.OutboxNotEmpty) clear — the proxyclient's mask reached the hardware and
+survived macOS's own setAPWakeupSources**; WD2 CTRL 0; ATC0_COMMON actual 4. The user opened the
+lid at ~11:13 and the SoC did not wake (the lid path on this Mac goes through the SMC's message,
+the masked source). The host-side guest process hit its 1-hour timeout at 12:02; the M1 was
+unaffected (the harness now allows 4 h).
+
+Gauge: macOS's last B0RM poll before the entry **2465 mAh** (t=17 s, 39 s before slpw, awake at
+~−180 mA ≈ 2 mAh); m1n1 read **2450 mAh** at 14:03:33 and again 2450 at +30 s and +74 s.
+**15 mAh over 10810 s, ~13 mAh after the awake tail ≈ 4.3 mA ≈ 0.05 W; gauge ±15 mAh → ±0.06 W.**
+
+**Caveat on the source of that current.** Every earlier post-wake read showed the M1 on its
+battery with the M3 Max link feeding nothing (B0AC −178 mA, PDTR 0.04 W; last confirmed 11:00:24).
+At this wake the M1 reported B0AC 0 and **PDTR 2.33 W** (the M3 Max's port3 is now `[source]`,
+`usb_power_delivery`, feeding m1n1's whole idle draw). The host journal has no record of when
+port3 took the source role. So for an unknown part of these 3 hours the M1 may have been fed by
+the M3 Max, and the battery drop is then a lower bound on the SoC's draw. The number above holds
+if the role changed at the wake (the SMC renegotiates when the AP comes back); it is not proven.
+For the next long run the M3 Max side must be pinned to sink (`/sys/class/typec/port3/power_role`)
+or the cable unplugged after the commit, and the gauge read before the first USB enumeration.
+
+Pooled, battery-only cycles (try39 −7 / 1500 s, try43 +2 / 1791 s, try44 +15 / 2409 s): 10 mAh over
+5700 s ≈ 6 mA ≈ 0.08 W ± 0.11 W. With try46 taken at face value: 25 mAh over 16510 s ≈ 5.5 mA ≈
+**0.07 W ± 0.04 W**. Either way the SoC's suspend-to-RAM draw on this M1 Air is well under Linux's
+s2idle (0.440 W) and in the range Aura measured on the J700 (0.109 W, by its battery gauge).
