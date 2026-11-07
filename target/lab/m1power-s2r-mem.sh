@@ -20,7 +20,7 @@
 #
 # The follow-up, on the next boot (lab exec or ssh): s2r-mem-readback.sh.
 set -u
-: "${MACLAB_OUT:?}" "${MACLAB_IN:?}"
+: "${MACLAB_OUT:?}"
 MACLAB_TEST=s2r-mem
 exec > "$MACLAB_OUT/log.txt" 2>&1
 log() { printf '[%s %s] %s\n' "$MACLAB_TEST" "$(date +%T.%N | cut -c1-12)" "$*"; }
