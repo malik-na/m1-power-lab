@@ -522,3 +522,33 @@ Pooled, battery-only cycles (try39 −7 / 1500 s, try43 +2 / 1791 s, try44 +15 /
 5700 s ≈ 6 mA ≈ 0.08 W ± 0.11 W. With try46 taken at face value: 25 mAh over 16510 s ≈ 5.5 mA ≈
 **0.07 W ± 0.04 W**. Either way the SoC's suspend-to-RAM draw on this M1 Air is well under Linux's
 s2idle (0.440 W) and in the range Aura measured on the J700 (0.109 W, by its battery gauge).
+
+(try46 addendum: the status map at the wake was 0x0100, so no SMC message was latched for source 81
+during the sleep. A host power-role swap during the sleep would most likely have posted one, so this
+favours the swap having happened at the wake — suggestive only, since whether a masked source still
+latches its status bit is untested. The host journal has no typec/tps6598x line for port3 at all.)
+
+### try47: first stage-one wake (hypervisor image kept alive, USB re-taken) — stalls in the gadget bring-up
+
+Goal of stage one: at the wake, instead of the WD1 reset, the handler keeps the hypervisor image,
+turns its MMU back on over the surviving page tables, restores the five clkgen mux words recorded at
+arm time (0x23b040140..154: 0x85100000 ×3, 0x86100000 ×2; macOS parks them at 0x80100000), powers
+the ATC0 USB path back up (`usb_phy_bringup(0)`), brings the dwc3 gadget back (`usb_iodev_init`) and
+runs the proxy, so the host can talk to the live image (guest memory, SPTM state, Python hooks).
+m1n1 93ec2724 + a 60-s WD1 fallback (1b60e585); `real_s2r_on(alarm=300, mask=[81], wake="proxy")`.
+
+try47 (login-screen recipe): commit 15:18:02, woke on the alarm at 15:23:01 (the host saw the old
+device disconnect then). **The PHY came up and the controller connected within 0.5 s** (host:
+"new high-speed USB device" at 15:23:02.24), but it never answered: "device descriptor read/64,
+error -110", then "not responding to setup address" through 15:23:20. The SoC reset ~20 s after the
+wake (WD1's 60-s fallback had not expired; 20 s is `wdt_reboot()`'s alarm while `hv_s2r_down` is
+set, i.e. some path called reboot — most likely an exception or assertion inside the gadget
+bring-up, whose message went to a console with no output) and came back as a normal boot through
+the installed image at 15:23:28. Note: stage 'D' (inside `usb_iodev_init`), sub 1 (PHY bring-up
+returned OK); wake set = NUB.SPMI0Sw3IRQ; SMC outbox not drained (mode 1).
+
+Also learned: in every cycle so far the host kept the M1's gadget enumerated through the whole sleep
+and saw the disconnect only at the wake. m1n1 0a10540d adds a fault note (kind, ESR, image offset
+of ELR into 0x9f05..09 / 0x9f0b..0c on the first exception, SError, assertion or reboot call while
+the wake path runs) and sub-stage bytes inside the gadget bring-up; the harness now reads CNTPCT at
+arm time and twice after the wake. try48 = the same cycle with that build.
