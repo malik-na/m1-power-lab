@@ -49,6 +49,36 @@ log "sync_on_suspend $(cat /sys/power/sync_on_suspend 2>/dev/null)"
 [ -e /sys/class/typec/port0 ] && log "typec: $(for p in /sys/class/typec/port?; do echo -n "$(basename $p) $(cat $p/power_role 2>/dev/null) partner=$(ls $p | grep -c partner); "; done)"
 log "online CPUs: $(cat /sys/devices/system/cpu/online)"
 
+# Pre-check: is the RVBAR target (the resident stage-2 m1n1) reserved from Linux and intact?
+# cpu0's locked RVBAR lives in its cpu-impl-reg (t8103 cpu0: 0x210050000; bit 0 lock, 47:12 address).
+{
+	echo "== RVBAR pre-check"
+	python3 - <<'PY' 2>&1
+import mmap, os, struct, hashlib, glob
+fd = os.open("/dev/mem", os.O_RDONLY | os.O_SYNC)
+m = mmap.mmap(fd, 0x4000, mmap.MAP_SHARED, mmap.PROT_READ, offset=0x210050000)
+rv = struct.unpack("<Q", m[0:8])[0]; m.close()
+addr = rv & 0x0000fffffffff000
+print(f"cpu0 RVBAR reg {rv:#x}: address {addr:#x}, locked {rv & 1}")
+for line in open("/proc/iomem"):
+    a, b = [int(x, 16) for x in line.split(":")[0].strip().split("-")]
+    if a <= addr <= b or (addr - 0x200000 <= a <= addr + 0x200000):
+        print("iomem:", line.rstrip())
+esp = next((f for f in ("/boot/efi/m1n1/boot.bin", "/efi/m1n1/boot.bin", "/boot/m1n1/boot.bin") if os.path.exists(f)), None)
+ref = open(esp, "rb").read(0x1000) if esp else b""
+try:
+    pg = mmap.mmap(fd, 0x1000, mmap.MAP_SHARED, mmap.PROT_READ, offset=addr)
+    live = pg[:0x1000]; pg.close()
+    print("RVBAR page sha", hashlib.sha256(live).hexdigest()[:16], "ESP stage-2 first page sha", hashlib.sha256(ref).hexdigest()[:16],
+          "MATCH" if live == ref else "DIFFERENT", "first words", live[:16].hex())
+except Exception as e:
+    print("RVBAR page not readable via /dev/mem:", e, "(STRICT_DEVMEM refuses System RAM: the page is NOT nomap-reserved)")
+PY
+	echo "cpu-start alive mask 0x23b754004: $(python3 -c "
+import mmap,os,struct; fd=os.open('/dev/mem',os.O_RDONLY|os.O_SYNC); m=mmap.mmap(fd,0x4000,mmap.MAP_SHARED,mmap.PROT_READ,offset=0x23b754000); print(hex(struct.unpack('<I',m[4:8])[0]))" 2>&1)"
+} | tee "$MACLAB_OUT/rvbar-precheck.txt"
+cp "$MACLAB_OUT/rvbar-precheck.txt" "$STATE/rvbar-precheck-$STAMP.txt"
+
 {
 	echo "stamp $STAMP"
 	echo "kernel $(uname -r)"
