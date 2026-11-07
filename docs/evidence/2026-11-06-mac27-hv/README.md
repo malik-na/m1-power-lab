@@ -672,3 +672,20 @@ Next: re-arm the pass-through after a resume (so macOS can sleep and wake repeat
 somewhere it stays awake (lid open + an input event, or the alarm with the lid open), capture the
 full post-wake console and MMIO trace of the restore, and turn both traces into the Linux
 suspend/resume sequence.
+
+### try55: macOS wakes from a real S2R and stays up — the full wake captured
+
+try55 (bd6a43d4, resume mode): slept 17:22:21 (after one lid open/close; the lid was then opened
+during the sleep — the lid wake is masked, so it does not wake), alarm wake 17:27:21, host back
+17:27:22, nonce matched, cpu0 re-entered. macOS restored the hardware, started all seven
+secondaries, wrote MBSE 'awake' (0x616b6177), and **with the lid open it stayed awake**: userspace
+ran (bluetoothd, AppleSEPKeyStore, ACM/TRM, `PMRD: assertionsUser 0x41->0x40`), no panic, still
+running 3 min after the wake when the capture was cut. This is the first macOS wake from a real
+suspend-to-RAM on the M1 Air under the hypervisor that runs on into normal operation.
+
+Captured: the hypervisor/host log (run-try55.out), the macOS console (vuart-try55.log), and the
+full MMIO/mailbox/SPMI trace (s2r-trace-20261107-171426.jsonl, 5.2 M events; the sleep gap is
+t = 475.4 → 775.9, the wake starts at seq 3431790; the first 20 s after the wake, 173 753 events,
+are cut out as wake-try55-first20s.jsonl: PMGR 134 k, DCP mailbox 31 k, SMC 6.4 k, PMP 69,
+PMU/SPMI 68). The ordered register-level restore sequence derived from it is kept with the private
+notes (var/), like the sleep-entry sequence.
