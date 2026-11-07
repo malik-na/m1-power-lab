@@ -47,7 +47,11 @@ def real_s2r_on(spin=0, alarm=0, mask=(), wake="reset"):
             hv.s2r_resume_addr = _base + _sym("hv_s2r_resume_guest")
             hv.s2r_expected = True
             _path, hv.s2r_product = hv._s2r_find_m1n1_tty()
-            print(f"[s2r-real] stage two armed: resume via {hv.s2r_resume_addr:#x}, flags {hv.s2r_resume_flags:#x}, device {hv.s2r_product!r}")
+            import secrets as _sec
+            hv.s2r_nonce = _sec.randbits(64) | 1
+            hv.s2r_nonce_addr = _base + _sym("hv_s2r_nonce")
+            p.write64(hv.s2r_nonce_addr, hv.s2r_nonce)
+            print(f"[s2r-real] stage two armed: resume via {hv.s2r_resume_addr:#x}, flags {hv.s2r_resume_flags:#x}, device {hv.s2r_product!r}, nonce {hv.s2r_nonce:#x}")
         print(f"[s2r-real] wake mode {wake}; clkgen at arm: " + " ".join(f"{r:#x}={v:#x}" for r, v in zip(_CLKGEN, vals)))
     except KeyError:
         if wake != "reset":
