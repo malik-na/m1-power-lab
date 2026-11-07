@@ -30,13 +30,25 @@ def wdt_state(tag=""):
     print(f"[s2r-real] AON WDT {tag}: WD0 cnt/alarm/ctl {p.read32(b):#x}/{p.read32(b+4):#x}/{p.read32(b+0xc):#x}  "
           f"WD1 {p.read32(b+0x10):#x}/{p.read32(b+0x14):#x}/{p.read32(b+0x1c):#x}  WD2 {p.read32(b+0x20):#x}/{p.read32(b+0x24):#x}/{p.read32(b+0x2c):#x}  "
           f"extra 8008/800c/8020 {p.read32(0x23d2b8008):#x}/{p.read32(0x23d2b800c):#x}/{p.read32(0x23d2b8020):#x}  s2r-timer {p.read32(0x23d2c4000):#x}")
-def real_s2r_on(spin=0, alarm=0):
+def real_s2r_on(spin=0, alarm=0, mask=()):
     p.write32(_A_CNT, 0); _slots.clear()
     try:
         p.write32(_base + _sym("hv_s2r_alarm_secs"), alarm)
         print(f"[s2r-real] RTC alarm at the commit: {'now + %d s' % alarm if alarm else 'left as macOS set it'}")
     except KeyError:
         pass
+    try:
+        # mask = AP wake-source numbers (ADT order, e.g. 81 = SMC.OutboxNotEmpty) to mask at the commit
+        a = _base + _sym("hv_s2r_wake_mask_or")
+        words = [0] * 5
+        for s in mask:
+            words[s // 32] |= 1 << (s % 32)
+        for i, w in enumerate(words):
+            p.write32(a + 4 * i, w)
+        print(f"[s2r-real] wake sources masked at the commit: {list(mask)} -> words {[hex(w) for w in words]}")
+    except KeyError:
+        if mask:
+            print("[s2r-real] this m1n1 build cannot mask wake sources")
     try:
         p.write32(_base + _sym("hv_s2r_spin_test"), 1 if spin else 0)
         print(f"[s2r-real] spin test {'ON: last core spins and counts 100 ms ticks into PMU scratch' if spin else 'off'}")
