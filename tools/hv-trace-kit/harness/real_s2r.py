@@ -69,6 +69,11 @@ def real_s2r_on(spin=0, alarm=0, mask=(), wake="reset"):
     except KeyError:
         print("[s2r-real] this m1n1 build has no spin test")
     wdt_state("at arm")
+    try:
+        import time as _t
+        print(f"[s2r-real] CNTPCT at arm {u.mrs((3, 3, 14, 0, 1)):#x} host {_t.time():.3f}")
+    except Exception as e:
+        print("[s2r-real] CNTPCT read failed:", e)
     hv.real_s2r_defer = _defer
     # the guest believes these hooked domains hold its last requested values: apply them at the
     # commit, like aura does (its commit 1820814), so the USB/UART/SIO domains really go down
