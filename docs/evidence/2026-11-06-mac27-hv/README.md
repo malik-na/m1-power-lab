@@ -470,3 +470,25 @@ RTKit start). Reading it means the wake handler draining the SMC mailbox before 
 Next: m1n1 330cba51 adds `hv_s2r_wake_mask_or[5]`, ORed into the mask words at the last core
 (after macOS's own setAPWakeupSources); `real_s2r_on(mask=[81])`. try46 = login-screen recipe,
 alarm 10800 s, SMC.OutboxNotEmpty masked.
+
+### What arms the desktop 1791-s timer: nothing the tracer sees (trace diff, 2026-11-07 11:00)
+
+Two independent diffs of try43 (desktop, woke at 1791 s) against try44 (login screen, held
+2400 s) — the peer session's and an 11-agent workflow over the three JSONL traces, the run logs
+and the serial console — found no arming act: the SMC WRITE_KEY set at sleep entry is identical
+(MBSE, WKTP=02, NTAP, UB0C, gP0d, CHLS, the tG*/zE* telemetry; NTAP/UB0C/gP0d are written at SMC
+bring-up in both runs), no SMC key or SRAM/MMIO write in 0x23d000000–0x23d3fffff carries a value
+near 1791/1800 s in any unit, the SPMI command list at the commit (boot_stage 0x50, alarm,
+irq_mask, alarm_ctrl 0x41) and the PMP/SMC SET_AP_POWER messages are the same, and the console
+log for try35 shows only macOS's own MaintenanceWakeCalendarDate (+942 s, through the RTC alarm
+we overwrite). Desktop-only differences: READ_KEY DICT, and slpw→slpa 9.8–12.5 s vs 0.8 s. What
+the tracer cannot see: AOP traffic and the DCP side. So the timer is either the SMC's own
+(SMC.CPUWakeupAP 76, or an SMC message = SMC.OutboxNotEmpty 81) or NUB-side (40/47), and one
+desktop cycle with the current build names it directly from the status map. (NTAP = the SMC
+notification enable, written at probe; with it on, source 81 was live in every sleep so far.)
+
+m1n1 ecac044f: the wake handler drains the SMC outbox before the WD1 reset and records the first
+message's endpoint, command byte and event code (msg0 >> 32) in the note; with no message pending
+the note carries the enabled map instead (the proof that a requested mask reached the hardware).
+Note layout now: 'H', status map lo/hi, count<<6 | ep, cmd (0xff = no message), 4 bytes event code
+or enabled map. `crumb.py` decodes both layouts.
