@@ -41,7 +41,13 @@ def real_s2r_on(spin=0, alarm=0, mask=(), wake="reset"):
         for i, (r, v) in enumerate(zip(_CLKGEN, vals)):
             p.write64(a + 16 * i, r); p.write64(a + 16 * i + 8, v)
         p.write32(_base + _sym("hv_s2r_clkgen_count"), len(_CLKGEN))
-        p.write32(_base + _sym("hv_s2r_wake_mode"), {"reset": 0, "proxy": 1}[wake])
+        p.write32(_base + _sym("hv_s2r_wake_mode"), {"reset": 0, "proxy": 1, "resume": 1}[wake])
+        if wake == "resume":
+            # stage two: the host session survives the USB drop and re-enters the guest
+            hv.s2r_resume_addr = _base + _sym("hv_s2r_resume_guest")
+            hv.s2r_expected = True
+            _path, hv.s2r_product = hv._s2r_find_m1n1_tty()
+            print(f"[s2r-real] stage two armed: resume via {hv.s2r_resume_addr:#x}, flags {hv.s2r_resume_flags:#x}, device {hv.s2r_product!r}")
         print(f"[s2r-real] wake mode {wake}; clkgen at arm: " + " ".join(f"{r:#x}={v:#x}" for r, v in zip(_CLKGEN, vals)))
     except KeyError:
         if wake != "reset":
