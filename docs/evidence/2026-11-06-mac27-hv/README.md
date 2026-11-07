@@ -425,3 +425,30 @@ PMU's interrupt) and `+0x24` bits 0-7 (AOP.SPMI0Sw3IRQ 64). Unrecorded until now
 AOP.OutboxNotEmpty, AOP.CPUWakeupAP, NUB.WakeupAP, NUB.GPIO.IRQ6, SMC.CPUWakeupAP,
 SMC.OutboxNotEmpty. The next build (m1n1 1aaf4e54) re-reads all five words in the handler and
 stores a 16-bit map in ADT order. Masks: word i at 0x23d004008 + 4*i, 1 = masked.
+
+### try44: 40-minute sleep from the login screen — no 30-min wake; the timer belongs to the logged-in session
+
+try44 (2026-11-07, build fb4802c4, alarm 2400 s, hold off, full trace): the lid stayed closed from
+boot, nobody logged in, so macOS slept from the login screen at 10:14. That sleep **held for the
+whole 2400 s** and woke on our RTC alarm (PMU RTC: commit 0x2b2503, handler read 0x2b2e6c =
+2409 s; `alarm_ctrl` 0x41→0x01, RTC−alarm = 9 s). Handler record: wake sources **set** =
+NUB.SPMI0Sw3IRQ only (map 0x0100); **enabled** = all 16 (0xffff); ATC0_COMMON actual 4; WD2 CTRL 0;
+trampoline +0x20>>16 = 0x40. So the **1791-s waker did not fire** from a login-screen sleep. try35
+and try43, the two sleeps that woke at 1791 s, were both desktop (logged-in) sleeps: the timer is
+armed by the user session, not by the sleep entry. With try43's recorded zeros (+0x1c, +0x20 bits
+16-23, +0x24 bits 0-7, +0x2c) the candidates are NUB.WakeupAP (40), NUB.GPIO.IRQ6 (47),
+SMC.CPUWakeupAP (76) and SMC.OutboxNotEmpty (81).
+
+Two practical consequences: (1) the login-screen sleep is now a working recipe — lid closed from
+boot, hold off, full trace, no user action — and it is the one to use for long measurements
+(try36/38/40 from the login screen did not hold; the difference to today is unexplained — those
+runs had the light trace or the E-cluster hold); (2) the multi-hour measurement no longer waits on
+masking the timer.
+
+Gauge: macOS's last B0RM poll before the entry **2480 mAh** (t=49 s, 32 s before slpw, lid
+closed so no display-off jump); m1n1 read **2463 mAh** at 10:54:18, 10 s after the wake. 17 mAh
+over 2409 s, of which ~2 mAh is the awake tail and m1n1's 10 s: **~15 mAh / 40 min ≈ 22 mA ≈
+0.27 W, ± 0.27 W** (gauge ±15 mAh). Three sleeps now: −7 mAh/25 min, +2 mAh/30 min, +15 mAh/40 min
+— all within the gauge's noise of zero, upper bound still ~0.3–0.4 W.
+
+try45 (started 11:00): the same login-screen recipe with alarm 10800 s, for a ±0.07 W number.
