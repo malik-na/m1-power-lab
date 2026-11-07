@@ -17,6 +17,7 @@ echo "kernel $(uname -r)"
 echo "pmu_rtc_d000_d00f $(pmu_at 0xd000 16)"
 echo "pmu_scratch_9f00_9f1f $(pmu_at 0x9f00 32)"
 s=$(pmu_at 0x9f0a 1 | tr -d ' '); [ -n "$s" ] && printf 'stage letter at 0x9f0a: %s (%b)\n' "$s" "\\x$s"
+v=$(pmu_at 0x9f0b 1 | tr -d ' '); [ -n "$v" ] && printf 'm1n1 reset-path mark at 0x9f0b: %s (%b; 76 = v = m1n1 reached at the wake)\n' "$v" "\\x$v"
 # 0x9f04 'L' + the RTC second of the commit; now vs boot gives commit->boot
 python3 - "$(pmu_at 0x9f04 5)" "$(pmu_at 0xd002 6)" "$(cut -d' ' -f1 /proc/uptime)" <<'PY'
 import sys
@@ -27,10 +28,12 @@ if note[:1] == b"P":
     t = int.from_bytes(note[1:5], "little")
     print(f"'P' note: the suspend reached prepare (RTC {t:#x}) but not the commit; boot at prepare + {now - up - t:.1f} s"
           " (about the dead-man time: a hang after prepare, see the stage letter for the phase)")
-elif note[:1] == b"L":
+elif note[:1] in (b"L", b"l"):
     commit = int.from_bytes(note[1:5], "little")
     boot = now - up
     print(f"commit RTC {commit:#x}, now {now:#x}, uptime {up:.1f} s -> boot at commit + {boot - commit:.1f} s")
+    if note[:1] == b"l":
+        print("  'l': m1n1's wake handler consumed the note: the SoC woke from S2R and reached m1n1")
     print("  about alarm_s + 2..10 s: the SoC slept and woke on the alarm; about 5-8 s: the off failed (WD2);"
           " about the dead-man time: the wake hung in m1n1 and WD1 reset it")
 else:
