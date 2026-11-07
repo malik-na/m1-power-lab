@@ -23,7 +23,11 @@ import sys
 note = bytes.fromhex(sys.argv[1].replace(" ", "")); rtc = bytes.fromhex(sys.argv[2].replace(" ", ""))
 up = float(sys.argv[3])
 now = int.from_bytes(rtc[2:6], "little")
-if note[:1] == b"L":
+if note[:1] == b"P":
+    t = int.from_bytes(note[1:5], "little")
+    print(f"'P' note: the suspend reached prepare (RTC {t:#x}) but not the commit; boot at prepare + {now - up - t:.1f} s"
+          " (about the dead-man time: a hang after prepare, see the stage letter for the phase)")
+elif note[:1] == b"L":
     commit = int.from_bytes(note[1:5], "little")
     boot = now - up
     print(f"commit RTC {commit:#x}, now {now:#x}, uptime {up:.1f} s -> boot at commit + {boot - commit:.1f} s")
