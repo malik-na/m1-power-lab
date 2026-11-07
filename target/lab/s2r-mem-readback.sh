@@ -18,6 +18,9 @@ echo "pmu_rtc_d000_d00f $(pmu_at 0xd000 16)"
 echo "pmu_scratch_9f00_9f1f $(pmu_at 0x9f00 32)"
 s=$(pmu_at 0x9f0a 1 | tr -d ' '); [ -n "$s" ] && printf 'stage letter at 0x9f0a: %s (%b)\n' "$s" "\\x$s"
 v=$(pmu_at 0x9f0b 1 | tr -d ' '); [ -n "$v" ] && printf 'm1n1 reset-path mark at 0x9f0b: %s (%b; 76 = v = m1n1 reached at the wake)\n' "$v" "\\x$v"
+c=$(pmu_at 0x9f0c 1 | tr -d ' '); [ -n "$c" ] && echo "0x9f0c: $c (with 'v': bit 7 = SPMI TX FIFO empty at the wake, bits 6..0 = attempts the 'v' write took)"
+echo "pmu_fault_log_d200 $(pmu_at 0xd200 16)"
+echo "pmu_fault_shadow_a478 $(pmu_at 0xa478 8)"
 # 0x9f04 'L' + the RTC second of the commit; now vs boot gives commit->boot
 python3 - "$(pmu_at 0x9f04 5)" "$(pmu_at 0xd002 6)" "$(cut -d' ' -f1 /proc/uptime)" <<'PY'
 import sys
@@ -34,8 +37,19 @@ elif note[:1] in (b"L", b"l"):
     print(f"commit RTC {commit:#x}, now {now:#x}, uptime {up:.1f} s -> boot at commit + {boot - commit:.1f} s")
     if note[:1] == b"l":
         print("  'l': m1n1's wake handler consumed the note: the SoC woke from S2R and reached m1n1")
-    print("  about alarm_s + 2..10 s: the SoC slept and woke on the alarm; about 5-8 s: the off failed (WD2);"
-          " about the dead-man time: the wake hung in m1n1 and WD1 reset it")
+    d = boot - commit
+    # test-8 stage-2 build: each wake-path stage re-arms WD1 (wake at alarm 60 s, boot ~11 s)
+    table = [(41, "the final wfi returned (cpu0 not power-gated; kernel 30 s mark)"),
+             (71, "full wake path: m1n1 consumed the note and reset at once (expect 'v', 'w', 'l')"),
+             (86, "stage A: cpu0 ran its first instruction at the RVBAR, died before the stack load"),
+             (101, "stage B: stack loaded, died before C"),
+             (116, "stage C: C reached, hung on the nub-spmi access itself"),
+             (136, "SPMI TX FIFO never empty (no 'v'), or note read failed ('v' present)"),
+             (156, "SPMI: no or wrong reply on every attempt"),
+             (181, "no wake-path stage ran: Linux's dead-man (170 s)")]
+    best = min(table, key=lambda t: abs(t[0] - d))
+    print(f"  test-8 decode: nearest {best[0]} s -> {best[1]} (off by {d - best[0]:+.1f} s)")
+    print("  (older builds: about alarm_s + 2..10 s = woke on the alarm; 5-8 s = WD2, the off failed; ~181 = dead-man)")
 else:
     print(f"no 'L' note at 0x9f04 ({note.hex()}): the finisher did not reach the commit")
 PY
