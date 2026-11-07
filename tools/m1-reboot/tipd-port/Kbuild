@@ -1,0 +1,5 @@
+obj-m := tps6598x-core.o sn201202x.o
+tps6598x-core-y := core.o trace.o debugfs.o
+sn201202x-y := spmi.o
+CFLAGS_trace.o := -I$(src)
+ccflags-y += -DCONFIG_TYPEC_TPS6598X_DEBUG_COMMANDS=1

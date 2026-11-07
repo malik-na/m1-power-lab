@@ -15,3 +15,9 @@ build/
 tools/hv-trace-kit/runs/
 tools/hv-trace-kit/prep/
 tools/hv-trace-kit/kc/
+tools/m1-reboot/tipd-port/*.ko
+tools/m1-reboot/tipd-port/*.o
+tools/m1-reboot/tipd-port/.*.cmd
+tools/m1-reboot/tipd-port/*.mod*
+tools/m1-reboot/tipd-port/Module.symvers
+tools/m1-reboot/tipd-port/modules.order
