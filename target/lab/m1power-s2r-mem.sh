@@ -39,6 +39,13 @@ log "kernel $(uname -r): $(cat /proc/cmdline)"
 grep -qw apple_s2r=1 /proc/cmdline || { result "VERDICT SKIP cmdline lacks apple_s2r=1"; exit 0; }
 dmesg | grep -E "apple-s2r|apple-cpu-hotplug" | tail -20
 dmesg | grep -q "apple-s2r: enabled" || { result "VERDICT FAIL apple-s2r did not register (see log)"; exit 0; }
+# Linux test 2: with apple_pmp_v1_hold=1, start the PMP (pmp_v1) so apple-s2r can idle it
+if grep -qw apple_pmp_v1_hold=1 /proc/cmdline; then
+	modprobe apple-pmp-v1 2>&1 || modprobe apple_pmp_v1 2>&1
+	sleep 5
+	dmesg | grep -E "PMPv1|PMP power hook" | tail -15
+	dmesg | grep -q "PMPv1: S2R idle hook registered" || { result "VERDICT SKIP the PMP did not come up (no S2R idle hook)"; exit 0; }
+fi
 log "mem_sleep: $(cat /sys/power/mem_sleep)"
 grep -q deep /sys/power/mem_sleep || { result "VERDICT FAIL no deep in mem_sleep"; exit 0; }
 P=/sys/module/apple_s2r/parameters

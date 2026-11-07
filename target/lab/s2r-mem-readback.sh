@@ -21,7 +21,7 @@ v=$(pmu_at 0x9f0b 1 | tr -d ' '); [ -n "$v" ] && printf 'm1n1 mark at 0x9f0b: %s
 c=$(pmu_at 0x9f0c 1 | tr -d ' '); if [ -n "$c" ]; then
 	if [ "$v" = 52 ] || [ "$v" = 72 ] || [ "$v" = 58 ]; then x=$((16#$c)); echo "0x9f0c: $c (m1n1 retention probe: all-words-identical=$((x>>7&1)) mean flipped bits/word=$((x&127)); 0 intact, well under 32 decay, ~32 unrelated data)"
 	elif [ "$v" = 76 ]; then echo "0x9f0c: $c (m1n1 at the wake: bit 7 = SPMI TX FIFO empty, bits 6..0 = attempts the 'v' write took)"
-	else x=$((16#$c)); echo "0x9f0c: $c (kernel at the commit: valid=$((x>>7&1)) slpw=$((x&1)) WKTP=$((x>>1&1)) slpa=$((x>>2&1)) SMC-AP-0x201-acked=$((x>>3&1)) MCC-flushed=$((x>>4&1)))"; fi
+	else x=$((16#$c)); echo "0x9f0c: $c (kernel at the commit: valid=$((x>>7&1)) slpw=$((x&1)) WKTP=$((x>>1&1)) slpa=$((x>>2&1)) SMC-AP-0x201-acked=$((x>>3&1)) MCC-flushed=$((x>>4&1)) PMP-idled=$((x>>5&1)))"; fi
 fi
 echo "pmu_fault_log_d200 $(pmu_at 0xd200 16)"
 echo "pmu_fault_shadow_a478 $(pmu_at 0xa478 8)"
