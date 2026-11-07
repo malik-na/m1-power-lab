@@ -13,8 +13,12 @@ if b[4] == ord('H'):
     else:                   # later builds: 'H', map lo, map hi, count<<6 | ep, cmd, event code (4 bytes LE)
         m = b[5] | (b[6] << 8); cnt = b[7] >> 6; ep = b[7] & 0x3f
         evt = b[9] | (b[10] << 8) | (b[11] << 16) | (b[12] << 24)
-        epname = {0x3f: "no message pending", 0x3e: "mailbox unreadable (all-ones)", 0x3d: "no mailbox address"}.get(ep, "ep %#x" % ep)
-        print("  handler ran: wake sources SET = %s (map %#06x); SMC outbox: %s, %d message(s) drained, first: cmd %#04x event code %#010x" % ([n for k, n in enumerate(names) if m >> k & 1] or ["none"], m, epname, cnt, b[8], evt))
+        epname = {0x3f: "no message pending", 0x3e: "mailbox unreadable (all-ones or EMPTY+FULL)", 0x3d: "no mailbox address"}.get(ep, "ep %#x" % ep)
+        if cnt == 0 and b[8] == 0xff:
+            en = evt & 0xffff
+            print("  handler ran: wake sources SET = %s (map %#06x); SMC outbox: %s; ENABLED at wake = %s (%#06x)" % ([n for k, n in enumerate(names) if m >> k & 1] or ["none"], m, epname, [n for k, n in enumerate(names) if en >> k & 1] or ["none"], en))
+        else:
+            print("  handler ran: wake sources SET = %s (map %#06x); SMC outbox: %s, %d message(s) drained, first: cmd %#04x event code %#010x" % ([n for k, n in enumerate(names) if m >> k & 1] or ["none"], m, epname, cnt, b[8], evt))
 print("  0x9f04:", chr(b[4]) if 32 <= b[4] < 127 else b[4], " stage 0x9f0a:", st, " 0x9f0b:", b[11], " 0x9f0c: %#04x" % b[12], " (0x9f0d is iBoot's)")
 r = [s.read8(0xf, 0xd000 + i) for i in range(12)]
 rtc = r[4] | r[5] << 8 | r[6] << 16 | r[7] << 24; al = r[8] | r[9] << 8 | r[10] << 16 | r[11] << 24
