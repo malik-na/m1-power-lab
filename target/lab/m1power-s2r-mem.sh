@@ -1,0 +1,88 @@
+#!/bin/bash
+# Lab job script for m1power/s2r-mem stage 1: one real suspend-to-RAM on t8103.
+#
+# Kernel: malik-na/linux-aurora m1power/s2r-mem (apple-s2r.c + the hotplug S2R
+# deep stop). Cmdline: apple_s2r=1 apple_cpu_hotplug=park.
+#
+# What it does:
+#   1. checks the driver registered "mem" (dmesg "apple-s2r: enabled",
+#      /sys/power/mem_sleep offers deep);
+#   2. writes a pre-sleep snapshot (time, PMU RTC, PMU scratch 0x9f00-0x9f1f,
+#      the RTC alarm block) to $MACLAB_OUT and, synced, to
+#      /var/lib/m1power-s2r/, because the wake does not resume: it comes back
+#      through the locked RVBAR into m1n1 and boots again, so this job ends
+#      with the Mac rebooting, and only /var survives for the follow-up read;
+#   3. sets the driver's PMU alarm (apple_s2r.alarm_secs, default 60 s) and
+#      enters "mem". The SoC should power off within about 0.7 s and the
+#      alarm should bring it back.
+# If the entry is refused (a device's suspend failed, the CPUs did not go
+# offline) the write to /sys/power/state returns and the job reports it.
+#
+# The follow-up, on the next boot (lab exec or ssh): s2r-mem-readback.sh.
+set -u
+: "${MACLAB_OUT:?}" "${MACLAB_IN:?}"
+MACLAB_TEST=s2r-mem
+exec > "$MACLAB_OUT/log.txt" 2>&1
+log() { printf '[%s %s] %s\n' "$MACLAB_TEST" "$(date +%T.%N | cut -c1-12)" "$*"; }
+result() { printf '%s\n' "$*" > "$MACLAB_OUT/result.txt"; }
+
+ALARM=${S2R_ALARM_S:-60}
+STATE=/var/lib/m1power-s2r
+mkdir -p "$STATE"
+STAMP=$(date +%Y%m%d-%H%M%S)
+PRE="$STATE/pre-$STAMP.txt"
+
+NV=$(ls -d /sys/bus/nvmem/devices/spmi_nvmem* 2>/dev/null | head -1)
+pmu_at() { [ -n "$NV" ] && dd if="$NV/nvmem" bs=1 skip=$(($1)) count="$2" 2>/dev/null | od -An -tx1; }
+
+log "kernel $(uname -r): $(cat /proc/cmdline)"
+grep -qw apple_s2r=1 /proc/cmdline || { result "VERDICT SKIP cmdline lacks apple_s2r=1"; exit 0; }
+dmesg | grep -E "apple-s2r|apple-cpu-hotplug" | tail -20
+dmesg | grep -q "apple-s2r: enabled" || { result "VERDICT FAIL apple-s2r did not register (see log)"; exit 0; }
+log "mem_sleep: $(cat /sys/power/mem_sleep)"
+grep -q deep /sys/power/mem_sleep || { result "VERDICT FAIL no deep in mem_sleep"; exit 0; }
+P=/sys/module/apple_s2r/parameters
+echo "$ALARM" > "$P/alarm_secs"
+echo 1 > "$P/stop_cores"
+log "alarm_secs $(cat $P/alarm_secs) stop_cores $(cat $P/stop_cores) deadman_secs $(cat $P/deadman_secs)"
+log "sync_on_suspend $(cat /sys/power/sync_on_suspend 2>/dev/null)"
+[ -e /sys/class/typec/port0 ] && log "typec: $(for p in /sys/class/typec/port?; do echo -n "$(basename $p) $(cat $p/power_role 2>/dev/null) partner=$(ls $p | grep -c partner); "; done)"
+log "online CPUs: $(cat /sys/devices/system/cpu/online)"
+
+{
+	echo "stamp $STAMP"
+	echo "kernel $(uname -r)"
+	echo "date_epoch $(date +%s.%N)"
+	echo "uptime $(cut -d' ' -f1 /proc/uptime)"
+	echo "alarm_s $ALARM"
+	echo "pmu_rtc_d000_d00f $(pmu_at 0xd000 16)"
+	echo "pmu_scratch_9f00_9f1f $(pmu_at 0x9f00 32)"
+	for z in /sys/class/power_supply/macsmc-battery/energy_now /sys/class/power_supply/macsmc-battery/charge_now \
+		/sys/class/power_supply/macsmc-battery/current_now /sys/class/power_supply/macsmc-battery/status; do
+		[ -e "$z" ] && echo "$(basename "$z") $(cat "$z")"
+	done
+	if [ -e /sys/kernel/debug/m1power/smc ]; then
+		grep -E "zSLa|zSPa" /sys/kernel/debug/m1power/smc 2>/dev/null
+	fi
+} | tee "$PRE" > "$MACLAB_OUT/pre.txt"
+sync
+log "snapshot in $PRE"
+
+result "VERDICT ENTERED mem at $(date +%T) (alarm +$ALARM s); a reboot after this is the expected wake"
+cp "$MACLAB_OUT/result.txt" "$STATE/entered-$STAMP.txt"
+sync
+sleep 1
+
+echo deep > /sys/power/mem_sleep
+log "echo mem > /sys/power/state"
+if echo mem > /sys/power/state; then
+	rc=0
+else
+	rc=$?
+fi
+# Only reached if the entry was refused or (later stages) resumed.
+log "returned rc=$rc"
+dmesg | tail -120 > "$MACLAB_OUT/dmesg-after.txt"
+result "VERDICT RETURNED rc=$rc: the suspend did not reach the SoC power-off (see dmesg-after.txt)"
+cp "$MACLAB_OUT/result.txt" "$STATE/returned-$STAMP.txt"
+sync
