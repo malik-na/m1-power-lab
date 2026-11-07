@@ -552,3 +552,47 @@ and saw the disconnect only at the wake. m1n1 0a10540d adds a fault note (kind, 
 of ELR into 0x9f05..09 / 0x9f0b..0c on the first exception, SError, assertion or reboot call while
 the wake path runs) and sub-stage bytes inside the gadget bring-up; the harness now reads CNTPCT at
 arm time and twice after the wake. try48 = the same cycle with that build.
+
+### try48: the stall is a synchronous abort in dart_init — on USB port 1, which is off at the wake
+
+try48 (m1n1 0a10540d, same cycle; commit 15:27:19, wake 15:32:18) left the new fault note: kind 1
+(synchronous exception), **ESR 0x96000018** (data abort at the same EL, DFSC 0x18 = synchronous
+external abort, read), ELR at image offset 0x16bb0 = `dart_init` dart.c:227, the first DART access
+(`read32(regs + DART_T8020_CONFIG)`). So on t8103 a read of a gated block comes back as a catchable
+synchronous abort (exc_sync → "Unhandled exception" → `wdt_reboot()`, whose 20-s alarm explains
+try47's +20 s), not a hang. The peer session found which DART: `usb_iodev_init()` loops over every
+port, and port 0 had come up (the host saw the high-speed device at +0.5 s in both runs); the abort
+is port 1's `dart-usb1`, whose ATC1 domains are off at the wake (at boot, `usb_init()` powers every
+port before `usb_iodev_init()`). The PMGR words macOS writes in its last 3 s besides the clkgen muxes
+(0x23b71c080/88 = 0x80000000; 0x23b734000, 0x23b748000..c00, 0x23b778000, 0x23b77c000 = 0;
+0x23d2dc100 = 0x100) all equal their fresh-boot values. CNTPCT at arm read 214.5 s, i.e. counting
+from try47's WD reset: a watchdog reset restarts the system counter.
+
+### try49: stage one works — the live hypervisor image is back on USB 0.6 s after the wake
+
+m1n1 21fcf0ec: at the wake only port 0 is brought up (`usb_iodev_init_count = 1`), and guarded
+probes of `dart-usb0` +0x60 and `usb-drd0` +0xc120 run with the clkgen muxes still parked (after
+`usb_phy_bringup(0)`) and again after the restore. Login-screen recipe, mask=[81], alarm 300 s.
+macOS sat at the login screen for 14 min without sleeping (lid closed from boot); one lid
+open/close and it slept at once (commit 15:51:23) — the login-screen recipe can miss its clamshell
+trigger at boot.
+
+**Wake 15:56:22.7 (old device disconnects); 15:56:23.3 the host enumerates `m1n1 uartproxy
+v2.0.0-125-gf33` — the chainloaded hypervisor build that went to sleep, not the installed image
+(-105-gf4c) a reset would boot.** Stage letter 'Q' (proxy running), sub 0x50 (gadget bring-up
+complete), probe byte 0 (dart-usb0 and dwc3 read cleanly both with the muxes parked and after the
+restore), PMU 0x9f01 = 0x50 (macOS's boot_stage, untouched — no iBoot ran), set = NUB.SPMI0Sw3IRQ,
+enabled 0x..ff with bit 11 masked. Through the live proxy: clkgen 0x85100000 ×3, 0x87100000 ×2;
+ATC0_USB/AON 0x3ff, ATC0_COMMON 0x23ff, UART0 0x3ff; WD1/WD2 CTRL 0.
+
+**The system counter runs through the suspend.** CNTPCT at arm 303.391 s (host time 1794046063.128),
+at the wake 1427.285 s: 1123.894 s of counter against 1123.863 s of host time across the arm, the
+14-min wait, the 5-min sleep and the wake — equal within 31 ms. So the 24 MHz timebase keeps
+counting while the SoC is off in S2R (it restarts only on a watchdog reset), which is what xnu's
+`cpu_timebase_init` assumes and what a Linux S2R implementation can rely on.
+
+What stage one does not do yet: the host-side Python session dies with the USB link
+(`SerialException` in run_guest.py), so the hooks, the PMGR shadow and the tracer state are lost;
+the guest is not re-entered. Stage two: keep the host session across the link drop, bring the
+seven secondaries back into m1n1's spin loop, re-arm EL2 on cpu0 without re-seeding the SPTM's
+per-CPU SPRR/GXF state, and enter the guest at the SPTM reset page (entry & ~0xfff).
