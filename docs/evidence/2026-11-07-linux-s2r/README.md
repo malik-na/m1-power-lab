@@ -111,3 +111,19 @@ that neither side has tested is the **PMP**: Linux never starts it (pms_sram is 
 runs it and idles it at sleep, and macOS will not complete a sleep with the PMP idle pair blocked. The
 next test would be Linux with the PMP running (m1power/pmp-v1-overlay) and idled as macOS does, plus a
 no-sleep diff of the registers the wake sequences poll, Linux vs macOS at the commit.
+
+## The last three Linux runs (budget 10/10)
+
+| Run | Change | Result |
+|---|---|---|
+| 9 (test 2) | PMP started (pmp_v1) and idled (AP 0x201 + IOP 0x201) between slpw and slpa | 180.9 s, no wake. A no-sleep self-test later confirmed the idle path itself works (idle → 0; the following wake → -62, a warm restart is needed) |
+| — | PMP idle self-test (no sleep) | idle acked |
+| 10 | AON wake masks copied from the macOS run that woke (only 26/27/38/81 masked) | 181.2 s, no wake; the results byte now survives: slpw/WKTP/slpa/SMC 0x201 acked, MCC flushed |
+
+A commit-time register comparison (Linux vs the try55/try62 traces, over every register the reconfig
+engine's wake sequences poll) found most differences rewritten by the entry sequences right after the
+commit. Remaining untested differences: ps_atc0_common (Linux target 0xf, always-on in the DT; macOS
+target 0) and ps_gfx (Linux target 0xf + auto-enable; macOS 0). Neither register is read by the
+macOS trace at the moment that matters, so they are candidates, not findings.
+
+The Wi-Fi watchdog (target/wifi-heal) now also cycles power save when the gateway answers slowly.
