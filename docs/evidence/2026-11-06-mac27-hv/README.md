@@ -627,3 +627,17 @@ address every secondary got). Secondaries are started lazily, when the guest's C
 
 So the S2R round trip now goes sleep → hardware wake → live hypervisor on USB → macOS's own wake
 code running and restoring hardware; what is left is whatever its restore trips over.
+
+### try53: the panic after the resume is ours — a write to a lock-protected clkgen register
+
+try53 (same as try52, with the macOS console logged): resume at 16:59:24, macOS ran its
+IOPlatformActiveAction chain (GPIOIC, DialogSPMIPMU, PCIe, temperature sensors …), then:
+
+    panic(cpu 0 caller 0xfffffe003b6f1fd8): "AppleEventLogHandler: Register is locked down!
+    AccessType=Write Address=0x23b040140 IntrID=2 RegMapID=2 Deferred=False" @AppleEventLogHandler.cpp:248
+
+0x23b040140 is the first of the five clkgen mux words the stage-one wake path restored to their
+arm-time values. The register is lock-protected; the SoC's event log recorded our write and macOS's
+event-log handler panics on it once its interrupt is enabled at the wake. try49's probes showed the
+DART and dwc3 work with the muxes still parked, so in resume mode the wake path now leaves them for
+macOS's own restoreClockConfig. (Console log: runs/20261106/mac27/vuart-try53.log.)

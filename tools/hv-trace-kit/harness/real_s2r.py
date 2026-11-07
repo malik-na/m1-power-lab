@@ -40,7 +40,11 @@ def real_s2r_on(spin=0, alarm=0, mask=(), wake="reset"):
         vals = [p.read32(r) for r in _CLKGEN]
         for i, (r, v) in enumerate(zip(_CLKGEN, vals)):
             p.write64(a + 16 * i, r); p.write64(a + 16 * i + 8, v)
-        p.write32(_base + _sym("hv_s2r_clkgen_count"), len(_CLKGEN))
+        # try53: macOS panicked at the wake on "Register is locked down! AccessType=Write
+        # Address=0x23b040140": the clkgen muxes are lock-protected and the PMGR event log records
+        # our restore. USB works with them parked (try49 probes), so in resume mode leave them to
+        # macOS's own restoreClockConfig.
+        p.write32(_base + _sym("hv_s2r_clkgen_count"), 0 if wake == "resume" else len(_CLKGEN))
         p.write32(_base + _sym("hv_s2r_wake_mode"), {"reset": 0, "proxy": 1, "resume": 1}[wake])
         if wake == "resume":
             # stage two: the host session survives the USB drop and re-enters the guest
