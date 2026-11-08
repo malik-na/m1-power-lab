@@ -127,3 +127,22 @@ target 0) and ps_gfx (Linux target 0xf + auto-enable; macOS 0). Neither register
 macOS trace at the moment that matters, so they are candidates, not findings.
 
 The Wi-Fi watchdog (target/wifi-heal) now also cycles power save when the gateway answers slowly.
+
+## Run 11 (2026-11-08): XNU core order (global sleep), past the budget
+
+Approved by the user through a side session ("Tell the agent to go for it."). The macOS traces
+(second sleep in try54, also try57/try62) show every secondary core writing its own CPU-start stop bit
+about 40 ms before the commit but staying up, and all eight cores setting ACC_OVRD deep and entering
+WFI together only after it. Linux before this put each secondary into deep WFI at cpu_die, long before
+the commit, so the P cluster was already down. Kernel m1power/s2r-pmp b6b2ea1d1 (7.2.11-labgs2): the
+stop argument's bit 30 holds a core in WFE on a release word read with the MMU off; CPU0 releases them
+(clean to PoC, dsb, sev) after the final commit and the cluster writes, and each released core then sets
+ACC_OVRD deep (bit 31).
+
+| Run | Change | Result |
+|---|---|---|
+| 11 (job j1108-140158-cfb1) | secondaries held in WFE until after the commit, then all cores deep-WFI together | entry ~19:32:55 IST, next boot 19:35:55 (watchdog reset, ~3 min), no wake. 0x9f0a = 'h' (the release ran: last mark before deep WFI), 0x9f0b = 00 (m1n1 never reached on a wake), 0x9f0c = 0x9f (slpw, WKTP, slpa, SMC 0x201 acked, MCC flushed; PMP not idled in this run) |
+
+So the core order is not what keeps the boot CPU from restarting. The lab reported the job as HUNG
+only because the M1's Wi-Fi stayed stuck after the reset; the desktop was up at 19:36, and the PMU
+bytes were read from its screen with the camera.
