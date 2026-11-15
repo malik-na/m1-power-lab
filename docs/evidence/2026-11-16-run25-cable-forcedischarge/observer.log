@@ -1,0 +1,1157 @@
+2026-11-16T02:29:34.528 INFO observer start; M1 at fe80::ef53:e661:bae2:c013%thunderbolt0 (cable), 192.168.1.6 (Wi-Fi); log /home/naeem/Projects/m1-power-lab/var/m1-observe/20261116-022932-run25-cablein.log
+2026-11-16T02:29:34.531 PING up (64 bytes from fe80::ef53:e661:bae2:c013%thunderbolt0: icmp_seq=1 ttl=64 time=0.208 ms)
+2026-11-16T02:29:34.535 WIFI up (64 bytes from 192.168.1.6: icmp_seq=1 ttl=64 time=4.73 ms)
+2026-11-16T02:29:34.538 PWR  port0:partner([sink]) port2:partner([sink]) ac=1 battery_current_uA=0
+2026-11-16T02:29:52.784 WIFI down (no answer yet for icmp_seq=91)
+2026-11-16T02:29:54.109 LINK 7: thunderbolt0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc fq state DOWN group default 
+2026-11-16T02:29:54.111 LINK     link/ether 02:00:46:a2:b4:71 brd ff:ff:ff:ff:ff:ff
+2026-11-16T02:29:54.112 LINK     altname enx020046a2b471
+2026-11-16T02:29:54.368 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:166: path_configuration_space_rx_path_tear_down - null_port_index=0, physical_queue_
+2026-11-16T02:29:54.369 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:70: path_configuration_space_tx_path_tear_down - source_port=1, null_port_index=0.
+2026-11-16T02:29:54.381 LINK 7: thunderbolt0: <BROADCAST,MULTICAST> mtu 1500 qdisc fq state DOWN group default 
+2026-11-16T02:29:54.382 LINK     link/ether 02:00:46:a2:b4:71 brd ff:ff:ff:ff:ff:ff
+2026-11-16T02:29:54.383 LINK     altname enx020046a2b471
+2026-11-16T02:29:54.383 LINK Deleted 7: thunderbolt0: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN group default 
+2026-11-16T02:29:54.384 LINK     link/ether 02:00:46:a2:b4:71 brd ff:ff:ff:ff:ff:ff
+2026-11-16T02:29:54.385 LINK     altname enx020046a2b471
+2026-11-16T02:29:54.496 PING down (no answer yet for icmp_seq=96)
+2026-11-16T02:29:54.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=83
+2026-11-16T02:29:54.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=83
+2026-11-16T02:29:54.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:29:54.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=89
+2026-11-16T02:29:54.641 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:29:54.642 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:29:54.643 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:1044: SBX disconnected!
+2026-11-16T02:29:54.644 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:29:54.644 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:29:54.645 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=89
+2026-11-16T02:29:54.646 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:29:54.647 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:29:54.648 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:29:54.648 KMSG thunderbolt 0-0:1.1: retimer disconnected
+2026-11-16T02:29:54.650 KMSG thunderbolt 0-1: host disconnected
+2026-11-16T02:29:54.650 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:29:55.775 PWR  port0:partner([sink]) ac=1 battery_current_uA=0
+2026-11-16T02:29:57.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:29:57.140 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:29:57.141 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:29:57.142 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:29:57.143 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:29:57.144 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:29:57.145 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:29:57.799 PWR  port0:partner([sink]) port2:partner([source]) ac=1 battery_current_uA=0
+2026-11-16T02:29:57.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:29:57.889 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:29:57.890 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:29:57.891 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:29:57.892 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:29:57.893 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:29:57.894 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:30:47.369 PWR  port0:partner([sink]) ac=1 battery_current_uA=0
+2026-11-16T02:30:49.390 PWR  port0:partner([sink]) port2:partner([source]) ac=1 battery_current_uA=0
+2026-11-16T02:30:49.455 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:30:49.456 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:30:49.457 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:30:49.458 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:30:49.459 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:30:49.460 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:30:49.461 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:30:50.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:30:50.139 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:30:50.140 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:30:50.141 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:30:50.142 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:30:50.143 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:30:50.144 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:30:59.361 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:396: Entering Phase 3
+2026-11-16T02:30:59.362 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:30:59.364 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:30:59.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:30:59.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:30:59.642 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:30:59.961 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:30:59.963 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:30:59.964 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:00.260 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:00.262 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:00.263 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:00.561 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:00.562 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:00.563 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:00.861 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:00.862 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:00.863 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:01.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:01.139 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:01.140 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:01.460 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:01.462 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:01.463 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:01.761 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:01.763 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:01.764 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:02.061 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:02.062 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:02.063 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:02.361 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:02.363 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:02.365 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:02.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:02.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:02.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:02.962 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:02.963 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:02.964 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:03.261 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:03.262 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:03.263 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:03.561 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:03.562 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:03.563 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:03.861 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:03.863 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:03.864 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:04.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:04.140 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:04.141 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:04.463 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:04.464 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:04.465 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:04.762 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:04.763 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:04.764 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:05.062 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:05.063 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:05.064 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:05.362 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:05.364 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:05.366 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:05.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:31:05.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:954: SBX disconnected!
+2026-11-16T02:31:05.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:31:05.641 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:31:05.643 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:31:05.644 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:396: Entering Phase 3
+2026-11-16T02:31:05.645 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:882: Got AT register 12. 3 bytes. 0x03 0xf3 0x03
+2026-11-16T02:31:05.646 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2219: RT Broadcast REMOTE: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:31:05.648 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2219: RT Broadcast REMOTE: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:31:05.649 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:1024: Entering Connected
+2026-11-16T02:31:05.651 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2212: RT Broadcast LOCAL: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:31:05.652 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2212: RT Broadcast LOCAL: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:31:06.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_training_cl0.c:24: Gen2/3 lane=1 entered CL0!
+2026-11-16T02:31:06.390 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_training_cl0.c:24: Gen2/3 lane=0 entered CL0!
+2026-11-16T02:31:06.391 KMSG thunderbolt 0-0:1.1: new retimer found, vendor=0x5ac device=0x2200
+2026-11-16T02:31:07.745 WIFI up (64 bytes from 192.168.1.6: icmp_seq=303 ttl=64 time=1144 ms)
+2026-11-16T02:31:11.888 KMSG thunderbolt 0-1: new host found, vendor=0x1d6b device=0x4
+2026-11-16T02:31:11.889 KMSG thunderbolt 0-1: Linux m1-air-omarchy
+2026-11-16T02:31:12.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:140: RX path: null port=0, queue=1, target port=1, hopid=1
+2026-11-16T02:31:12.890 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:57: TX path: src port=1, null port=0, hopid=8
+2026-11-16T02:31:21.081 WIFI down (no answer yet for icmp_seq=374)
+2026-11-16T02:31:21.084 WIFI up (64 bytes from 192.168.1.6: icmp_seq=375 ttl=64 time=4.25 ms)
+2026-11-16T02:31:53.577 WIFI down (no answer yet for icmp_seq=536)
+2026-11-16T02:31:55.103 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:166: path_configuration_space_rx_path_tear_down - null_port_index=0, physical_queue_
+2026-11-16T02:31:55.105 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:70: path_configuration_space_tx_path_tear_down - source_port=1, null_port_index=0.
+2026-11-16T02:31:55.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=83
+2026-11-16T02:31:55.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=83
+2026-11-16T02:31:55.391 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=84
+2026-11-16T02:31:55.392 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=84
+2026-11-16T02:31:55.394 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:31:55.395 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:31:55.397 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:31:55.398 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=84
+2026-11-16T02:31:55.399 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:1044: SBX disconnected!
+2026-11-16T02:31:55.400 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:31:55.402 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:31:55.403 KMSG thunderbolt 0-0:1.1: retimer disconnected
+2026-11-16T02:31:55.405 KMSG thunderbolt 0-1: host disconnected
+2026-11-16T02:31:55.406 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:31:56.162 PWR  port0:partner([sink]) ac=1 battery_current_uA=0
+2026-11-16T02:31:57.952 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:31:57.953 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:31:57.954 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:31:57.955 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:31:57.956 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:31:57.957 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:31:57.958 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:31:58.185 PWR  port0:partner([sink]) port2:partner([source]) ac=1 battery_current_uA=0
+2026-11-16T02:31:58.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:31:58.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:31:58.641 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:31:58.642 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:31:58.643 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:31:58.644 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:31:58.645 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:32:07.541 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:396: Entering Phase 3
+2026-11-16T02:32:07.542 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:07.543 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:07.841 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:07.842 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:07.843 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:08.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:08.139 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:08.140 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:08.442 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:08.443 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:08.444 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:08.742 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:08.744 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:08.745 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:09.042 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:09.043 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:09.044 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:09.342 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:09.343 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:09.343 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:09.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:09.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:09.641 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:09.943 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:09.944 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:09.945 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:10.242 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:10.244 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:10.244 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:10.542 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:10.543 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:10.544 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:10.843 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:10.844 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:10.845 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:11.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:11.140 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:11.141 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:11.443 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:11.444 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:11.446 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:11.743 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:11.744 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:11.745 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:12.043 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:12.044 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:12.045 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:12.343 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:12.343 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:12.344 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:12.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:12.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:12.641 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:12.943 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:12.944 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:12.945 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:13.244 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:13.245 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:13.246 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:32:13.247 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:954: SBX disconnected!
+2026-11-16T02:32:13.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:32:13.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:32:13.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:32:13.641 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:396: Entering Phase 3
+2026-11-16T02:32:13.642 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:882: Got AT register 12. 3 bytes. 0x03 0xf3 0x03
+2026-11-16T02:32:13.643 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2219: RT Broadcast REMOTE: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:32:13.644 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2219: RT Broadcast REMOTE: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:32:13.645 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:1024: Entering Connected
+2026-11-16T02:32:13.646 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2212: RT Broadcast LOCAL: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:32:13.647 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2212: RT Broadcast LOCAL: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:32:14.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_training_cl0.c:24: Gen2/3 lane=0 entered CL0!
+2026-11-16T02:32:14.139 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_training_cl0.c:24: Gen2/3 lane=1 entered CL0!
+2026-11-16T02:32:14.140 KMSG thunderbolt 0-0:1.1: new retimer found, vendor=0x5ac device=0x2200
+2026-11-16T02:32:15.018 WIFI up (64 bytes from 192.168.1.6: icmp_seq=640 ttl=64 time=18.5 ms)
+2026-11-16T02:32:19.638 KMSG thunderbolt 0-1: new host found, vendor=0x1d6b device=0x4
+2026-11-16T02:32:19.639 KMSG thunderbolt 0-1: Linux m1-air-omarchy
+2026-11-16T02:32:20.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:140: RX path: null port=0, queue=1, target port=1, hopid=1
+2026-11-16T02:32:20.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:57: TX path: src port=1, null port=0, hopid=8
+2026-11-16T02:34:14.152 WIFI down (no answer yet for icmp_seq=1233)
+2026-11-16T02:34:15.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:166: path_configuration_space_rx_path_tear_down - null_port_index=0, physical_queue_
+2026-11-16T02:34:15.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:70: path_configuration_space_tx_path_tear_down - source_port=1, null_port_index=0.
+2026-11-16T02:34:16.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=83
+2026-11-16T02:34:16.139 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=83
+2026-11-16T02:34:16.140 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:34:16.142 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=89
+2026-11-16T02:34:16.142 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:34:16.143 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:34:16.144 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:1044: SBX disconnected!
+2026-11-16T02:34:16.145 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:34:16.146 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:34:16.147 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=89
+2026-11-16T02:34:16.148 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:34:16.149 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:34:16.149 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:34:16.150 KMSG thunderbolt 0-0:1.1: retimer disconnected
+2026-11-16T02:34:16.151 KMSG thunderbolt 0-1: host disconnected
+2026-11-16T02:34:16.152 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:34:16.757 PWR  port0:partner([sink]) ac=1 battery_current_uA=0
+2026-11-16T02:34:18.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:34:18.390 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:34:18.391 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:34:18.391 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:34:18.392 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:34:18.393 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:34:18.394 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:34:18.779 PWR  port0:partner([sink]) port2:partner([source]) ac=1 battery_current_uA=0
+2026-11-16T02:34:19.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:34:19.140 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:34:19.141 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:34:19.142 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:34:19.143 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:34:19.143 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:34:19.144 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:34:28.333 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:396: Entering Phase 3
+2026-11-16T02:34:28.335 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:28.336 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:28.633 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:28.634 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:28.635 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:28.887 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:28.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:28.889 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:29.226 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:29.227 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:29.228 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:29.534 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:29.535 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:29.536 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:29.834 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:29.835 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:29.836 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:30.134 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:30.135 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:30.136 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:30.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:30.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:30.390 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:30.734 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:30.736 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:30.737 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:31.034 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:31.035 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:31.036 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:31.334 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:31.335 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:31.336 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:31.635 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:31.636 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:31.637 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:31.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:31.889 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:31.890 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:32.235 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:32.236 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:32.237 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:32.535 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:32.537 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:32.538 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:32.835 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:32.836 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:32.838 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:33.135 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:33.136 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:33.137 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:33.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:33.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:33.390 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:33.735 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:33.736 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:33.737 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:34.036 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:34.037 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:34.038 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:34.336 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:34.337 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:34.338 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:34.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:34:34.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:954: SBX disconnected!
+2026-11-16T02:34:34.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:34:34.641 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:34:34.642 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:34:34.643 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:396: Entering Phase 3
+2026-11-16T02:34:34.643 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:882: Got AT register 12. 3 bytes. 0x03 0xf3 0x03
+2026-11-16T02:34:34.644 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2219: RT Broadcast REMOTE: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:34:34.645 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2219: RT Broadcast REMOTE: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:34:34.646 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:1024: Entering Connected
+2026-11-16T02:34:34.647 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2212: RT Broadcast LOCAL: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:34:34.648 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2212: RT Broadcast LOCAL: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:34:35.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_training_cl0.c:24: Gen2/3 lane=0 entered CL0!
+2026-11-16T02:34:35.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_training_cl0.c:24: Gen2/3 lane=1 entered CL0!
+2026-11-16T02:34:35.390 KMSG thunderbolt 0-0:1.1: new retimer found, vendor=0x5ac device=0x2200
+2026-11-16T02:34:36.233 WIFI up (64 bytes from 192.168.1.6: icmp_seq=1340 ttl=64 time=31.9 ms)
+2026-11-16T02:34:40.638 KMSG thunderbolt 0-1: new host found, vendor=0x1d6b device=0x4
+2026-11-16T02:34:40.639 KMSG thunderbolt 0-1: Linux m1-air-omarchy
+2026-11-16T02:34:41.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:140: RX path: null port=0, queue=1, target port=1, hopid=1
+2026-11-16T02:34:41.889 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:57: TX path: src port=1, null port=0, hopid=8
+2026-11-16T02:35:48.823 WIFI down (no answer yet for icmp_seq=1701)
+2026-11-16T02:35:50.315 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:166: path_configuration_space_rx_path_tear_down - null_port_index=0, physical_queue_
+2026-11-16T02:35:50.316 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:70: path_configuration_space_tx_path_tear_down - source_port=1, null_port_index=0.
+2026-11-16T02:35:50.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=84
+2026-11-16T02:35:50.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=83
+2026-11-16T02:35:50.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=84
+2026-11-16T02:35:50.641 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=84
+2026-11-16T02:35:50.642 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:35:50.643 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:35:50.644 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:35:50.645 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=84
+2026-11-16T02:35:50.646 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:1044: SBX disconnected!
+2026-11-16T02:35:50.646 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:35:50.647 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:35:50.648 KMSG thunderbolt 0-0:1.1: retimer disconnected
+2026-11-16T02:35:50.649 KMSG thunderbolt 0-1: host disconnected
+2026-11-16T02:35:50.650 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:35:51.808 PWR  port0:partner([sink]) ac=1 battery_current_uA=0
+2026-11-16T02:35:53.557 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:35:53.558 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:35:53.559 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:35:53.560 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:35:53.561 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:35:53.562 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:35:53.562 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:35:53.827 PWR  port0:partner([sink]) port2:partner([source]) ac=1 battery_current_uA=0
+2026-11-16T02:36:02.845 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:396: Entering Phase 3
+2026-11-16T02:36:02.846 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:02.847 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:03.137 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:03.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:03.139 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:03.445 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:03.446 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:03.446 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:03.745 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:03.746 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:03.747 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:04.045 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:04.046 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:04.047 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:04.345 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:04.346 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:04.347 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:04.637 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:04.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:04.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:04.945 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:04.946 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:04.947 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:05.245 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:05.246 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:05.247 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:05.545 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:05.546 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:05.547 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:05.846 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:05.847 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:05.848 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:06.137 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:06.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:06.139 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:06.446 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:06.447 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:06.448 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:06.746 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:06.747 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:06.748 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:07.046 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:07.047 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:07.048 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:07.346 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:07.347 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:07.348 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:07.637 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:07.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:07.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:07.946 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:07.947 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:07.948 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:08.246 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:08.247 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:08.248 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:08.524 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:08.525 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:08.526 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:36:08.887 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:954: SBX disconnected!
+2026-11-16T02:36:08.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:36:08.889 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:36:08.890 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:36:08.891 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:396: Entering Phase 3
+2026-11-16T02:36:08.892 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:882: Got AT register 12. 3 bytes. 0x03 0xf3 0x03
+2026-11-16T02:36:08.893 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2219: RT Broadcast REMOTE: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:36:08.893 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2219: RT Broadcast REMOTE: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:36:08.894 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:1024: Entering Connected
+2026-11-16T02:36:08.895 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2212: RT Broadcast LOCAL: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:36:08.896 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2212: RT Broadcast LOCAL: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:36:09.387 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_training_cl0.c:24: Gen2/3 lane=0 entered CL0!
+2026-11-16T02:36:09.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_training_cl0.c:24: Gen2/3 lane=1 entered CL0!
+2026-11-16T02:36:09.389 KMSG thunderbolt 0-0:1.1: new retimer found, vendor=0x5ac device=0x2200
+2026-11-16T02:36:11.061 WIFI up (64 bytes from 192.168.1.6: icmp_seq=1770 ttl=64 time=115 ms)
+2026-11-16T02:36:14.888 KMSG thunderbolt 0-1: new host found, vendor=0x1d6b device=0x4
+2026-11-16T02:36:14.889 KMSG thunderbolt 0-1: Linux m1-air-omarchy
+2026-11-16T02:36:15.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:140: RX path: null port=0, queue=1, target port=1, hopid=1
+2026-11-16T02:36:15.889 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:57: TX path: src port=1, null port=0, hopid=8
+2026-11-16T02:37:47.849 WIFI down (no answer yet for icmp_seq=2252)
+2026-11-16T02:37:49.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:166: path_configuration_space_rx_path_tear_down - null_port_index=0, physical_queue_
+2026-11-16T02:37:49.390 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:70: path_configuration_space_tx_path_tear_down - source_port=1, null_port_index=0.
+2026-11-16T02:37:49.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=83
+2026-11-16T02:37:49.889 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=83
+2026-11-16T02:37:49.890 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:37:49.891 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:37:49.892 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:37:49.893 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=89
+2026-11-16T02:37:49.894 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:1044: SBX disconnected!
+2026-11-16T02:37:49.895 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:37:49.896 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:37:49.896 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=89
+2026-11-16T02:37:49.897 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:37:49.898 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:37:49.899 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:37:49.900 KMSG thunderbolt 0-0:1.1: retimer disconnected
+2026-11-16T02:37:49.901 KMSG thunderbolt 0-1: host disconnected
+2026-11-16T02:37:49.901 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:37:50.135 PWR  port0:partner([sink]) ac=1 battery_current_uA=0
+2026-11-16T02:37:52.159 PWR  port0:partner([sink]) port2:partner([source]) ac=1 battery_current_uA=0
+2026-11-16T02:37:52.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:37:52.390 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:37:52.391 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:37:52.392 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:37:52.393 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:37:52.394 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:37:52.394 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:37:52.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:37:52.890 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:37:52.891 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:37:52.891 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:37:52.892 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:37:52.893 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:37:52.894 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:38:02.086 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:396: Entering Phase 3
+2026-11-16T02:38:02.088 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:02.089 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:02.386 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:02.387 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:02.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:02.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:02.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:02.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:02.987 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:02.988 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:02.989 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:03.287 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:03.288 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:03.288 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:03.588 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:03.590 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:03.591 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:03.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:03.889 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:03.890 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:04.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:04.139 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:04.140 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:04.487 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:04.488 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:04.489 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:04.787 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:04.788 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:04.789 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:05.087 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:05.088 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:05.089 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:05.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:05.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:05.391 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:05.689 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:05.690 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:05.692 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:05.988 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:05.990 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:05.992 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:06.289 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:06.290 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:06.291 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:06.589 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:06.591 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:06.592 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:06.594 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:06.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:06.890 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:07.188 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:07.190 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:07.192 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:07.488 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:07.490 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:07.491 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:07.790 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:07.791 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:07.793 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:08.090 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:08.091 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:08.092 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:08.339 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:08.341 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:08.342 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:954: SBX disconnected!
+2026-11-16T02:38:08.343 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:38:08.344 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:38:08.345 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:38:08.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:396: Entering Phase 3
+2026-11-16T02:38:08.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:882: Got AT register 12. 3 bytes. 0x03 0xf3 0x03
+2026-11-16T02:38:08.642 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2219: RT Broadcast REMOTE: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:38:08.643 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2219: RT Broadcast REMOTE: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:38:08.644 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:1024: Entering Connected
+2026-11-16T02:38:08.646 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2212: RT Broadcast LOCAL: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:38:08.647 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2212: RT Broadcast LOCAL: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:38:09.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_training_cl0.c:24: Gen2/3 lane=0 entered CL0!
+2026-11-16T02:38:09.140 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_training_cl0.c:24: Gen2/3 lane=1 entered CL0!
+2026-11-16T02:38:09.141 KMSG thunderbolt 0-0:1.1: new retimer found, vendor=0x5ac device=0x2200
+2026-11-16T02:38:11.091 WIFI up (64 bytes from 192.168.1.6: icmp_seq=2306 ttl=64 time=160 ms)
+2026-11-16T02:38:14.638 KMSG thunderbolt 0-1: new host found, vendor=0x1d6b device=0x4
+2026-11-16T02:38:14.640 KMSG thunderbolt 0-1: Linux m1-air-omarchy
+2026-11-16T02:38:15.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:140: RX path: null port=0, queue=1, target port=1, hopid=1
+2026-11-16T02:38:15.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:57: TX path: src port=1, null port=0, hopid=8
+2026-11-16T02:38:29.792 WIFI down (no answer yet for icmp_seq=2399)
+2026-11-16T02:38:31.889 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:166: path_configuration_space_rx_path_tear_down - null_port_index=0, physical_queue_
+2026-11-16T02:38:31.890 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:70: path_configuration_space_tx_path_tear_down - source_port=1, null_port_index=0.
+2026-11-16T02:38:32.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=83
+2026-11-16T02:38:32.391 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=83
+2026-11-16T02:38:32.392 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=84
+2026-11-16T02:38:32.393 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:38:32.395 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:38:32.396 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=89
+2026-11-16T02:38:32.397 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:1044: SBX disconnected!
+2026-11-16T02:38:32.399 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:38:32.399 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:38:32.400 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=89
+2026-11-16T02:38:32.401 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:38:32.403 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:38:32.403 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:38:32.404 KMSG thunderbolt 0-0:1.1: retimer disconnected
+2026-11-16T02:38:32.405 KMSG thunderbolt 0-1: host disconnected
+2026-11-16T02:38:32.406 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:38:32.622 PWR  port0:partner([sink]) ac=1 battery_current_uA=0
+2026-11-16T02:38:34.637 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:38:34.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:38:34.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:38:34.640 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:38:34.642 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:38:34.643 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:38:34.644 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:38:34.644 PWR  port0:partner([sink]) port2:partner([source]) ac=1 battery_current_uA=0
+2026-11-16T02:38:35.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:38:35.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:38:35.390 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:38:35.391 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:38:35.392 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:38:35.393 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:38:35.394 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:38:44.458 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:396: Entering Phase 3
+2026-11-16T02:38:44.460 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:44.461 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:44.758 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:44.760 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:44.761 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:45.059 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:45.060 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:45.061 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:45.359 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:45.360 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:45.361 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:45.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:45.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:45.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:45.959 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:45.960 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:45.961 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:46.259 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:46.260 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:46.261 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:46.559 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:46.560 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:46.561 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:46.859 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:46.860 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:46.861 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:47.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:47.139 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:47.139 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:47.460 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:47.461 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:47.462 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:47.760 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:47.761 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:47.762 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:48.060 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:48.061 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:48.062 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:48.360 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:48.361 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:48.362 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:48.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:48.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:48.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:48.960 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:48.962 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:48.964 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:49.260 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:49.261 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:49.262 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:49.560 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:49.561 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:49.563 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:49.861 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:49.862 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:49.862 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:50.111 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:50.113 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:38:50.114 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:954: SBX disconnected!
+2026-11-16T02:38:50.116 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:38:50.117 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:38:50.119 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:38:50.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:396: Entering Phase 3
+2026-11-16T02:38:50.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:882: Got AT register 12. 3 bytes. 0x03 0xf3 0x03
+2026-11-16T02:38:50.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2219: RT Broadcast REMOTE: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:38:50.390 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2219: RT Broadcast REMOTE: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:38:50.391 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:1024: Entering Connected
+2026-11-16T02:38:50.392 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2212: RT Broadcast LOCAL: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:38:50.393 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2212: RT Broadcast LOCAL: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:38:50.887 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_training_cl0.c:24: Gen2/3 lane=0 entered CL0!
+2026-11-16T02:38:50.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_training_cl0.c:24: Gen2/3 lane=1 entered CL0!
+2026-11-16T02:38:50.889 KMSG thunderbolt 0-0:1.1: new retimer found, vendor=0x5ac device=0x2200
+2026-11-16T02:38:52.242 WIFI up (64 bytes from 192.168.1.6: icmp_seq=2498 ttl=64 time=119 ms)
+2026-11-16T02:38:56.388 KMSG thunderbolt 0-1: new host found, vendor=0x1d6b device=0x4
+2026-11-16T02:38:56.389 KMSG thunderbolt 0-1: Linux m1-air-omarchy
+2026-11-16T02:38:57.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:140: RX path: null port=0, queue=1, target port=1, hopid=1
+2026-11-16T02:38:57.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:57: TX path: src port=1, null port=0, hopid=8
+2026-11-16T02:39:47.089 WIFI down (no answer yet for icmp_seq=2771)
+2026-11-16T02:39:47.094 WIFI up (64 bytes from 192.168.1.6: icmp_seq=2772 ttl=64 time=5.36 ms)
+2026-11-16T02:40:22.401 WIFI down (no answer yet for icmp_seq=2947)
+2026-11-16T02:40:22.404 WIFI up (64 bytes from 192.168.1.6: icmp_seq=2948 ttl=64 time=4.26 ms)
+2026-11-16T02:43:15.929 WIFI down (no answer yet for icmp_seq=3812)
+2026-11-16T02:43:15.932 WIFI up (64 bytes from 192.168.1.6: icmp_seq=3813 ttl=64 time=4.03 ms)
+2026-11-16T02:43:45.017 WIFI down (no answer yet for icmp_seq=3957)
+2026-11-16T02:43:45.020 WIFI up (64 bytes from 192.168.1.6: icmp_seq=3958 ttl=64 time=4.02 ms)
+2026-11-16T02:44:58.840 WIFI down (no answer yet for icmp_seq=4325)
+2026-11-16T02:44:58.844 WIFI up (64 bytes from 192.168.1.6: icmp_seq=4326 ttl=64 time=4.70 ms)
+2026-11-16T02:47:06.209 WIFI down (no answer yet for icmp_seq=4960)
+2026-11-16T02:47:06.213 WIFI up (64 bytes from 192.168.1.6: icmp_seq=4961 ttl=64 time=4.55 ms)
+2026-11-16T02:49:17.593 WIFI down (no answer yet for icmp_seq=5615)
+2026-11-16T02:49:17.596 WIFI up (64 bytes from 192.168.1.6: icmp_seq=5616 ttl=64 time=3.98 ms)
+2026-11-16T02:49:56.505 WIFI down (no answer yet for icmp_seq=5809)
+2026-11-16T02:49:56.509 WIFI up (64 bytes from 192.168.1.6: icmp_seq=5810 ttl=64 time=4.87 ms)
+2026-11-16T02:50:34.616 WIFI down (no answer yet for icmp_seq=5999)
+2026-11-16T02:50:36.136 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:166: path_configuration_space_rx_path_tear_down - null_port_index=0, physical_queue_
+2026-11-16T02:50:36.137 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:70: path_configuration_space_tx_path_tear_down - source_port=1, null_port_index=0.
+2026-11-16T02:50:36.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=84
+2026-11-16T02:50:36.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=83
+2026-11-16T02:50:36.390 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:50:36.392 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:50:36.393 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:50:36.395 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=89
+2026-11-16T02:50:36.396 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:1044: SBX disconnected!
+2026-11-16T02:50:36.397 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:50:36.398 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:50:36.400 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=89
+2026-11-16T02:50:36.401 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:50:36.402 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:50:36.403 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:50:36.405 KMSG thunderbolt 0-0:1.1: retimer disconnected
+2026-11-16T02:50:36.406 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:50:36.407 KMSG thunderbolt 0-1: host disconnected
+2026-11-16T02:50:37.725 PWR  port0:partner([sink]) ac=1 battery_current_uA=0
+2026-11-16T02:50:38.737 PWR  port0:partner([sink]) port2:partner([source]) ac=1 battery_current_uA=0
+2026-11-16T02:50:38.960 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:50:38.962 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:50:38.963 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:50:38.965 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:50:38.966 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:50:38.968 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:50:38.969 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:50:39.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:50:39.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:50:39.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:50:39.641 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:50:39.642 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:50:39.644 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:50:39.645 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:50:48.755 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:396: Entering Phase 3
+2026-11-16T02:50:48.756 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:48.757 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:49.055 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:49.056 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:49.057 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:49.355 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:49.356 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:49.357 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:49.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:49.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:49.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:49.956 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:49.957 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:49.958 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:50.256 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:50.257 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:50.258 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:50.556 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:50.557 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:50.558 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:50.857 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:50.858 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:50.859 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:51.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:51.139 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:51.141 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:51.456 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:51.457 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:51.458 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:51.756 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:51.758 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:51.759 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:52.056 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:52.057 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:52.058 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:52.356 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:52.358 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:52.359 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:52.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:52.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:52.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:52.957 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:52.958 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:52.960 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:53.257 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:53.258 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:53.259 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:53.557 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:53.558 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:53.559 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:53.857 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:53.858 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:53.860 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:54.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:54.139 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:54.140 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:54.457 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:54.458 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:54.460 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:54.757 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:54.758 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:54.759 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:55.057 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:55.058 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:55.060 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:50:55.061 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:954: SBX disconnected!
+2026-11-16T02:50:55.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:50:55.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:50:55.390 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:50:55.391 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:396: Entering Phase 3
+2026-11-16T02:50:55.392 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:882: Got AT register 12. 3 bytes. 0x03 0xf3 0x03
+2026-11-16T02:50:55.393 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2219: RT Broadcast REMOTE: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:50:55.394 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2219: RT Broadcast REMOTE: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:50:55.394 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:1024: Entering Connected
+2026-11-16T02:50:55.395 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2212: RT Broadcast LOCAL: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:50:55.396 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2212: RT Broadcast LOCAL: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:50:55.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_training_cl0.c:24: Gen2/3 lane=0 entered CL0!
+2026-11-16T02:50:55.889 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_training_cl0.c:24: Gen2/3 lane=1 entered CL0!
+2026-11-16T02:50:55.890 KMSG thunderbolt 0-0:1.1: new retimer found, vendor=0x5ac device=0x2200
+2026-11-16T02:50:57.812 WIFI up (64 bytes from 192.168.1.6: icmp_seq=6062 ttl=64 time=2321 ms)
+2026-11-16T02:51:01.388 KMSG thunderbolt 0-1: new host found, vendor=0x1d6b device=0x4
+2026-11-16T02:51:01.389 KMSG thunderbolt 0-1: Linux m1-air-omarchy
+2026-11-16T02:51:02.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:140: RX path: null port=0, queue=1, target port=1, hopid=1
+2026-11-16T02:51:02.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:57: TX path: src port=1, null port=0, hopid=8
+2026-11-16T02:51:46.952 WIFI down (no answer yet for icmp_seq=6312)
+2026-11-16T02:51:46.955 WIFI up (64 bytes from 192.168.1.6: icmp_seq=6313 ttl=64 time=4.27 ms)
+2026-11-16T02:52:35.696 WIFI down (no answer yet for icmp_seq=6555)
+2026-11-16T02:52:37.467 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:166: path_configuration_space_rx_path_tear_down - null_port_index=0, physical_queue_
+2026-11-16T02:52:37.469 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:70: path_configuration_space_tx_path_tear_down - source_port=1, null_port_index=0.
+2026-11-16T02:52:37.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=83
+2026-11-16T02:52:37.889 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=83
+2026-11-16T02:52:37.890 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:52:37.891 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=84
+2026-11-16T02:52:37.892 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:52:37.893 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=84
+2026-11-16T02:52:37.894 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:52:37.895 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:1044: SBX disconnected!
+2026-11-16T02:52:37.896 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:52:37.897 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:52:37.897 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=89
+2026-11-16T02:52:37.898 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:52:37.899 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:52:37.900 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=84
+2026-11-16T02:52:37.901 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:52:37.902 KMSG thunderbolt 0-0:1.1: retimer disconnected
+2026-11-16T02:52:37.903 KMSG thunderbolt 0-1: host disconnected
+2026-11-16T02:52:37.903 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:52:38.107 PWR  port0:partner([sink]) ac=1 battery_current_uA=0
+2026-11-16T02:52:40.128 PWR  port0:partner([sink]) port2:partner([source]) ac=1 battery_current_uA=0
+2026-11-16T02:52:40.311 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:52:40.313 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:52:40.315 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:52:40.316 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:52:40.317 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:52:40.318 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:52:40.320 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:52:40.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:52:40.890 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:52:40.892 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:52:40.893 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:52:40.894 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:52:40.896 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:52:40.897 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:52:49.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:396: Entering Phase 3
+2026-11-16T02:52:49.889 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:49.890 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:50.227 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:50.228 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:50.230 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:50.527 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:50.529 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:50.530 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:50.532 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:50.828 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:50.829 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:51.127 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:51.129 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:51.130 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:51.132 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:51.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:51.390 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:51.727 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:51.729 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:51.730 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:52.027 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:52.029 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:52.030 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:52.327 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:52.328 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:52.330 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:52.628 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:52.629 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:52.631 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:52.632 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:52.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:52.890 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:53.228 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:53.229 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:53.231 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:53.528 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:53.530 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:53.531 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:53.828 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:53.830 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:53.831 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:54.129 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:54.130 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:54.132 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:54.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:54.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:54.390 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:54.728 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:54.730 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:54.730 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:54.731 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:55.028 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:55.029 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:55.328 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:55.329 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:55.331 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:55.628 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:55.630 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:55.631 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:55.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:52:55.889 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:954: SBX disconnected!
+2026-11-16T02:52:55.891 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:52:55.892 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:52:55.893 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:52:55.893 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:396: Entering Phase 3
+2026-11-16T02:52:55.894 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:882: Got AT register 12. 3 bytes. 0x03 0xf3 0x03
+2026-11-16T02:52:55.895 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2219: RT Broadcast REMOTE: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:52:55.896 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2219: RT Broadcast REMOTE: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:52:55.897 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:1024: Entering Connected
+2026-11-16T02:52:55.898 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2212: RT Broadcast LOCAL: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:52:55.899 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2212: RT Broadcast LOCAL: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:52:56.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_training_cl0.c:24: Gen2/3 lane=1 entered CL0!
+2026-11-16T02:52:56.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_training_cl0.c:24: Gen2/3 lane=0 entered CL0!
+2026-11-16T02:52:56.642 KMSG thunderbolt 0-0:1.1: new retimer found, vendor=0x5ac device=0x2200
+2026-11-16T02:52:58.332 WIFI up (64 bytes from 192.168.1.6: icmp_seq=6626 ttl=64 time=116 ms)
+2026-11-16T02:53:02.138 KMSG thunderbolt 0-1: new host found, vendor=0x1d6b device=0x4
+2026-11-16T02:53:02.139 KMSG thunderbolt 0-1: Linux m1-air-omarchy
+2026-11-16T02:53:03.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:140: RX path: null port=0, queue=1, target port=1, hopid=1
+2026-11-16T02:53:03.139 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:57: TX path: src port=1, null port=0, hopid=8
+2026-11-16T02:53:33.112 WIFI down (no answer yet for icmp_seq=6799)
+2026-11-16T02:53:33.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:166: path_configuration_space_rx_path_tear_down - null_port_index=0, physical_queue_
+2026-11-16T02:53:33.139 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:70: path_configuration_space_tx_path_tear_down - source_port=1, null_port_index=0.
+2026-11-16T02:53:36.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=83
+2026-11-16T02:53:36.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=83
+2026-11-16T02:53:36.391 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:53:36.391 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=89
+2026-11-16T02:53:36.392 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:53:36.393 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:53:36.394 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:53:36.395 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=89
+2026-11-16T02:53:36.396 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:53:36.397 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:53:36.397 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:53:36.398 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=89
+2026-11-16T02:53:36.399 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:53:36.400 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:53:36.401 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:53:36.401 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=89
+2026-11-16T02:53:36.402 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:53:36.403 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:53:36.404 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:53:36.405 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=89
+2026-11-16T02:53:36.406 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:53:36.406 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:53:36.407 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=89
+2026-11-16T02:53:36.408 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=89
+2026-11-16T02:53:36.409 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:53:36.410 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:53:36.411 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=89
+2026-11-16T02:53:36.411 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:53:36.412 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=1, error=87
+2026-11-16T02:53:36.413 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:289: Gen2/3 link error. lane=0, error=87
+2026-11-16T02:53:36.414 KMSG thunderbolt 0-0:1.1: retimer disconnected
+2026-11-16T02:53:36.415 KMSG thunderbolt 0-1: host disconnected
+2026-11-16T02:53:37.303 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:37.305 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:37.306 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:37.603 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:37.604 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:37.605 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:37.887 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:37.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:37.889 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:38.204 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:38.205 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:38.206 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:38.504 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:38.505 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:38.506 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:38.804 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:38.805 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:38.806 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:39.104 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:39.105 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:39.106 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:39.387 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:39.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:39.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:39.704 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:39.705 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:39.706 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:40.004 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:40.005 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:40.006 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:40.304 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:40.305 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:40.306 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:40.604 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:40.605 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:40.606 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:40.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:40.890 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:40.891 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:41.155 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:41.157 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:41.158 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:954: SBX disconnected!
+2026-11-16T02:53:41.159 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:53:41.161 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:53:41.628 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:53:41.809 PWR  port0:partner([sink]) ac=1 battery_current_uA=0
+2026-11-16T02:53:43.813 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:53:43.815 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:53:43.816 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:53:43.816 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:53:43.817 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:53:43.818 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:53:43.819 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:53:43.828 PWR  port0:partner([sink]) port2:partner([source]) ac=1 battery_current_uA=0
+2026-11-16T02:53:44.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: Initializing (protocol version 12)
+2026-11-16T02:53:44.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:60: #ACIO FW IS READY# FW_VERSION_STRING=AppleCIOFirmware-480~8882__2026-08-08-14:5
+2026-11-16T02:53:44.391 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: main.c:61: FW state=1
+2026-11-16T02:53:44.391 KMSG thunderbolt-apple-nhi 701f00000.nhi: device links to tunneled native ports are missing!
+2026-11-16T02:53:44.392 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:53:44.393 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:53:44.394 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:53:53.571 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:396: Entering Phase 3
+2026-11-16T02:53:53.572 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:53.573 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:53.871 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:53.872 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:53.873 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:54.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:54.139 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:54.140 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:54.471 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:54.472 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:54.473 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:54.771 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:54.772 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:54.773 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:55.071 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:55.072 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:55.073 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:55.372 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:55.373 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:55.374 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:55.638 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:55.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:55.640 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:55.971 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:55.972 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:55.973 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:56.272 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:56.273 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:56.274 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:56.572 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:56.573 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:56.574 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:56.872 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:56.873 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:56.874 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:57.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:57.139 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:57.140 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:57.472 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:57.473 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:57.474 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:57.772 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:57.773 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:57.774 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:58.072 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:58.073 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:58.074 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:58.373 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:58.374 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:58.375 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:58.637 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:58.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:58.639 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:58.973 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:58.974 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:58.975 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:59.273 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:59.274 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:59.275 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:59.573 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:59.574 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:59.575 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:59.873 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:59.874 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:53:59.874 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:54:00.138 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:936: Timeout reading AT register
+2026-11-16T02:54:00.139 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:954: SBX disconnected!
+2026-11-16T02:54:00.140 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:181: Entering Phase 1. action=0
+2026-11-16T02:54:00.141 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:78: Lane init parmas = 0x00000017
+2026-11-16T02:54:00.142 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:343: Entering Phase 2
+2026-11-16T02:54:00.143 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:396: Entering Phase 3
+2026-11-16T02:54:00.144 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:882: Got AT register 12. 3 bytes. 0x03 0xf3 0x03
+2026-11-16T02:54:00.144 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2219: RT Broadcast REMOTE: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:54:00.145 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2219: RT Broadcast REMOTE: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:54:00.146 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_init.c:1024: Entering Connected
+2026-11-16T02:54:00.147 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2212: RT Broadcast LOCAL: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:54:00.148 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: high_speed_lane.c:2212: RT Broadcast LOCAL: gen=2, legacy=0, rs_fec=1, usb4=1, l0_en=1, l1_en=1
+2026-11-16T02:54:00.888 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_training_cl0.c:24: Gen2/3 lane=0 entered CL0!
+2026-11-16T02:54:00.889 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: lane_training_cl0.c:24: Gen2/3 lane=1 entered CL0!
+2026-11-16T02:54:00.890 KMSG thunderbolt 0-0:1.1: new retimer found, vendor=0x5ac device=0x2200
+2026-11-16T02:54:02.429 WIFI up (64 bytes from 192.168.1.6: icmp_seq=6878 ttl=64 time=1251 ms)
+2026-11-16T02:54:02.430 WIFI down (no answer yet for icmp_seq=6883)
+2026-11-16T02:54:02.431 WIFI up (64 bytes from 192.168.1.6: icmp_seq=6879 ttl=64 time=1045 ms)
+2026-11-16T02:54:06.388 KMSG thunderbolt 0-1: new host found, vendor=0x1d6b device=0x4
+2026-11-16T02:54:06.389 KMSG thunderbolt 0-1: Linux m1-air-omarchy
+2026-11-16T02:54:07.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:140: RX path: null port=0, queue=1, target port=1, hopid=1
+2026-11-16T02:54:07.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:57: TX path: src port=1, null port=0, hopid=8
+2026-11-16T02:55:06.381 INFO observer stop

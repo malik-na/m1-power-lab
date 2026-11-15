@@ -1,0 +1,17 @@
+--- run25.sh	2026-11-16 02:32:30.796000006 +0530
++++ run25-cablein.sh	2026-11-16 02:33:49.229506445 +0530
+@@ -365,9 +365,12 @@
+ 	PSY=0; for s in /sys/class/power_supply/tps6598x-source-psy-*; do [ "$(cat $s/online)" = 1 ] && PSY=$((PSY + 1)); done
+ 	USB=$(for d in /sys/bus/usb/devices/[0-9]*-[0-9]*; do [ -f $d/idVendor ] && echo x; done | wc -l)
+ 	GATE="ac_online=$AC status=$ST typec_partners=$PARTNERS port_supplies_online=$PSY usb_devices=$USB"
+-	[ "$AC" = 0 ] && [ "$ST" = Discharging ] && [ "$PARTNERS" = 0 ] && [ "$PSY" = 0 ] && [ "$USB" = 0 ]
++	# CABLE-IN VARIANT (2026-11-16, Naeem: "Yes, cable in"): the Thunderbolt cable to the M3 Max stays in, so
++	# type-C partners and port supplies are recorded in $GATE but not required to be 0. Charger out, battery
++	# discharging and no USB device are still required. Nothing else in this script differs from run25.sh 3b90a8a4.
++	[ "$AC" = 0 ] && [ "$ST" = Discharging ] && [ "$USB" = 0 ]
+ }
+-say "GATE: WAITING up to 600 s for the charger to be out and both ports empty"
++say "GATE: WAITING up to 600 s for the charger to be out (CABLE-IN VARIANT: the Thunderbolt cable may stay in)"
+ sync
+ last=""; ok=0
+ for i in $(seq 1 300); do

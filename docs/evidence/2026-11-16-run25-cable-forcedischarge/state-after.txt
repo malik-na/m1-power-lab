@@ -1,0 +1,15 @@
+uname: Linux m1-air-omarchy 7.3.0-0test5-1-ARCH #1 SMP PREEMPT_DYNAMIC Sat, 14 Nov 2026 13:27:47 +0000 aarch64 GNU/Linux
+cmdline: root=UUID=4f4d5801-524f-4f54-8000-000000000001 rw rootflags=subvol=@,x-systemd.device-timeout=0 zswap.enabled=0 rootfstype=btrfs user4k=on rd.luks.name=6b1a5e0c-729c-42ad-b6ce-c6982ef535fa=root rd.luks.key=6b1a5e0c-729c-42ad-b6ce-c6982ef535fa=/omarchy/luks-key:UUID=4f4d5801-424f-4f54-8000-000000000001 quiet splash loglevel=0 systemd.show_status=false rd.udev.log_level=0 vt.global_cursor_default=0 plymouth.ignore-serial-consoles
+boot_id: 4fb18de2-38f4-4b8b-9666-c6e2472f2208  uptime: 73.40 s  date: 2026-11-16T02:55:06+05:30
+mem_sleep: [s2idle]
+psu macsmc-ac: capacity= status= online=1
+psu macsmc-battery: capacity=77 status=Charging online=
+psu tps6598x-source-psy-0-0038: capacity= status= online=1
+psu tps6598x-source-psy-0-003f: capacity= status= online=0
+stage2 m1n1: 26844aaf
+pmu nvmem: /sys/bus/nvmem/devices/spmi_nvmem0
+0x0201 (start kind)    01 
+0x2621                 00 
+0x9f00-0x9f1f scratch  00 30 00 50 79 1a 07 00 00 00 52 00 8f 00 00 00 94 07 00 c0 08 00 0f bf 00 00 88 00 aa f3 07 00 
+0xa47b fault record    00 1c 04 00 00 00 00 00 00 00 00 00 00 00 00 00 
+0xd000-0xd00f alarm    03 02 06 a4 d3 1a 07 00 b5 1a 07 00 01 00 00 00 

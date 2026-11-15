@@ -1,0 +1,18 @@
+--- run25.sh	2026-11-16 02:32:30.796000006 +0530
++++ run25-cablefd.sh	2026-11-16 02:52:16.238561445 +0530
+@@ -365,9 +365,13 @@
+ 	PSY=0; for s in /sys/class/power_supply/tps6598x-source-psy-*; do [ "$(cat $s/online)" = 1 ] && PSY=$((PSY + 1)); done
+ 	USB=$(for d in /sys/bus/usb/devices/[0-9]*-[0-9]*; do [ -f $d/idVendor ] && echo x; done | wc -l)
+ 	GATE="ac_online=$AC status=$ST typec_partners=$PARTNERS port_supplies_online=$PSY usb_devices=$USB"
+-	[ "$AC" = 0 ] && [ "$ST" = Discharging ] && [ "$PARTNERS" = 0 ] && [ "$PSY" = 0 ] && [ "$USB" = 0 ]
++	# CABLE-IN + FORCE-DISCHARGE VARIANT (2026-11-16, Naeem: "Yes, run it"): the Thunderbolt cable to the M3 Max stays
++	# in and the battery is set to force-discharge from outside (macsmc-battery charge_behaviour), so the M1 runs on its
++	# battery while the cable carries 5 V: ac_online, type-C partners and port supplies are recorded in $GATE but not
++	# required to be 0. Battery discharging and no USB device are still required. Nothing else differs from run25.sh 3b90a8a4.
++	[ "$ST" = Discharging ] && [ "$USB" = 0 ]
+ }
+-say "GATE: WAITING up to 600 s for the charger to be out and both ports empty"
++say "GATE: WAITING up to 600 s for the battery to discharge (CABLE-IN + FORCE-DISCHARGE VARIANT: cable in, charge_behaviour force-discharge)"
+ sync
+ last=""; ok=0
+ for i in $(seq 1 300); do
