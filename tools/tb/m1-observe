@@ -4,7 +4,8 @@
 # depend on anything the M1 records about itself.
 #   tools/tb/m1-observe [label]      foreground; Ctrl-C stops; log in var/m1-observe/
 # Lines (ISO time, source, event):
-#   PING  up/down transitions of the M1's link-local address (5 Hz probes)
+#   PING  up/down of the M1's link-local address on the cable (5 Hz probes)
+#   WIFI  up/down of the M1's Wi-Fi address, from the M3 Max over the LAN (5 Hz)
 #   LINK  thunderbolt0 carrier changes (ip monitor)
 #   KMSG  M3 Max kernel lines about thunderbolt / typec / the cio controller (peer
 #         host found / disconnected, retimers)
@@ -21,7 +22,12 @@ emit() { printf '%s %-4s %s\n' "$(date +%FT%T.%3N)" "$1" "$2" | tee -a "$log"; }
 addr=$("$here/m1tb" --addr 2>/dev/null || true)
 [ -n "$addr" ] || addr=$(cat "$repo/var/m1-observe/.last-addr" 2>/dev/null || true)
 [ -n "$addr" ] && echo "$addr" > "$repo/var/m1-observe/.last-addr"
-emit INFO "observer start; M1 at ${addr:-unknown}; log $log"
+# The M1's Wi-Fi address (same LAN as the M3 Max): the second signal, for runs where the
+# cable has to be out. Asked over the cable when it is in, else the last one seen.
+lan=$("$here/m1tb" -o BatchMode=yes -o ConnectTimeout=3 "ip -4 -o addr show wlan0" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 || true)
+[ -n "$lan" ] || lan=$(cat "$repo/var/m1-observe/.last-lan" 2>/dev/null || true)
+[ -n "$lan" ] && echo "$lan" > "$repo/var/m1-observe/.last-lan"
+emit INFO "observer start; M1 at ${addr:-unknown} (cable), ${lan:-unknown} (Wi-Fi); log $log"
 
 pids=()
 # The readers are pipelines inside subshells: kill each subshell's whole tree (ping,
@@ -30,17 +36,20 @@ killtree() { local c; for c in $(pgrep -P "$1"); do killtree "$c"; done; kill "$
 stop() { trap - INT TERM; for p in "${pids[@]}"; do killtree "$p"; done; emit INFO "observer stop"; exit 0; }
 trap stop INT TERM
 
-if [ -n "$addr" ]; then
-	( ping -6 -n -O -i 0.2 -W 0.5 "$addr" 2>&1 | while IFS= read -r l; do
+# pinger TAG ADDR: 5 Hz probes, one line per up/down transition.
+pinger() {
+	( ping -n -O -i 0.2 -W 0.5 "$2" 2>&1 | while IFS= read -r l; do
 		case "$l" in
 		*"bytes from"*) s=up ;;
 		*"no answer"*|*"Unreachable"*|*"unreachable"*) s=down ;;
 		*) continue ;;
 		esac
-		[ "$s" != "${prev:-}" ] && emit PING "$s ($l)"
+		[ "$s" != "${prev:-}" ] && emit "$1" "$s ($l)"
 		prev=$s
 	done ) & pids+=($!)
-fi
+}
+[ -n "$addr" ] && pinger PING "$addr"
+[ -n "$lan" ] && pinger WIFI "$lan"
 
 ( ip monitor link dev "$IF" 2>&1 | while IFS= read -r l; do emit LINK "$l"; done ) & pids+=($!)
 
