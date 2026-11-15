@@ -110,6 +110,19 @@ page/block skipping after repeated faults); values in the database only.
 | Keyboard-backlight PWM 0x235044000 | 1024 | 9 | DT window is 0x4000 but only +0x0..+0xfff answers: every read at +0x1000 and above takes the machine down |
 | S2R driver's own words (MCC, AIC config, cluster states, wake mask/status, SPMI status, carry/TVM) | 58 | 2 | the 64-bit read of each cluster's ACC base (0x210e00000, 0x211e00000) takes the machine down |
 
+Second tier (03:56-04:02, cable out, power states re-read first: with the cable out atc0_cio,
+atc0_cio_pcie and atc0_cio_usb are off):
+
+| Block | Words read | Faults | Notes |
+|---|---|---|---|
+| Coprocessor control words (GPU, SIO, PMP, SMC, SEP, AOP: +0x44/+0x48/+0x8110/+0x8114) | 24 | 0 | running: GPU firmware (domain gfx reads off but is auto-gated), SMC, AOP; stopped: SIO, PMP (never started by Linux), SEP (no driver) |
+| Audio DMA (SIO) 0x238200000 | 16384 | 0 | |
+| Audio DMA (AOP) 0x24a980000 | 0 | 2 | faults from its first word: not reachable from the main CPUs while awake |
+| Interrupt controller config 0x23b100000 (+0x0..+0x1fff, +0x6000..+0x7fff) | 4096 | 0 | event / acknowledge / per-CPU range +0x2000..+0x5fff not read |
+| Thunderbolt reset controller 0x23b784000 | 8192 | 3 crashes in fast mode | the slow re-steps after each read clean: values unverified, read it slowly next time |
+| USB-C PHYs, both ports (axi2af, pipehandler, usb2phy, core, lpdptx) | 73728 | 0 | |
+| USB controllers (dwc3), both ports | 32640 | 0 | all zero with nothing plugged in: the cores idle while their domains (atc0_usb, atc1_usb) stay on |
+
 Not read yet, on purpose: coprocessors (mailboxes and firmware memory), the interrupt controller's
 event/acknowledge registers, UART / I2C / SPI / SPMI data, NVMe, PCIe, USB / ATC / Thunderbolt,
 display pipes, and every block whose power domain is not fully on (reading a powered-down block
