@@ -1,0 +1,26 @@
+#!/bin/bash
+# Flight recorder for the M3 Max itself: keeps the last seconds before an unexpected reset.
+# Three resets on 2026-11-16 left nothing (no panic, no pstore, journal cut seconds short),
+# each within minutes of Thunderbolt / USB-C events with the M1 on the cable, while systemd
+# drives the hardware watchdog (maclab's RuntimeWatchdogSec=30s): a kernel hang becomes a
+# silent reset. This writes, fsync'd line by line, to var/m3-blackbox/<boot id>.log:
+#   KMSG  every kernel message as it arrives
+#   BEAT  once a second: uptime, load, port partners and power roles, AC, battery current,
+#         thunderbolt0 carrier
+# Run in the background on the M3 Max: tools/tb/m3-blackbox &   (stop: kill it)
+set -u
+here=$(cd "$(dirname "$0")" && pwd)
+dir="$(cd "$here/../.." && pwd)/var/m3-blackbox"
+mkdir -p "$dir"
+log="$dir/$(cat /proc/sys/kernel/random/boot_id).log"
+w() { printf '%s %s %s\n' "$(date +%FT%T.%3N)" "$1" "$2" >> "$log"; sync "$log"; }
+w INFO "start; uptime $(cut -d' ' -f1 /proc/uptime)"
+( sudo -n dmesg -w --time-format iso 2>/dev/null | while IFS= read -r l; do w KMSG "$l"; done ) &
+while :; do
+	s=""
+	for p in /sys/class/typec/port?; do
+		[ -e "$p-partner" ] && s+="$(basename "$p"):$(grep -o '\[[a-z]*\]' "$p/power_role") "
+	done
+	w BEAT "up=$(cut -d' ' -f1 /proc/uptime) load=$(cut -d' ' -f1 /proc/loadavg) ${s}ac=$(cat /sys/class/power_supply/macsmc-ac/online 2>/dev/null) bat_uA=$(cat /sys/class/power_supply/macsmc-battery/current_now 2>/dev/null) tb0=$(cat /sys/class/net/thunderbolt0/carrier 2>/dev/null || echo -)"
+	sleep 1
+done
