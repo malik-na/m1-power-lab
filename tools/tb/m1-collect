@@ -1,0 +1,50 @@
+#!/bin/bash
+# Pull everything a sleep run leaves on the M1 to the M3 Max over the Thunderbolt cable
+# (fallback: Tailscale, M1TB_VIA=m1ts). Read-only on the M1.
+#   tools/tb/m1-collect [label]    -> var/m1-state/<stamp>[-label]/
+# Contents: /var/lib/m1power-s2r (run logs, acceptance records), the kernel log of this
+# boot and the previous one, the PMU bytes the S2R work reads (0x0201, 0x2621, scratch
+# 0x9f00-0x9f1f, fault record 0xa47b, alarm block 0xd000-0xd00f), identity and power.
+set -euo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+repo=$(cd "$here/../.." && pwd)
+stamp=$(date +%Y%m%d-%H%M%S)
+out="$repo/var/m1-state/$stamp${1:+-$1}"
+mkdir -p "$out"
+
+if [ "${M1TB_VIA:-tb}" = m1ts ]; then
+	run() { ssh -o BatchMode=yes m1ts "$@"; }
+	rs=(rsync -a -e "ssh -o BatchMode=yes" m1ts:)
+else
+	run() { "$here/m1tb" -o BatchMode=yes "$@"; }
+	rs=(rsync -a -e "$here/m1tb" m1tb:)
+fi
+
+"${rs[@]}"/var/lib/m1power-s2r/ "$out/m1power-s2r/"
+run 'journalctl -k -b 0 --no-pager -o short-monotonic' > "$out/kernel-b0.txt" || true
+run 'journalctl -k -b -1 --no-pager -o short-monotonic' > "$out/kernel-b-1.txt" 2>&1 || true
+run 'journalctl --list-boots --no-pager | tail -5' > "$out/boots.txt" || true
+run 'bash -s' > "$out/state.txt" <<'EOF'
+echo "uname: $(uname -a)"
+echo "cmdline: $(cat /proc/cmdline)"
+echo "boot_id: $(cat /proc/sys/kernel/random/boot_id)  uptime: $(cut -d' ' -f1 /proc/uptime) s  date: $(date -Is)"
+echo "mem_sleep: $(cat /sys/power/mem_sleep)"
+for b in /sys/class/power_supply/*; do
+	echo "psu $(basename "$b"): capacity=$(cat "$b/capacity" 2>/dev/null) status=$(cat "$b/status" 2>/dev/null) online=$(cat "$b/online" 2>/dev/null)"
+done
+echo "stage2 m1n1: $(sha256sum /boot/efi/m1n1/boot.bin 2>/dev/null | cut -c1-8)"
+nv=$(ls -d /sys/bus/nvmem/devices/spmi_nvmem* 2>/dev/null | while read d; do
+	[ "$(dd if="$d/nvmem" bs=1 skip=$((0x0201)) count=1 2>/dev/null | wc -c)" = 1 ] && echo "$d"; done | tail -1)
+echo "pmu nvmem: ${nv:-none}"
+at() { printf '%-22s' "$1"; dd if="$nv/nvmem" bs=1 skip=$(($2)) count="$3" 2>/dev/null | od -An -tx1 | tr -s ' \n' ' '; echo; }
+if [ -n "$nv" ]; then
+	at "0x0201 (start kind)" 0x0201 1
+	at "0x2621" 0x2621 1
+	at "0x9f00-0x9f1f scratch" 0x9f00 32
+	at "0xa47b fault record" 0xa47b 16
+	at "0xd000-0xd00f alarm" 0xd000 16
+fi
+EOF
+( cd "$out" && find . -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS )
+echo "$out"
+sed -n '1,4p;/^0x/p' "$out/state.txt"

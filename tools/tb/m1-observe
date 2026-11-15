@@ -1,0 +1,65 @@
+#!/bin/bash
+# Independent observer of the M1 Air, run on the M3 Max: everything here is seen from the
+# M3 Max's side of the Thunderbolt cable and timed by the M3 Max's clock, so it does not
+# depend on anything the M1 records about itself.
+#   tools/tb/m1-observe [label]      foreground; Ctrl-C stops; log in var/m1-observe/
+# Lines (ISO time, source, event):
+#   PING  up/down transitions of the M1's link-local address (5 Hz probes)
+#   LINK  thunderbolt0 carrier changes (ip monitor)
+#   KMSG  M3 Max kernel lines about thunderbolt / typec / the cio controller (peer
+#         host found / disconnected, retimers)
+#   PWR   changes in what the M3 Max sees on its USB-C ports: partner present,
+#         power role, AC online, own battery current (the M1 can source power to it)
+set -uo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+repo=$(cd "$here/../.." && pwd)
+IF=${M1TB_IF:-thunderbolt0}
+mkdir -p "$repo/var/m1-observe"
+log="$repo/var/m1-observe/$(date +%Y%m%d-%H%M%S)${1:+-$1}.log"
+emit() { printf '%s %-4s %s\n' "$(date +%FT%T.%3N)" "$1" "$2" | tee -a "$log"; }
+
+addr=$("$here/m1tb" --addr 2>/dev/null || true)
+[ -n "$addr" ] || addr=$(cat "$repo/var/m1-observe/.last-addr" 2>/dev/null || true)
+[ -n "$addr" ] && echo "$addr" > "$repo/var/m1-observe/.last-addr"
+emit INFO "observer start; M1 at ${addr:-unknown}; log $log"
+
+pids=()
+# The readers are pipelines inside subshells: kill each subshell's whole tree (ping,
+# ip monitor, journalctl), not just the subshell, or they outlive the observer.
+killtree() { local c; for c in $(pgrep -P "$1"); do killtree "$c"; done; kill "$1" 2>/dev/null; }
+stop() { trap - INT TERM; for p in "${pids[@]}"; do killtree "$p"; done; emit INFO "observer stop"; exit 0; }
+trap stop INT TERM
+
+if [ -n "$addr" ]; then
+	( ping -6 -n -O -i 0.2 -W 0.5 "$addr" 2>&1 | while IFS= read -r l; do
+		case "$l" in
+		*"bytes from"*) s=up ;;
+		*"no answer"*|*"Unreachable"*|*"unreachable"*) s=down ;;
+		*) continue ;;
+		esac
+		[ "$s" != "${prev:-}" ] && emit PING "$s ($l)"
+		prev=$s
+	done ) & pids+=($!)
+fi
+
+( ip monitor link dev "$IF" 2>&1 | while IFS= read -r l; do emit LINK "$l"; done ) & pids+=($!)
+
+( journalctl -kf -n 0 -o cat 2>/dev/null | grep --line-buffered -iE 'thunderbolt|typec|tps6598|cio|retimer' \
+	| while IFS= read -r l; do emit KMSG "$l"; done ) & pids+=($!)
+
+( while :; do
+	s=""
+	for p in /sys/class/typec/port*; do
+		case "$p" in *-partner|*-cable|*-plug*) continue ;; esac
+		n=$(basename "$p")
+		[ -e "$p-partner" ] && s+="$n:partner($(cat "$p/power_role" 2>/dev/null | grep -o '\[[a-z]*\]')) "
+	done
+	s+="ac=$(cat /sys/class/power_supply/macsmc-ac/online 2>/dev/null)"
+	cur=$(cat /sys/class/power_supply/macsmc-battery/current_now 2>/dev/null || echo 0)
+	sign=$([ "${cur#-}" = "$cur" ] && echo in || echo out)
+	[ "$s/$sign" != "${prevs:-}" ] && emit PWR "$s battery_current_uA=$cur"
+	prevs="$s/$sign"
+	sleep 1
+done ) & pids+=($!)
+
+wait
