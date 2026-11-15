@@ -38,9 +38,11 @@ CREATE INDEX IF NOT EXISTS reg_addr ON reg_read (addr);
 CREATE TABLE IF NOT EXISTS read_fault (addr INTEGER, width INTEGER, kernel TEXT, at TEXT, note TEXT);
 CREATE TABLE IF NOT EXISTS note (at TEXT, topic TEXT, text TEXT);
 CREATE VIEW IF NOT EXISTS reg_map AS
-  SELECT printf('%#x', r.addr) AS addr, r.width, r.value, r.label, b.node, b.compatible, b.driver,
-         b.power_domains, r.snapshot
-  FROM reg_read r LEFT JOIN block b ON r.addr >= b.start AND r.addr < b.start + b.size;
+  SELECT printf('%#x', r.addr) AS addr, r.width, r.value, r.label,
+         (SELECT b.node FROM block b WHERE r.addr >= b.start AND r.addr < b.start + b.size ORDER BY b.size LIMIT 1) AS node,
+         (SELECT b.driver FROM block b WHERE r.addr >= b.start AND r.addr < b.start + b.size ORDER BY b.size LIMIT 1) AS driver,
+         r.snapshot
+  FROM reg_read r;
 """
 
 
@@ -122,11 +124,11 @@ def regs(c, sid, out, labels):
                 lab[int(m.group(1), 16)] = m.group(2).strip()
     n = 0
     for l in open(out, errors="replace"):
-        m = re.match(r"(0x[0-9a-f]+) ([48]) (0x[0-9a-f]+)\s*$", l.strip())
+        m = re.match(r"(0x[0-9a-f]+) ([48]) ((?:0x)?[0-9a-f]+)\s*$", l.strip())  # mrd prints 0 as 0000000000
         if m:
             a = int(m.group(1), 16)
             c.execute("INSERT INTO reg_read VALUES (?,?,?,?,?,?)",
-                      (sid, a, int(m.group(2)), m.group(3), lab.get(a, ""), os.path.basename(out)))
+                      (sid, a, int(m.group(2)), "%#0*x" % (2 + 2 * int(m.group(2)), int(m.group(3), 16)), lab.get(a, ""), os.path.basename(out)))
             n += 1
     c.commit()
     print(n, "reads")

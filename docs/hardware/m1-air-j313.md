@@ -93,3 +93,24 @@ range), UART / I2C / SPI data registers, the NVMe controller, unmapped gaps betw
 Because an M1 crash re-trains the Thunderbolt link and the M3 Max has reset itself after link
 events (memory: m3-silent-resets-tb-link), deliberate crash-risk reads are done with the cable
 out, or accepted explicitly.
+
+## Register coverage (2026-11-16, awake, stock kernel, no cable)
+
+83,002 words read with `tools/regmap/scan.sh` (Wi-Fi, fast mode with slow re-stepping after a crash,
+page/block skipping after repeated faults); values in the database only.
+
+| Block | Words read | Faults | Notes |
+|---|---|---|---|
+| PMGR 0x23b700000 (0x14000) | 20480 | 0 | 159 non-zero words on five pages (+0x0, +0x4000, +0x8000, +0xc000, +0x10000): the 146 power-state words and their neighbours |
+| PMGR always-on 0x23d280000 (0x4000) | 4096 | 0 | 14 non-zero words, the always-on domains' power states at +0x58..+0xc0 |
+| Watchdog 0x23d2b0000 (0x4000) + engine words | 4096 + 7 | 0 | |
+| NCO clock generator 0x23b044000 | 4096 (of 0x14000) | 0 | |
+| Pin controllers x5 | 20480 | 0 | 0x23c100000 holds 169 informative words |
+| IOMMUs (DART) x7 with their domains on | 28672 | 0 | |
+| Keyboard-backlight PWM 0x235044000 | 1024 | 9 | DT window is 0x4000 but only +0x0..+0xfff answers: every read at +0x1000 and above takes the machine down |
+| S2R driver's own words (MCC, AIC config, cluster states, wake mask/status, SPMI status, carry/TVM) | 58 | 2 | the 64-bit read of each cluster's ACC base (0x210e00000, 0x211e00000) takes the machine down |
+
+Not read yet, on purpose: coprocessors (mailboxes and firmware memory), the interrupt controller's
+event/acknowledge registers, UART / I2C / SPI / SPMI data, NVMe, PCIe, USB / ATC / Thunderbolt,
+display pipes, and every block whose power domain is not fully on (reading a powered-down block
+takes the machine down).
