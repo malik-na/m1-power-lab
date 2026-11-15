@@ -1,0 +1,68 @@
+#!/bin/bash
+# One s2idle cycle on the M1, watched from the M3 Max over the Thunderbolt cable.
+#   tools/tb/m1-s2idle-cal [seconds=60] [label]
+# Needs m1power.ko loaded on the M1 (its watchdog-BARK wake timer is the only timed wake
+# source on the stock kernel). Sequence: start m1-observe on the M3 Max; record the M1's
+# state; arm the wake timer; `systemctl suspend` (3 s later, so this ssh returns first);
+# wait for the M1 to answer again (5 min limit); record its state again; m1-collect;
+# stop the observer. Everything lands in var/m1-cal/<stamp>[-label]/.
+set -uo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+repo=$(cd "$here/../.." && pwd)
+SECS=${1:-60}
+out="$repo/var/m1-cal/$(date +%Y%m%d-%H%M%S)${2:+-$2}"
+mkdir -p "$out"
+say() { printf '%s %s\n' "$(date +%T.%3N)" "$*" | tee -a "$out/host.txt"; }
+m1() { "$here/m1tb" -o BatchMode=yes -o ConnectTimeout=3 "$@"; }
+
+snap='echo "date $(date +%s.%N) boot_id $(cat /proc/sys/kernel/random/boot_id) uptime $(cut -d" " -f1 /proc/uptime)"
+for f in /sys/power/suspend_stats/*; do echo "suspend_stats.$(basename $f) $(cat $f 2>/dev/null | tr "\n" " ")"; done
+echo "wakeup_count $(cat /sys/power/wakeup_count)"
+sed "s/^/waketimer./" /sys/kernel/debug/m1power/waketimer
+echo "battery $(cat /sys/class/power_supply/macsmc-battery/{capacity,status,current_now,voltage_now} | tr "\n" " ")"
+echo "ac $(cat /sys/class/power_supply/macsmc-ac/online)"
+for p in /sys/class/typec/port?; do echo "typec.$(basename $p) role=$(cat $p/power_role) partner=$([ -e $p-partner ] && echo yes || echo no)"; done
+echo "wifi.$(iw dev wlan0 get power_save 2>&1 | tr -d " ")"
+gw=$(ip -4 route show default | awk "{print \$3; exit}")
+echo "wifi.gateway_ping $(ping -c 10 -i 0.2 -W 1 -q $gw 2>&1 | tail -2 | tr "\n" " ")"'
+# Wi-Fi is only read, never changed: a stuck power-save state after resume (high latency,
+# no throughput) is a finding to report, not something this script fixes.
+
+"$here/m1-observe" "cal${2:+-$2}" > "$out/observer.txt" 2>&1 &
+obs=$!
+sleep 2
+
+say "pre-state"
+m1 "$snap" > "$out/pre.txt" || { say "M1 not reachable; abort"; kill -TERM $obs; exit 2; }
+boot0=$(awk '/^date/{print $4}' "$out/pre.txt")
+m1 'grep -q "^armed 0" /sys/kernel/debug/m1power/waketimer' || { say "wake timer already armed; abort"; kill -TERM $obs; exit 2; }
+
+say "arming the wake timer for $SECS s and suspending in 3 s"
+m1 "echo $SECS > /sys/kernel/debug/m1power/waketimer && systemd-run --quiet --no-block --on-active=3s --unit=m1cal-suspend systemctl suspend && date +%s.%N" > "$out/arm.txt" \
+	|| { say "arm/suspend request failed"; kill -TERM $obs; exit 2; }
+t_req=$(tail -1 "$out/arm.txt")
+say "requested at M1 clock $t_req"
+
+sleep 8
+deadline=$((SECONDS + SECS + 300))
+back=""
+while [ $SECONDS -lt $deadline ]; do
+	if m1 true 2>/dev/null; then back=yes; break; fi
+	sleep 1
+done
+if [ -z "$back" ]; then
+	say "M1 did not answer within $((SECS + 300)) s of the request"
+else
+	say "M1 answers ssh again"
+	sleep 5
+	m1 "$snap" > "$out/post.txt"
+	m1 'journalctl -b 0 -k --no-pager -o short-monotonic --since "-10min" | grep -iE "PM:|suspend|resume|wake|m1power|s2idle|Freezing|Restarting" | tail -60' > "$out/kernel-sleep.txt"
+	boot1=$(awk '/^date/{print $4}' "$out/post.txt")
+	[ "$boot0" = "$boot1" ] && say "same boot ($boot1): resumed" || say "BOOT CHANGED ($boot0 -> $boot1): it rebooted"
+	"$here/m1-collect" "cal" > "$out/collect.txt" 2>&1
+fi
+sleep 2
+kill -TERM $obs; wait $obs 2>/dev/null
+say "observer timeline:"
+grep -vE ' INFO ' "$out/observer.txt" | tee -a "$out/host.txt"
+echo "$out"

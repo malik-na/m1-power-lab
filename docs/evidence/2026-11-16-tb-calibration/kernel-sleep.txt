@@ -1,0 +1,12 @@
+[ 2295.020018] m1-air-omarchy kernel: m1power: loading out-of-tree module taints kernel.
+[ 2295.020046] m1-air-omarchy kernel: m1power: module verification failed: signature and/or required key missing - tainting kernel
+[ 2295.027013] m1-air-omarchy kernel: m1power: 1445 SMC keys (read-only), 146 PMGR domains, wake timer ready
+[ 2349.993021] m1-air-omarchy kernel: PM: suspend entry (s2idle)
+[ 2350.005008] m1-air-omarchy kernel: Freezing user space processes
+[ 2350.837321] m1-air-omarchy kernel: Freezing user space processes completed (elapsed 0.001 seconds)
+[ 2350.837902] m1-air-omarchy kernel: Freezing remaining freezable tasks
+[ 2350.837928] m1-air-omarchy kernel: Freezing remaining freezable tasks completed (elapsed 0.000 seconds)
+[ 2350.837954] m1-air-omarchy kernel: printk: Suspending console(s) (use no_console_suspend to debug)
+[ 2350.847264] m1-air-omarchy kernel: Restarting tasks: Starting
+[ 2350.847287] m1-air-omarchy kernel: Restarting tasks: Done
+[ 2350.847379] m1-air-omarchy kernel: PM: suspend exit

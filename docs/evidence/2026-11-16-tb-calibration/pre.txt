@@ -1,0 +1,37 @@
+date 1794774673.339123368 boot_id b294f0de-bbe3-411f-82c2-e640b345468c uptime 5364.68
+suspend_stats.fail 0 
+suspend_stats.failed_freeze 0 
+suspend_stats.failed_prepare 0 
+suspend_stats.failed_resume 0 
+suspend_stats.failed_resume_early 0 
+suspend_stats.failed_resume_noirq 0 
+suspend_stats.failed_suspend 0 
+suspend_stats.failed_suspend_late 0 
+suspend_stats.failed_suspend_noirq 0 
+suspend_stats.last_failed_dev  
+suspend_stats.last_failed_errno 0 
+suspend_stats.last_failed_step  
+suspend_stats.success 2 
+wakeup_count 77
+waketimer.channel 0
+waketimer.irq 151
+waketimer.irq_wake 1
+waketimer.armed 0
+waketimer.armed_at_boot_ns 0
+waketimer.deadline_boot_ns 0
+waketimer.fired_chunks 0
+waketimer.fired_total 0
+waketimer.spurious_fires 0
+waketimer.last_fire_boot_ns 0
+waketimer.consecutive_spurious 0
+waketimer.pending_wake 0
+waketimer.suspending 0
+waketimer.pm_notifier 1
+waketimer.storm_disabled 0
+waketimer.last_error -
+battery 42 Charging 1419000 11924000 
+ac 1
+typec.port0 role=[source] sink partner=yes
+typec.port1 role=source [sink] partner=yes
+wifi.Powersave:off
+wifi.gateway_ping 10 packets transmitted, 10 received, 0% packet loss, time 1807ms rtt min/avg/max/mdev = 2.685/3.329/4.155/0.531 ms 

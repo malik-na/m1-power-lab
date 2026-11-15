@@ -1,0 +1,32 @@
+2026-11-16T02:01:11.145 INFO observer start; M1 at fe80::ef53:e661:bae2:c013%thunderbolt0; log /home/naeem/Projects/m1-power-lab/var/m1-observe/20261116-020110-cal-stock-s2idle.log
+2026-11-16T02:01:11.148 PING up (64 bytes from fe80::ef53:e661:bae2:c013%thunderbolt0: icmp_seq=1 ttl=64 time=0.310 ms)
+2026-11-16T02:01:11.154 PWR  port0:partner([sink]) port2:partner([sink]) ac=1 battery_current_uA=7933000
+2026-11-16T02:01:20.940 LINK 4: thunderbolt0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc fq state DOWN group default 
+2026-11-16T02:01:20.941 LINK     link/ether 02:00:46:a2:b4:71 brd ff:ff:ff:ff:ff:ff
+2026-11-16T02:01:20.943 LINK     altname enx020046a2b471
+2026-11-16T02:01:21.336 PING down (no answer yet for icmp_seq=49)
+2026-11-16T02:01:21.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:166: path_configuration_space_rx_path_tear_down - null_port_index=0, physical_queue_
+2026-11-16T02:01:21.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:70: path_configuration_space_tx_path_tear_down - source_port=1, null_port_index=0.
+2026-11-16T02:02:18.972 LINK 4: thunderbolt0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq state UP group default 
+2026-11-16T02:02:18.973 LINK     link/ether 02:00:46:a2:b4:71 brd ff:ff:ff:ff:ff:ff
+2026-11-16T02:02:18.974 LINK     altname enx020046a2b471
+2026-11-16T02:02:19.388 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: ration_space_null.c:140: RX path: null port=0, queue=1, target port=1, hopid=1
+2026-11-16T02:02:19.389 KMSG thunderbolt-apple-acio 701ac0000.cio: RTKit: syslog message: iguration_space_tx.c:57: TX path: src port=1, null port=0, hopid=8
+2026-11-16T02:02:21.546 PING up (64 bytes from fe80::ef53:e661:bae2:c013%thunderbolt0: icmp_seq=144 ttl=64 time=2049 ms)
+Done                       ping -6 -n -O -i 0.2 -W 0.5 "$addr" 2>&1 | while IFS= read -r l; do
+    case "$l" in 
+        *"bytes from"*)
+            s=up
+        ;;
+        *"no answer"* | *"Unreachable"* | *"unreachable"*)
+            s=down
+        ;;
+        *)
+            continue
+        ;;
+    esac; [ "$s" != "${prev:-}" ] && emit PING "$s ($l)"; prev=$s;
+done
+Done                       ip monitor link dev "$IF" 2>&1 | while IFS= read -r l; do
+    emit LINK "$l";
+done
+2026-11-16T02:11:43.195 INFO observer stop
