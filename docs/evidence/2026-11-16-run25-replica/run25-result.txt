@@ -1,0 +1,1 @@
+VERDICT ENTERED run 25: the entry was asked for at 02:22:51.626; if this is the last line, the machine went down and came back through a boot (see the next boot's record)

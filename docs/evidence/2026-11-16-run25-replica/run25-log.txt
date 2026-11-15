@@ -1,0 +1,206 @@
+[run25 02:22:08.619] kernel 7.2.11-labsep14 | #77 SMP PREEMPT_DYNAMIC Sat Nov 14 11:40:38 UTC 2026 | boot_id 1834d9b5-7d85-4d7c-a3b5-03ba8682f9a1
+[run25 02:22:08.620] cmdline: root=UUID=4f4d5801-524f-4f54-8000-000000000001 rw rootflags=subvol=@,x-systemd.device-timeout=0 zswap.enabled=0 rootfstype=btrfs user4k=on rd.luks.name=6b1a5e0c-729c-42ad-b6ce-c6982ef535fa=root rd.luks.key=6b1a5e0c-729c-42ad-b6ce-c6982ef535fa=/omarchy/luks-key:UUID=4f4d5801-424f-4f54-8000-000000000001 quiet splash loglevel=0 systemd.show_status=false rd.udev.log_level=0 vt.global_cursor_default=0 plymouth.ignore-serial-consoles panic=10 systemd.watchdog_sec=0 watchdog.open_timeout=180 maclab.lab_boot=1 apple_s2r_rs.enable=1 apple_cpu_hotplug=park apple_s2r_rs.dry=0 apple_s2r_rs.alarm_secs=60 apple_s2r_rs.net_wd1_secs=170 apple_s2r_rs.disp_park=1 pmgr_pwrstate.always_on=fpwm1,gfx,sio_busif,sio maclab.job=j1115-205114-6163
+[run25 02:22:08.622] job environment (names only): _ HOME INVOCATION_ID JOURNAL_STREAM LANG MACLAB_JOB MACLAB_OUT MACLAB_SKIP_ON_SCREEN MACLAB_TEST MEMORY_PRESSURE_WATCH MEMORY_PRESSURE_WRITE PATH PWD SHLVL SYSTEMD_EXEC_PID USER 
+[run25 02:22:08.644] note: an earlier boot's lab job (j1114-053847-9715, Naeem's 'real' test) loaded apple_sep; the enclave's state resets on reboot
+=== the driver's lines in the boot log (raw)
+[    0.052380] apple_s2r_rs: boot core L1D CCSIDR 0x700fe03a: line 64 bytes, 8 ways, 128 sets
+[    0.052389] apple_s2r_rs: wake path: mailbox at 0x803894a40, 8 cpus, rvbar 0x8037c4000, boot core 0x0 in slot 0, resumes 0, resume entry will be 0x935339060
+[    0.052393] apple_s2r_rs: enabled for "mem": dry=0 alarm_secs=60 net_wd1_secs=170 disp_park=1
+[    0.052399] apple_s2r_rs: mcc: channel control +0x00c found 070a0100 070a0100 070a0100 070a0100 070a0100 070a0100 070a0100 070a0100 now 070a1100 070a1100 070a1100 070a1100 070a1100 070a1100 070a1100 070a1100: bit 12 set on 8 of 8
+[    0.053903] apple_s2r_rs: address audit: 332 addresses, 198 checked against the live tree, 0 differ, 134 not in the tree (sourced in the audit): entries allowed
+[    0.053914] apple_s2r_rs: selftest: the SPMI controller's own driver is not bound
+[    0.053976] apple_s2r_rs: selftest: polled read of power-chip byte 0x9f01: Ok(()) value 0x2f, 12 us
+[    0.053977] apple_s2r_rs: selftest: SPMI controller 0 pending words before [0, 35000000, 0, 0, 0, 0, 0, b870300, 0] after [0, 35000000, 0, 0, 0, 0, 1, b870300, 0]
+[    0.053980] apple_s2r_rs: selftest: SPMI controller 1 pending words before [0, 35000000, 0, 0, 0, 0, 0, 300000, 0] after [0, 35000000, 0, 0, 0, 0, 0, 300000, 0]
+[    0.053995] apple_s2r_rs: selftest: polled read of 0x9f04-07: Ok(()) value 98 7d 06 00
+[    0.054008] apple_s2r_rs: selftest: polled read of 0x9f0c: Ok(()) value 8f
+[    0.054032] apple_s2r_rs: selftest: polled write of 0x9f0a = 0x74: Ok(()); read back Ok(()) value 0x74
+[    0.054033] apple_s2r_rs: selftest: as found 0x23b734000 = 0x00000000
+[    0.054034] apple_s2r_rs: selftest: as found 0x23b77c000 = 0x00000000
+[    0.054036] apple_s2r_rs: selftest: as found 0x23b778000 = 0x00000000
+[    0.054037] apple_s2r_rs: selftest: as found 0x23b738004 = 0x00000000
+[    0.054038] apple_s2r_rs: selftest: as found 0x23b738008 = 0x00000000
+[    0.054039] apple_s2r_rs: selftest: as found 0x23b748000 = 0x00000000
+[    0.054040] apple_s2r_rs: selftest: as found 0x23b748400 = 0x00000000
+[    0.054041] apple_s2r_rs: selftest: as found 0x23b748800 = 0x00000000
+[    0.054042] apple_s2r_rs: selftest: as found 0x23b748c00 = 0x00000000
+[    0.054043] apple_s2r_rs: selftest: passed; an entry is allowed
+the boot chain's count line on this boot: [end]
+[run25 02:22:08.662] resume mailbox: /chosen/asahi,s2r-mailbox = 0000000803894a40[end] ; loader versions: stage 1 v1.6.1-dirty / stage 2 unknown
+[run25 02:22:08.669] driver's wake path line: [    0.052389] apple_s2r_rs: wake path: mailbox at 0x803894a40, 8 cpus, rvbar 0x8037c4000, boot core 0x0 in slot 0, resumes 0, resume entry will be 0x935339060
+[run25 02:22:08.678] driver's bit-12 line: [    0.052399] apple_s2r_rs: mcc: channel control +0x00c found 070a0100 070a0100 070a0100 070a0100 070a0100 070a0100 070a0100 070a0100 now 070a1100 070a1100 070a1100 070a1100 070a1100 070a1100 070a1100 070a1100: bit 12 set on 8 of 8
+[run25 02:22:08.823] channel control words read 070a1100 x8 by /dev/mem
+[run25 02:22:08.842] perf-state words before the entry (E P, word:bit42): 0000040000105105:1 000004000010f10f:1 
+[run25 02:22:08.852] pwm: 235044000.pwm bound to apple-pwm ; live tree status okay ; kbd_backlight brightness 0
+[run25 02:22:08.919] kept on: domain sio_busif kept on by always_on=;domain sio kept on by always_on=;domain fpwm1 kept on by always_on=;domain gfx kept on by always_on=; gfx word now 1000230f ; sio_busif 1400024f sio 1f0000ff fpwm1 000002ff
+[run25 02:22:08.927] boot core L1D: [    0.052380] apple_s2r_rs: boot core L1D CCSIDR 0x700fe03a: line 64 bytes, 8 ways, 128 sets ; sysfs cpu0 L1d 64K
+[run25 02:22:08.938] AOP endpoints (bit n = 0x20 + n): [    1.651416] apple_aop 24ac00000.aop: AFK endpoints from 0x20: announced 0x01f7 started 0x01f7
+[run25 02:22:08.948] display drivers: dcp [apple-dcp] dcpext [apple-dcp] ; modules: asahi appledrm dcp_fabric_core 
+[run25 02:22:08.999] display words before the entry: rmx 1f0000ff disp0_fe 000020ff dispext_fe 000023ff dispext_cpu0 1404024f disp0_cpu0 1404024f
+[run25 02:22:09.003] power chip 0x0201 before the entry: 04 (04 expected after the cold start)
+[run25 02:22:09.007] controller keys CLSP / CLWK at probe: CLSP type ui64 size 8 flags 0x84 read 8: 00 00 00 00 00 00 00 00; CLWK type ui64 size 8 flags 0x84 read 8: d6 1d 1c f1 6b 00 00 00; [end]
+[run25 02:22:09.010] driver, from the running kernel: alarm_secs=60 dry=0 net_wd1_secs=170 ; mem_sleep: s2idle [deep]
+=== boot log, order: the self-test against the SPMI controller's driver, nvmem and the reboot driver
+323:[    0.053914] apple_s2r_rs: selftest: the SPMI controller's own driver is not bound
+324:[    0.053976] apple_s2r_rs: selftest: polled read of power-chip byte 0x9f01: Ok(()) value 0x2f, 12 us
+325:[    0.053977] apple_s2r_rs: selftest: SPMI controller 0 pending words before [0, 35000000, 0, 0, 0, 0, 0, b870300, 0] after [0, 35000000, 0, 0, 0, 0, 1, b870300, 0]
+326:[    0.053980] apple_s2r_rs: selftest: SPMI controller 1 pending words before [0, 35000000, 0, 0, 0, 0, 0, 300000, 0] after [0, 35000000, 0, 0, 0, 0, 0, 300000, 0]
+327:[    0.053995] apple_s2r_rs: selftest: polled read of 0x9f04-07: Ok(()) value 98 7d 06 00
+328:[    0.054008] apple_s2r_rs: selftest: polled read of 0x9f0c: Ok(()) value 8f
+329:[    0.054032] apple_s2r_rs: selftest: polled write of 0x9f0a = 0x74: Ok(()); read back Ok(()) value 0x74
+339:[    0.054043] apple_s2r_rs: selftest: passed; an entry is allowed
+877:[    6.940020] macsmc-reboot macsmc-reboot: Handling reboot and poweroff requests via SMC
+[run25 02:22:09.049] nvmem (/sys/bus/nvmem/devices/spmi_nvmem3): 0x9f04-07 = 98 7d 06 00 ; 0x9f0c = 8f ; 0x9f0a = 74 ; 0x9f01 = 30
+[run25 02:22:09.051] self-test logged: 0x9f04-07 -> [Ok(()) 98 7d 06 00] ; 0x9f0c -> [Ok(()) 8f] ; write of 0x9f0a -> [Ok(()) Ok(()) 74]
+[run25 02:22:09.051] READ  MATCH: polled 0x9f04-07 = 98 7d 06 00 and 0x9f0c = 8f, the same through nvmem
+[run25 02:22:09.052] WRITE MATCH: polled write 0x74 to 0x9f0a, polled read-back 74, nvmem 74
+[run25 02:22:09.061] scratch 0x9f00-1f through nvmem: 00 30 00 30 98 7d 06 00 00 00 74 00 8f 00 00 00 94 07 00 c0 08 00 0f bf 00 00 a9 00 aa f3 07 00
+[run25 02:22:09.076] before: fault record 0xa47b (16) 00 1c 04 00 00 00 00 00 00 00 00 00 00 00 00 00 | 0xa67b (16) b0 46 28 75 60 1c 64 37 58 08 c1 a6 4a 98 04 36 | 0x9f03 30 | 0x0201 04 | 0x2621 00
+=== files of the acceptance test on this machine
+[run25 02:22:09.080] ok acceptance.sh 2fa113b52a79
+[run25 02:22:09.083] ok params.sh 27d4685655d9
+[run25 02:22:09.086] ok enter.sh 20a779384804
+[run25 02:22:09.088] ok pmu-read.sh 4a872568cfdc
+[run25 02:22:09.090] ok window-time.sh 68b48b3e7c6c
+[run25 02:22:09.093] ok pmp-state.sh ac71768c2f3e
+[run25 02:22:09.095] ok driver-params.sh a554197820cb
+[run25 02:22:09.098] ok enter-dry.sh 3a527fed6a12
+[run25 02:22:09.100] ok params-dry.sh 78467aa8ac88
+=== dry run of the acceptance cycle (stub in place of the write; own output folder /run/m1power-s2r-dry)
+[run25 02:22:15.643] dry run passed: acceptance.sh cycle 60 reached the write (exit 1; its verdicts are void, nothing was suspended)
+[run25 02:22:15.647] battery: 64% Charging charge_now 1994000 energy_now 22731600 ; ac_online 1
+[run25 02:22:15.779] bound: 23d0d9300.spmi=apple-spmi 23d2b0000.watchdog=apple-watchdog 23e400000.smc=macsmc 242400000.sep= 24ac00000.aop=apple_aop 
+[run25 02:22:15.802] apple_pmp modules loaded: 1 (the PMP is NOT started in this run) ; PMP state: not-started
+=== SPMI controllers' interrupt words as found (enable 0x20.., pending 0x60..; 9 words each), read only
+  controller 0 (primary power chip): enable 0 0 0 0 0 0 0 0 0 | pending 0 35000000 0 0 0 0 1 b870300 0
+  controller 1: enable 0 0 0 0 0 0 0 0 0 | pending 0 35000000 0 0 0 0 0 300000 0
+=== baseline lxbase1 (read-only, unchanged)
+02:22:15.838 lxbase1 on m1-air-omarchy, kernel 7.2.11-labsep14, uptime 27.27 s; read-only
+cmdline: root=UUID=4f4d5801-524f-4f54-8000-000000000001 rw rootflags=subvol=@,x-systemd.device-timeout=0 zswap.enabled=0 rootfstype=btrfs user4k=on rd.luks.name=6b1a5e0c-729c-42ad-b6ce-c6982ef535fa=root rd.luks.key=6b1a5e0c-729c-42ad-b6ce-c6982ef535fa=/omarchy/luks-key:UUID=4f4d5801-424f-4f54-8000-000000000001 quiet splash loglevel=0 systemd.show_status=false rd.udev.log_level=0 vt.global_cursor_default=0 plymouth.ignore-serial-consoles panic=10 systemd.watchdog_sec=0 watchdog.open_timeout=180 maclab.lab_boot=1 apple_s2r_rs.enable=1 apple_cpu_hotplug=park apple_s2r_rs.dry=0 apple_s2r_rs.alarm_secs=60 apple_s2r_rs.net_wd1_secs=170 apple_s2r_rs.disp_park=1 pmgr_pwrstate.always_on=fpwm1,gfx,sio_busif,sio maclab.job=j1115-205114-6163
+power chip through ['spmi_nvmem3'] (spmi devices: 0-0f spmi-0):
+  0x0201                                   04
+  0x2621                                   00
+  scratch 0x9f00-1f (counter = 0x9f02)     00 30 00 30 98 7d 06 00 00 00 74 00 8f 00 00 00 94 07 00 c0 08 00 0f bf 00 00 a9 00 aa f3 07 00
+  alarm block 0xd000-0f                    01 02 74 1c 1c 13 07 00 d4 7d 06 00 00 00 00 00
+  fault shadow 0xa47b (16 bytes)           00 1c 04 00 00 00 00 00 00 00 00 00 00 00 00 00
+02:22:15.840 power words (target 3:0, actual 7:4, status 27:24, auto flag 28): nub_sram 0x1000030f | debug_auth 0x1000030f | nub_spmi1 0x1400024f | nub_spmi0 0x1400024f | nub_aon 0x1f0002ff | msg 0x000002ff | debug_usb 0x1000030f | sep 0x1f0020ff | sbr 0x1f0000ff | pms 0x1f0000ff | pmgr_soc_ocla 0x00000200 | ispsens0 0x04000200 | ispsens1 0x04000200 | ispsens2 0x04000200 | ispsens3 0x04000200 | pcie_ref 0x1f0000ff | sio 0x1f0000ff | sio_cpu 0x1f0000ff | fpwm1 0x000002ff | i2c2 0x00000200 | i2c4 0x00000200 | aes 0x00000300 | spi0 0x00000200 | spi1 0x00000200 | spi2 0x00000200 | spi3 0x00000200 | spi4 0x00000200 | uart_n 0x00000200 | uart1 0x00000200 | uart2 0x00000200 | uart3 0x00000200 | uart4 0x00000200 | uart5 0x00000200 | uart6 0x00000200 | uart7 0x00000200 | uart8 0x00000200 | mca1 0x00000200 | mca2 0x000002ff | mmx 0x0f000300 | dispext_cpu0 0x1404024f | pmp 0x1f0000ff | pms_sram 0x0f000300 | apcie_gp 0x1f0020ff | ans2 0x1000230f | gfx 0x1000230f | apcie_st 0x1000020f | atc0_pcie 0x000003ff | atc1_pcie 0x000003ff | isp_set4 0x00000200 | disp0_cpu0 0x1404024f | sio_busif 0x1400024f | pms_busif 0x1f0002ff | nub_fabric 0x1f0003ff | imx 0x1f0000ff | smx 0x1f0000ff | rmx 0x1f0000ff | dcs0 0x1f0003ff | dcs1 0x1f0003ff | dcs2 0x1f0003ff | dcs3 0x1f0003ff | dcs4 0x1f0003ff | dcs5 0x1f0003ff | dcs6 0x1f0003ff | dcs7 0x1f0003ff | mcc 0x1f0000ff
+  PMGR 0x4c200                       0x23b74c200 = 0x00000004
+  PMGR block's last words 0x4fff8    0x23b74fff8 = 0x00000003
+  PMGR 0x4fffc                       0x23b74fffc = 0x00000001
+  AIC info word                      0x23b100004 = 0x000a0380
+02:22:15.840 watchdog block 0x23d2b0000 +0x00..0x2c: 3691037b 00000000 00000000 00000000 06dda3e1 55d4a800 00000000 00000004 1c28fe79 07270e00 00000000 00000000
+  WD0 count 0x3691037b alarm 0x0 control 0x0 | watchdog 1 count 0x6dda3e1 alarm 0x55d4a800 (60.0 s) control 0x4 | WD2 count 0x1c28fe79 alarm 0x7270e00 control 0x0
+  one second later: watchdog 1 count 0x1257d4e (0.80 s) alarm 0x55d4a800 control 0x4
+02:22:16.840 engine block 0x23d2b8000 +0x00..0x3c: 00000003 00000000 00000000 00000000 a7118805 38876762 f002c25e d0fdbe44 00000000 00000000 00000002 00000000 00000000 00000000 00000000 00000000
+02:22:16.840 wake masks 00000000 00000040 00000000 00000000 00000000 | pending 00000000 00000000 00000000 00000000 00000000 -> pending lines []
+  aop      0x24a400000: run control +0x44 0x00000010 ; status +0x48 0x0000002c ; inbox control +0x8110 0x00020001 ; outbox control +0x8114 0x00020001   -> status bit 1 (stopped) 0, bit 5 1, bit 3 1, bit 2 1, bit 0 0
+  smc      0x23e400000: run control +0x44 0x00000010 ; status +0x48 0x00000028 ; inbox control +0x8110 0x00020001 ; outbox control +0x8114 0x00020001   -> status bit 1 (stopped) 0, bit 5 1, bit 3 1, bit 2 0, bit 0 0
+  pmp      0x23bc00000: run control +0x44 0x00000000 ; status +0x48 0x0000002a ; inbox control +0x8110 0x00020001 ; outbox control +0x8114 0x00020001   -> status bit 1 (stopped) 1, bit 5 1, bit 3 1, bit 2 0, bit 0 0   (gate: pmp 0x1f0000ff)
+  sep      0x242400000: run control +0x44 0x00000000 ; status +0x48 0x00000000 ; inbox control +0x8110 0x0002ff01 ; outbox control +0x8114 0x00020001   -> status bit 1 (stopped) 0, bit 5 0, bit 3 0, bit 2 0, bit 0 0   (gate: sep 0x1f0020ff)
+  sio      0x236400000: run control +0x44 0x00000000 ; status +0x48 0x0000002a ; inbox control +0x8110 0x00020001 ; outbox control +0x8114 0x00020001   -> status bit 1 (stopped) 1, bit 5 1, bit 3 1, bit 2 0, bit 0 0   (gate: sio 0x1f0000ff, sio_cpu 0x1f0000ff)
+  ans      0x277400000: NOT READ (ans2 reads 0x1000230f)
+  dcp      0x231c00000: NOT READ (disp0_cpu0 reads 0x1404024f)
+  dcpext   0x271c00000: NOT READ (dispext_cpu0 reads 0x1404024f)
+  gfx-asc  0x206400000: NOT READ (gfx reads 0x1000230f)
+02:22:16.841 done; uptime 28.27 s
+=== baseline lxbase2 (read-only, unchanged)
+02:22:16.864 lxbase2 on m1-air-omarchy, kernel 7.2.11-labsep14, uptime 28.29 s; read-only
+holding: this process on cpu[0], busy child 5226 on cpu4
+02:22:17.065 cluster words E / P: 0xf / 0xf
+  0x23b748000 = 0x00000000 (bit 0 0) ; poll word 0x23b7483e0 = 0x00616100 (bit 1 0)
+  0x23b748400 = 0x00000000 (bit 0 0) ; poll word 0x23b7487e0 = 0x007f7f00 (bit 1 0)
+  0x23b748800 = 0x00000000 (bit 0 0) ; poll word 0x23b748be0 = 0x00000000 (bit 1 0)
+  0x23b748c00 = 0x00000000 (bit 0 0) ; poll word 0x23b748fe0 = 0x006c6c00 (bit 1 0)
+  E 0x210e20020 sample 0: 0x0000040000105105  bit 22 0, bit 7 0, bits 15:12 0x5, bits 4:0 0x5   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  E 0x210e20020 sample 1: 0x0000040000105105  bit 22 0, bit 7 0, bits 15:12 0x5, bits 4:0 0x5   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  E 0x210e20020 sample 2: 0x0000040000105105  bit 22 0, bit 7 0, bits 15:12 0x5, bits 4:0 0x5   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  E 0x210e20020 sample 3: 0x0000040000105105  bit 22 0, bit 7 0, bits 15:12 0x5, bits 4:0 0x5   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  E 0x210e20020 sample 4: 0x0000040000105105  bit 22 0, bit 7 0, bits 15:12 0x5, bits 4:0 0x5   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  E +0x48400 0x210e48400: 0x8003b20026f02400  bit 63 1   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  E +0x40240 0x210e40240: 0x0002000026f00000  bit 63 0   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  E +0x40250 0x210e40250: 0x8001b20026f02400  bit 63 1   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  E +0x20660 0x210e20660: 0x0000000000000000  bit 63 0   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  E +0x48080 0x210e48080: 0x0000000000000000  bit 63 0   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  P 0x211e20020 sample 0: 0x000004000010f10f  bit 22 0, bit 7 0, bits 15:12 0xf, bits 4:0 0xf   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  P 0x211e20020 sample 1: 0x000004000010f10f  bit 22 0, bit 7 0, bits 15:12 0xf, bits 4:0 0xf   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  P 0x211e20020 sample 2: 0x000004000010f10f  bit 22 0, bit 7 0, bits 15:12 0xf, bits 4:0 0xf   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  P 0x211e20020 sample 3: 0x000004000010f10f  bit 22 0, bit 7 0, bits 15:12 0xf, bits 4:0 0xf   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  P 0x211e20020 sample 4: 0x000004000010f10f  bit 22 0, bit 7 0, bits 15:12 0xf, bits 4:0 0xf   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  P +0x48400 0x211e48400: 0x8001b2005df05200  bit 63 1   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  P +0x40240 0x211e40240: 0x000100005df00000  bit 63 0   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  P +0x40250 0x211e40250: 0x8001b2005df05200  bit 63 1   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  P +0x20660 0x211e20660: 0x0000000000000000  bit 63 0   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+  P +0x48080 0x211e48080: 0x0000000000000000  bit 63 0   (cluster words before 0xf / 0xf, after 0xf / 0xf)
+02:22:17.266 done, busy child ended; uptime 28.69 s
+[run25 02:22:17.270] GATE: WAITING up to 600 s for the charger to be out and both ports empty
+[run25 02:22:17.280] gate: ac_online=1 status=Charging typec_partners=2 port_supplies_online=2 usb_devices=0
+[run25 02:22:32.089] gate: ac_online=1 status=Charging typec_partners=1 port_supplies_online=1 usb_devices=0
+[run25 02:22:42.135] gate: ac_online=0 status=Discharging typec_partners=0 port_supplies_online=0 usb_devices=0
+[run25 02:22:46.163] GATE PASSED: ac_online=0 status=Discharging typec_partners=0 port_supplies_online=0 usb_devices=0 ; battery 64 %
+[run25 02:22:46.186] 0x2808 preset: status before 01000100;before 0x2808 = 05;write 05 reply 00008f30 ack 1;after 0x2808 = 05;after, second read 0x2808 = 05;status after 01000100;RESULT 05;
+[run25 02:22:46.217] sep: start; power word 1f0020ff
+[run25 02:22:46.231] sep: modprobe apple-sep xart_writes=0 provision_keybag=0 xart_guard=2
+[run25 02:22:46.247] sep: modprobe rc=0
+[run25 02:22:46.254] sep: parameters as loaded: xart_writes=unreadable provision_keybag=unreadable xart_guard=unreadable 
+[run25 02:22:47.281] sep: system booted after ~2s
+[run25 02:22:50.454] sep: bring-up ended: [   67.120546] apple_sep 242400000.sep: hwrng: survey failed after 5 attempts (EIO) ; uptime now 67.16
+[run25 02:22:50.476] sep: power word 1400224f with its driver loaded
+[run25 02:22:51.512] sep: power word with its driver loaded and idle, 50 samples over 1.00 s: 1000230f x35, 1400224f x15; first and changes (s:word): 0.000:1400224f 0.301:1000230f
+=== the Secure Enclave driver's own lines in the kernel log (and any refused module parameter)
+[   63.386803] apple_sep 242400000.sep: discover: endpoint 0x10 (type 1, msg0 0x02020202100100fd); 4 known
+[   63.386809] apple_sep 242400000.sep: discover: endpoint 0x13 (type 0, msg0 0x7861726d130000fd); 5 known
+[   63.386814] apple_sep 242400000.sep: discover: endpoint 0x13 (type 1, msg0 0x02020202130100fd); 5 known
+[   63.387604] apple_sep 242400000.sep: discover: endpoint 0x0e (type 0, msg0 0x686463700e0000fd); 6 known
+[   63.387613] apple_sep 242400000.sep: discover: endpoint 0x0e (type 1, msg0 0x010101010e0100fd); 6 known
+[   63.464777] apple_sep 242400000.sep: discover: endpoint 0x14 (type 0, msg0 0x68696265140000fd); 7 known
+[   63.464785] apple_sep 242400000.sep: discover: endpoint 0x14 (type 1, msg0 0x01010101140100fd); 7 known
+[   64.000791] apple_sep 242400000.sep: attach: 7 endpoints advertised in 20 messages
+[   64.000809] apple_sep 242400000.sep: xART: using /chosen/apfs-preboot-uuid
+[   65.599760] apple_sep 242400000.sep: discover: endpoint 0x08 (type 0, msg0 0x7362696f080000fd); 8 known
+[   65.599784] apple_sep 242400000.sep: discover: endpoint 0x08 (type 1, msg0 0x01010101080100fd); 8 known
+[   65.612257] apple_sep 242400000.sep: discover: endpoint 0x17 (type 0, msg0 0x736b646c170000fd); 9 known
+[   65.612266] apple_sep 242400000.sep: discover: endpoint 0x17 (type 1, msg0 0x01010101170100fd); 9 known
+[   65.612503] apple_sep 242400000.sep: discover: endpoint 0x0c (type 0, msg0 0x737365200c0000fd); 10 known
+[   65.612509] apple_sep 242400000.sep: discover: endpoint 0x0c (type 1, msg0 0x010101010c0100fd); 10 known
+[   65.612935] apple_sep 242400000.sep: discover: endpoint 0x0a (type 0, msg0 0x736372640a0000fd); 11 known
+[   65.612941] apple_sep 242400000.sep: discover: endpoint 0x0a (type 1, msg0 0x010101010a0100fd); 11 known
+[   65.818540] apple_sep 242400000.sep: discover: endpoint 0x12 (type 0, msg0 0x736b7320120000fd); 12 known
+[   65.818552] apple_sep 242400000.sep: discover: endpoint 0x12 (type 1, msg0 0x02010201120100fd); 12 known
+[   66.080890] apple_sep 242400000.sep: sks: capability word 2, IPC header version 2
+[   66.288521] apple_sep 242400000.sep: hwrng: survey attempt 1 failed (EIO); retrying
+[   66.497890] apple_sep 242400000.sep: hwrng: survey attempt 2 failed (EIO); retrying
+[   66.704600] apple_sep 242400000.sep: hwrng: survey attempt 3 failed (EIO); retrying
+[   66.912426] apple_sep 242400000.sep: hwrng: survey attempt 4 failed (EIO); retrying
+[   67.120546] apple_sep 242400000.sep: hwrng: survey failed after 5 attempts (EIO)
+=== acceptance preflight (changes nothing)
+== preflight (nothing is changed, no suspend) ==
+parameter file: /var/lib/m1power-s2r/run1/params.sh sha256 27d4685655d99475940a634ed570c2c05fc936d1450c9fa1b237275518a6631b (none = the values in this script)
+alarm by the driver: 60 s after its last stage (no wakealarm is written)
+machine: apple,j313
+mem_sleep: [deep]
+power chip 0x0201 reads '04'
+KBD_EVDEV is empty: A7 will be UNDECIDED
+swap is active: A5 will be UNDECIDED (the marker could leave RAM)
+battery: Discharging, charge 2008000 uAh, charger online=0
+preflight ok
+[run25 02:22:51.550] acceptance preflight exit 0
+[run25 02:22:51.561] last state before the entry: gate passes: ac_online=0 status=Discharging typec_partners=0 port_supplies_online=0 usb_devices=0 ; uptime 68.27
+[run25 02:22:51.590] 0x2808 right before the entry: status before 01000100;after 0x2808 = 05;after, second read 0x2808 = 05;status after 01000100;RESULT 05;
+[run25 02:22:51.614] sep: power word 1000230f with its driver still loaded; device bound to: [apple_sep]; it is unloaded by enter.sh directly before the write
+[run25 02:22:51.632] controller keys CLSP / CLWK before the entry: CLSP type ui64 size 8 flags 0x84 read 8: 00 00 00 00 00 00 00 00; CLWK type ui64 size 8 flags 0x84 read 8: d6 1d 1c f1 6b 00 00 00; [end]
+[run25 02:22:51.633] ENTRY: acceptance.sh cycle 60 now
+== preflight (nothing is changed, no suspend) ==
+parameter file: /var/lib/m1power-s2r/run1/params.sh sha256 27d4685655d99475940a634ed570c2c05fc936d1450c9fa1b237275518a6631b (none = the values in this script)
+alarm by the driver: 60 s after its last stage (no wakealarm is written)
+machine: apple,j313
+mem_sleep: [deep]
+power chip 0x0201 reads '04'
+KBD_EVDEV is empty: A7 will be UNDECIDED
+swap is active: A5 will be UNDECIDED (the marker could leave RAM)
+battery: Discharging, charge 2008000 uAh, charger online=0
+preflight ok
+== cycle single: 60 s ==
+suspending now; scheduled wake at Mon Nov 16 02:23:53 AM IST 2026. Do not touch the machine.
+If the machine comes back through a boot instead of into this script: run '/var/lib/m1power-s2r/run1/acceptance.sh postmortem' (or '/var/lib/m1power-s2r/run1/acceptance.sh series') after it.
+enter: current random source is [none], not the enclave's: no read before the unload
+enter: rmmod apple-sep rc=0 at 02:22:53.943 (begun 02:22:53.932)

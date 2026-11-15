@@ -1,0 +1,24 @@
+== cycle single: 60 s ==
+== postmortem of cycle single ==
+parameters now: file /var/lib/m1power-s2r/run1/params.sh sha256 27d4685655d99475940a634ed570c2c05fc936d1450c9fa1b237275518a6631b; at the entry: file /var/lib/m1power-s2r/run1/params.sh sha256 27d4685655d99475940a634ed570c2c05fc936d1450c9fa1b237275518a6631b
+RAW: this boot started 21 s after the recorded entry (entry 1794775973, boot start 1794775994)
+kernel then: Linux m1-air-omarchy 7.2.11-labsep14 #77 SMP PREEMPT_DYNAMIC Sat Nov 14 11:40:38 UTC 2026 aarch64 GNU/Linux; build id: #77 SMP PREEMPT_DYNAMIC Sat Nov 14 11:40:38 UTC 2026 
+command line then: root=UUID=4f4d5801-524f-4f54-8000-000000000001 rw rootflags=subvol=@,x-systemd.device-timeout=0 zswap.enabled=0 rootfstype=btrfs user4k=on rd.luks.name=6b1a5e0c-729c-42ad-b6ce-c6982ef535fa=root rd.luks.key=6b1a5e0c-729c-42ad-b6ce-c6982ef535fa=/omarchy/luks-key:UUID=4f4d5801-424f-4f54-8000-000000000001 quiet splash loglevel=0 systemd.show_status=false rd.udev.log_level=0 vt.global_cursor_default=0 plymouth.ignore-serial-consoles panic=10 systemd.watchdog_sec=0 watchdog.open_timeout=180 maclab.lab_boot=1 apple_s2r_rs.enable=1 apple_cpu_hotplug=park apple_s2r_rs.dry=0 apple_s2r_rs.alarm_secs=60 apple_s2r_rs.net_wd1_secs=170 apple_s2r_rs.disp_park=1 pmgr_pwrstate.always_on=fpwm1,gfx,sio_busif,sio maclab.job=j1115-205114-6163
+driver parameters then: dry=0 alarm_secs=60 net_wd1_secs=170 disp_park=1 
+PMP before the entry: not-started 
+boot id then 1834d9b5-7d85-4d7c-a3b5-03ba8682f9a1, now 7bac7f7e-a240-4482-a159-4be282725141
+power chip then: 0201=04 2621=00 2808= 9f02=00 a47b=001c d000..0f=0102e67647130700d47d060000000000
+power chip now:  0201=01 2621=00 2808= 9f02=00 a47b=001c d000..0f=030250ce8f1307008613070001000000
+entered 1794775973, alarm 1794776033, this boot started 1794775994: 21 s after the entry
+ENDING (a reading of the raw seconds, used in no verdict): at no known time; kind of restart: wake-restart; operator's act: unknown
+recorded time from the E cluster word to the release: 112 us (limit 52000)
+NAMED DEVIATION from SPEC R13: watchdog 1 armed at 170 s as this run's net
+A1 UNDECIDED 0x0201 04 -> 01: not a known signature
+   note: A2 not judged: the stay of about 9 s is under POWER_MIN_S=3600
+A3 FAIL the wake lies 49 s or more before the alarm: woken by something else
+A6 PASS restart counter 00 and fault bytes 001c unchanged
+A4 FAIL the machine came back through a boot; it did not wake into the same boot (boot id changed)
+A5 FAIL RAM marker lost with the boot; memory across the sleep is not shown
+   note: A7 to A10 not judged: the devices were brought up by a boot, not by a wake
+FIRST-ENTRY READING: ending 'at no known time', restart 'wake-restart', 0x0201 04 -> 01; A1, A2, A3, A6 as above
+CYCLE single: FAIL as a sleep-and-wake cycle (3 FAIL, 1 UNDECIDED)
