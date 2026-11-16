@@ -11,6 +11,7 @@ printf 'p.write32(0x23d2b0000 + 0x1c, 0); print("WDT off", hex(p.read32(0x23d2b0
 timeout 60 bash -c "until tail -n 40 $O | grep -q 'wake handler registered'; do sleep 0.5; done" && echo "real S2R armed $(date +%T)" || echo "real_s2r_on did not confirm"
 # cont() over the FIFO does not resume (2026-11-16, Python 3.14); end the shell's input instead:
 # the console exits and the hypervisor continues the guest. Later shells get EOF at once.
-kill $(ps -eo pid,args | awk '$2=="sleep" && $3=="7200" {print $1}') 2>/dev/null
-timeout 30 bash -c "until [ \$(stat -c %Y $R/vuart.log) -gt \$(( \$(date +%s) - 5 )) ]; do sleep 1; done" && echo "guest running again $(date +%T)" || echo "guest did not resume"
+kill $(cat $S/hvin.holder) 2>/dev/null
+# The trace grows while the guest runs (the console can be silent for minutes).
+timeout 30 bash -c "until [ \$(stat -c %Y $R/s2r-trace-$T.jsonl) -gt \$(( \$(date +%s) - 5 )) ]; do sleep 1; done" && echo "guest running again $(date +%T)" || echo "guest did not resume (no trace event for 30 s)"
 grep -a -E '\[s2r-real\]|WDT off' $O | tail -8

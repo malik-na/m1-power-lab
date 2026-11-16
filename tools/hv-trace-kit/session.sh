@@ -115,10 +115,11 @@ console)
     # "multiple access on port", each reader reopens the port, and the reopen storm reaches the
     # Mac as DTR toggles (2026-11-16: five stale readers, hypervisor link dead in every run).
     # exec: no shell wrapper is left for a kill to hit while the reader lives on.
-    exec 9>/tmp/m1n1-console.lock
-    flock -n 9 || { echo "another console reader holds /tmp/m1n1-console.lock: $(pgrep -af 'vuart.log' | head -3)"; exit 1; }
-    echo "XNU console on ${sec} (auto = USB 1209:316d interface 02) -> $RUN/vuart.log (Ctrl-C to quit; reconnects)"
-    exec "$PY" - "$sec" "$RUN/vuart.log" <<'PYEOF'
+    lock="${M1N1_CONSOLE_LOCK:-/tmp/m1n1-console.lock}"; vlog="${VUART_LOG:-$RUN/vuart.log}"
+    exec 9>"$lock"
+    flock -n 9 || { echo "another console reader holds $lock; stop it first (harness/stop.sh)"; exit 1; }
+    echo "XNU console on ${sec} (auto = USB 1209:316d interface 02) -> $vlog (Ctrl-C to quit; reconnects)"
+    exec "$PY" - "$sec" "$vlog" <<'PYEOF'
 import os, sys, time, serial
 dev, path = sys.argv[1], sys.argv[2]
 
