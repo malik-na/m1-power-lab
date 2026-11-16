@@ -13,3 +13,22 @@ Use the five default Matt Pocock triage labels. See `docs/agents/triage-labels.m
 ### Domain docs
 
 Use the single-context layout. See `docs/agents/domain.md`.
+
+## Operator corrections: the rules and what enforces them
+
+When Naeem corrects you, fix the mistake and add its rule here. A rule that is here already and
+has nothing enforcing it is a repeat: enforce it in the same change. Drop a rule once its mistake
+cannot happen.
+
+| Rule | Corrected on | What enforces it |
+|---|---|---|
+| A hypervisor run starts with nothing left from an earlier run on the M1's ports, and exactly one console reader. | 2026-11-16 (five stale readers broke six runs) | `harness/lib.sh` `hv_preflight` in `go135.sh` / `golinux.sh` refuses, naming the pids; the run script starts and stops its own reader; `session.sh console` takes a lock. Test: `harness/test-lib.sh` (pytest `tests/core/test_hv_harness.py`). |
+| Stop host processes by pid, never with `pkill -f` / `pgrep -f` (they match the calling shell). | 2026-11-16 (twice) | `harness/stop.sh` and `hv_run_guests` match the command's own argument. Nothing stops a hand-typed `pkill -f`: use `stop.sh`. |
+| Wait on a run's own files, not on a log shared between runs. | 2026-11-16 (a wait matched an earlier run's text; a false "guest did not resume") | The run scripts write `vuart-<tag>.log`; the drive scripts judge progress by `s2r-trace-<tag>.jsonl`. |
+| Drive the M1 over Thunderbolt (`tools/tb/`), not through the lab, while the cable is in. | 2026-11-16 | `tools/tb/m1-bootonce` (boot a test kernel once), `tools/tb/m1-hvboot` (to the m1n1 proxy), `tools/tb/m1tb`. Judgment: nothing fails if you call `lab`. |
+| Do not hand Naeem a check or a step you can do: read the state, look at the M1's screen, reboot it yourself. Ask for his hands only when no tool reaches (a power cycle with the proxy dead, a macOS login). | 2026-11-16 (three times) | `tools/tb/m1-look` (the screen), `harness/hv-reboot.sh` (reboot from the hypervisor or proxy), the guest m1n1 keeps watchdog 1 armed. Judgment beyond that. |
+| Never state a cause you have not read. Say "unknown" when the readings do not tell (a restart: his power cycle, a watchdog or a crash?). Once you have asked him something, wait for his answer; do not act on a side effect as if it answered. | 2026-11-16 (twice) | Judgment. Memory: never-assume-always-validate. |
+| Before a hypervisor run, know what else is plugged into the M3 and what holds its ports. | 2026-11-16 | `hv_preflight` covers the ports. What is plugged in: judgment (`ls /sys/bus/usb/devices`). |
+| Several changes per run, chosen from readings; not one fix per run. | 2026-11-16 | Judgment. |
+| Never offer to stop, and do not slow down for risk to the M1: it is a dedicated test machine, anything recoverable from DFU is allowed. Naeem says when to stop. The M3 is not to be put at risk. | 2026-11-16 (twice) | Judgment. Memory: full-throttle-no-stop-offers. |
+
