@@ -807,6 +807,15 @@ class S2RTrace:
         lst = list(self.SNAP_REGS)
         if CFG["snap_wake"]:
             lst += [(0x23d004000 + o, f"nub-wake+{o:#04x}") for o in range(0, 0x50, 4)]
+        # 2026-11-16: the power-state, AON and clock words the engine's wake sequences read
+        # (S2R_SNAP_LIST: JSON [[addr, name], ...]), so two systems' states at the commit
+        # can be set side by side. Only addresses already read safely under Linux.
+        n_core = len(lst)
+        if os.environ.get("S2R_SNAP_LIST"):
+            try:
+                lst += [(int(a), str(n)) for a, n in json.load(open(os.environ["S2R_SNAP_LIST"]))]
+            except Exception as e:
+                print(f"[s2r] S2R_SNAP_LIST not loaded: {e}")
         t = time.time()
         for addr, name in lst:
             try:
@@ -816,7 +825,7 @@ class S2RTrace:
         self.rec("snap", text=tag, regs=regs, ms=round((time.time() - t) * 1000, 1))
         print(f"[s2r] snapshot '{tag}' ({len(regs)} regs, {(time.time() - t) * 1000:.0f} ms) logged")
         if CFG["console"] >= 1:
-            for k, v in regs.items():
+            for k, v in list(regs.items())[:n_core]:
                 print(f"[s2r]   {k} = {v}")
 
     # ---------------------------------------------------------- hv log tee
