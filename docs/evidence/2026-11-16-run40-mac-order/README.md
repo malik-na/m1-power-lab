@@ -33,3 +33,22 @@ m1n1's real-S2R path; Linux goes down through its own final routine (`s2r_seq` e
 core's last stage, stage-1 m1n1's wake vector). Next: Linux as the hypervisor guest **with real S2R
 pass-through**, so Linux's device state commits through the same path macOS used. A wake there puts
 the fault in Linux's commit path; a reset ~5 s after the commit puts it in the device state.
+
+## Linux as the hypervisor guest with real S2R pass-through: not reached (runs lx5-lx7)
+
+Guest image `var/hvlinux/guest-run40hv.bin` (run40 kernel and initramfs, run 40's command line
+with `wake_path=0`, `m1hv.delay=120`), arming by `tools/hv-trace-kit/harness/drivelinux.sh`.
+All three froze within 1.3-2.5 s of the guest start, before Linux reached user space, so real
+S2R was never armed:
+
+| Run | Console reader | Freeze |
+|---|---|---|
+| lx5 | opened after "Jumping" | t 1.33 s, guest m1n1 starting CPU 5 |
+| lx6 | opened 25 s after "Jumping" | t 2.34 s, Linux hw-breakpoint init, trapped DBG* msr on CPU 3 |
+| lx7 | running before the guest | t 2.43 s, same place (DBGBVR4_EL1 on CPU 3) |
+
+The hypervisor stops answering (SIGINT gives no shell, proxy hung, power cycle needed). lx3/lx4
+(run39 image) passed the same burst of ~200 trapped debug-register writes across the CPUs; the
+freeze sits inside that burst at slightly different writes each time. Not the console reader
+(lx7). Cause not known; the next step is the hypervisor's handling of concurrent sysreg traps,
+not another retry.
