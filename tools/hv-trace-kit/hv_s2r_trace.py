@@ -120,6 +120,11 @@ CFG = {
     # ring, AOP 0x85 -> its RX ring), read through the AOP DART. 1: AP commands only,
     # 2: the AOP's replies and reports too (very noisy at boot).
     "afk_dump": _env_int("S2R_AFK_DUMP", 1),
+    # 2026-11-16: the DRAM controllers. At the commit DCSn+0x7b0 reads 0 under macOS 13.5 and 3
+    # under Linux. 1: trace the AP's writes to the eight DRAM controllers and the memory-cache
+    # controller from the guest's start, and sample DCS0+0x7b0, ps_dcs0 and power gate +0xd8 at
+    # every AP->AOP message (needs afk_dump: read from its synchronous hook), logged on change.
+    "dcs": _env_int("S2R_DCS", 0),
     # group-3 bisection: "0" no hook, "pass" hook installed but transparent, "1" block the
     # AOP's ep0 SET_AP_POWER/SET_IOP_POWER (swapped for a PING, its PONG relabelled as the ack)
     "block_aop": os.environ.get("S2R_BLOCK_AOP", "0"),
@@ -286,7 +291,7 @@ class S2RTrace:
             if m is not None and write:
                 m.note_sram_write(addr, data, nbytes)
             return
-        lvl = 2 if (ps is not None or region in ("pmgr", "clkgen", "aic")
+        lvl = 2 if (ps is not None or kind == "dcs" or region in ("pmgr", "clkgen", "aic")
                     or str(region).startswith("cluster")) else 1
         self.say(lvl, f"cpu{evt.flags.CPU} {'W' if write else 'R'}{nbytes * 8} {addr:#x} = {data:#x}"
                       f" [{ps or rname}] pc {evt.pc:#x}")
@@ -368,7 +373,20 @@ class S2RTrace:
         self.hv.u.write(addr, val, width)
         self._mbox(ev, b, "aop-mbox", "aop", True, val)
 
+    def _dcs_sample(self):
+        v = tuple(self.hv.p.read32(a) for a in (0x2002007b0, 0x2003c07b0, 0x23b700300, 0x23b71c0d8))
+        if v != getattr(self, "_dcs_last", None):
+            self._dcs_last = v
+            txt = "dcs-state DCS0+0x7b0 %#x DCS7+0x7b0 %#x ps_dcs0 %#x pwrgate+0xd8 %#x" % v
+            self.rec("dcs-state", text=txt)
+            self.say(1, txt)
+
     def _afk_pre(self, m0, m1):
+        if CFG["dcs"]:
+            try:
+                self._dcs_sample()
+            except Exception as e:
+                self.rec("afk-error", text=f"dcs sample: {e}")
         ep, opc = m1 & 0xff, m0 >> 48
         if ep < 0x20:
             return
@@ -457,6 +475,15 @@ class S2RTrace:
             kinds += [("aop", "aop")]
         if CFG["mbox_extra"]:
             kinds += [("sep", "sep"), ("sio", "sio"), ("ans", "ans")]
+        if CFG["dcs"]:
+            for i in range(8):
+                self._add(S2R_IDENT_ALWAYS, 0x200200000 + 0x40000 * i, 0x20000, TraceMode.ASYNC,
+                          f"dcs{i}", kind="dcs", write=True, read=False)
+            for i in range(4):
+                self._add(S2R_IDENT_ALWAYS, 0x200000000 + 0x40000 * i, 0x4000, TraceMode.ASYNC,
+                          f"mcc-plane{i}", kind="dcs", write=True, read=False)
+            self._add(S2R_IDENT_ALWAYS, 0x200100000, 0x4000, TraceMode.ASYNC, "mcc-global",
+                      kind="dcs", write=True, read=False)
         for kind, node in kinds:
             b = self._asc_base(node, FALLBACK[kind])
             if kind == "aop" and CFG["afk_dump"]:
