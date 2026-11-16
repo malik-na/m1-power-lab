@@ -1,4 +1,4 @@
-# Runs 36 and 37: the ~5 s restart after the release is not watchdog 2, and not the PMP (2026-11-16)
+# Runs 36-38: the ~5 s restart after the release is a firmware reset, not watchdog 2, not the PMP, not a wake (2026-11-16)
 
 ## Premise check before run 36
 
@@ -50,4 +50,22 @@ change the restart.
 - SMC, AOP and NVMe syslogs in the next boot say nothing about it; the SMC keys that look like
   causes (MSXN, MSXn) are the same in every snapshot today.
 
-Open (run 38): wake or reset. Raw state: var/m1-state/*-run36, *-run37, pmu-*.txt (private).
+## Run 38 (j1116-074211-b310, kernel 7.2.11-run38 = bd065c9c9)
+
+Run 36 with `wake_mask=4`: every AP wake source masked (the 60 s alarm kept: the frozen acceptance
+script needs it). Record `d2 01 04 05 64 01 00 01`: watchdog 2 moved to 100 s.
+rmmod 13:13:35.60, USB4 host disconnected 13:13:38.82, the M1's type-C partner gone between
+13:13:43.67 and 13:13:44.69: **~5 s after the release again, with no wake source open.**
+0x9f02 unchanged.
+
+## Conclusion of the three-run budget
+
+Under system firmware 13.5 the M1 is reset ~5 s after the release by something outside the AP:
+not watchdog 2, not an AP wake source, not counted by the power chip as a watchdog reset, and
+unmoved by the PMP idle or by atc0_common/gfx/i2c0/i2c3. The candidates left are the SMC and
+power-chip firmware (and the AOP), which only a trace of macOS 13.5 can separate. Per the agreed
+rule, the next step is the m1n1 hypervisor: trace macOS 13.5's entry with the two SPMI controllers
+(0x23d0d9300, 0x23d0e1300) and the AOP mailbox added to the traced zones, which the 2026-11-07
+traces did not cover.
+
+Raw state: var/m1-state/*-run36, *-run37, pmu-*.txt (private).
