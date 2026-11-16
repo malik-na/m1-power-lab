@@ -111,6 +111,9 @@ CFG = {
     "cyc_read": _env_int("S2R_CYC_READ", 1),   # read CYC_OVRD_EL1 back in the exit-cpu hook
     "dcp": _env_int("S2R_DCP", 1),             # trace the DCP/DCPEXT RTKit mailboxes too
     "aop": _env_int("S2R_AOP", 1),             # trace the AOP RTKit mailbox too
+    # 2026-11-16 (13.5 trace): the SEP, SIO and NVMe (ANS) mailboxes, never traced before;
+    # the SEP behaves differently under 13.5 (it gates itself ~1.4 s after its last exchange).
+    "mbox_extra": _env_int("S2R_MBOX_EXTRA", 1),
     # group-3 bisection: "0" no hook, "pass" hook installed but transparent, "1" block the
     # AOP's ep0 SET_AP_POWER/SET_IOP_POWER (swapped for a PING, its PONG relabelled as the ack)
     "block_aop": os.environ.get("S2R_BLOCK_AOP", "0"),
@@ -129,6 +132,9 @@ FALLBACK = {
     "dcp": 0x231c00000,       # display coprocessor ASC (J313 ADT /arm-io/dcp)
     "dcpext": 0x271c00000,    # external-display coprocessor ASC (/arm-io/dcpext)
     "aop": 0x24a400000,       # always-on processor ASC (/arm-io/aop reg[0]; t8103.dtsi aop_mbox@24a408000)
+    "sep": 0x242400000,       # Secure Enclave ASC (t8103.dtsi sep_mbox@242408000)
+    "sio": 0x236400000,       # SIO ASC (t8103.dtsi sio_mbox@236408000)
+    "ans": 0x277400000,       # NVMe ASC (t8103.dtsi ans_mbox@277408000)
 }
 
 # Expected /arm-io/pmgr reg[] on t8103 (J313 ADT, fabric/adt.pkl). A zone is
@@ -264,7 +270,7 @@ class S2RTrace:
         if kind == "spmi":
             self._spmi(evt, base, region, write, data)
             return
-        if kind in ("smc", "pmp", "dcp", "dcpext", "aop"):
+        if kind in ("smc", "pmp", "dcp", "dcpext", "aop", "sep", "sio", "ans"):
             self._mbox(evt, base, region, kind, write, data)
             return
         if kind == "sram":
@@ -305,7 +311,7 @@ class S2RTrace:
             mgmt_hot = "mgmt" in o and o.get("mgmt") in ("SET_AP_POWER", "SET_IOP_POWER", "IOP_POWER_ACK")
             smc_hot = o.get("smc") in ("WRITE_KEY", "RW_KEY") or "sram_addr" in o
             self.say(1 if (mgmt_hot or smc_hot or kind == "pmp") else 2, o["text"])
-            if kind in ("dcp", "dcpext", "aop") and o.get("ep") == 0:
+            if kind in ("dcp", "dcpext", "aop", "sep", "sio", "ans") and o.get("ep") == 0:
                 self.say(1, o["text"])
             if "sram_addr" in o and self.armed:
                 self._add_sram_zone()
@@ -340,6 +346,8 @@ class S2RTrace:
             kinds += [("dcp", "dcp"), ("dcpext", "dcpext")]
         if CFG["aop"]:
             kinds += [("aop", "aop")]
+        if CFG["mbox_extra"]:
+            kinds += [("sep", "sep"), ("sio", "sio"), ("ans", "ans")]
         for kind, node in kinds:
             b = self._asc_base(node, FALLBACK[kind])
             self._add(S2R_IDENT_ALWAYS, b + 0x8800, 0x10, TraceMode.ASYNC, f"{kind}-mbox",
