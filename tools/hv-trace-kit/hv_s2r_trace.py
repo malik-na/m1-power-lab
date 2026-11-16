@@ -42,6 +42,7 @@
 #   executes the sleep WFI with bit 0 set, and the guest cannot complete a real
 #   S2R; this kit captures the AP-side entry program, not a wake.
 
+import struct
 import json
 import os
 import pathlib
@@ -114,6 +115,10 @@ CFG = {
     # 2026-11-16 (13.5 trace): the SEP, SIO and NVMe (ANS) mailboxes, never traced before;
     # the SEP behaves differently under 13.5 (it gates itself ~1.4 s after its last exchange).
     "mbox_extra": _env_int("S2R_MBOX_EXTRA", 1),
+    # 2026-11-16: decode the AOP's AFK ring entries behind each doorbell (AP 0xa2 -> its TX
+    # ring, AOP 0x85 -> its RX ring), read through the AOP DART. 1: AP commands only,
+    # 2: the AOP's replies and reports too (very noisy at boot).
+    "afk_dump": _env_int("S2R_AFK_DUMP", 1),
     # group-3 bisection: "0" no hook, "pass" hook installed but transparent, "1" block the
     # AOP's ep0 SET_AP_POWER/SET_IOP_POWER (swapped for a PING, its PONG relabelled as the ack)
     "block_aop": os.environ.get("S2R_BLOCK_AOP", "0"),
@@ -186,6 +191,8 @@ class S2RTrace:
         self.spmi = {}
         self.mbox = {}
         self.ps_names = {}
+        self.afk = {}
+        self.dart_aop = None
         self.zone_names = []
         self.refused = []
         self._build_ps_names()
@@ -315,6 +322,79 @@ class S2RTrace:
                 self.say(1, o["text"])
             if "sram_addr" in o and self.armed:
                 self._add_sram_zone()
+            if kind == "aop" and CFG["afk_dump"]:
+                try:
+                    self._afk(o, write)
+                except Exception as e:
+                    self.rec("afk-error", text=f"afk ep{o.get('ep')}: {e}")
+
+    # ------------------------------------------------- AOP AFK ring entries
+    # Ring setup, from the endpoint's own messages (drivers/soc/apple/aop.rs parse_ring_buf):
+    # AP 0xa1 gives the shared buffer's IOVA; AOP 0x8a/0x8b give (offset, size) in 0x40 units
+    # at bits 32-47 / 16-31. At the ring: u32 buf_size; block = (size - buf_size) / 3;
+    # rptr at +block, wptr at +2*block, entries from +3*block. Entry: magic " POI"/" POA",
+    # size, channel, type, then size bytes (EPIC header + payload), padded to the block.
+    def _afk(self, o, write):
+        ep = o.get("ep")
+        if ep is None or ep < 0x20:
+            return
+        m = int(o["msg"], 16)
+        opc = m >> 48
+        st = self.afk.setdefault(ep, {})
+        if write and opc == 0xa1:
+            st["iova"] = m & 0xffffffffffff
+        elif not write and opc in (0x8a, 0x8b):
+            st["tx" if opc == 0x8a else "rx"] = [((m >> 32) & 0xffff) * 0x40, ((m >> 16) & 0xffff) * 0x40, None]
+        elif write and opc == 0xa2:
+            self._afk_ring(ep, st, "tx")
+        elif not write and opc == 0x85 and CFG["afk_dump"] >= 2:
+            self._afk_ring(ep, st, "rx")
+
+    def _afk_read(self, iova, size):
+        if self.dart_aop is None:
+            from m1n1.hw.dart import DART
+            self.dart_aop = DART.from_adt(self.hv.u, "/arm-io/dart-aop")
+            self.dart_aop_stream = None
+            for sid in range(16):
+                try:
+                    if all(a is not None for a, _ in self.dart_aop.iotranslate(sid, iova, 4)):
+                        self.dart_aop_stream = sid
+                        break
+                except Exception:
+                    pass
+            self.rec("note", text=f"afk: AOP DART stream {self.dart_aop_stream} maps iova {iova:#x}")
+        if self.dart_aop_stream is None:
+            raise Exception(f"no AOP DART stream maps {iova:#x}")
+        return self.dart_aop.ioread(self.dart_aop_stream, iova, size)
+
+    def _afk_ring(self, ep, st, which):
+        if "iova" not in st or which not in st:
+            return
+        off, size, last = st[which]
+        base = st["iova"] + off
+        buf_size = struct.unpack("<I", self._afk_read(base, 4))[0]
+        blk = (size - buf_size) // 3
+        rptr = struct.unpack("<I", self._afk_read(base + blk, 4))[0]
+        wptr = struct.unpack("<I", self._afk_read(base + 2 * blk, 4))[0]
+        data = base + 3 * blk
+        p = 0 if last is None else last
+        n = 0
+        while p != wptr and n < 8 and p < buf_size:
+            hdr = self._afk_read(data + p, 16)
+            magic, esz, chan, ty = struct.unpack("<4I", hdr)
+            if magic not in (0x20504f49, 0x20504f41):
+                self.rec("afk", ep=ep, ring=which, ptr=p, text=f"afk ep{ep:#x} {which} bad magic {magic:#x} at {p:#x} (rptr {rptr:#x} wptr {wptr:#x})")
+                break
+            if p + 16 + esz > buf_size:
+                p = 0
+                continue
+            body = self._afk_read(data + p + 16, min(esz, 256))
+            txt = f"afk ep{ep:#x} {which} @{p:#x} chan {chan:#x} type {ty:#x} size {esz:#x}: {body.hex()}"
+            self.rec("afk", ep=ep, ring=which, ptr=p, chan=chan, type=ty, size=esz, body=body.hex(), text=txt)
+            self.say(1, txt)
+            p = (p + 16 + esz + blk - 1) // blk * blk % buf_size
+            n += 1
+        st[which][2] = wptr
 
     # ------------------------------------------------------------------ zones
     def _add(self, ident, start, size, mode, name, kind=None, read=False, write=True, base=None):
