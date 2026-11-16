@@ -1,0 +1,42 @@
+#!/bin/bash
+# Boot a test kernel once on the M1, over the Thunderbolt link (no lab involved).
+#   tools/tb/m1-bootonce <kernel.tar.zst> <tag> <cmdline-extra-file>
+# On the M1: the package's modules go to /usr/lib/modules/<krel>; an initramfs is built for it;
+# kernel and initramfs go to the ESP under s2r/<tag>/; a Limine entry "m1tb-<tag>"
+# (protocol linux) goes into its own "# m1tb:" block of limine.conf; LoaderEntryOneShot names
+# it (bootctl set-oneshot); the Mac reboots. The default entry is not touched, so the next boot
+# after this one is Omarchy again. The command line is this boot's root/LUKS part plus the
+# extra file's words.
+set -euo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+pkg=${1:?kernel.tar.zst}; tag=${2:?tag}; extra=${3:?cmdline file}
+krel=$(zstd -dc "$pkg" | tar -t | sed -n 's|^usr/lib/modules/\([^/]*\)/vmlinuz$|\1|p' | head -1)
+[ -n "$krel" ] || { echo "no usr/lib/modules/<krel>/vmlinuz in $pkg"; exit 1; }
+words=$(tr '\n' ' ' < "$extra")
+echo "kernel $krel, entry m1tb-$tag"
+cat "$pkg" | "$here/m1tb" "set -e
+tar -C / --zstd -x usr/lib/modules/$krel
+depmod $krel
+base=\$(tr ' ' '\n' < /proc/cmdline | grep -E '^(root|rw|rootflags|zswap.enabled|rootfstype|user4k|rd.luks.name|rd.luks.key)(=|\$)' | tr '\n' ' ')
+d=/boot/efi/s2r/$tag; mkdir -p \$d
+cp /usr/lib/modules/$krel/vmlinuz \$d/vmlinuz
+/usr/bin/mkinitcpio -k $krel -g \$d/initramfs.img > /tmp/m1tb-mkinitcpio-$tag.log 2>&1 || { tail -5 /tmp/m1tb-mkinitcpio-$tag.log; exit 1; }
+c=/boot/efi/limine.conf; cp \$c \$c.m1tb-bak
+python3 - \$c \"$tag\" \"\$base $words\" <<'PY'
+import sys
+p, tag, cl = sys.argv[1], sys.argv[2], ' '.join(sys.argv[3].split())
+s = open(p).read()
+b, e = '# m1tb: begin', '# m1tb: end'
+if b in s:
+    s = s[:s.index(b)] + s[s.index(e) + len(e):].lstrip('\n')
+s = s.rstrip('\n') + '\n\n' + b + '. Test kernels booted once over Thunderbolt (tools/tb/m1-bootonce).\n'
+s += '/m1tb-' + tag + '\n    comment: m1tb ' + tag + '\n    protocol: linux\n'
+s += '    path: boot():/s2r/' + tag + '/vmlinuz\n    module_path: boot():/s2r/' + tag + '/initramfs.img\n'
+s += '    cmdline: ' + cl + '\n' + e + '\n'
+open(p, 'w').write(s)
+PY
+sed -n '/# m1tb: begin/,/# m1tb: end/p' \$c | cut -c1-160
+bootctl set-oneshot m1tb-$tag
+echo oneshot: \$(bootctl status 2>/dev/null | grep -i -m1 'oneshot\|one-shot' || true)
+ls -la \$d; sync
+systemctl reboot"
