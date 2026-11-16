@@ -62,3 +62,30 @@ sends the 0xa2 commands to 0x24/0x25, and sends AP power 0x201 50 ms later.
 2. One Linux run with the AOP quiesce done as macOS does (the 0xa2 commands, the stops in its
    order with each answer waited for, AP power 0x201 acked), plus the other coprocessors' 0x201
    states from the table.
+
+## Runs 135r5 and 135r6: what macOS writes to AOP endpoints 0x24 and 0x25 (repeated, identical)
+
+The tracer reads the AFK ring entry behind each AP doorbell from a synchronous hook on the AOP send
+registers (135r3 crashed the session doing the read from an async event; 135r4 failed on the
+state it left). Both runs slept and woke with the same signature as 135r2 (breadcrumb 0x8000000,
+progress 0x22, WD2 off, AOP 0x1c 0xff0, wake status +0x20 = 0x400000): three of three.
+
+Endpoint 0x24 is the ambient light sensor and 0x25 the lid angle sensor (Linux aop_als.rs: property
+0x00 = report interval in µs, 0x16 "batch interval", 0x5c "raw interval"). Before the sleep, ALS
+reports arrive every 0.389 s. Times relative to MBSE slpw:
+
+| t (s), 135r5 / 135r6 | Endpoint | Ring entry (EPIC set property) |
+|---|---|---|
+| -6.69 / -6.72 | 0x24 ALS | 0x16 = 0; 0x5c = 0; **0x00 (interval) = 0**; ALS reports stop |
+| +0.16 / +0.17 | 0x25 LAS | **0x00 (interval) = 0** |
+| +0.17 / +0.18 | 0x24 ALS | 0x00 = 0 again |
+| +0.13..+0.41 | all eight | 0xa4 stops, each answered 0x87 (the order of the first two batches differs between runs) |
+| +0.41 / +0.41 | mgmt | AP power 0x201, echoed |
+
+After the wake macOS writes ALS 0x16 = 10000, 0x5c = 0, 0x00 = 200000 and the reports resume.
+
+Linux: aop_als.rs sets the interval to 200000 µs at probe and has no suspend path; aop_las.rs has
+none either. If the modules are bound (they are built for the run kernels: aop_als.ko, aop_las.ko;
+whether they were loaded in runs 36-38 is not recorded), the AOP keeps sampling and reporting
+through Linux's sleep. A sensor report needs the AOP's DRAM ring, which is the S2R_AOP -> AOP_DDR
+transition (sequence 4, WD2 armed, AOP handshake). This is the leading candidate, not yet tested.

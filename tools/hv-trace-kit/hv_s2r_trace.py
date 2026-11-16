@@ -43,6 +43,7 @@
 #   S2R; this kit captures the AP-side entry program, not a wake.
 
 import struct
+import types
 import json
 import os
 import pathlib
@@ -345,10 +346,38 @@ class S2RTrace:
             st["iova"] = m & 0xffffffffffff
         elif not write and opc in (0x8a, 0x8b):
             st["tx" if opc == 0x8a else "rx"] = [((m >> 32) & 0xffff) * 0x40, ((m >> 16) & 0xffff) * 0x40, None]
-        elif write and opc == 0xa2:
-            self._afk_ring(ep, st, "tx")
-        elif not write and opc == 0x85 and CFG["afk_dump"] >= 2:
-            self._afk_ring(ep, st, "rx")
+
+    def _aop_w(self, addr, val, width, **kw):
+        b = self.aop_base
+        ev = types.SimpleNamespace(addr=addr)
+        try:
+            if width == 128:
+                m0, m1 = val[0], val[1]
+                self._afk_pre(m0, m1)
+                self.hv.u.write(addr, val, 128)
+                self._mbox(types.SimpleNamespace(addr=b + 0x8800), b, "aop-mbox", "aop", True, m0)
+                self._mbox(types.SimpleNamespace(addr=b + 0x8808), b, "aop-mbox", "aop", True, m1)
+                return
+            if addr == b + 0x8808 and self.aop_m0 is not None:
+                self._afk_pre(self.aop_m0, val)
+                self.aop_m0 = None
+            elif addr == b + 0x8800:
+                self.aop_m0 = val
+        except Exception as e:
+            self.rec("afk-error", text=f"afk hook: {e}")
+        self.hv.u.write(addr, val, width)
+        self._mbox(ev, b, "aop-mbox", "aop", True, val)
+
+    def _afk_pre(self, m0, m1):
+        ep, opc = m1 & 0xff, m0 >> 48
+        if ep < 0x20:
+            return
+        st = self.afk.setdefault(ep, {})
+        if opc == 0xa2:
+            try:
+                self._afk_ring(ep, st, "tx")
+            except Exception as e:
+                self.rec("afk-error", text=f"afk ep{ep:#x} tx: {e}")
 
     def _afk_read(self, iova, size):
         if self.dart_aop is None:
@@ -430,8 +459,18 @@ class S2RTrace:
             kinds += [("sep", "sep"), ("sio", "sio"), ("ans", "ans")]
         for kind, node in kinds:
             b = self._asc_base(node, FALLBACK[kind])
-            self._add(S2R_IDENT_ALWAYS, b + 0x8800, 0x10, TraceMode.ASYNC, f"{kind}-mbox",
-                      kind=kind, write=True, read=False, base=b)
+            if kind == "aop" and CFG["afk_dump"]:
+                # Synchronous hook on the AP->AOP send registers: the ring entry behind a
+                # doorbell is read (proxy reads are safe only while the guest is held in a
+                # hook, not from an async event) before the doorbell reaches the AOP.
+                self.aop_base, self.aop_m0 = b, None
+                zone = irange(b + 0x8800, 0x10)
+                self.hv.add_tracer(zone, S2R_IDENT_ALWAYS, TraceMode.HOOK, None, self._aop_w,
+                                   region="aop-mbox")
+                self.zone_names.append((S2R_IDENT_ALWAYS, b + 0x8800, 0x10, "HOOK", "aop-mbox"))
+            else:
+                self._add(S2R_IDENT_ALWAYS, b + 0x8800, 0x10, TraceMode.ASYNC, f"{kind}-mbox",
+                          kind=kind, write=True, read=False, base=b)
             self._add(S2R_IDENT_ALWAYS, b + 0x8830, 0x10, TraceMode.ASYNC, f"{kind}-mbox",
                       kind=kind, write=False, read=True, base=b)
             self.rec("note", text=f"{kind} mailbox traced at {b + 0x8800:#x}/{b + 0x8830:#x}")
