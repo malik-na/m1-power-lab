@@ -6,6 +6,7 @@ K=/home/naeem/Projects/m1-power-lab/tools/hv-trace-kit; PY=$K/venv/bin/python; R
 S=$(cd "$(dirname "$0")" && pwd); T=${1:?tag}; shift
 source $S/m1dev.sh
 until M1N1DEVICE=$(m1dev); do sleep 0.5; done; export M1N1DEVICE; echo "proxy device $M1N1DEVICE"
+export M1N1_HV_NO_DEBUG_TRAP=${M1N1_HV_NO_DEBUG_TRAP:-1}
 export M1N1_ELF="${M1N1_ELF:-/home/naeem/m1n1/build/m1n1-raw.elf}"
 export S2R_LOG=$R/s2r-trace-$T.jsonl S2R_ARM_AT_START=${S2R_ARM_AT_START:-1} S2R_SNAP_WAKE=${S2R_SNAP_WAKE:-1}
 echo "start $(date +%T)"
