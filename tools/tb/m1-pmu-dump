@@ -1,0 +1,50 @@
+#!/bin/bash
+# Read-only dump of the M1's two power chips over the Thunderbolt cable.
+#   tools/tb/m1-pmu-dump [label]   -> var/m1-state/pmu-<stamp>[-label].txt
+# Primary chip (sera, SPMI controller 0x23d0d9300): through the kernel's nvmem device, so this
+# never issues commands on the controller Linux owns. Ranges are the ones the S2R work reads and
+# their neighbours, not the whole map: some power-chip registers clear when read.
+# Second chip (SPMI controller 0x23d0e1300, slave 0xf, no Linux driver): polled extended reads
+# from /dev/mem, one byte per command; a reply is 0, 0, header (opcode 0x38, slave 0xf), data.
+set -euo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+repo=$(cd "$here/../.." && pwd)
+out="$repo/var/m1-state/pmu-$(date +%Y%m%d-%H%M%S)${1:+-$1}.txt"
+"$here/m1tb" -o BatchMode=yes 'python3 -I -' > "$out" <<'EOF'
+import mmap, os, struct, time
+NV = "/sys/bus/nvmem/devices/spmi_nvmem0/nvmem"
+PRIMARY = [(0x0200, 0x40), (0x2600, 0x40), (0x9f00, 0x40), (0xa470, 0x20), (0xd000, 0x20)]
+SECOND = [(0x2800, 0x20), (0x0200, 0x08)]
+print("boot_id", open("/proc/sys/kernel/random/boot_id").read().strip(), "uptime", open("/proc/uptime").read().split()[0])
+with open(NV, "rb") as f:
+    for base, n in PRIMARY:
+        f.seek(base)
+        b = f.read(n)
+        for i in range(0, n, 16):
+            print("pmu0 %04x: %s" % (base + i, " ".join("%02x" % x for x in b[i:i + 16])))
+fd = os.open("/dev/mem", os.O_RDWR | os.O_SYNC)
+m = mmap.mmap(fd, 0x4000, mmap.MAP_SHARED, mmap.PROT_READ | mmap.PROT_WRITE, offset=0x23d0e0000)
+OFF = 0x1300
+rd = lambda o: struct.unpack_from("<I", m, OFF + o)[0]
+def wr(o, v): struct.pack_into("<I", m, OFF + o, v)
+def drain():
+    n = 0
+    while not rd(0) & (1 << 24) and n < 64:
+        rd(8); n += 1
+def read1(reg):
+    drain()
+    wr(4, reg << 16 | 0x8000 | 0xf << 8 | 0x38)
+    w, t = [], time.monotonic()
+    while len(w) < 4 and time.monotonic() - t < 0.02:
+        if not rd(0) & (1 << 24):
+            w.append(rd(8))
+    return "%02x" % (w[3] & 0xff) if len(w) == 4 and w[2] & 0xffff == 0x0f38 else "??"
+if not rd(0) & (1 << 8):
+    print("pmu1: controller busy (tx not empty); not read")
+else:
+    for base, n in SECOND:
+        vals = [read1(base + i) for i in range(n)]
+        for i in range(0, n, 16):
+            print("pmu1 %04x: %s" % (base + i, " ".join(vals[i:i + 16])))
+EOF
+echo "$out"
