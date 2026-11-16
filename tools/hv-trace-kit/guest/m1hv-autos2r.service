@@ -1,0 +1,11 @@
+[Unit]
+Description=m1hv: one unattended suspend-to-RAM entry under the m1n1 hypervisor
+ConditionKernelCommandLine=m1hv.autos2r=1
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/m1hv/autos2r.sh
+
+[Install]
+WantedBy=multi-user.target
