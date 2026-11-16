@@ -12,7 +12,8 @@ export S2R_LOG=$R/s2r-trace-$T.jsonl S2R_ARM_AT_START=${S2R_ARM_AT_START:-1} S2R
 echo "start $(date +%T)"
 cd $R; rm -f $S/hvin; mkfifo $S/hvin
 ( exec 3>$S/hvin; sleep 7200 ) &
-timeout ${GUEST_TIMEOUT:-7200} $PY -u /home/naeem/m1n1/proxyclient/tools/run_guest.py "$@" -m $S/arm_wdt.py -m $S/real_s2r.py -m $K/hv_s2r_trace.py \
+PROBE=(); [ -n "${M1N1_HV_WDT_CPU:-}" ] && PROBE=(-C "${GUEST_CPUS:-0123456}"); export M1N1_HV_WDT_CPU
+timeout ${GUEST_TIMEOUT:-7200} $PY -u /home/naeem/m1n1/proxyclient/tools/run_guest.py "$@" "${PROBE[@]}" -m $S/freeze_probe.py -m $S/arm_wdt.py -m $S/real_s2r.py -m $K/hv_s2r_trace.py \
   -l hv-$T.log -r ${GUEST:-/home/naeem/Projects/m1-power-lab/var/hvlinux/guest-run39.bin} \
   > run-$T.out 2>&1 < $S/hvin
 echo "run_guest exit $? $(date +%T)"
