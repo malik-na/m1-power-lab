@@ -57,3 +57,14 @@ not another retry.
 guest start in the guest m1n1's CPU 5 bring-up (trapped HID msr), as lx5 did. The debug-register
 traps are not the cause. Setup is identical to lx3/lx4 (the one missing zone in lx5-lx8, the SMC
 SRAM at 0x23fe5c000, is added only once the guest's SMC driver runs). Cause unknown.
+
+**lx9 (freeze probe; hypervisor watchdog on CPU 7, guest on CPUs 0-6):** booted to user space and
+made its entry (stopped by the driver: `cores-parked 0x0 0x7e`, seven guest cores where it expects
+eight; an artefact of the probe). 4 s after the stopped entry everything from the M1 stopped at
+once (trace, console, the AOP's 0.39 s light sensor reports). The host's stacks (SIGUSR2): main
+thread waiting to read from the M1, and its interrupt byte blocked in the serial write: the M1 no
+longer takes USB data, though the device stays enumerated. The hypervisor watchdog sent nothing.
+No M3 kernel message at any of the five freeze times. So the freezes are not tied to early boot,
+and either the hypervisor hangs in a way its watchdog cannot report over USB, or the USB link
+itself dies while the guest runs on. The guest m1n1 build now leaves watchdog 1 armed
+(`var/hvlinux/guest-run40hv-wd.bin`) so a hung hypervisor resets the Mac without a power cycle.
