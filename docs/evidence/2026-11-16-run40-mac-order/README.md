@@ -52,3 +52,8 @@ The hypervisor stops answering (SIGINT gives no shell, proxy hung, power cycle n
 freeze sits inside that burst at slightly different writes each time. Not the console reader
 (lx7). Cause not known; the next step is the hypervisor's handling of concurrent sysreg traps,
 not another retry.
+
+**lx8 (debug registers untrapped, m1n1 c288f8d4 `M1N1_HV_NO_DEBUG_TRAP=1`):** froze 1-2 s after the
+guest start in the guest m1n1's CPU 5 bring-up (trapped HID msr), as lx5 did. The debug-register
+traps are not the cause. Setup is identical to lx3/lx4 (the one missing zone in lx5-lx8, the SMC
+SRAM at 0x23fe5c000, is added only once the guest's SMC driver runs). Cause unknown.
