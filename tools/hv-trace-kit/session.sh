@@ -111,8 +111,14 @@ wait)
     ;;
 console)
     sec="${M1N1SEC:-auto}"
+    # One reader only. Several readers on the port race for its bytes; pyserial then raises
+    # "multiple access on port", each reader reopens the port, and the reopen storm reaches the
+    # Mac as DTR toggles (2026-11-16: five stale readers, hypervisor link dead in every run).
+    # exec: no shell wrapper is left for a kill to hit while the reader lives on.
+    exec 9>/tmp/m1n1-console.lock
+    flock -n 9 || { echo "another console reader holds /tmp/m1n1-console.lock: $(pgrep -af 'vuart.log' | head -3)"; exit 1; }
     echo "XNU console on ${sec} (auto = USB 1209:316d interface 02) -> $RUN/vuart.log (Ctrl-C to quit; reconnects)"
-    "$PY" - "$sec" "$RUN/vuart.log" <<'PYEOF'
+    exec "$PY" - "$sec" "$RUN/vuart.log" <<'PYEOF'
 import os, sys, time, serial
 dev, path = sys.argv[1], sys.argv[2]
 

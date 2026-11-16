@@ -68,3 +68,16 @@ No M3 kernel message at any of the five freeze times. So the freezes are not tie
 and either the hypervisor hangs in a way its watchdog cannot report over USB, or the USB link
 itself dies while the guest runs on. The guest m1n1 build now leaves watchdog 1 armed
 (`var/hvlinux/guest-run40hv-wd.bin`) so a hung hypervisor resets the Mac without a power cycle.
+
+**lx10 (USB hub out of the M3, otherwise as lx7/lx8):** froze 2.4 s after the guest start, in the
+guest driver's boot self-test. The hub is not the cause.
+
+**Five console readers on one port.** `fuser /dev/ttyACM1` during lx10's freeze: five Python console
+readers (started 13:53:04, 20:46:21, 21:09:28, 21:17:25, 22:26:37). Stopping `session.sh console`
+killed its shell and left the reader running, so each run added one. The reader reopens the port
+on any `SerialException`, and pyserial raises exactly that ("multiple access on port") when
+several readers race for the same bytes, so the port was reopened over and over; the Mac logs each
+as "ACM device opened" (2-4 in a row at every start, and as the last line before the freeze in lx5
+and lx7). Readers alive per run: one in the macOS runs, two in lx3/lx4 (no freeze), three to five
+in lx5-lx10 (all froze). Mechanism on the Mac's side not shown; untested until a run with one
+reader. `session.sh console` now takes a lock, refuses a second reader and `exec`s the reader.
