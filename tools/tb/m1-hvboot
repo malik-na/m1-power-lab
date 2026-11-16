@@ -1,0 +1,22 @@
+#!/bin/bash
+# Bring the M1 from Omarchy to the m1n1 proxy for one hypervisor run, over Thunderbolt.
+#   tools/tb/m1-hvboot [kernel.tar.zst]
+# With a kernel package: its modules are installed first (the lab agent removes test kernels'
+# modules at every boot, so a guest kernel's modules have to go back before each run).
+# Then: next boot only from the macOS volume (its boot object is m1n1), reboot, wait for the
+# proxy's USB device, and check that nothing on this Mac holds its ports.
+set -euo pipefail
+here=$(cd "$(dirname "$0")" && pwd); repo=$(cd "$here/../.." && pwd)
+S="$repo/tools/hv-trace-kit/harness"; source "$S/lib.sh"
+if [ -n "${1:-}" ]; then
+	krel=$(zstd -dc "$1" | tar -t | sed -n 's|^usr/lib/modules/\([^/]*\)/vmlinuz$|\1|p' | head -1)
+	[ -n "$krel" ] || { echo "no usr/lib/modules/<krel>/vmlinuz in $1"; exit 1; }
+	cat "$1" | "$here/m1tb" "tar -C / --zstd -x usr/lib/modules/$krel && depmod $krel && echo modules: \$(ls /usr/lib/modules | tr '\n' ' ')"
+fi
+"$here/m1tb" 'asahi-bless --set-boot-macos --next --yes | tail -1 && sync && systemctl reboot' || true
+for i in $(seq 1 60); do
+	p=$(cat /sys/bus/usb/devices/1-1/product 2>/dev/null || true)
+	case "$p" in m1n1*) echo "proxy: $p"; hv_preflight; exit $?;; esac
+	sleep 3
+done
+echo "no m1n1 proxy after 3 min"; exit 1

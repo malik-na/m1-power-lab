@@ -1,0 +1,9 @@
+#!/bin/bash
+# Look at the M1's screen through the M3 Max's camera (the two Macs face each other).
+#   tools/tb/m1-look [label]   -> var/m1-look/<stamp>[-label].jpg (path printed)
+set -euo pipefail
+repo=$(cd "$(dirname "$0")/../.." && pwd)
+out="$repo/var/m1-look/$(date +%Y%m%d-%H%M%S)${1:+-$1}.jpg"
+mkdir -p "$(dirname "$out")"
+timeout 30 ffmpeg -hide_banner -loglevel error -y -f v4l2 -i /dev/video1 -frames:v 12 -update 1 "$out"
+echo "$out"
