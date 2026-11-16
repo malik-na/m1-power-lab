@@ -43,3 +43,26 @@ alone do not switch the state; what does is not found yet.
 
 - Sample +0x7b0 from the guest's first instruction on, to find the moment it leaves 3 under macOS
   and the writes just before it (the PMGR+0x34000 block and the PMP's start are candidates).
+
+## The recipe, and the test of it (2026-11-17)
+
+- Per-write sampling under macOS (hv 135dcs3, `S2R_DCS=2`): +0x7b0 leaves 3 during XNU's
+  `DCSn+0xc = 0x070a1100` writes (bit 12), with the auto flag already on the ps_dcs words.
+- At the m1n1 proxy (no guest): bit 12 on all eight controllers alone changes nothing; adding
+  the auto flag (bit 28) on ps_dcs0-7 switches all eight to 0 at once, ps_dcs0 reads 0x1000030f
+  (gated) and gate +0xd8 reports. Sixteen writes; XNU's table and MCC words are not needed for it.
+- Once Linux runs, the same writes do nothing: live on bare metal (with and without XNU's table,
+  with the power-state words as XNU has them), and in the driver's slow part at the commit
+  (**run 42**, kernel 7.2.11-run42 = s2r-rs1-135 0008e4871, `dram_gate=1`: record byte 0x9f11 =
+  0x80, 0 of 8 switched; restart 29.8 s from release to Omarchy as before). Without XNU's table
+  the auto-flag rewrite crashed live Linux once.
+- **Switched before the guest starts** (`harness/dram_gate.py`, hv runs lx16/lx17, Linux run41):
+  all eight read 0 after the script, Linux boots and runs normally, and at its commit all eight
+  still read 0 (lx17 snapshot). **With real S2R (lx16) the M1 still restarted**: commit
+  00:35:41.44, Omarchy on Thunderbolt 00:36:11.39 (29.95 s), no wake.
+
+So the +0x7b0 state, though the engine's program reads it and Linux differs from macOS in it, is
+not what decides the restart. What still differs at the commit with it equal (lx17 against
+135snap2, 42 of 823 words): the DRAM controllers' domains are busy under Linux (ps_dcs actual f,
+gates +0xd8/+0xf0 bit 30 clear) and idle under macOS (dcs0-4 actual 4, bit 30 set); the rest is
+flag and status bits, iBoot's CTRR bounds and the watchdog words.

@@ -373,13 +373,38 @@ class S2RTrace:
         self.hv.u.write(addr, val, width)
         self._mbox(ev, b, "aop-mbox", "aop", True, val)
 
-    def _dcs_sample(self):
+    def _dcs_sample(self, trigger=""):
         v = tuple(self.hv.p.read32(a) for a in (0x2002007b0, 0x2003c07b0, 0x23b700300, 0x23b71c0d8))
-        if v != getattr(self, "_dcs_last", None):
-            self._dcs_last = v
+        key = (v[0] & 0xf, v[1] & 0xf) if CFG["dcs"] >= 2 else v
+        if key != getattr(self, "_dcs_last", None):
+            self._dcs_last = key
             txt = "dcs-state DCS0+0x7b0 %#x DCS7+0x7b0 %#x ps_dcs0 %#x pwrgate+0xd8 %#x" % v
+            if trigger:
+                txt += " after " + trigger
             self.rec("dcs-state", text=txt)
             self.say(1, txt)
+
+    # S2R_DCS=2: synchronous hook on the DRAM/MCC words and the PMGR pages XNU sets up early;
+    # each write is performed, logged, and DCS0/7+0x7b0 read back, so the write after which
+    # the state leaves 3 is named.
+    def _dcs_w(self, addr, val=None, width=None, **kw):
+        if val is None:
+            # Called as a second tracer on a word another hook owns (the hypervisor's own PMGR
+            # hook): `addr` is the event and the write has not been made yet.
+            evt = addr
+            self.rec("dcs-w", addr=f"{evt.addr:#x}", data=f"{evt.data:#x}", width=0)
+            try:
+                self._dcs_sample(trigger=f"the writes before {evt.addr:#x} = {evt.data:#x}")
+            except Exception as e:
+                self.rec("afk-error", text=f"dcs sample: {e}")
+            return
+        self.hv.u.write(addr, val, width)
+        sv = f"{val:#x}" if isinstance(val, int) else str([f"{x:#x}" for x in val])
+        self.rec("dcs-w", addr=f"{addr:#x}", data=sv, width=width)
+        try:
+            self._dcs_sample(trigger=f"write {addr:#x} = {sv}")
+        except Exception as e:
+            self.rec("afk-error", text=f"dcs sample: {e}")
 
     def _afk_pre(self, m0, m1):
         if CFG["dcs"]:
@@ -475,7 +500,18 @@ class S2RTrace:
             kinds += [("aop", "aop")]
         if CFG["mbox_extra"]:
             kinds += [("sep", "sep"), ("sio", "sio"), ("ans", "ans")]
-        if CFG["dcs"]:
+        if CFG["dcs"] >= 2:
+            hooks = [(0x200200000 + 0x40000 * i, 0x40000, f"dcs{i}") for i in range(8)]
+            hooks += [(0x200000000 + 0x40000 * i, 0x40000, f"mcc-plane{i}") for i in range(4)]
+            hooks += [(0x200100000, 0x4000, "mcc-global"), (0x23b7002f8, 0x50, "ps-mcc-dcs"),
+                      (0x23b718000, 0x4000, "pmgr-18000"), (0x23b71c000, 0x4000, "pmgr-pwrgate-h"),
+                      (0x23b734000, 0x4000, "pmgr-34000")]
+            for start, size, name in hooks:
+                zone = irange(start, size)
+                self.hv.add_tracer(zone, S2R_IDENT_ALWAYS, TraceMode.HOOK, None, self._dcs_w, region=name)
+                self.zone_names.append((S2R_IDENT_ALWAYS, start, size, "HOOK", name))
+            self._dcs_last = None
+        elif CFG["dcs"]:
             for i in range(8):
                 self._add(S2R_IDENT_ALWAYS, 0x200200000 + 0x40000 * i, 0x20000, TraceMode.ASYNC,
                           f"dcs{i}", kind="dcs", write=True, read=False)

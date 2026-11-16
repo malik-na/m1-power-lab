@@ -18,7 +18,13 @@ cat "$pkg" | "$here/m1tb" "set -e
 tar -C / --zstd -x usr/lib/modules/$krel
 depmod $krel
 base=\$(tr ' ' '\n' < /proc/cmdline | grep -E '^(root|rw|rootflags|zswap.enabled|rootfstype|user4k|rd.luks.name|rd.luks.key)(=|\$)' | tr '\n' ' ')
-d=/boot/efi/s2r/$tag; mkdir -p \$d
+d=/boot/efi/s2r/$tag
+# One test kernel on the ESP at a time (each is ~60 MB of 499): older ones go first, and a
+# partial copy of this one. 2026-11-17: a full ESP cut run42's kernel short, silently.
+for o in /boot/efi/s2r/*/; do rm -rf \"\$o\"; done
+mkdir -p \$d
+free=\$(df --output=avail -m /boot/efi | tail -1)
+[ \$free -ge 80 ] || { echo \"m1-bootonce: only \$free MB free on the ESP, need 80\"; exit 1; }
 cp /usr/lib/modules/$krel/vmlinuz \$d/vmlinuz
 /usr/bin/mkinitcpio -k $krel -g \$d/initramfs.img > /tmp/m1tb-mkinitcpio-$tag.log 2>&1 || { tail -5 /tmp/m1tb-mkinitcpio-$tag.log; exit 1; }
 c=/boot/efi/limine.conf; cp \$c \$c.m1tb-bak
