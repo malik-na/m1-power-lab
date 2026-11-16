@@ -34,6 +34,7 @@ Preconditions:
 ## Gotchas
 
 - Since the 2026-11-14 macOS 13.5 reinstall the enclave gates itself ~1.4 s after its driver's last exchange and its hwrng survey always fails (EIO): run 22-era scripts refuse unless their enclave checks use the target nibble and accept the survey line (`run26-watch.sh` does).
+- With the cable in, the type-C power roles are renegotiated at every M1 boot, including the lab's reboot into the test kernel: a doctor reading taken before the submit (M1 sourcing, ac 0) does not hold at the gate (run 27: M3 Max sourcing, M1 charging, gate timed out). Use the discharging-only gate (`run27b.sh`) and set `force-discharge` once the gate waits, then read back `Discharging`.
 - A stale type-C partner can stay on port0 after the cable is removed (no PD, no power): the strict gate never passes; it clears on the next boot.
 - `lab run` puts tests in the order given: listing `omarchy-m-test` before the script makes the lab run it first (GPU and display load before the entry).
 - The old after-script labelled `gate_record` bytes as wake sources; with `gate_record=1`, 0x9f1a / 0x9f1c-1e are wait-condition indices into `SEQ0_GATES`.
