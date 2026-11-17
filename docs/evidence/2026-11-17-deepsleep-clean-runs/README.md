@@ -890,3 +890,30 @@ answer, not yet in.
 | Whether a wake began | A marker written at the wake entry before anything else, in the boot loader (stage 1 v1.6.1-dirty), and read after the restart. The hypervisor does this with 'W' -> 'Z' at `0x9f04`/`0x9f0a`. | A boot-loader change, writing only inside `0x9f04`-`0x9f0d` (the glue's record shares those bytes). Not done. |
 | Whether the M3 missed part of it | The M3 must not sleep during a run: it was in s2idle 21:02-21:47. | An inhibitor on the M3 (`systemd-inhibit` around the run). |
 | What ends the run without hands | (1) Watchdog 1 armed by the glue just before the commit, at most 178.9 s (32-bit at 24 MHz). If the SoC stays up, it resets and that reset is itself a reading; whether it counts while powered down is unknown (det9/det10: watchdog 2 read 0.325 s at both wakes). This is a glue change, an AON register, not the power chip. (2) The alarm, already armed, which did not end ds16. (3) A reset over the cable (`tools/m1-reboot/m1-reboot.sh`, a USB-C VDM): barred, because it crashed the M3's Thunderbolt driver today. | (1) needs the implementation stage; (3) would need the M3-side risk removed first. No power-chip write outside `0x9f04`-`0x9f0d` and the alarm register is needed by any of these. |
+
+## Run ds16b (22:07): ds16 again with Naeem at the M1; on battery through the dark period
+
+Kernel ds16 again, command line ds14's (`snap=2`), `snap_k` set to 3 at run time. Naeem was at
+the M1; the M3 was kept awake.
+
+- Before: battery "Full", `charge_now` 3,274,000 µAh, on mains. Power chip before the run:
+  `0x0201` = `04`.
+- `real.sh` started 22:07:26; host disconnect on the M3 22:07:29.78. Naeem unplugged the charger
+  and the M3 cable once the screen was dark (the M3 lost the port partner between 22:07:41 and
+  22:08:03).
+- No wake at the alarm (+60 s). At about 22:18:25 Naeem pressed the space bar once: no answer
+  on the tailnet in the 30 s after. He then held the power button; kernel start 22:20:29.
+- Record: `44 43 40 00 2a 02 2b 02 3c 00` = 'C' again (the commit was reached), M = 64 (63 in
+  ds16), surprises 3 and 4 by index: 554 (`0x23b040048`) and 555 (`0x23b04004c`), SoC clock
+  words. The record's last two bytes again do not hold a third index (`3c 00`; ds16: `29 00`).
+  The glue's author states the ten bytes go out as three SPMI commands (`0x9f04`-`07`,
+  `0x9f08`-`0b`, `0x9f0c`-`0d`): in both runs the third did not land.
+- Power chip after: `0x0201` = `04`, fault shadow `0x040c00`, `0xd000` = `01`, `0xd00c` = `00`,
+  alarm 621226 s, clock at the read 622061 s; the kernel logged "PMU logged 1 boot error(s)".
+- Battery after the restart (on battery, `current_now` about -373 mA):
+  `charge_now` = `charge_full` in every sample from 22:20:48 to 22:22:40, rising 3,280,000 ->
+  3,292,000 µAh, capacity 100 %. The gauge does not count down near full, so this reading does
+  not tell how much the dark period drew (`var/deepsleep/ds16b-battery-after.txt`).
+
+Not known, still: whether the chip powered down. Read in both runs: the record is cut at the
+same place, after its second SPMI command.
