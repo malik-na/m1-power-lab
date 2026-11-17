@@ -1579,6 +1579,15 @@ Before the SoC goes down:
 - **R22 [BOTH]** `0x23b748400`=0, then `0x23b7487e0` polled until it reads `0x494900`, then
   `0x23b748800`, `0x23b748c00`, `0x23b748000` = 0; then `0x23b718000`, `0x23b718004` = 0
   (E5-8h/i). The number of polls varies (9, 6, 9).
+  **R22a [BOTH]** (added after the first runs on Linux) The same holds for each of the four
+  sub-blocks, in the order `0x23b748400`, `0x23b748800`, `0x23b748c00`, `0x23b748000`: the word
+  is read (`1` in every capture), written 0, and then the sub-block's status word 0x3e0 above
+  it (`0x23b7487e0`, `0x23b748be0`, `0x23b748fe0`, `0x23b7483e0`) is read until its low byte is
+  0: `0x494002` (6 to 9 reads) then `0x494900`; `0` at the first read; `0x494002` (2 or 3
+  reads) then `0x494900`; `0x514d02` (1 or 2 reads) then `0x515100`. Identical in all six
+  captures (`db/cap*.db`). In each final value the second and third bytes are equal. What the
+  sub-blocks are is not known. At the wake all four are written 1 again (W1-2).
+
 - **R23 [BOTH]** SIO_CPU `0x23b7001d0` written with bit 28 cleared (E5-8j). **R23a [ARTEFACT]**
   The same for SIO and SIO_BUSIF is seen only through the hypervisor's guard (A3); D gives the
   order and times: SIO, SIO_BUSIF, SIO_CPU, within 15 microseconds, immediately before R24.
