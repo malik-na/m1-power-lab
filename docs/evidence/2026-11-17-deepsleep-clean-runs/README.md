@@ -497,3 +497,161 @@ phases).
 
 This is Linux's state before the driver runs, not at its commit. What the driver's entry then
 changes is not read here.
+
+## Hypervisor round 3: macOS 13.5, the spec stage's open readings (det10, 2026-11-17 18:26-18:41)
+
+One capture by the det8/det9 recipe and build, with the same no-hands way out (the
+hypervisor's alarm 90 s after the commit). It carries readings 1, 4, 5 and 6 of the spec stage's
+list. Readings 2 and 3 are taken only as far as this capture's log goes (below).
+
+### Correction to round 2's table
+
+The phase column of `var/commit-state/macos135-det9-125words-writes.tsv` used the spec's fixed
+time windows. It has been regenerated with the phases taken from the console line before each
+write, the spec's method (section 4.1a). The phase starts relative to T:
+
+| Phase | Starts at | Marker |
+|---|---|---|
+| E1 | -7.558 | first of "Set PowerStage (4 -> 6)" / "awdl0 disable" |
+| E2 | -0.877 | "PM response took" |
+| E3 | -0.478 | "IOCPUSleepKernel enter" |
+| E4 | -0.0903 | first stop-bit record |
+| E5 | -0.0897 | first quiesce action |
+| E6 | -0.0159 | interrupt-controller quiesce action |
+
+The display-domain writes at T-0.73 are therefore in **E2** (not E3), and SIO_CPU's write at
+T-0.016 is in **E5** (not E6). By phase, det9's 194 writes are now E1 145, E2 45, E5 4. The
+round 2 text above keeps the old labels; this table and the regenerated file supersede them.
+
+### What was run
+
+- `ALARM=90 FULL_SKIP=<det8's four pages> S2R_TOUCH_FULL="0x23b300000+0x4000,0x235004000+0x4000"
+  harness/macos-up.sh det10` (18:26:46; hypervisor run start 18:27:09, READY 18:30:44, about
+  1,685 accesses/s in full logging). Same chainloaded build (`~/m1n1-next` ed07f5bb), boot
+  arguments and checks as det9: alarm "now + 90 s", "wake lands in THIS image", all three
+  watchdogs at control 0. **Addition for reading 5:** the two translator pages logged in full
+  from macOS's boot.
+- `PRE='hv.run_script(".../harness/awake_snap.py")\nawake_snap("<list>", "awake-extra")\n'
+  ARGS='commit_snap="<list>"' harness/detach135.sh det10` (18:30:51-18:30:53), with `<list>` =
+  `var/recfg/commit-snap-list-r3.json` (863 entries, 862 addresses). That is round 2's list
+  plus the four sub-block status words `0x23b7483e0`, `7e0`, `be0`, `fe0`.
+  `0x23b720030`-`48` and all 29 words of the spec's R52 / 4.1a item 3 were already in it.
+  - **Addition for readings 1 and 4:** the new `harness/awake_snap.py` reads that whole list
+    once with macOS awake, in the hypervisor shell just before the detach (snapshot
+    "awake-extra"), and puts the touch map's own 793-word list back. The wake-snapshot list
+    therefore stays at 265 words: detached mode takes at most 320.
+  - The same list is read at the commit.
+  - `detach135.sh` gained `PRE` (hypervisor-shell lines run before `detach()`).
+- `harness/detached-wake-readout.sh det10`, nobody at the M1; then `harness/hv-reboot.sh` and
+  `tools/tb/m1-pmu-dump`.
+
+Files (private): `tools/hv-trace-kit/runs/20261116-mac135/*-det10.*`;
+`var/commit-state/macos135-det10-*`; `var/recfg/commit-snap-list-r3.json`,
+`var/recfg/r52-29-words.json`; `var/m1-state/pmu-20261117-184042-after-det10.txt`.
+
+### The run
+
+| | det10 | det9 |
+|---|---|---|
+| Detach (M3) | 18:30:53 | 17:41:53 |
+| T (last core in its sleep path), from the detach | 431.378 s (about 18:38:04) | 434.399 s |
+| Asleep (wake record) | **90.18 s** | 90.28 s |
+| USB device left / back (the wake) | 18:39:33.612 / 18:39:34.224 | 17:50:36.699 / 17:50:37.312 |
+| AON wake status `+0x1c / +0x20 / +0x24` | `0x0 / 0x400000 / 0x0` | the same |
+| Log entries / dropped; accesses | 995,348 / 0; 993,447 | 1,230,245 / 0 |
+| Handled by the hypervisor alone | pmgr 30, cpustart 28, sysreg 368, secondary 7 | the same |
+| Power chip afterwards | `0xd008 = b3 49 09 00` (608691 s; the clock read 608761 s at 18:40:42, so the alarm fell at about 18:39:32); `0x9f04`: `48 00 01 3f ff ff 47 50 00` | the same pattern |
+
+- **Commit snapshot:** 862 words, 0 errors. Against det8 (792): 774 equal, 18 different.
+  Against det9: **768 equal, 24 different**. All 24 are among the words that have already
+  varied between captures:
+  - 8 `MCC.planeN+0x680/684` (`0xad1`/`0xafd` this time);
+  - `DCS1`, `2`, `4`, `5`, `6`, `7` `+0x500` (`0x1440004`, det9 `0x2440004`);
+  - `0x23b040020`;
+  - `ps_dcs0`-`3`, `ps_dcs5`;
+  - power-gate words `0x23b71c0d8`, `0f0`, `108`, `120`.
+- **Wake snapshot:** 264 words. Against det8: 262 equal, 2 different (`ps_dcs4`, `ps_dcs5`).
+- The phase starts by the console lines are E1 -7.548, E2 -0.876, E3 -0.481, E4 -0.0911,
+  E5 -0.0906, E6 -0.0157 (s from T).
+
+### The six readings
+
+1. **Sub-block status words with the sub-blocks on** (awake-extra, 18:30:5x), then their
+   commit values:
+
+   | Word | Awake | Commit |
+   |---|---|---|
+   | `0x23b7483e0` | `0x4d4d01` | `0x515100` |
+   | `0x23b7487e0` | `0x404001` | `0x494900` |
+   | `0x23b748be0` | `0x1` | `0x0` |
+   | `0x23b748fe0` | `0x404001` | `0x494900` |
+
+   The awake reads had 0 errors and did not disturb the run.
+2. **Sub-blocks and `0x23b720030`-`48` together:** taken only from what macOS itself
+   accessed (`macos135-det10-subblocks.tsv`). Between the detach and T, macOS touches the
+   sub-block words only in one burst in E5, T-0.015895 to T-0.015801. For each block it reads
+   the control word (`0x1`), writes 0, then reads its status until the low byte is 0:
+   - `7e0`: nine reads of `0x494002`, then `0x494900`;
+   - `be0`: `0x0`;
+   - `fe0`: `0x494002` x3, then `0x494900`;
+   - `3e0`: `0x514d02` x2, then `0x515100`.
+
+   The order is `400`, `800`, `c00`, `000`, the same as det9. macOS accesses none of
+   `0x23b720030`-`48` in that window.
+
+   Their awake (awake-extra) and commit values: `030` `0x14d514d` -> `0x1515151`, `034`
+   `0x1404940` -> `0x1494949`, `044` `0x1404940` -> `0x1494949`; `038` `0x1313131`, `03c`
+   `0x1262626`, `040` `0x1000000` and `048` `0x17a7a7a` are unchanged.
+
+   **Not taken:** reading `0x23b720030`.. at each sub-block write needs a read by the
+   hypervisor at those writes. Detached mode reads extra words only at the commit and at the
+   wake, and the four writes come within 0.1 ms of each other with no host attached.
+3. **When the 29 words change:** `macos135-det10-29words.tsv`. 22 of the 29 differ between
+   awake (pre-detach) and the commit. Of the 29, the only one macOS accesses between the detach
+   and T is ANS2 (4 reads). For the others the change lies somewhere in the 431 s between the
+   detach and the commit, as in G and H.
+
+   **Not taken:** periodic snapshots during the entry. They need the host's clock or a sampler
+   on the M1. The hypervisor's clock must be stopped before a real sleep (det3 and det7
+   restarted the M1 with it running), and detached mode has no sampler. This needs either a
+   hypervisor change (a periodic read of a word list into the detached log) or a capture whose
+   end is not the alarm wake. Neither was done here.
+4. **The 66 domain words with macOS awake:** read in awake-extra, 0 errors
+   (`macos135-det10-awake-vs-commit-new.tsv`; 70 rows with the four status words). Awake
+   against commit, 57 equal, 13 different:
+   - the four status words;
+   - ECPU1-3 and PCPU0-3 `0x1f0` -> `0x100`;
+   - PCPM `0x21f0` -> `0x2100`;
+   - APCIE_ST `0x1000030f` -> `0x0f000300`.
+5. **Where the translator values come from** (`macos135-det10-translators.tsv`). On the two
+   pages logged in full from boot: 1,178 accesses before the detach. All writes to the three
+   words come from one PC, `0xfffffe0015022d8c`, all 32-bit, about 2.2-2.9 s after the touch
+   map started:
+   - `0x23b300200` <- `0x0`, then `0x808217dc`;
+   - `0x235004210` <- `0x0`, then `0x80821a38`;
+   - `0x235004200` <- `0x0`, then `0x80822854`.
+
+   After the wake the same PC writes the same three values again (T+90.226, T+90.226, T+90.535).
+   What the values point at is not read.
+6. **Widths:**
+   - **`0x690000004`** (det9 and det10 alike): read 32-bit (`0x100007`) at T-0.49; written
+     **16-bit** (width log2 = 1) with `0x0` at T-0.041 (PC `...ff70`); after the wake, read
+     32-bit (`0x100000`) and written 32-bit (`0x100007`).
+   - **The guarded power-manager words and the core start/stop words:** before the detach
+     (boot and secondary-core start) all 67 accesses the hypervisor's hooks logged in det10
+     were 32-bit (`+off:32` in `run-det10.out`).
+   - **Not read:** the widths during the entry. The detached hypervisor writes a fixed width
+     (2) into its `pmgr` and `cpustart` records (`hv_detached.c`), so the width macOS used
+     there is not recorded.
+
+### Not done in this round
+
+- The extra reads in 2, the periodic snapshots in 3 and the entry-time widths in 6, for the
+  reasons given there.
+- The items the coordinator set aside: another starting state, a stopped coprocessor,
+  macOS's own alarm, and Linux at its commit.
+
+### M1 left
+
+In Omarchy, stock kernel `7.3.0-0test5-1-ARCH`, up since 18:40:18, reached over Thunderbolt;
+the camera frame `var/m1-look/20261117-184049-state-after-det10.jpg` shows the desktop.

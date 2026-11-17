@@ -16,7 +16,8 @@ n=$(wc -l < $O)
 # reads them. If detach() fails nothing is armed: the guest is still attached, and either runs
 # on (the FIFO has no writer left: end of input) or stays paused in the shell (macos-up.sh keeps
 # a writer open; its pid is in hvin.holder).
-printf 'hv.run_script("%s/detach.py")\ndetach(%s)\n' "$S" "${ARGS:-}" > "$HVIN"
+# PRE: hypervisor-shell lines run before detach() (e.g. harness/awake_snap.py), newline-terminated.
+printf '%bhv.run_script("%s/detach.py")\ndetach(%s)\n' "${PRE:-}" "$S" "${ARGS:-}" > "$HVIN"
 kill -INT $P
 timeout 180 bash -c "until tail -n +$n $O | grep -a -q -E 'DETACHED|ARMED|Traceback|Error'; do sleep 0.5; done"
 sleep 1
