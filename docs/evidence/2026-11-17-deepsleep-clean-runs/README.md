@@ -1651,3 +1651,132 @@ suspended), one 32-bit read each, for the spec's open question 64: `0x23b71c000`
 `0x23b71c040` = `0x80000000`; `0x23b754000` = `0x0`; `0x23b754004` = `0x0`. (The spec: macOS
 reads `0x23b71c000` = `0x80000000` awake and at its commit in every capture.) The same words at
 Linux's commit are not read.
+
+## Hypervisor round 8: the power-gate header word `0x23b71c000` cleared before the cores' final writes (det23, det24, 2026-11-18 03:58-04:32)
+
+Readings only. Times are the M3's clock unless "t" (s from the detach, the M1's timer) is given;
+T is the last core's sleep-path record. Taken for the spec's open question 67. Naeem stopped the
+round after det24 ("Stop after this one"); det25 (both header words) was brought up but not run,
+and question 66 was not run.
+
+**Short answer: with `0x23b71c000` written 0 by the hypervisor in the cores' sleep path, and
+reading 0 at the commit, macOS powered down and woke at the 90 s alarm in both runs (asleep
+90.00 s and 89.65 s), as det18 did without the change. [HV-CHANGED]**
+
+### The change and the runs
+
+- **Hypervisor:** `~/m1n1-next` branch `m1power/hv-detached`, local commit `9ec6b9c7` on top of
+  `ff8caba0`, not pushed. One option, `hv_s2r_pg_clear`, 0 (off) by default:
+  - bit 0: the hypervisor writes `0x23b71c000` = 0; bit 1: also `0x23b71c040` = 0 (not run);
+  - once per sleep, on the first core to take the hypervisor's sleep `CYC_OVRD_EL1` path, before
+    that core's own `CYC_OVRD_EL1` write and after macOS's last write to the page (`0x23b71c080`,
+    `088` at about T−15.7 ms, round 7);
+  - bit 2 clear (det23, `pg_clear=1`): the write comes after that core's round-6 state record;
+    bit 2 set (det24, `pg_clear=5`): before it;
+  - the two header words are read just before and just after the write (log kind 28, seq 100),
+    and again at the end of the commit note into power-chip scratch `0x9f0a` (over `'P'`):
+    `0xc0 | (0x23b71c000 bit 31) | (0x23b71c040 bit 31) << 1`, for a run that resets. Both runs
+    woke, and the wake path rewrites the scratch, so that byte was not needed.
+- **Host side:** `harness/real_s2r.py` `real_s2r_on(pg_clear=)`.
+- **Recipe:** det18's (round 7), with one change:
+  - `WD1=150 ALARM=90 FULL_SKIP=<det8's four pages> S2R_ARGS='core_state=1, c4_probe=1, pg_clear=N' harness/macos-up.sh detNN`;
+  - `PRE=<awake_snap of the r7 list> ARGS='commit_snap=<r7 list>' harness/detach135.sh detNN`;
+  - `harness/detached-wake-readout.sh detNN`, `harness/hv-reboot.sh`, `tools/tb/m1-pmu-dump`.
+
+  The M1 was claimed as `observation` throughout.
+- **No same-session control run.** The build with the option off is the round-7 code plus the
+  option's unused branches. The control is det18 (round 7, 2026-11-18 02:16).
+- **The no-hands way out, named before each run:** the hypervisor's alarm at commit + 90 s;
+  watchdog 1 at commit + 150 s; and the reset 5-7 s after the commit seen in every failed run.
+- **Boot panic:** none in three bring-ups (det23, det24, det25).
+- **Files (private):**
+  - `tools/hv-trace-kit/runs/20261116-mac135/*-det23.*`, `*-det24.*`, `*-det25.*`;
+  - `var/commit-state/r8-det23.txt`, `r8-det24.txt` (`r7_probe.py`), `r8-det2[34]-core-state.txt`
+    (`r6_core_state.py`), `r8-det2[34]-vs-det18.txt` (`r6_snapdiff.py`);
+  - `var/m1-state/pmu-20261118-041248-after-det23.txt`, `pmu-20261118-042720-after-det24.txt`,
+    `pmu-20261118-043229-after-det25-bringup.txt`;
+  - camera frame `var/m1-look/20261118-043227-state-after-round8.jpg`.
+
+| Run | `pg_clear` | Detach | T | Outcome |
+|---|---|---|---|---|
+| det23 | 1 (`0x23b71c000`, after the first core's state record) | 04:02:17 | t = 425.210867 (core 0) | **asleep 89.998 s, woke at the alarm**: USB gone 04:10:50.541, back 04:10:51.155; wake status `0 / 0x400000 / 0`; log read out, 0 dropped **[HV-CHANGED]** |
+| det24 | 5 (`0x23b71c000`, before the first core's state record) | 04:17:16 | t = 433.976776 (core 0) | **asleep 89.649 s, woke at the alarm**: USB gone 04:25:58.541, back 04:25:59.155; wake status `0 / 0x400000 / 0`; log read out, 0 dropped **[HV-CHANGED]** |
+| det25 | 7 (both words, before) | - | - | not run: macOS came up (READY 04:31:35, no panic); the stop came before the detach; the M1 was rebooted out of the hypervisor with `hv-reboot.sh` (04:31:52) without a sleep |
+
+### 1. The write and the word at the commit
+
+| | det23 | det24 |
+|---|---|---|
+| Core that wrote | core 2 | core 4 |
+| Read just before (t) | 425.210853: `0x23b71c000` `0x80000000`, `0x23b71c040` `0x80000000` | 433.976488: the same |
+| Read just after (t) | 425.210861: `0x23b71c000` **`0x0`**, `0x23b71c040` `0x80000000` | 433.976495: `0x23b71c000` **`0x0`**, `0x23b71c040` `0x80000000` |
+| The cores' state records began | t 425.210572-425.210604 (all eight) | t 433.976486-433.976526 |
+| Core-down records (each logged just before that core's own `CYC_OVRD_EL1` write) | core 1 425.210853, core 3 .210855, cores 4, 6, 5, 7 .210860-.210861, core 2 .210864, core 0 (last) .210867 | cores 7, 5, 1, 6, 2, 4, 3 433.976756-.976769, core 0 (last) .976776 |
+| The write against the cores' final writes | 6-14 µs before T. Before the down records of six cores; at the same time as cores 1 and 3 logged going down (their final writes follow their records; at this resolution, before or after the clear is not separated) | **281-288 µs before T, 261 µs before the first core-down record: before every core's final write** |
+| Commit snapshot (T + 1 µs to T + 2 ms): `0x23b71c000` / `0x23b71c040` | **`0x0`** / `0x80000000` | **`0x0`** / `0x80000000` |
+| Awake (r7 list at the detach) | `0x80000000` / `0x80000000` | `0x80000000` / `0x80000000` |
+
+So in both runs the word read 0 at the commit, and macOS's power-down and alarm wake followed.
+No access by macOS to `0x23b71c000` is in either log between the clear and the wake.
+
+At the wake, as in every earlier capture, core 0 read `0x23b71c000` = 0 and wrote it
+`0x80000000`, then read and wrote `0x23b71c040` = `0x80000000`. This came at wake + 7.7 ms
+(det23) and + 7.8 ms (det24); det18: + 7.5 ms.
+
+### 2. The rest of the commit, against det18
+
+- macOS's three writes of `0x23d2c4000` = 1 (core 0): det23 at T−15.8 / −4.1 / −0.98 ms, det24
+  at T−15.8 / −4.1 / −0.95 ms.
+- Watchdog 2 at the first write: already armed. Bite `0x7270e00`, control 4, count 38 µs (det23)
+  and 57 µs (det24). `0x23d2b8028` read `0x1000000` and `0x23d2b8040` `0x20` at all three
+  writes. All as det18.
+- Each core's state at its final write (round-6 records):
+  - det23: guest virtual timer fired (`CNTV_CTL_EL02` `0x5`) on cores 2, 1 and 0; `HCR_EL2` VF
+    set on cores 3, 2, 1 and 0.
+  - det24: fired on cores 1 and 0; VF set on cores 1 and 0.
+  - The rest as in round 7.
+- CPU start/stop block at the commit: `0x23b754000` = `0x23b754004` = `0xfe`, the other six 0
+  (awake all 0), as det18.
+- Commit snapshot against det18 (1328 words): 18 differ in det23 and 23 in det24.
+  - Besides `0x23b71c000` and the watchdog counts, all are in groups that varied before:
+    `MCC.planeN+0x680/684`, `ps_dcs` words `0x23b700300`-`338`, the power-gate group
+    `0x23b71c0d8`-`134`, and in det24 `0x2002c0500`.
+  - In det24 the power-gate group read differently from round 7: awake `0x23b71c120` =
+    `0x80040307` and `0x23b71c0ec` = 0, and at the commit `0x23b71c0d8`, `0f0`, `108` and `120` =
+    `0xc0040307`. In det18, det19b and det21 those four read `0x80040307` at the commit, except
+    `0f0` in det19b and det21 and `120` in det19b (`0xc0040307`).
+- At the wake entry (det23 / det24):
+  - `0x23d2b8028` `0x8000000`, `0x23d2b8040` `0x22`, `0x23d2c001c` `0xff0`;
+  - watchdog 2 count `0x77066e` / `0x76f2c8` (0.325 s), bite `0x7270e00`, control 0;
+  - watchdog 1 count `0x52c8e` / `0x51957` (13.8 / 13.9 ms), bite `0xd693a400`, control 4.
+
+  As in det11-det21.
+
+### 3. Power chip afterwards
+
+| After | `0x0201` | `0x9f03` | `0x9f04`-`0x9f0c` | `0xa47b`-`d` | `0xd000` | `0xd00c` |
+|---|---|---|---|---|---|---|
+| det23, det24 (after `hv-reboot.sh`) | `00` | `00` | `48 00 01 3f ff ff 47 50 00` | `00 08 00` | `01` | `00` |
+| det25's bring-up, rebooted without a sleep | `00` | `ff` | `00 00 00 00 00 00 00 00 00` | `00 08 00` | `01` | `00` |
+
+det23 and det24 are the same as det18, det19b and det21.
+
+### Left out, and why
+
+- **`0x23b71c040` cleared as well** (`pg_clear=7`, det25): brought up, not run. Naeem stopped the
+  round.
+- **Question 66** (a pending interrupt at a core after its final write): not run, for the same
+  reason. A draft of an instrument for 66(b) was written and not built or run. It turns on the
+  fired timer's FIQ to the core and counts the hypervisor's FIQ entries on cores already down.
+  It is kept outside the repositories, in the session scratchpad (`round8-full.patch`). For
+  66(a), round 6's records show the guest's `PSTATE` with D, A, I and F all masked at each
+  core's final write. A pending virtual FIQ there is not taken as an exception, so a core
+  leaving its wait need not enter the hypervisor. Counting those exits would need the
+  hypervisor to trap `WFI`, which changes the wait being measured.
+- **A same-session control with the option off:** not run (see above). det18 is the control.
+
+### M1 left
+
+In stock Omarchy (kernel 7.3.0-0test5-1-ARCH, up since 2026-11-18 04:32:05, after the reboot
+out of det25's bring-up), reached over Thunderbolt. The camera frame
+`var/m1-look/20261118-043227-state-after-round8.jpg` shows the desktop. The claim is released.

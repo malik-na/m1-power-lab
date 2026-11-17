@@ -33,7 +33,7 @@ def wdt_state(tag=""):
 _CLKGEN = (0x23b040140, 0x23b040144, 0x23b040148, 0x23b04014c, 0x23b040154)  # muxes macOS parks (= 0x80100000) before the commit
 def real_s2r_on(spin=0, alarm=0, mask=(), wake="reset", wd1=0, core_state=0, keep_state=0,
                 sample_ms=0, sample_max_ms=0, sample_pmu_every=0, sample_hold=0,
-                keep_timers=0, keep_vfiq=0, c4_probe=0):
+                keep_timers=0, keep_vfiq=0, c4_probe=0, pg_clear=0):
     p.write32(_A_CNT, 0); _slots.clear()
     try:
         # wake="proxy": the handler keeps the hypervisor image alive, restores these clkgen words,
@@ -108,7 +108,11 @@ def real_s2r_on(spin=0, alarm=0, mask=(), wake="reset", wd1=0, core_state=0, kee
                    # timer FIQ enable, keep_vfiq=1 only the pending virtual IRQ/FIQ (keep_state = both);
                    # c4_probe=1 reads the always-on words around each guest write of 0x23d2c4000
                    ("hv_s2r_keep_timers", keep_timers), ("hv_s2r_keep_vfiq", keep_vfiq),
-                   ("hv_s2r_c4_probe", c4_probe)):
+                   ("hv_s2r_c4_probe", c4_probe),
+                   # round 8 (m1n1-next, local): pg_clear bit 0 writes the power-gate header word
+                   # 0x23b71c000 = 0 at the first core's sleep write, bit 1 also 0x23b71c040;
+                   # read before/after (kind 28 seq 100) and at the commit (PMU scratch 0x9f0a)
+                   ("hv_s2r_pg_clear", pg_clear)):
         try:
             p.write32(_base + _sym(_n), _v)
             print(f"[s2r-real] {_n} = {_v}")
