@@ -939,7 +939,7 @@ M1 read `ac=0`, "Discharging", -377 mA at 22:36:04; the run was started over the
 - `real.sh` started 22:36:10. No answer at the alarm time (+60 s).
 - The M1 answered on the tailnet at 22:38:41 in stock Omarchy, kernel start 22:38:26: about
   133 s after the entry began, i.e. a reset at about the watchdog's 120 s plus the boot.
-  Whether anyone touched the M1 in that time: Naeem to confirm.
+  Naeem, who was at the M1: he did not touch it in that time.
 - Record: `44 57 00 40 2c 3d 02 30 7e 00` = 'W': the commit point was reached and the watchdog
   armed there. The last access before it: a 32-bit write to `0x23d2c4000` by core 0. All ten
   bytes landed this time.
