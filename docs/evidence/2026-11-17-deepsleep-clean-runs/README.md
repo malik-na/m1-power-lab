@@ -1325,3 +1325,321 @@ Wake snapshot: 259 of 264 equal to det11 (five DCS domain words).
 In stock Omarchy (kernel 7.3.0-0test5-1-ARCH, up since 2026-11-18 00:59:49), reached over
 Thunderbolt. The camera frame `var/m1-look/20261118-010014-state-after-round6.jpg` shows the
 desktop.
+
+## Hypervisor round 7: watchdog 2 around macOS's writes of `0x23d2c4000`, the CPU block and power-gate records, the keep-state split (det18-det22c, 2026-11-18 02:08-03:35)
+
+Readings only. Where a reading was not taken, the text says "unknown". Times are the M3's clock
+unless "t" (s from the detach, the M1's timer) is given; T is the last core's sleep-path record.
+Taken for the spec's open questions 60, 59 and 61, in that order.
+
+### The change and the runs
+
+- **Hypervisor:** `~/m1n1-next` branch `m1power/hv-detached`, local commit `ff8caba0` on top of
+  `2cb8a180`, not pushed. Every option 0 (off) by default:
+  - `hv_s2r_keep_timers`: the guest's timers (`CNTP_CTL_EL02`, `CNTV_CTL_EL02`) and the guest timer
+    FIQ enable (`VM_TMR_FIQ_ENA_EL2`) are left as they were at the core's sleep `CYC_OVRD_EL1`
+    write; the pending virtual IRQ/FIQ (`HCR_EL2` VI/VF) are cleared as in every earlier
+    power-down.
+  - `hv_s2r_keep_vfiq`: the pending virtual IRQ/FIQ are left; the guest's timers and the timer FIQ
+    enable are written 0 as in every earlier power-down.
+  - (`hv_s2r_keep_state`, round 6, is both at once; unchanged.)
+  - `hv_s2r_c4_probe`: on each guest write of `0x23d2c4000` (a traced page: the access traps and
+    the hypervisor does it), the writing core reads `0x23d2c4000`, watchdog 2's count, bite and
+    control (`0x23d2b0020`, `24`, `2c`), `0x23d2b8028` and `0x23d2b8040` just before the write and
+    again just after it, then the timer count; reads only. Log kind 28, each record pushed to
+    memory at once.
+  - The commit-snapshot table holds 2048 words (detached layout 3; was 1024).
+- **Host side:** lab commit `546e9e4`: `harness/real_s2r.py` `real_s2r_on(keep_timers=,
+  keep_vfiq=, c4_probe=)`, `harness/detached_fmt.py` (layout 3, kind 28 as `c4-probe` records),
+  test `tests/core/test_hv_detached.py::test_s2r_timer_write_probe_records` (the layout test
+  checks the struct against the build).
+- **Commit list:** `var/recfg/commit-snap-list-r7.json`, 1329 entries: round 6's 880, the CPU
+  start/stop block `0x23b754000`-`0x23b75401c` (8 words), and every word of the power-gate page
+  from `0x23b71c000` to `0x23b71c704` not already in the list (441; with the 9 already there, all
+  450). The same list was read awake ("awake-extra", over the proxy with the guest paused) at each
+  detach, about 7 min before the commit. Before the runs the 8 CPU-block words were read once on
+  Linux awake (`tools/regmap/scan.sh`, hwdb snapshot 16): all 0, no fault. The power-gate page
+  had been read whole on Linux before (hwdb snapshot 12); its non-zero words end at `+0x704`.
+- **Recipe:** round 6's, every run: `WD1=150 ALARM=90 FULL_SKIP=<det8's four pages>
+  S2R_ARGS='core_state=1, c4_probe=1[, keep_timers=1 | keep_vfiq=1]' harness/macos-up.sh detNN`;
+  `PRE=<awake_snap of the r7 list> ARGS='commit_snap=<r7 list>' harness/detach135.sh detNN`;
+  `harness/detached-wake-readout.sh detNN`; afterwards `harness/hv-reboot.sh` (the runs that woke)
+  and `tools/tb/m1-pmu-dump`. The M1 was claimed as `observation` throughout.
+- **The no-hands way out, named before each run:** the hypervisor's alarm at commit + 90 s;
+  watchdog 1 at commit + 150 s; and for the keep runs, the reset 5-7 s after the commit seen in
+  det13 and det17. Every run ended without hands.
+- **Files (private):** `tools/hv-trace-kit/runs/20261116-mac135/*-det18.*`, `*-det19*`, `*-det20*`,
+  `*-det21.*`, `*-det22*`; `var/commit-state/r7_probe.py` (outputs `r7-det18.txt`,
+  `r7-det19b.txt`, `r7-det21.txt`), `r7_wd2start.py` (`r7-wd2start-det*.txt`),
+  `r7-det*-core-state.txt` (round 6's `r6_core_state.py`), `r7-pwrgate-records.md`;
+  `var/m1-state/pmu-20261118-*-after-det*.txt`; camera frames `var/m1-look/20261118-0*`.
+
+| Run | Options besides `core_state=1, c4_probe=1`, WD1 150, alarm 90 | T | Outcome |
+|---|---|---|---|
+| det18 | none | t = 445.324 s | **asleep 89.58 s, woke at the alarm**, wake status `0 / 0x400000 / 0`, log read out |
+| det19 | `keep_timers=1` | - | not run: macOS panicked while booting under the hypervisor, before the arm (`i2c0::_runInterruptMode RxFIFO doesn't have enough bytes ... hpmBusManager`, as det15); the M1 restarted into Linux by itself |
+| det19b | `keep_timers=1` | t = 433.068 s | **asleep 89.74 s, woke at the alarm**, wake status `0 / 0x400000 / 0`, log read out **[HV-CHANGED setup; outcome as without it]** |
+| det20 | `keep_vfiq=1` | - | not run: the same boot panic |
+| det20b | `keep_vfiq=1` | about 02:59:12 (±2 s, from the alarm register) | **no wake; reset**: USB device gone 02:59:18.05, Linux kernel start 02:59:30 (M1 clock) **[HV-CHANGED]** |
+| det21 | `keep_timers=1` (det19b repeated) | t = 433.659 s | **asleep 89.62 s, woke at the alarm**, wake status `0 / 0x400000 / 0`, log read out **[HV-CHANGED setup; outcome as without it]** |
+| det22, det22b | `keep_vfiq=1` | - | not run: the same boot panic, twice |
+| det22c | `keep_vfiq=1` (det20b repeated) | about 03:34:02 (±2 s) | **no wake; reset**: USB device gone 03:34:08.81, Linux kernel start 03:34:21 (M1 clock) **[HV-CHANGED]** |
+
+T for the runs that reset is found as in round 6: T = dump time + (alarm `0xd008` − clock
+`0xd004`) − 90 s. Of nine bring-ups, four ended in that boot panic before the arm; the options
+of this round are written only at the arm.
+
+Power chip after each run:
+
+| Run | `0x0201` | `0x9f03` | `0x9f04`-`0x9f0c` | `0xa47b`-`d` | `0xd000` | `0xd00c` |
+|---|---|---|---|---|---|---|
+| det18, det19b, det21 (after `hv-reboot.sh`) | `00` | `00` | `48 00 01 3f ff ff 47 50 00` | `00 08 00` | `01` | `00` |
+| det20b | `00` | `50` | `57 f0 d1 83 00 02 50 0f ff` | `00 08 00` | `41` | `00` |
+| det22c | `00` | `50` | `57 f0 31 a9 00 02 50 07 ff` | `00 08 00` | `41` | `00` |
+
+In det20b and det22c `0x9f04` still held the hypervisor's `'W'` wake note, unconsumed, and
+`0x9f0a` its `'P'` stage mark (as det13, det17). `0x9f0b`/`0x9f0c` are round 6's per-core bitmaps
+of macOS's own state at each core's final write, before the hypervisor's writes: `0x9f0c` `0xff`
+(guest timer enabled and unmasked on all eight cores) in both; `0x9f0b` (a virtual IRQ/FIQ or a
+hypervisor-held interrupt pending) `0x0f` (cores 0-3) in det20b, `0x07` (cores 0-2) in det22c.
+
+At the wake entry of det18, det19b and det21: `0x23d2b8028` `0x8000000`, `0x23d2b8040` `0x22`,
+`0x23d2c001c` `0xff0`, watchdog 2 bite `0x7270e00`, control 0, count `0x76dfe1` / `0x770fbd` /
+`0x76edf3` (0.325-0.326 s); watchdog 1 bite `0xd693a400`, control 4, count 13.7-13.9 ms; as in
+det11 and det12.
+
+### 1. Watchdog 2 and the always-on words around macOS's three writes of `0x23d2c4000` (question 60)
+
+macOS wrote `0x23d2c4000` = 1 three times in each of det18, det19b, det21, from core 0, the same
+guest PC within a run (det18 `0xfffffe00157be2d0`), at T−15.6/−4.1/−0.97 ms (det18),
+T−16.1/−4.6/−0.97 ms (det19b), T−16.0/−4.2/−0.96 ms (det21). No other access to the word is in
+the logs. The "before" reads ended 11.9 / 21.1 / 11.5 µs after the trap's access record of the write
+(det18 / det19b / det21), the "after" reads 9.4-11.4 µs after the "before" reads.
+
+| Write | Read | `0x23d2c4000` | WD2 count | WD2 bite | WD2 control | `0x23d2b8028` | `0x23d2b8040` |
+|---|---|---|---|---|---|---|---|
+| 1 | before | **1** | 42.6 / 52.7 / 56.4 µs | `0x7270e00` | **4** | **`0x1000000`** | `0x20` |
+| 1 | after | 0 | 52.1 / 64.4 / 65.8 µs | `0x7270e00` | 4 | `0x1000000` | `0x20` |
+| 2 | before | 0 | 11.575 / 11.562 / 11.776 ms | `0x7270e00` | 4 | `0x1000000` | `0x20` |
+| 2 | after | 0 | 11.584 / 11.571 / 11.785 ms | `0x7270e00` | 4 | `0x1000000` | `0x20` |
+| 3 | before | 0 | 14.712 / 15.180 / 15.040 ms | `0x7270e00` | 4 | `0x1000000` | `0x20` |
+| 3 | after | 0 | 14.721 / 15.188 / 15.049 ms | `0x7270e00` | 4 | `0x1000000` | `0x20` |
+
+(Counts det18 / det19b / det21, at 24 MHz; every other value the same in all three runs.)
+
+So, in all three runs:
+- **Before macOS's first write of `0x23d2c4000` reached the hardware, watchdog 2 was already
+  armed** (bite 5 s, control 4) with a count of 43-56 µs, and `0x23d2b8028` already read
+  `0x1000000`. Awake (the r7 list read at the detach) they read bite `0x80befc00`, control 0,
+  `0x23d2b8028` 0.
+- `0x23d2c4000` read 1 before the first write and 0 after each of the three writes of 1.
+- Nothing in the six words changed at any of the three writes except the count.
+- `0x23d2b8040` read `0x20` throughout (awake also `0x20`).
+
+**When the count started**, from each set (count subtracted from the timer count read just after;
+`var/commit-state/r7_wd2start.py`): det18 t = 445.3080573, det19b t = 433.0520395, det21
+t = 433.6433051, from the first set. The later sets put it 7-10 µs later (the watchdog's count
+runs about 0.05 % slower than the timer, or is read with an offset; not separated), so the start
+is good to about ±10 µs. Against the access log (a write's record is put before the write
+reaches the hardware; the log has every access to the device space except det8's four skipped
+pages and the zones the hypervisor holds, 1.2 of the spec):
+
+| Log record (core 0) | det18 | det19b | det21 |
+|---|---|---|---|
+| `W 0x23b71c080` = `0x80000000`, `W 0x23b71c088` = `0x80000000` | −29, −25 µs | −32, −29 µs | −29, −25 µs |
+| `R 0x23b718000` = `0xf`, `W 0x23b718000` = 0 | −18, −14 µs | −16, −12 µs | −19, −15 µs |
+| `R 0x23b718004` = `0xf`, **`W 0x23b718004` = 0** | −9, **−1.3 µs** | −9, **−5.5 µs** | −11, **−7.1 µs** |
+| *watchdog 2's count 0* | 0 | 0 | 0 |
+| guarded `0x23b7001c8`, `1c0`: read, write (the writes held by the hypervisor, A3) | +4 to +19 µs | −1.5 to +14 µs | +9 to +32 µs |
+| `R`/`W 0x23b7001d0` (`0x1400024f` -> `0x400024f`) | +22, +25 µs | +16, +19 µs | +34, +38 µs |
+| the first `W 0x23d2c4000` = 1 | +31 µs | +32 µs | +45 µs |
+
+In each run the computed start falls 1.3-7.1 µs after the record of macOS's write
+`0x23b718004` = 0 (in det19b also 1.5 µs after the next record, the hypervisor's read of the
+guarded `0x23b7001c8`); within the ±10 µs above, the nearest earlier access that reaches the
+hardware as a write is `0x23b718004` = 0 and the nearest later one `0x23b7001d0`. That the
+timing coincides is a reading; what arms watchdog 2 is not read. (Round 6's "within about 0.3 ms of the first write" came from the count at the commit;
+this round gives 31-45 µs **before** it.)
+
+### 2. The keep-state split (question 59) **[HV-CHANGED]**
+
+Each core's own state at its final `CYC_OVRD_EL1` write (round 6's records, before the
+hypervisor's writes; `r7-det*-core-state.txt`) was as in det12 and K in all three runs that
+woke:
+
+| Run | Guest virtual timer fired (`CNTV_CTL_EL02` `0x5`), `HCR_EL2` VF set, `VM_TMR_FIQ_ENA_EL2` 2 | Enabled, not fired (`0x1`), VF clear, `VM_TMR_FIQ_ENA_EL2` 3: due after the core's final write |
+|---|---|---|
+| det18 | cores 1, 3, 2, 0 | cores 5, 6, 4, 7: +89.39 s |
+| det19b | cores 1, 3, 0 | core 2: +0.063 s; cores 4, 6, 5, 7: +89.39 s |
+| det21 | cores 1, 2, 0 | core 3: +0.062 s; cores 7, 5, 6, 4: +89.39 s |
+
+`CNTP_CTL_EL02` `0x6` (disabled) on every core in every run. Order of the cores' sleep writes:
+core 0 made its `CYC_OVRD_EL1` write last in det18 and det19b (the last-core record is core 0's);
+in det21 core 0's state record came last (t 433.659058) but core 4 took the last-core path
+(core 0 counted 7th at 433.659304, core 4 8th at 433.659305). So:
+- **(b) `keep_timers=1`** (det19b, det21): every core went down with its guest virtual timer
+  enabled and unmasked as macOS left it (fired on three cores, due 62-63 ms later on one core,
+  due 89.4 s later on the rest) and its timer FIQ enable as found (2 on the fired cores,
+  3 on the rest); the hypervisor cleared VF. **Both runs: power-down, alarm wake after 89.7 s
+  and 89.6 s**, the same as det18 without the option.
+- **(a) `keep_vfiq=1`** (det20b, det22c): the guest timers and timer FIQ enables written 0; the
+  pending virtual FIQ left on the cores the bitmap names (det20b cores 0-3, det22c cores 0-2).
+  **Both runs: no alarm wake, a reset about 6-7 s after the commit**, as det13 and det17 (both
+  items kept).
+- Whether the SoC powered down before the reset in det20b and det22c: unknown. What reset it:
+  unknown. Whether the last core's `CYC_OVRD_EL1` write followed the commit: not read (the RAM log
+  is lost with the reset).
+
+### 3. The CPU start/stop block and the power-gate page (question 61)
+
+Commit snapshots: 1328 words (the list less one duplicate), 0 read errors in each run, read from
+T + 1 µs to T + 1.8-2.6 ms. Awake: the same list at each detach.
+
+**CPU start/stop block `0x23b754000`-`0x23b75401c`:** awake all 8 words 0 (three runs; Linux
+awake also 0); **at the commit `0x23b754000` = `0xfe` and `0x23b754004` = `0xfe`**, the other six
+0, in all three runs. macOS's writes to the block in the entry (passed to the hardware by the
+hypervisor in real-sleep mode, A4): cores 4, 1, 5, 2, 3, 6, 7 each write their own bit (`0x10`,
+`0x2`, `0x20`, `0x4`, `0x8`, `0x40`, `0x80`) to `+0x0` at T−0.090 s (det18); no write to `+0x4`
+in the entry. After the wake core 0 writes `+0x4`, `+0x8`, `+0xc` once per core.
+
+**Power-gate page `0x23b71c000`-`0x23b71c707`:** 450 words. The page's non-zero words fall in a
+header (`+0x000`-`+0x08c`: `0x80000000` at `+0x000`, `010`, ... `080` and `088`) and from `+0x090`
+in groups of six words every `0x18` bytes (69 groups to `+0x6f0`; the grouping is the lab's
+reading of the values' stride, not a documented layout). macOS's only writes to the page in the
+entry are `0x23b71c080` and `0x23b71c088` = `0x80000000` (both read `0x80000000` before), at
+T−15.7 ms (det18). Words that differ between awake and the commit, or between runs:
+
+| Word | Awake det18 / det19b / det21 | Commit det18 / det19b / det21 |
+|---|---|---|
+| `0x23b71c0d8` | `0xc0040307` (all) | `0x80040307` (all) |
+| `0x23b71c0ec` | `0x6000000` / `0xc000000` / 0 | `0xc000000` / 0 / `0xc000000` |
+| `0x23b71c0f0` | `0xc0040307` (all) | `0x80040307` / `0xc0040307` / `0xc0040307` |
+| `0x23b71c104` | `0xc000000` (all) | 0 (all) |
+| `0x23b71c108` | `0xc0040307` (all) | `0x80040307` (all) |
+| `0x23b71c11c` | `0xc000000` (all) | `0xc000000` / 0 / `0xc000000` |
+| `0x23b71c120` | `0xc0040307` (all) | `0x80040307` / `0xc0040307` / `0x80040307` |
+| `0x23b71c134` | `0xc000000` (all) | 0 / 0 / `0xc000000` |
+| `0x23b71c198` | `0x8004031b` (all) | `0xc004031b` (all) |
+| `0x23b71c1ac` | 0 (all) | `0xc000000` (all) |
+| `0x23b71c1b0` | `0x8004030a` (all) | `0xc004030a` (all) |
+| `0x23b71c1c4` | 0 (all) | `0xc000000` (all) |
+| `0x23b71c1d8`, `1f0`, `208`, `220`, `238` | 0 (all) | `0x30000000` (all) |
+| `0x23b71c330` | `0xc0040317` (all) | `0x80040317` (all) |
+| `0x23b71c344` | `0xc000000` (all) | 0 (all) |
+| `0x23b71c348` | `0xc0040302` (all) | `0x80040302` (all) |
+| `0x23b71c35c` | `0xc000000` (all) | 0 (all) |
+| `0x23b71c5a0` | `0xc004030e` (all) | `0x8004030e` (all) |
+| `0x23b71c5b4` | `0xc000000` (all) | 0 (all) |
+
+None of these words is written by macOS in the logged entry. Every other word of the page has one
+value in all six readings (awake and at the commit, three runs; det18's values below).
+`0x23b71c090` `0x8004030c` and `0x23b71c360` `0xc004030b` at the commit, as in det12.
+
+The whole page in det18 (hex, "a -> **c**" where the commit value differs from the awake one):
+
+| Offset | +0x0 | +0x4 | +0x8 | +0xc | +0x10 | +0x14 |
+|---|---|---|---|---|---|---|
+| `+0x000` | 80000000 | 0 | 0 | 0 | | |
+| `+0x010` | 80000000 | 0 | 0 | 0 | | |
+| `+0x020` | 80000000 | 0 | 0 | 0 | | |
+| `+0x030` | 80000000 | 0 | 0 | 0 | | |
+| `+0x040` | 80000000 | 0 | 0 | 0 | | |
+| `+0x050` | 80000000 | 0 | 0 | 0 | | |
+| `+0x060` | 80000000 | 0 | 0 | 0 | | |
+| `+0x070` | 80000000 | 0 | 0 | 0 | | |
+| `+0x080` | 80000000 | 0 | 80000000 | 0 | | |
+| `+0x090` | 8004030c | 150002 | 90c0c0c | 11081008 | 0 | 0 |
+| `+0x0a8` | c0040301 | 110001 | 10c0c0c | 11081008 | 0 | c000000 |
+| `+0x0c0` | 80040608 | 60006 | 10b0b01 | 66020102 | 0 | 0 |
+| `+0x0d8` | c0040307 -> **80040307** | d0004 | 40c0c1a | 44181010 | 0 | 6000000 -> **c000000** |
+| `+0x0f0` | c0040307 -> **80040307** | d0004 | 40c0c1a | 44181010 | 0 | c000000 -> **0** |
+| `+0x108` | c0040307 -> **80040307** | d0004 | 40c0c1a | 44181010 | 0 | c000000 |
+| `+0x120` | c0040307 -> **80040307** | d0004 | 40c0c1a | 44181010 | 0 | c000000 -> **0** |
+| `+0x138` | 80040308 | 50001 | 1070701 | 11020102 | 0 | 0 |
+| `+0x150` | 80040309 | a0002 | 1060601 | 11020102 | 0 | 0 |
+| `+0x168` | c0040306 | c0002 | 1070701 | 11020102 | 0 | c000000 |
+| `+0x180` | c0040305 | b0001 | 1060601 | 11020102 | 0 | c000000 |
+| `+0x198` | 8004031b -> **c004031b** | 2b0003 | 30c1414 | 22081008 | 0 | 0 -> **c000000** |
+| `+0x1b0` | 8004030a -> **c004030a** | d0001 | a0c1414 | 11081008 | 0 | 0 -> **c000000** |
+| `+0x1c8` | c0040324 | 50003 | 3040404 | 21081008 | 0 -> **30000000** | c000000 |
+| `+0x1e0` | c0040324 | 50003 | 3040404 | 21081008 | 0 -> **30000000** | c000000 |
+| `+0x1f8` | c004033f | 1c0004 | 7040404 | 21081008 | 0 -> **30000000** | c000000 |
+| `+0x210` | c0040312 | 160003 | 30c0c0c | 21081008 | 0 -> **30000000** | c000000 |
+| `+0x228` | c0040320 | 140003 | 30c0c0c | 21081008 | 0 -> **30000000** | c000000 |
+| `+0x240` | c0040307 | 3f0002 | 10c1414 | 22101008 | 0 | c000000 |
+| `+0x258` | c0040308 | a0001 | 90c1414 | 11081008 | 0 | c000000 |
+| `+0x270` | c0040321 | 50003 | 3040404 | 21081008 | 30000000 | c000000 |
+| `+0x288` | c0040321 | 50003 | 3040404 | 21081008 | 30000000 | c000000 |
+| `+0x2a0` | c004030e | a0001 | 4040404 | 21081008 | 30000000 | c000000 |
+| `+0x2b8` | c004030c | 120002 | 20c0c0c | 11081008 | 0 | c000000 |
+| `+0x2d0` | c0040309 | 140002 | 20c180c | 22281008 | 0 | c000000 |
+| `+0x2e8` | c004030e | 280002 | 20c0c0c | 11081008 | 0 | c000000 |
+| `+0x300` | c0040332 | 310004 | 60c0c0c | 44081008 | 0 | c000000 |
+| `+0x318` | c0040304 | f0002 | 10c0c0c | 22081008 | 0 | c000000 |
+| `+0x330` | c0040317 -> **80040317** | 1c0001 | 370c1010 | 11081008 | 0 | c000000 -> **0** |
+| `+0x348` | c0040302 -> **80040302** | 10002 | 10c0c0c | 11081008 | 0 | c000000 -> **0** |
+| `+0x360` | c004030b | 190002 | 20c0c0c | 11081008 | 0 | c000000 |
+| `+0x378` | c0040301 | 10010 | 10c0c0c | 11081009 | 0 | c000000 |
+| `+0x390` | c0080860 | 1680024 | 60204020 | ff202020 | 0 | c000000 |
+| `+0x3a8` | c0080860 | 1680024 | 60204020 | ff202020 | 0 | c000000 |
+| `+0x3c0` | c0040311 | 4c0004 | 20c0c0c | 11081008 | 0 | c000000 |
+| `+0x3d8` | c0040304 | d0001 | 10c0c0c | 21081008 | 30000000 | c000000 |
+| `+0x3f0` | c004030b | 1b0002 | 10c0c0c | 21081008 | 30000000 | c000000 |
+| `+0x408` | c004030b | 1b0002 | 10c0c0c | 21081008 | 30000000 | c000000 |
+| `+0x420` | c0040316 | 1f0004 | 30c0c0c | 44081008 | 0 | c000000 |
+| `+0x438` | c0040326 | 1b0002 | 80c0c0c | 21081008 | 30000000 | c000000 |
+| `+0x450` | c0040326 | 1b0002 | 80c0c0c | 21081008 | 30000000 | c000000 |
+| `+0x468` | c0040318 | 1f0001 | 40c0c0c | 21081008 | 30000000 | c000000 |
+| `+0x480` | c0040326 | 240002 | 40c0c0c | 11081008 | 0 | c000000 |
+| `+0x498` | c0040311 | 140003 | 30c0c0c | 63081008 | 30000000 | c000000 |
+| `+0x4b0` | c004036a | 2c0006 | 6d0c0c0c | a5081008 | 30000000 | c000000 |
+| `+0x4c8` | c0040326 | 130002 | 50c0c0c | 21081008 | 30000000 | c000000 |
+| `+0x4e0` | c0040309 | 50001 | 20c0c0c | 21081008 | 30000000 | c000000 |
+| `+0x4f8` | c0040309 | 1f0001 | 80c0c0c | 1109100c | 0 | c000010 |
+| `+0x510` | c0040316 | 400003 | 30c0c0c | 11081008 | 0 | c000000 |
+| `+0x528` | c0040314 | 300003 | 20c0c0c | 11081008 | 0 | c000000 |
+| `+0x540` | c004030f | 1c0002 | 20c0c0c | 11081008 | 0 | c000010 |
+| `+0x558` | c0040321 | 290003 | 60c0c0c | 22081008 | 0 | c000010 |
+| `+0x570` | c004030d | 150001 | 20c0c0c | 11081008 | 0 | c000010 |
+| `+0x588` | c004030d | 150001 | 20c0c0c | 11081008 | 0 | c000010 |
+| `+0x5a0` | c004030e -> **8004030e** | 230003 | 2040404 | 22081008 | 0 | c000000 -> **0** |
+| `+0x5b8` | 80040302 | 140001 | 10c0c0c | 11081008 | 0 | 0 |
+| `+0x5d0` | c0040306 | 90001 | 10c0c0c | 11081008 | 0 | c000000 |
+| `+0x5e8` | c0040312 | 2b0003 | 30c0c0c | 11081008 | 0 | c000000 |
+| `+0x600` | c0040302 | 140001 | 10c0c0c | 11081008 | 0 | c000000 |
+| `+0x618` | c0040306 | 90001 | 10c0c0c | 11081008 | 0 | c000000 |
+| `+0x630` | c0040312 | 2b0003 | 30c0c0c | 11081008 | 0 | c000000 |
+| `+0x648` | c0040301 | f0003 | 10c380c | 330c140c | 0 | c000000 |
+| `+0x660` | c0040301 | c0001 | 10e700e | 11141414 | 0 | c000000 |
+| `+0x678` | c004030b | 160003 | 90c380c | 42081008 | 30000000 | c000000 |
+| `+0x690` | c00403b0 | 7c0019 | d10cd20c | 33081008 | 0 | c000000 |
+| `+0x6a8` | c0040307 | 2d0002 | 30cd20c | 11081008 | 0 | c000000 |
+| `+0x6c0` | c0040307 | 2d0003 | 30cd20c | 22081008 | 0 | c000000 |
+| `+0x6d8` | c0040307 | 2d0005 | 30cd20c | 44081008 | 0 | c000000 |
+| `+0x6f0` | c0040307 | 2d0009 | 30cd20c | 88081008 | 0 | c000000 |
+
+### Left out, and why
+
+- **Nothing of the three asked readings.** Question 60: three captures (det18, det19b, det21).
+  Question 59: each half of the split run twice (det19b and det21; det20b and det22c); the
+  configuration that had failed twice (`keep_state=1`, det13 and det17) was not run again.
+  Question 61: the 8 CPU-block words and the 450 power-gate words, awake and at the commit, three
+  times.
+- **In the runs that reset (det20b, det22c)** the RAM log, with its probe records, commit
+  snapshot and per-core records, was lost; only the power chip's scratch survives. Whether the
+  SoC powered down before the reset, and what reset it: unknown.
+- **What arms watchdog 2** and what sets `0x23d2b8028` bit 24: not read. The probe gives their
+  state at macOS's writes of `0x23d2c4000` only; the earliest reading has both already set.
+- **The probe itself** is a change: about 10-20 µs of hypervisor reads inside each of the three
+  writes. The runs with it and no keep option (det18) and with `keep_timers` (det19b, det21)
+  powered down and woke as det11 and det12 did without it.
+- **The boot panic** (`i2c0 ... hpmBusManager`) ended four bring-ups before the arm (det19, det20,
+  det22, det22b); each time the M1 restarted into Linux by itself. Its cause was not looked into.
+- Open question 55 (macOS's commit without the instrument's last-core acts) was not asked for and
+  was not run.
+
+### M1 left
+
+In stock Omarchy (kernel 7.3.0-0test5-1-ARCH, up since 2026-11-18 03:34:21 after det22c's
+reset), reached over Thunderbolt. The camera frame
+`var/m1-look/20261118-033445-state-after-det22c.jpg` shows the desktop.
