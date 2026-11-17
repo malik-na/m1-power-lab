@@ -103,3 +103,31 @@ all six captures macOS stops each of the four sub-blocks and reads its status un
 byte is 0 (`0x494900`, 0, `0x494900`, `0x515100`); the spec had only the first, as a literal
 (now R22a). Also seen in the power chip after this run: byte `0x9f03` reads `0x50` (`0x30`
 before); `0x9f01` reads `0x30`. Not explained.
+
+## Run ds9 (14:03): the entry runs to its end; the chip does not power down
+
+Kernel ds9 (`a25fc534a`: the power manager's sub-blocks taken as found; 169 tests), `trace=1`,
+alarm +60 s. Devices suspended 14:03:16.04.
+
+- Record in the power chip: `44 52 00 f5 1d 00 00 60 ac 00` = 'R': the logic's `enter` returned
+  Ok, i.e. every step ran, including core 0's own last system-register writes (`CYC_OVRD_EL1`).
+  Alarm register `0xd008` = `2d 09 09 00`: the driver's alarm, written in the power-chip step.
+- The M1 did **not** reset (every earlier run reset about 10 s after its failure) and did not
+  wake at the alarm: screen dark (camera 14:09:42), no answer for 7 minutes.
+- The M3 logged nothing about the Thunderbolt link between 14:03:16 and 14:10:09 (two lines, the
+  tunnel teardown at the suspend). At each earlier reset of the M1 it logged link errors and a
+  disconnect at once. So the M1's Thunderbolt port stayed up: the SoC was not powered down. The
+  cores were in their wait instruction with interrupts masked.
+- 14:10:09 `tools/m1-reboot/m1-reboot.sh reboot`: the M1 acknowledged and rebooted into Omarchy
+  (up 14:10:24). **On the M3** the script's swap of the USB-C controller module restarted the
+  Thunderbolt stack, and at 14:10:38 the M3's kernel faulted in `thunderbolt` (`ring_work` ->
+  `tb_ctl_rx_callback` -> `mutex_lock`, NULL pointer). The M3 keeps running; `thunderbolt0` is
+  down. The M1 is reached over the tailnet (`ssh m1ts`) since.
+
+**Where this leaves the question.** Doing what macOS's kernel sleep path does, as far as the
+tests hold the driver to it, is not enough for the chip to power down from Linux's state.
+Known differences that remain: the display and second-port domains are on (macOS: off, with
+their coprocessors shut down first); the other device-level shutdowns of phase E2 (graphics,
+storage, always-on processor) are not done; `DCS0`-`7`, `PMP`, `SEP` control words differ in the
+bits above the request; 59 domain words are not observed for macOS; many written values are
+macOS's own.
