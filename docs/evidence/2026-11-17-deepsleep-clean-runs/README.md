@@ -717,3 +717,38 @@ So at the point where the driver's entry begins under Linux, `dcp` and `dcpext` 
 `0x10` with their processor domains at state 4 and their blocks answering; the domains of
 `gfx-asc`, `ans` and `sio` report state 0; `pmp`'s were not read because PMS_SRAM reports
 state 0 (PMP itself reports on).
+
+## Run ds16 (20:26): the round-7 driver reaches the commit; the M1 stays dark, no reset, no wake
+
+Kernel ds16 (`5e1aadaa2`, package in `var/kernels/ds16/`): the driver logic at `2695243`
+(218/218 from tests `e508cf7`: domains turned off by macOS's forms, `dcp`, `dcpext`, `gfx-asc`,
+`ans` stopped before their domains, the first port's domains off at the commit, the 16-bit PCIe
+write). Command line ds14's (`snap=2`: the commit comparison is written to the power-chip
+record at the commit, then the entry goes on).
+
+- `real.sh` started 20:26:46. The M3 logged the M1's retimer and host disconnect at 20:26:49.4.
+- After that the M1 answered on nothing (Thunderbolt, USB, tailnet). No reset: at every earlier
+  failed entry it was back within about 30 s. No wake at the alarm (+60 s). Camera frames at
+  20:28:34 and later: black (the room was dark as well).
+- 21:52:12 the M3's Thunderbolt port re-initialised; the M1 was up in stock Omarchy with kernel
+  start 21:52:28. What restarted it is not read (Naeem had been asked to press a key and, if
+  nothing happened, to hold the power button; his answer is not in yet).
+- Record in the power chip after the restart: `44 43 3f 00 27 02 28 02 29 00`. Reason 'C': the
+  commit comparison, which the glue writes at the commit point. So the entry ran to the commit.
+  M (words whose value at the commit is neither the driver's last write nor the reading before
+  the entry) = `0x003f` = 63. The first three such words by index: `0x0227` = 551
+  (`0x23b04003c`), `0x0228` = 552 (`0x23b040040`), and `0x0029`; if the record's last byte was
+  not written, that is `0x0229` = 553 (`0x23b040044`), the next word, else index 41
+  (`0x200080684`). All with bit 15 clear: the expected value was the reading before the entry.
+  These are SoC clock words; under macOS the spec's R52 lists clock words that change with no
+  logged write.
+- Other power-chip bytes after this run: `0x9f01` = `0x30`, `0x9f03` = `0x50` (`0x00` after
+  ds14, `0x50` after ds8 to ds12); alarm register `0xd008` = `12 63 09 00` (615186 s), the clock
+  at the dump 620301 s (5115 s later); `0xd00c` = `00` (`01` in the dumps after ds10 to ds12).
+  Full dump: `var/m1-state/pmu-20261117-215301-after-ds16.txt` (private).
+- `real.out` holds its first line only; the kernel log of that boot kept three driver lines.
+
+Not known: whether the chip powered down after the commit or stayed up with its cores stopped.
+The M3 cannot tell the two apart here, because the driver itself now turns the first port's
+domains off during the entry. The M1 was on mains with a full battery, so the battery does not
+tell either.
