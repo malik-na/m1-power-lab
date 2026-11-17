@@ -917,3 +917,37 @@ the M1; the M3 was kept awake.
 
 Not known, still: whether the chip powered down. Read in both runs: the record is cut at the
 same place, after its second SPMI command.
+
+## Run ds16c (22:25): ds16 with every diagnostic off; dark, no wake from any source
+
+Kernel ds16, command line without `snap`, `trace`, `dump` (`var/deepsleep/ds16c.cmdline`), M3
+cable and charger plugged in. `real.sh` started 22:25:41; host disconnect on the M3 22:25:44.47.
+No wake at the alarm (+60 s). Naeem, at the M1: nothing visible at the alarm time; then a key
+press, a short press of the power button, and the lid closed and opened, about 20 s apart: no
+reaction to any. He held the power button; kernel start 22:30:05. Record after: `44 61 00 ...`
+('a': armed, no failure recorded, as expected with trace off). `0x0201` = `04`, fault shadow
+`0x040c00`, `0xd000` = `01`, `0xd00c` = `00`. So the outcome of ds16 and ds16b does not come
+from the snapshot or the trace marks.
+
+## Run ds17 (22:36): on battery, watchdog 1 armed at the commit; the M1 resets about 120 s later
+
+Kernel ds17 (`2bdbfc491`: ds16's logic; the glue's `apple_deepsleep.wdt=N` arms the SoC's
+watchdog 1 at the commit point to reset N s later, after a 'W' mark in the record). Command line
+ds16c's plus `wdt=120`. Naeem had unplugged the M3 cable and the charger before the start: the
+M1 read `ac=0`, "Discharging", -377 mA at 22:36:04; the run was started over the tailnet.
+
+- `real.sh` started 22:36:10. No answer at the alarm time (+60 s).
+- The M1 answered on the tailnet at 22:38:41 in stock Omarchy, kernel start 22:38:26: about
+  133 s after the entry began, i.e. a reset at about the watchdog's 120 s plus the boot.
+  Whether anyone touched the M1 in that time: Naeem to confirm.
+- Record: `44 57 00 40 2c 3d 02 30 7e 00` = 'W': the commit point was reached and the watchdog
+  armed there. The last access before it: a 32-bit write to `0x23d2c4000` by core 0. All ten
+  bytes landed this time.
+- Power chip after: `0x0201` = `04` (unchanged; by the lab's decode of macOS's always-on sleep
+  program a sleep entry writes `01` and a wake `00`); fault shadow `0x040c00`; `0xd000` = `01`,
+  `0xd00c` = `00`; fault log at `0xd200` all zero. The kernel logged "PMU logged 1 boot
+  error(s)".
+
+Read together: 120 s after the commit, with nothing plugged into the M1, the SoC's watchdog
+still counted and reset the machine, and the power chip's sleep byte was not written. The
+earlier dark periods (ds16, ds16b, ds16c) ended only with the power button.
