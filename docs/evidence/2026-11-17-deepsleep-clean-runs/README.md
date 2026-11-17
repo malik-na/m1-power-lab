@@ -65,3 +65,24 @@ once (back at 11:22:10, `PMU logged 1 boot error(s)`). `apple_pmp` was loaded. I
 macOS reads this block (`0x23b52c000`-`0x23b55bffc`, R6) only after it has stopped the `pmp`
 coprocessor (R4, R5). Linux's pmp driver does nothing at suspend. So the power manager's quiesce
 depends on a step the tests had left out of the driver's scope.
+
+## Runs ds5, ds6, ds7 (12:21-12:58)
+
+- **ds5** (`905004705`, the logic widened to macOS's whole kernel sleep path, 107 tests): record
+  `44 d0 00 42 00 35 02 10 01 00` = panic, SError pending, 32-bit read of `0x235004200` (sio's
+  translator), count 1. Linux had powered sio's domain off before the entry.
+- **ds6** (`401649d27`, `apple_deepsleep.dump=1`, rehearsal only, no crash): all 137 power-domain
+  words logged at the moment the entry would run (`var/deepsleep/ds6-ps-dump.txt`). Against
+  macOS at the start of its platform sleep actions (`var/spec/ps-at-e3.tsv`, captures D-G):
+  Linux requests off where macOS requests on for GPIO, SIO_BUSIF, SIO, SIO_CPU, FPWM1, SPI_P,
+  UART_P, UART_N, UART0-8, AUDIO_P, PMS_SRAM, ANS2; on where macOS has off for RMX, DISP0_FE,
+  DISP0_CPU0, DISPEXT_FE, DISPEXT_CPU0, ATC1_COMMON; other bits differ on DCS0-7, PMP, SEP,
+  APCIE_GP. Spec 1.9 / R50 added.
+- **ds7** (`409997fce`, the logic turns on the domains macOS has on, 125 tests): **no reset.**
+  The entry stopped by itself before the commit and Linux carried on: `enter: the entry stopped
+  before the commit: -110, wait on 0x236408114 did not end`; cores 1-7 came back, `PM: suspend
+  exit` 0.6 s later, rc=1, 8 cores online. So the domain turn-on, the watchdog words, the
+  power-chip register and the SPMI controllers' step all ran; the first mailbox exchange with
+  `sio` got no reply. On this boot `apple-sio` had failed to probe (`error -ETIME: sending SIO
+  parameter 0x23`), so `sio` was not running. `begin` logged `sio translator ... (domains not
+  on: 0 given), pmp translator +0x200 0x0 (read)`.
