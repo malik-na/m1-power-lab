@@ -7,8 +7,10 @@ adds a register snapshot at the commit and each core's system registers on the w
 sections 1.7, 3 E7, 4), and with a repeat of G whose commit snapshot also covers all 137
 power-domain words (H, sections 1.7a, 4; round of 2026-11-17 evening), and with a third idle
 sleep that also reads the commit list with macOS awake (I, sections 1.7b, 4.1b; round of
-2026-11-17 night, listed in "Changes in this round" at the end, with the previous round's list
-below it). It states what macOS did, not why, and not what is needed for sleep to work.
+2026-11-17 night), and with the seventh round of the test author's questions answered from the
+same eight captures, the Linux runs ds15 and "Linux awake", and reference code (round of
+2026-11-17 late night, listed in "Changes in this round" at the end, with the earlier rounds'
+lists below it). It states what macOS did, not why, and not what is needed for sleep to work.
 Nothing here comes from any Linux sleep driver's code. Section 12 records what was **read on the
 machine under Linux** (the state a driver starts from); every such statement is marked
 **[LINUX]** and is an observation of Linux, not of macOS.
@@ -47,6 +49,30 @@ machine under Linux** (the state a driver starts from); every such statement is 
   DISPEXT_FE `0xb4f` / `0x2b4f`; E, F, I), never at rest and never written. PMP's
   `0x1f0f03ff` is also read once with macOS awake, before any sleep entry (I's "pre-full"
   snapshot, section 4.1b), so it is not tied to the sleep.
+  *(Added round 7, gaps W2, W14; `r7_bits24.py`.)* **Bits 24-27 against bits 4-7**, over every
+  read and snapshot value of a domain word in D-I (101,361 values): with bit 28 set, bits 24-27
+  equal bits 4-7 in 1,004 of 1,012 values (`0x1000030f`, `0x1400024f`, `0x1f0003ff` ...); the
+  eight others are DCS words reading `0x1f00030f` and `0x1f00034f` (bits 24-27 `0xf`, state 0 or
+  4). With bit 28 clear, bits 24-27 read 0, 4 or `0xf` independently of the state (`0x0f000200`,
+  `0x4000244`, `0x244`). In every read after a write that cleared bit 28 (section 4.3, form 2;
+  66 instances with a read, `r7_bit28.py`) bits 24-27 read `0xf`, also where the write put 0 there (RMX written `0xf`, read
+  `0x0f0003ff`): bits 24-27 are not read back as written.
+  *Reference, not an observation* (round 7): in the same Aurora Silicon file (commit
+  `dcce0e751c71`), bit 28 enables the hardware's automatic power management: a domain
+  "active" there is one whose actual state is `0xf`, **or** whose target is `0xf` with bit 28
+  set (`apple_pmgr_ps_is_active`); the driver sets bit 28 after a turn-on unless told not to,
+  and on a turn-off "as macOS lowers a domain" it first writes the word with bits 28, 9, 8 and
+  11 cleared and waits for the actual state `0xf`, then writes the target with bits 8 and 9 set
+  ("writing the history bits clears them"), the actual bits left as read. Its comment, written
+  for another chip (T8140), says that taking both at once "from an auto-gated state can leave
+  BUSY latched", and states that "macOS waits for (word & 0x8ff) == 0" after a turn-off. Its
+  comment for the M4 DCP (J713) says the DCP CPU domain under automatic power management "reads
+  level 0 while its CPU idles, and is fully on again once the CPU has been stopped". Aurora's
+  device tree (`arch/arm64/boot/dts/apple/t8103-pmgr.dtsi`, same commit) gives DISP0_CPU0 and
+  DISPEXT_CPU0 `apple,min-state = <4>`, which that driver writes into bits 16-19. None of this
+  is established for t8103 by the captures; it is how the reference code reads these bits. The
+  Asahi Linux documentation has no power-manager page (asahilinux.org/docs/hw/soc/pmgr/ returns
+  404, round 7).
 - **Memory controller (`mcc`)**: the block at `0x200000000`-`0x2003fffff`: four identical planes
   at `0x200000000`, `0x200040000`, `0x200080000`, `0x2000c0000`, common words at `0x200100000` and
   `0x200150000`, and eight DRAM channel controllers `DCS0`-`DCS7` at `0x200200000` + n x `0x40000`.
@@ -76,6 +102,32 @@ machine under Linux** (the state a driver starts from); every such statement is 
   Aurora Silicon's `aura` (`aurora-silicon/aura`, branch `main`, commit `5d3219cf`,
   `src/asc.c`) names +`0x48` bit 1 "STOPPED" and bit 5 "IDLE" and treats a coprocessor with
   both set as stopped in its idle loop; the Asahi page names bit 5 differently (above).
+  *(Added round 7, gaps W1, W7; observation.)* **Widths** (`r7_mbox_seq.py`, all eight
+  captures): the four mailbox words +`0x8800`, +`0x8808`, +`0x8830`, +`0x8838` are accessed as
+  64 bits, and +`0x44`, +`0x48`, +`0x8110`, +`0x8114` as 32 bits, for every coprocessor of R4.
+  The low byte of +`0x8808` (sent) and +`0x8838` (received) is the endpoint; its upper bytes in
+  the received word carry a counter (`0x10670000000020` ...). **+`0x48` is read only straight
+  before a write of +`0x44` = 0, and reads `0x2e` in all 76 such reads of all eight captures**
+  (`r7_coproc_words.py`); no capture reads it at another moment. `aop`, `smc` and `sep` have no
+  access to +`0x44` or +`0x48` in any capture.
+  *Reference, not an observation* (round 7; Aurora Silicon `aurora-silicon/linux`, branch
+  `integration/aurora`, commit `dcce0e751c71`): `drivers/soc/apple/mailbox.c` names +`0x8110`
+  the AP-to-coprocessor control word and +`0x8114` the coprocessor-to-AP control word, bit 16
+  "full", bit 17 "empty", and bit 0 of +`0x8114` "receive enable"; +`0x44` bit 4 "CPU run".
+  `drivers/soc/apple/rtkit.c` names the management message types by bits 52-59: 6 "set IOP
+  power state" (`0x0060..`), 7 its acknowledgement (`0x0070..`), `0xb` "set AP power state"
+  (`0x00b0..`, acknowledged with the same type), 1 hello, 5 start endpoint, 8 endpoint map;
+  the power states `0x20` "on", `0x10` "quiesced", `0x201` "idle: sleeping, retain state",
+  `0x220` "init"; the system endpoints 1 crash log, 2 syslog, 3 debug, 4 I/O report, 8 OS log;
+  and +`0x48` bit 1 "stopped", bit 5 "idle", both together "down": its own sleep path, after
+  the "idle" power state, polls +`0x48` for both bits for 5 ms. `drivers/gpu/drm/apple/afk.c`
+  names the endpoint-level types of `dcp`'s endpoints by bits 48-63: `0xa3` "start", `0x86`
+  "start acknowledged", `0xa2` "send", `0x85` "receive", `0xc0` / `0xc1` "shutdown" /
+  acknowledged; it has no name for `0xa4` and `0x87` (the pair macOS uses in R5a).
+  `drivers/gpu/drm/apple/dcp-internal.h` names `dcp`'s endpoint `0x37` "IOMFB" and lists
+  `0x20`-`0x2d` as service endpoints. `drivers/gpu/drm/apple/iomfb_m4.c` (M4, not t8103) stops
+  its display coprocessor by waiting up to 100 ms for +`0x48` bit 5 and then clearing +`0x44`
+  bit 4.
   Coprocessors seen:
   `smc` (system management: battery, sensors, lid, keys), `pmp` (power metering), `sio` (serial
   I/O helper), `aop` (always-on sensors, audio), `ans` (storage), `dcp` and `dcpext` (internal
@@ -489,6 +541,29 @@ captures (`widths.tsv`: address, direction, bits, the captures it was seen in, t
   secondary-core start in I (46 guarded-word and 21 start-word records in `run-det10.out`) is
   32 bits. Their width during the entry and the wake is not recorded (the detached hypervisor
   writes a fixed width into those records).
+- *(Added round 7, gap W9; `r7_pcie_widths.py`, `r7-pcie-widths.txt`.)* **The ten PCIe words with
+  two widths, access by access** (D-I; the same in each of the six captures; value as read or
+  written; times from T or W):
+
+  | Word | Before the sleep (reads T-0.49 to T-0.48; the write T-0.041, E5-3) | After the wake (W+0.43 to W+0.66) |
+  |---|---|---|
+  | `0x690000000` | R32 `0x100c106b` (twice) | R16 `0x106b` |
+  | `0x690000004` | R32 `0x100007`; **W16 `0x0`** (T-0.041) | R32 `0x100000`; W32 `0x100007` |
+  | `0x690000044` | R32 `0x8` | R16 `0x8`; W32 `0x8` |
+  | `0x690000058` | R32 `0x0` | W32 `0x0`; W16 `0x0` |
+  | `0x690000078` | R32 `0x10081f`; R16 `0x81f` | R32 `0x102810`; W32 `0x100810`; W32 `0x10081f`; W16 `0x81f` |
+  | `0x690000080` | R16 `0xc02` | R32 `0x10110000`; W32 `0x10110400`; W16 `0xc02` (twice); R32 `0xb0120c02`; R16 `0xc02` |
+  | `0x690000098` | R16 `0x400` | W16 `0x400` (twice); R16 `0x0`; R32 `0x400`; W32 `0x400` |
+  | `0x6900000a0` | R16 `0x42` | R16 `0x44`; W16 `0x42` (twice); R32 `0x2010042` |
+  | `0x690000130` | (none) | W32 `0xff` (twice); R32 `0x0`; W16 `0x0` |
+  | `0x6901000d4` | (none) | R32 `0x0`; W32 `0x400`; W16 `0x400` |
+
+  So these words are read and written with both widths at fixed places of the sequence; a
+  16-bit access touches the low half (the 16-bit values are the low halves of the 32-bit ones
+  where both are read, e.g. `0x81f` / `0x10081f`). Every other word of the entry and the wake
+  has one width (above). R49's "the width of a word never changed between reads and writes" is
+  therefore stated for every word except these ten and the thirteen of `0x23b549000`; for these
+  the width is the one in this table, per access.
 
 ### 1.9 The power domains when the platform sleep actions begin (captures D, E, F, G)
 
@@ -566,6 +641,21 @@ same in all four, the source).
   `mca-switch` `0x238400000` (+`0x18000`): MCA0-5. The temperature sensors, pin controllers,
   watchdog, SPMI controllers, NCO and interrupt controller carry no domain property. Which
   domain the blocks without one depend on is not observed.
+- *Reference, not an observation* (round 7, gaps W6, W13): Aurora Silicon's Linux device tree
+  for this chip (`aurora-silicon/linux`, `integration/aurora`, commit `dcce0e751c71`,
+  `arch/arm64/boot/dts/apple/t8103.dtsi`) gives these blocks power domains: the display
+  translators `dart-disp0` `0x231304000` and `dart-dcp` `0x23130c000`, `dcp` and its mailbox:
+  DISP0_CPU0; `dart-dispext0` `0x271304000`, `dart-dcpext` `0x27130c000`, `dcpext`:
+  DISPEXT_CPU0; `dart-sio` `0x235004000` and `sio`: SIO_CPU (`sio`'s mailbox: SIO);
+  `dart-apcie0` `0x681008000` (and `0x682008000`, `0x683008000`) and PCIe: APCIE_GP; the
+  interrupt controller: AIC; the pin controller `0x23c100000`: GPIO; the pin controller
+  `0x23d1f0000` (R13's `0x23d1f0900`): NUB_GPIO; `gpu` `0x206400000`: GFX; NVMe/`ans`: ANS2 and
+  APCIE_ST; `ans`'s mailbox: ANS2. It gives **none** to the watchdog `0x23d2b0000`, the SPMI
+  controller `0x23d0d9300`, the NCO `0x23b044000`, the pin controllers `0x24a820000` (R13's
+  `0x24a820900`) and `0x23e820000`, `aop`, `smc`, `sep` and their translators; it has no node
+  for the temperature sensors, `dart-pmp` `0x23b300000` or R20's blocks. That a block of these
+  is unreachable with its domain off is observed only under Linux, for `dart-sio` (section 12,
+  L5).
 - *(Added this round, gap Q14.)* **The 13 words on at the commit that are not observed at E3:**
   DWI, PMS_BUSIF, PCIE_REF, APCIE, DEBUG, NUB_SPMI0, NUB_SPMI1, NUB_AON, NUB_GPIO, NUB_FABRIC,
   NUB_SRAM, DEBUG_USB, DEBUG_AUTH. I's "awake-extra" snapshot (macOS awake, 431 s before T) has
@@ -808,24 +898,84 @@ way, and the same as `sio` and `pmp` in E3 (R5):
    +`0x8838`, section 0): "AP power `0x201`" (`0x00b0000000000201`, endpoint 0) sent and echoed;
    for `dcp` and `dcpext` an "endpoint stop" `0x00a4000000000000` to each of endpoints `0x20`
    to `0x2c` in turn, each answered `0x0087000000000000`; then "coprocessor power `0x201`"
-   (`0x0060000000000201`) sent and acknowledged (`IOP_POWER_ACK 0x201`). `gfx-asc` and `ans`
+   (`0x0060000000000201`) sent and acknowledged (`0x0070000000000201`, round 7). `gfx-asc` and `ans`
    get only the two power messages (H: `mbox-pre-h.txt`).
-2. **Register stop**, immediately after the acknowledgement: +`0x8114` read and written with
-   bit 0 cleared (the value read, in the bit-17 form: `dcp` `0x2ff00` D, G, `0x27700` H,
-   `0x24400` I, `0x26600` in E2; `dcpext` `0x25500`; `gfx-asc` `0x21100`; `ans` `0x24400`),
+2. **Register stop**, immediately after the acknowledgement: +`0x8114` read (in the bit-17
+   form with bit 0 set) and written that value with bit 0 cleared (*corrected round 7, gap W7:
+   the values given here are those written*; I: `dcp` read `0x24401`, written `0x24400`; E2
+   read `0x26601`, written `0x26600`; `dcpext` read `0x25501`, written `0x25500`; `gfx-asc` read
+   `0x21101`, written `0x21100`; `ans` read `0x24401`, written `0x24400`; written in other
+   captures: `dcp` `0x2ff00` D, G, `0x27700` H),
    +`0x48` read (`0x2e` in every instance), +`0x44` read (`0x10`), **+`0x44` written 0**. For
    `dcp` (base `0x231c00000`), `dcpext` (`0x271c00000`), `gfx-asc` (`0x206400000`), `ans`
    (`0x277400000`), in each of D-I; 30 instances, no exception (the rule on +`0x8114` checked on
    every write: value read with bit 0 cleared).
-3. **Address translators** of the display (E1, `dcp` only): before step 1 `dart-disp0`
-   `0x2313040fc` is written `0x7ffe`, `0x7fee`, `0x7fee` (T-7.38, H); after step 2 `dart-dcp`
-   `0x23130c0fc` is written `0x7ffe` twice.
+3. **Address translators** of the display. *(Corrected and completed round 7, gap W6;
+   `r7_dart_disp.py`, `r7_dart_rule.py`, `r7-dart-rule.txt`.)* Every write of +`0xfc` on the
+   four display translators in D-I (105 writes) is either `0x7fff` (at each restart, below) or
+   **the value of the last read of +`0xfc` with one bit s cleared, where s is the stream whose
+   word +`0x100`+4s was read just before** (no exception):
+   - `dart-disp0` `0x2313040fc`, E1 only, before step 1 (T-7.37 in I, between `dcp`'s
+     endpoint-`0x37` exchanges and its "AP power `0x201`"): R +`0x40` (`0xa040000`), then for
+     s = 0, 4, 15: R +`0x100`+4s (`0x80`, `0x80`, `0x100`), R +`0xfc`, W +`0xfc` with bit s
+     cleared: `0x7fff` -> `0x7ffe` -> `0x7fee` -> `0x7fee` (bit 15 already clear); then R +`0x40`,
+     +`0x100c`. Not written again before T: it is written `0x7fff` only after the key wakes (D,
+     E, F, W+0.51), and not at all after the alarm wakes.
+   - `dart-dcp` `0x23130c0fc`, straight after **every** stop of `dcp` (E1, E2 and the wake's,
+     below): R +`0x40`, then for s = 0, 15: R +`0x100`+4s (`0x80`, `0x100`), R +`0xfc`, W:
+     `0x7fff` -> `0x7ffe` -> `0x7ffe`; then R +`0x40`, +`0x100c`. **The E2 stop has them too**
+     (T-0.739 in I; the earlier text said E2 had neither: withdrawn).
+   - `dart-dcpext` `0x27130c0fc`: the same after every stop of `dcpext` (E2, wake).
+   - At each restart of `dcp` and `dcpext` (E2 and the wake), before +`0x44` = `0x10`: their
+     translator's +`0x0`, +`0x4`, +`0x60`, +`0xf0`, +`0x80`-`0x8c` read, **+`0xfc` = `0x7fff`**,
+     +`0x200` and +`0x2f0` read, **+`0x34` = `0xffffffff`, +`0x20` = `0x100000`**, +`0x20` read
+     back `0x100000`, +`0x100`, +`0x13c` read.
+   The values read before these writes are the same in every capture (`0x7fff` before the first
+   clear; +`0x100` `0x80`; +`0x13c` `0x100`). What `dart-disp0`, `dart-dcp`, `dart-dcpext` hold
+   under Linux is not read. *Reference, not an observation:* Aurora Silicon's
+   `drivers/iommu/apple-dart.c` (`integration/aurora`, `dcce0e751c71`) names, for this kind of
+   translator, +`0xfc` "streams enable" (one bit per stream), +`0x100`+4s the stream's control
+   word (bit 7 "translate enable", bit 8 "bypass"), +`0x200`+4s its table base (bit 31 valid,
+   address >> 12), +`0x34` "stream select", +`0x20` "stream command" (bit 20 "invalidate"),
+   +`0x40` error status, +`0x60` config.
 4. **Then the domains** (section 4.3): `dcp`'s DISP0_CPU0, DISP0_FE, RMX at T-7.33 (H, I),
    0.4 ms after +`0x44` = 0; in E2, after each coprocessor's step 2: DISPEXT_CPU0, DISPEXT_FE;
    DISP0_CPU0, DISP0_FE, RMX; GFX; APCIE_ST.
 **Restart in E2** (`dcp` and `dcpext`, before their second stop): after their domains are
 turned on, +`0x8114` written `0x20001`, +`0x44` read **0** and written `0x10`, then the
 coprocessor's hello is read: the same as `sio`'s and `pmp`'s start after the wake (R5w).
+*(Round 7: the translator writes of item 3 come before +`0x8114` = `0x20001` at every restart,
+in D-I; 18 restarts of `dcp`, 12 of `dcpext`, before and after the wake.)*
+**The exchange of step 1, message by message** *(added round 7, gap W7; `r7_stops.py`,
+`r7-stops.txt`, `r7_mbox_seq.py`).* Over all 76 stops of the six coprocessors in all eight
+captures (each write of +`0x44` = 0: 28 of `dcp`, 16 of `dcpext`, 8 each of `gfx-asc`, `ans`,
+`sio`, `pmp`, before the sleep and after the wake), from the last "AP power `0x201`" to +`0x44`
+= 0, the sequence is, without exception:
+- sent `0x00b0000000000201` on endpoint 0; received `0x00b0000000000201` on endpoint 0;
+- for `dcp` and `dcpext` only: sent `0x00a4000000000000` on endpoint `0x20`, then `0x21`, ...,
+  `0x2c` (ascending, 13 endpoints), **each answered `0x0087000000000000` received on the same
+  endpoint before the next is sent** (44 of 44 stops strictly alternating);
+- sent `0x0060000000000201` on endpoint 0; received **`0x0070000000000201`** on endpoint 0;
+- +`0x8114` read, written with bit 0 cleared; +`0x48` read `0x2e`; +`0x44` read `0x10`; +`0x44`
+  written 0.
+The only other message inside this span: in E and F (cable out) `dcp`'s E1 stop also has
+`0x0040000000000000` sent and echoed on endpoint 4 between the two "AP power" words (open
+question 20). Between messages macOS reads +`0x8114` (before each reply it reads with bit 20 set,
+section 0). How long macOS waits for a reply before giving up is not observed (open question 38).
+**The endpoints being stopped were all started by macOS**: in E1, `dcp` has been running since
+before the log begins (+`0x44` `0x10`) and receives `0x0085..` words on endpoints among
+`0x20`-`0x2c` just before the stop (I: `0x24`, `0x27`-`0x29`, `0x2b`), their starts lying before
+the log; in E2 and at the wake the 13 stops follow 13 starts
+`0x00a3000000000000` on endpoints `0x20`-`0x2c` (each answered `0x0086..`) made after the
+coprocessor's boot (I: W+0.4590 to W+0.4608 starts, W+0.4629 to W+0.4660 stops). A stop sent to
+an endpoint that was not started, and a stop of a coprocessor that macOS did not boot, are in no
+capture.
+**`dcpext` with macOS awake is stopped, with its domains off** *(added round 7; snapshots of
+all eight captures, `r7_coproc_words.py`)*: DISPEXT_CPU0 reads `0x0f040300` and DISPEXT_FE
+`0x2300` in every awake snapshot (15), and the first access to `dcpext`'s +`0x44` in each
+capture is the read of **0** before its E2 restart. So macOS boots `dcpext` in E2 only to stop
+it again (E2 above); it has no external display at the login window. **`dcp` with macOS awake
+runs**: its first +`0x44` read in each capture is `0x10`, in E1.
 **What the messages carry.** Before step 1, `dcp`'s E1 traffic (T-8.5 to T-7.33) is endpoint
 `0x37` and `0x02` words (`0x0000003c00000202`, `0x0000189c00000202`, `0x342`, `0x42`,
 `0x005000000000002c`..`3a`, ...) whose payloads are in shared memory that the log does not
@@ -841,6 +991,23 @@ step 2 (T-7.33): `0x1f0402ff` in seven captures, `0x1f0403ff` in E. So macOS's t
 this word was always made from state `0xf` with bit 28 set; it was never seen to write the word
 while it read state 4, and what the word does when it is asked for 0 from state 4 is not
 observed under macOS.
+*(Added round 7, gaps W2, W14; `r7_bit28.py`, `r7-bit28.txt`.)* **What clearing bit 28 does,
+as observed.** Every write in D-I that clears bit 28 of a word read with bit 28 set and request
+`0xf`, keeping the request (72 writes): the first read after it (3 to 491 microseconds later)
+reports state `0xf` and bits 24-27 `0xf` in every instance that has a read (66). The state read
+**before** such a write was `0xf` for DISP0_CPU0 (21), DISPEXT_CPU0 (12), GFX (6), APCIE_ST (6),
+and **0 for RMX** (21 instances, R `0x1000030f` W `0xf` R `0x0f0003ff`, before the sleep and at
+the wake). From state 4 the write is seen only for SIO_CPU (R23, R `0x1400024f` W
+`0x0400024f`, 6 instances), and no read follows it before the commit, where SIO_CPU reads
+`0x0f0002ff`. So a bit-28 clear taking a word to state `0xf` is observed from state `0xf` and
+from state 0; **from state 4 the word's next value is not observed** (open question 43). That
+`dcp`'s stop is what brings DISP0_CPU0 from state 4 to `0xf` is not shown either: in the three
+awake snapshots where the word reads `0x1f0402ff`, `dcp` runs (its +`0x44` reads `0x10` at its
+first access, in E1, minutes later; the word reads `0x1404024f` in the other awake snapshots
+of the same runs with `dcp` equally running). Under Linux the word reads `0x1404024f` with `dcp`
+running (+`0x44` = `0x10`) both with the display on and in the suspend path (section 12, L14,
+L15). *Reference, not an observation:* section 0, the Aurora driver's reading of bit 28 as
+automatic power management and its comment on the M4 DCP CPU domain.
 
 ### E3. Kernel sleep path, part 1: "sleep actions" (T-2.603 / T-2.590 to T-0.27)
 
@@ -1583,12 +1750,30 @@ value read just before, as stated; no instance departs from it except where name
    `0x0f0003f0` R `0x0f000300` (D, G, I) / `0x0f000200` (E, F, H). **RMX departs in the second
    write**: R `0x1000030f` W `0xf` (the rule) R `0x0f0003ff` **W `0x300`** R `0x0f000300` (E1,
    E2, wake; D-I, 12 + 6 instances).
+   *(Added round 7, gap W5a; `r7_rmx.py`.)* RMX's read before that second write is
+   `0x0f0003ff` in all 18 instances, so "the read value with bits 0-9 replaced by `0x3f0`"
+   (`0x0f0003f0`), "the same with bits 24-27 cleared too" (`0x3f0`) and the constant `0x300`
+   differ, and only `0x300` was written: bits 4-7 are written 0 as well, unlike every other
+   turn-off. The **same read value `0x0f0003ff`** is followed by **W `0x0f0003f0`** (form 1) in
+   RMX's first write at the wake (W+0.0138, D-I, 6 instances, before its turn-on), by the same
+   instruction as every other RMX write (one pc for all 102 RMX writes in D-I). So RMX's second
+   write is not a function of the value read alone; what the captures give is: after form 2's
+   first write, `0x300`; at the wake's first write, form 1. RMX reads `0x0f000300` after either.
+   With another read value before the second write (Linux's RMX reads `0x1f0000ff`, section 12)
+   the value macOS would write is not observed.
 3. **Request 4 to 0** (only at the wake, from the values the chip comes back with): write = the
    read value with bits 0-9 replaced by `0x340`. PMS_FPWM0-4, AFT0, DEVC0_IVDMC R `0x244` W
    `0x340` R `0x200`; I2C0-4, SPI0-4, FPWM0, FPWM2 (and FPWM1 in F) R `0x344` W `0x340` R
    `0x200`; SOC_SPMI0-2 R `0x0f000244` W `0x0f000340` R `0x0f000200`; ISPSENS0-3 R `0x4000244`
    W `0x4000340` R `0x4000200`. D-I, every wake. This is the only place request 4 is seen
    written over or read before a write; no capture shows request 4 before the sleep.
+   *(Round 7, gap W5c, W5d.)* Under Linux twelve words read request 4 at the driver's entry
+   (SOC_SPMI0-2 `0x0f000244`, PMS_FPWM0-4, AFT0, DEVC0_IVDMC, FPWM0, FPWM2 `0x244`; section 12,
+   L15): ten of them are among the words this form was seen on at the wake, from the same
+   values (`0x244`, `0x0f000244`); FPWM0 and FPWM2 were seen at the wake from `0x344`. A turn-off
+   of a request-4 word **before** a sleep, and a word with request 4 and bit 28 set, are in no
+   capture. A word that does not read bits 24-27 `0xf` after form 2's first write is in no
+   capture either (above, 66 of 66).
 **After a turn-off write** macOS reads the word one to three times within about 40
 microseconds. In every instance (all three forms, all captures) the first read already reports
 state 0 (bits 4-7 = 0). macOS never met a word that still reported another state after an off
@@ -1997,6 +2182,29 @@ captured. **Capture H** (alarm) is dark too: no "OFF to ON" line, no `WKTP` key 
 recorded, "system wake events: NUB.SPMI0Sw3IRQ nub-spmi.0x02 nub-spmi.0xC0 rtc" at W+0.671,
 `0xd00c` reads `01`. Three alarm wakes (A, G, H) against four key wakes.
 
+**`dcp` and `dcpext` at every wake** *(added round 7, gap W3; `r7_wake_display_sum.py`,
+`r7-wake-display.txt`, `r7_wake_display.py`).* In all eight captures macOS turns the display
+domains on (RMX, DISP0_FE, DISP0_CPU0, DISPEXT_FE, DISPEXT_CPU0 by form 4 of section 4.3; I:
+W+0.4553 to W+0.4584), restarts **both** coprocessors (translator, +`0x8114` = `0x20001`, +`0x44`
+0 -> `0x10`, E2a), boots them (`0x00200000000c000c` sent, endpoint-map words, "AP power `0x20`"),
+starts their endpoints `0x20`-`0x2c` and sends three endpoint-`0x37` words, and then **stops
+both again** by the whole of E2a (power messages, 13 endpoint stops, register stop, translator
+streams 0 and 15 cleared) and turns their domains off (child first, forms 2 and 1), 9 to 169
+ms after the restart (I: `dcp` +`0x44` `0x10` at W+0.4575, 0 at W+0.4668). After the four
+alarm wakes (A, G, H, I) nothing more happens to either before the end of the log (163 s in
+A, 20.8 s in G-I): the display domains end at their commit values (RMX `0x0f000300`, DISP0_FE
+`0x300`, DISP0_CPU0 and DISPEXT_CPU0 `0x0f040300`, DISPEXT_FE `0x300`) and both coprocessors
+are stopped. After the four key wakes (B, D, E, F) `dcp` is restarted and stopped once more
+and restarted a third time (+`0x44` `0x10`, 0, `0x10`, 0, `0x10` from W+0.44 to W+0.51 in D,
+E, F; W+3.98 to W+4.32 in B) and stays running with RMX `0x1f00000f`, DISP0_CPU0 `0x1f04000f`;
+`dcpext` is stopped once and stays stopped with its domains off, as with macOS awake (E2a).
+In every case (E1, E2, every wake; D-I, 63 starts and stops, `r7_stop_domain.py`) each stop
+of `dcp` or `dcpext` is followed by the off writes of its CPU0 word (the first `0x0f0400ff`,
+at most 2.4 ms later), and each start is preceded by that word's turn-on to `0x1f04000f` (D:
+RMX, DISP0_FE, DISP0_CPU0 turned on, `dcp` started, stopped, the three turned off, twice; then
+on and started a third time, W+0.44 to W+0.51): no capture leaves a display coprocessor
+stopped with its domains on, or running with them off.
+
 ### W5. Back at idle
 
 Distinct (address, direction) pairs not seen in the idle before the sleep, per second after W
@@ -2323,6 +2531,21 @@ Before the SoC goes down:
   are not in the log `[UNKNOWN]`; `dart-dcp` +`0xfc` is written `0x7ffe` twice after the
   stop. When `dcp` and `dcpext` are restarted in E2 (after their domains are on): +`0x8114`
   written `0x20001`, +`0x44` read 0, written `0x10`.
+  *(Changed round 7, gaps W6, W7; E2a; all eight captures, 76 stops.)* The exchange is exactly:
+  sent `0x00b0000000000201` / received `0x00b0000000000201` (endpoint 0); for `dcp` and
+  `dcpext` sent `0x00a4000000000000` on endpoint `0x20`, `0x21`, ..., `0x2c` in ascending order,
+  each answered `0x0087000000000000` on that endpoint before the next is sent; sent
+  `0x0060000000000201` / received `0x0070000000000201` (endpoint 0); then the register stop.
+  Mailbox words 64 bits, +`0x44`/+`0x48`/+`0x8114` 32 bits. The +`0x8114` read has bit 0 set
+  and the write is that value with bit 0 cleared (E2a gives both). In every instance the
+  endpoints stopped had been started by macOS (E2a). **Translators**: after **every** stop of
+  `dcp` (E1, E2, wake) `dart-dcp` +`0xfc`, and after every stop of `dcpext` `dart-dcpext` +`0xfc`,
+  are written for s = 0 then 15 the last value read from +`0xfc` with bit s cleared, each after
+  a read of +`0x100`+4s and of +`0xfc` (`0x7fff` -> `0x7ffe`, `0x7ffe`); in E1 only, before
+  `dcp`'s "AP power `0x201`", `dart-disp0` +`0xfc` the same for s = 0, 4, 15 (`0x7ffe`, `0x7fee`,
+  `0x7fee`); at every restart, before +`0x8114` = `0x20001`: the translator's +`0xfc` =
+  `0x7fff`, +`0x34` = `0xffffffff`, +`0x20` = `0x100000` (E2a item 3; 105 +`0xfc` writes, no
+  exception). (The previous wording, "`dcp`'s second stop in E2 has neither", is withdrawn.)
   **R5w [BOTH]** *(new)* At the wake, in each of `sio`'s and `pmp`'s wake actions, in all seven:
   +`0x8114` reads `0x20001` and is written `0x20001`; +`0x44` reads **0** and is written `0x10`;
   the next read of +`0x8114` is `0x100101` and the coprocessor's first message (`0x00100000000c000c`)
@@ -2600,6 +2823,18 @@ After the SoC comes up, before macOS is back at idle:
   values for those three are `[ARTEFACT A3]`. ATC0_PCIE, ATC0_CIO, ATC0_CIO_PCIE, ATC0_CIO_USB
   are 0 at the commit and awake, never written, on a machine where macOS had no driver for the
   first port `[A2]`; their state with that port driven by macOS is **not observed**.
+  *(Round 7, gap W4.)* So for the first port's seven words (ATC0_COMMON, ATC0_USB_AON,
+  ATC0_USB, ATC0_PCIE, ATC0_CIO, ATC0_CIO_PCIE, ATC0_CIO_USB) the off request at the commit
+  rests on the hypervisor's artefacts A2/A3, not on macOS with the port in use; what these words
+  read after macOS's own writes reach the hardware, and what the chip comes back with for them
+  after a sleep without the hypervisor, are in no capture (the wake snapshot's values are taken
+  after the hypervisor has brought its own USB back, A7). Under Linux they read ATC0_COMMON
+  `0x22ff`, ATC0_USB_AON and ATC0_USB `0x2ff`, ATC0_PCIE, ATC0_CIO, ATC0_CIO_PCIE, ATC0_CIO_USB
+  `0x3ff` (all on; section 12, L15), and the Thunderbolt link to the other computer runs behind
+  them. Holding the driver to these seven being requested off at the commit is decision **D4**
+  (below), not an observation. *Reference, not an observation:* Aurora's device tree marks
+  ATC0_USB_AON and ATC1_USB_AON `apple,always-on` ("Needs to stay on for dwc3 to work",
+  `t8103-pmgr.dtsi`, `dcce0e751c71`).
 - **R48 [G] / [ARTEFACT]** The clock muxes written `0x80100000` in R18 hold `0x85100000` /
   `0x87100000` at the commit: the write of R18 is observed (all six captures), its effect on
   the word is not. The values of SIO, SIO_BUSIF, UART_P, UART0, ATC0_COMMON at the commit are
@@ -2624,12 +2859,23 @@ After the SoC comes up, before macOS is back at idle:
   and at the wake the same V again, by the same instruction, without a read (W3): **the value
   written at the wake is the value written at boot** (one capture). What V points at, and
   whether 0 would do, is not observed.
+  *Reference, not an observation (round 7):* in Aurora Silicon's `drivers/iommu/apple-dart.c`
+  (`integration/aurora`, `dcce0e751c71`) +`0x200` of such a translator is stream 0's table base
+  register (bit 31 "valid", the table's address shifted right by 12) and +`0xfc` the streams
+  enable; read that way, V names a translation table in memory (I's `0x808217dc`: valid, table
+  at `0x8217dc000`), which the captures do not contain.
 
 - **R49 [BOTH]** Every access was made with the width that word has in `widths.tsv`: 32 bits
   unless listed there as 64 (or 16, or 8) bits; the width of a word never changed between
   captures or between reads and writes of the same word, apart from the 23 words named in
   section 1.8 (all six captures; `widths.py`). *(This round.)* `0x690000004` is read as 32 bits
   and written as 16 bits (value 0) in E5-3, read and written as 32 bits at the wake (all eight).
+  *(Changed round 7, gap W9.)* For the ten PCIe words with two widths the width is per access,
+  as in the table of section 1.8 (D-I, the same in all six): there a word's width does change
+  between reads and writes, and between one access and the next. The guarded power words and
+  the core start/stop words: 32 bits at boot; during the entry and the wake not recorded (open
+  question 39). The coprocessors' mailbox words are 64 bits, their +`0x44`, +`0x48`, +`0x8110`,
+  +`0x8114` 32 bits (section 0).
 
 - **R50 [D]** When the platform sleep actions begin, each power-domain control word has the
   requested state of `ps-at-e3.tsv` (section 1.9): the same in D, E, F and G for 77 of the 78
@@ -2649,11 +2895,33 @@ After the SoC comes up, before macOS is back at idle:
   ATC0_CIO_PCIE, ATC0_CIO_USB, ATC1_PCIE, MSG, ATC1_USB_AON, ATC1_USB) have **no observed
   turn-off**: they are 0 with macOS awake (I) and at the commit, and are not written in any log
   (boot is not logged in full).
+  *(Round 7, gaps W2, W5.)* (a) RMX: its second write is `0x300` after a read of `0x0f0003ff`
+  in all 18 instances, while the same read at the wake's first RMX write is followed by form
+  (1)'s `0x0f0003f0` (4.3): the captures give the value per place, not a rule on the read.
+  (b) The nine never-written domains read on under Linux (ATC1_COMMON `0x23ff`, ATC0_PCIE,
+  ATC0_CIO, ATC0_CIO_PCIE, ATC0_CIO_USB, ATC1_PCIE `0x3ff`, MSG, ATC1_USB_AON, ATC1_USB
+  `0x2ff`; L15); which form macOS would use on them is not observed: by the value alone (bit 28
+  clear) the general statement (1) is the only form the captures have for such a word.
+  (c) Form (3) is seen at the wake only; a request-4 word turned off before a sleep is not
+  observed. (d) A word with bit 28 set and request 4, and a word that does not read state `0xf`
+  after form (2)'s first write, are not observed; from state 4, form (2)'s first write is seen
+  only in R23 (SIO_CPU), with no read after it (E2a, open question 43). After a turn-off write,
+  the first read reported state 0 in every instance, so how long a word may take to report
+  state 0, and what macOS does if it does not, are not observed. *Reference, not an
+  observation:* Aurora's driver comment says macOS waits for (word & `0x8ff`) == 0 (section 0).
 - **R57 [D]** *(new, gaps Q1c, Q6)* At the wake (W1-2c), the words that come back with request
   4 are written request 0 by form (3) of R56 (PMS_FPWM0-4, AFT0, DEVC0_IVDMC, SOC_SPMI0-2,
   I2C0-4, SPI0-4, FPWM0, FPWM2, ISPSENS0-3) and read `..200` after; turn-ons take the forms 4-6
   of section 4.3 (three writes, the third with bit 28, after a read showing state `0xf`; one
   write for words already on). Request 4 is never written over request 0 in any capture.
+- **R58 [BOTH]** *(new round 7, gap W3; section 6 W4; all eight captures)* At every wake macOS
+  turns the display domains on, restarts and boots `dcp` and `dcpext` (E2a's restart), starts
+  their endpoints `0x20`-`0x2c`, and stops both again by R5a's whole stop, turning their domains
+  off after each stop, 9 to 169 ms after the restart. After the four alarm (dark) wakes both
+  stay stopped with their domains at the commit values to the end of each log (A 163 s; G, H, I
+  20.8 s). After the four key wakes `dcp` is started again and stays running; `dcpext` stays
+  stopped. In no capture is a display coprocessor left stopped with its domains on, or running
+  with them off.
 - **D1 — a decision about Linux, not an observation of macOS** (recorded here at the gap
   file's request; the orchestrator's decision, round 6, gap Q6): *the wake keeps macOS's
   sequence, and after it puts each power domain that the Linux entry changed back to the
@@ -2661,6 +2929,38 @@ After the SoC comes up, before macOS is back at idle:
   never changes a domain that Linux would need back (R25), R40 rests on one domain in one
   capture, and request 4 is never written over request 0 (R57). Where in the wake this happens
   is not given by any observation.
+  *(Round 7, gap W8.)* Under D1 the wake writes request `0xf` (or 4) back over words the entry
+  set to 0. For DISP0_CPU0 and DISPEXT_CPU0 the only turn-on macOS was seen to make is form 4
+  of section 4.3: R `0x0f000300` (or `0x0f040300`) W `0x0f040000` (bits 16-19 = 4), W
+  `0x0f04000f`, read until state `0xf`, W `0x1f04000f`; Linux's value for both before the entry,
+  `0x1404024f`, also has bits 16-19 = 4. Request 4 written over request 0 is in no capture (R57);
+  sixth-round Q6 (a)-(e) stand as stated there.
+- **D2 — a decision about Linux, not an observation of macOS** (the orchestrator's default to
+  the round-7 gap W3, reported to Naeem, who may change it): *the wake leaves the coprocessors
+  the entry stopped (`dcp`, `dcpext`, and any other it stopped by R5a) as they are: it does not
+  restart or boot them. Bringing a device's coprocessor back after a sleep is left to that
+  device's own Linux driver. (D1 still puts the power domains back.)* What the captures say
+  next to it: macOS's dark wakes end with `dcp` and `dcpext` stopped, but with their domains
+  off (R58); a display domain left on with its coprocessor stopped, which D1 with D2 produces
+  for DISP0_CPU0 and DISPEXT_CPU0, is in no capture (4.3, R58). What Linux's display driver does
+  with a coprocessor it finds stopped (+`0x44` = 0) is not observed.
+- **D3 — a decision about Linux, not an observation of macOS** (the orchestrator's default to
+  gap W1): *for `dcp`, `dcpext`, `gfx-asc` and `ans` the rule decided earlier for `sio` and `pmp`
+  holds: found running, the driver does what macOS does, its messages included; found stopped,
+  it sends nothing; silent, a bounded wait and then the register stop. A coprocessor whose power
+  domain is found off is not touched at all.* What the captures and readings say next to it:
+  macOS found each of them running and answering in every stop (R5a); under Linux at the
+  driver's entry `dcp` and `dcpext` read +`0x44` `0x10` (running), +`0x48` `0x2d`, and the
+  domains of `gfx-asc`, `ans`, `sio` and PMS_SRAM read state 0 (L15). What a coprocessor answers
+  under Linux, and a bound for its reply, are not observed (open questions 38, 50).
+- **D4 — a decision about Linux, not an observation of macOS** (the orchestrator's default to
+  gap W4): *the driver is held to all seven first-port domains (ATC0_COMMON, ATC0_USB_AON,
+  ATC0_USB, ATC0_PCIE, ATC0_CIO, ATC0_CIO_PCIE, ATC0_CIO_USB) being requested off at the commit,
+  as R54 has it, although that rests on the hypervisor's artefacts A2/A3; D1 puts them back at
+  the wake.* What the captures say next to it: R54's round-7 note; the forms macOS would use on
+  these words from Linux's values (`0x22ff`, `0x2ff`, `0x3ff`) are those of a bit-28-clear word
+  (form 1, 4.3; seen for the first three at boot, through the hypervisor's guard, A3); the four
+  never-written ones have no observed turn-off (R56).
 
 ## 9. Open questions
 
@@ -2797,13 +3097,17 @@ would settle it.
 36. **PARTLY CLOSED by I.** *Where the translator values V of R55 come from:* written at boot,
     0 then V, by the instruction that writes them again at the wake with the same V (W3). Still
     open: what V points at, and whether 0 would do. *Settles it:* macOS memory at the address V
-    names, read under the hypervisor.
+    names, read under the hypervisor. *(Round 7, reference only: V is in the place of a
+    translation table base, R55.)*
 37. **What macOS's mailbox, `+0x44` and `+0x48` read for a coprocessor that is stopped, not
     started, or not answering** (gaps F3, F6, F8, Q11). Seen only: after a sleep, before macOS
     starts them, `sio` and `pmp` read +`0x44` = 0 and +`0x8114` = `0x20001` (R5w); in E2,
     before their restart, `dcp` and `dcpext` read +`0x44` = 0 (R5a). +`0x48` was read only as
     `0x2e`. *Settles it:* a capture in which the hypervisor withholds one coprocessor's boot,
     or a Linux reading of these words with the coprocessor stopped (section 12, L6, L11).
+    *(Round 7.)* For a coprocessor **running** under Linux: `dcp` and `dcpext` read +`0x44`
+    `0x10`, +`0x48` **`0x2d`** (macOS only ever read `0x2e`, after the power messages), +`0x8110`
+    and +`0x8114` in the bit-17 form (L15). Still not read: a stopped or silent one.
 38. **How long a reply may take** (gap F7). In D-H every "coprocessor power `0x201`" reply of
     `sio` and `pmp` came 0.1 to 0.4 ms after the message (`mbox-pre-<cap>.txt`), with the
     hypervisor trapping every access; no reply ever failed. A bound for a missing reply is not
@@ -2826,16 +3130,24 @@ would settle it.
     They are 0 with macOS awake. *Settles it:* the power manager's pages `0x23b700000` and
     `0x23d280000` logged in full from macOS's boot (as I did for the translator pages), and for
     the first port a capture without A2.
-42. **What `dcp`'s endpoint-`0x37`/`0x02` messages before its stop ask for** (Q1b), and what
-    `dcp`, `dcpext`, `gfx-asc`, `ans` read (+`0x44`, +`0x48`, +`0x8110`, +`0x8114`) under
-    Linux at the driver's entry. *Settles it:* the shared-memory buffers those messages name,
-    read by the hypervisor at each message; and the four words of each coprocessor read under
-    Linux just before the driver's entry (an observation of Linux).
+42. **PARTLY CLOSED by ds15 (round 7).** *What `dcp`'s endpoint-`0x37`/`0x02` messages before
+    its stop ask for* (Q1b), and what `dcp`, `dcpext`, `gfx-asc`, `ans` read under Linux at the
+    driver's entry. Read in ds15 (L15): `dcp` and `dcpext` running (+`0x44` `0x10`, +`0x48`
+    `0x2d`); `gfx-asc` and `ans` not read because their domains report state 0. Still open: the
+    messages' payloads. *Settles it:* the shared-memory buffers those messages name, read by
+    the hypervisor at each message.
 43. **A domain asked for 0 while it reads state 4 with bit 28 set** (Q1, run ds14, L13). macOS
     never did it: DISP0_CPU0 always read state `0xf` when macOS turned it off (E2a), and no
     write by macOS was seen to take it from 4 to `0xf`. *Settles it:* readings of `0x23b710018`
     at short intervals with macOS awake and through E1 (when state 4 becomes `0xf`), and under
     Linux the same word read before and after the display coprocessor is stopped.
+    *(Narrowed round 7.)* A bit-28 clear is seen to bring a word to state `0xf` from state `0xf`
+    and from state 0 (RMX, 21 instances), never from state 4 with a read after it (E2a). Under
+    Linux DISP0_CPU0 reads `0x1404024f` with the display on (L14) and before the entry with
+    `dcp` running (L15), the same before and after `dcp`'s four words are read. What the
+    round-6 driver wrote to the word in ds14 is not in its log (L13). *Settles it (Linux):*
+    DISP0_CPU0 read after each write of form 2 on it, with and without `dcp` stopped first by
+    R5a's stop, the replies logged (open question 51).
 44. **Who writes the non-domain words Linux has differently** (Q2): DCSn+`0x7b0`, the clock
     words of L2 other than `0x23b0400d4`-`e8`, the NCO, `0x23b058000`.., the always-on clock
     words. No capture writes any of them (the audio path's `0x23b0400d8` and NCO writes of
@@ -2856,9 +3168,35 @@ would settle it.
 48. **The domain behind the blocks with no domain property** (Q12; temperature sensors, pin
     controllers, watchdog, SPMI, NCO, interrupt controller, R20's blocks, `dart-apcie0`). Not
     observable from macOS's captures, which never accessed a block whose domain it had off.
+    *(Round 7, reference only.)* Aurora's Linux device tree gives domains to some of them
+    (`dart-apcie0` APCIE_GP, interrupt controller AIC, pin controllers GPIO / NUB_GPIO, the
+    display translators DISP0_CPU0 / DISPEXT_CPU0) and none to the watchdog, SPMI controller,
+    NCO, two pin controllers; temperature sensors, `dart-pmp` and R20's blocks have no node
+    (section 1.9). *Settles it (Linux):* a read of each block with the named domain off, as L5
+    did for `dart-sio` (a fault means the block depends on it).
 49. **Bit 11 at rest** (Q13: FPWM1 `0xa00`, GFX `0x0f002b00` under Linux): macOS reads bit 11
     only while waiting for a turn-on (section 0). What a word at rest with bit 11 set means
     is not observed.
+
+Added round 7 (from the seventh-round gap list W1-W14, run ds15 and "Linux awake"). Each says
+which reading would settle it.
+
+50. **What `dcp` and `dcpext` answer under Linux to macOS's stop** (W1): "AP power `0x201`",
+    the endpoint stops `0x00a4..` to `0x20`-`0x2c` (some of which Linux's own display driver
+    may not have started: which endpoints are started under Linux is not read), "coprocessor
+    power `0x201`", with Linux's display driver suspended. Under macOS each stopped endpoint
+    had been started by macOS and every message was answered (R5a). *Settles it:* one run of
+    R5a's stop under Linux on bare metal with every received word and +`0x8114`, +`0x48`
+    logged; and the endpoints Linux's driver started, read from it or from the mailbox traffic
+    at boot.
+51. **DISP0_CPU0 and DISPEXT_CPU0 under form 2 from Linux's state** (W2): from `0x1404024f`,
+    whether the first write (`0x0404004f`: bits 28, 9, 8 cleared, request kept) brings the state to
+    `0xf`, with and without the coprocessor stopped first; and whether the second write then
+    reads state 0 at once. *Settles it:* that run under Linux, reading the word after each write
+    (open question 43).
+52. **What Linux's display driver does with a coprocessor it finds stopped with its domains on
+    after the wake** (D2): no capture, no reading. *Settles it:* a Linux run of the wake under D1
+    and D2 with the display driver's log and `dcp`'s +`0x44`, +`0x48` read after its resume.
 
 ## 10. With and without the cable
 
@@ -2988,7 +3326,7 @@ Everything in this section was read on the same machine with Linux running (Omar
 kernels), recorded in `docs/evidence/2026-11-17-deepsleep-clean-runs/README.md` and its private
 files. It is **not** an observation of macOS and **not** a requirement. It is here so that the
 reader knows in which respects the machine a Linux driver meets differs from the one macOS was
-captured on. The numbers L1-L12 are for reference from tests and from section 4.
+captured on. The numbers L1-L15 are for reference from tests and from section 4.
 
 - **L1 (run ds13, bare metal, 17:59).** In Linux's suspend path, after its devices were
   suspended and cores 1-7 parked and before the deep-sleep driver's first access, the 792 words
@@ -3096,7 +3434,11 @@ captured on. The numbers L1-L12 are for reference from tests and from section 4.
   (gap V9); the 66 domain words' values after the entry's writes; any register while asleep. *(This
   round.)* Also not read: `dcp`'s, `dcpext`'s, `gfx-asc`'s and `ans`'s +`0x44`, +`0x48`,
   +`0x8114` at the driver's entry (R5a; whether these coprocessors run then); which domain a
-  read of a core's domain word reflects (L12).
+  read of a core's domain word reflects (L12). *(Round 7: `dcp`'s and `dcpext`'s four words are
+  now read, L15; `gfx-asc`'s, `ans`'s, `sio`'s and `pmp`'s were not, their domains reporting
+  state 0. Still not read: what any coprocessor answers to a message under Linux; which of
+  `dcp`'s endpoints Linux has started; the display translators' words; DISP0_CPU0 after a
+  write; Linux's state at its own commit.)*
 - **L12: the domain dumps of ds6 and ds13 ("ps prepare", two boots) are equal** in 135 of 137
   words; they differ only in which core's domain reports on (ds6: PCPU1 `0x1f0`, ECPU3 `0x100`;
   ds13 the other way round). *(This round, gap Q15.)* ds13's dump was taken after Linux had parked
@@ -3118,6 +3460,68 @@ captured on. The numbers L1-L12 are for reference from tests and from section 4.
   word then reads `0x1f0402ff` (state `0xf`); macOS writes `0x0f0400ff` (bit 28 cleared, request
   still `0xf`), reads `0x0f0402ff`, writes `0x0f0403f0`, and reads `0x0f040300` at once.
   After this run power-chip byte `0x9f03` read `0x00` (L9).
+- **L14 (Linux awake, stock kernel, 19:35; evidence "Linux awake, stock kernel"; added round
+  7).** Read over `/dev/mem` in stock Omarchy (kernel 7.3.0-0test5, display on, nothing
+  suspended), one 32-bit read each. The evidence file's text is the only record (no log file
+  holds these reads): DISP0_CPU0 `0x23b710018` **`0x1404024f`**; DISP0_FE `0x23b700360`
+  `0x20ff`; DISPEXT_FE `0x23b700368` `0x23ff`; DISPEXT_CPU0 `0x23b700378` `0x1404024f`; GFX
+  `0x23b7003f8` `0x1000230f`; ANS2 `0x23b7003f0` `0x1000230f`; PMS_SRAM `0x23b7003e0`
+  `0x0f000300`; SIO_CPU `0x23b7001d0` `0x1400024f`; NUB_SPMI0 `0x23d280060` `0x1400024f` (names
+  from the power manager's table; the evidence names only four). Against macOS awake (the 15
+  awake snapshots, `r7_coproc_words.py` and the snapshot tables): DISP0_CPU0 `0x1404024f`,
+  DISP0_FE `0x20ff`, GFX `0x1000230f`, ANS2 `0x1000230f`, SIO_CPU `0x1400024f`, NUB_SPMI0
+  `0x1400024f` are **the values macOS has awake** (DISP0_CPU0 and DISP0_FE in most snapshots,
+  section E2a); **DISPEXT_FE and DISPEXT_CPU0 differ**: on under Linux, off under macOS awake
+  (`0x2300`, `0x0f040300` in all 15); PMS_SRAM differs (macOS awake `0x1000030f`, I's pre-full
+  `0x1f0003ff`). So DISP0_CPU0 reads state 4 with bit 28 set with the display on and Linux
+  awake, as under macOS awake.
+- **L15 (run ds15, bare metal, 19:35; evidence "Run ds15"; `var/deepsleep/ds15-snap4-dmesg.txt`,
+  parsed by `r7_linux_ds15.py` into `linux-ds15.json`; added round 7).** In Linux's suspend
+  path, cores 1-7 parked, before the driver's first access (the driver is not called): the 137
+  domain words ("ps prepare"), the 792 words of the commit list, then for six coprocessors
+  +`0x44`, +`0x48`, +`0x8110`, +`0x8114` (each coprocessor's four skipped if one of its domain
+  words reports state 0), with those domain words read before and after; then the 137 again
+  ("ps wake"). Checked against the log lines:
+
+  | Coprocessor | +`0x44` | +`0x48` | +`0x8110` | +`0x8114` | Its domain words (same before and after) |
+  |---|---|---|---|---|---|
+  | `dcp` | `0x10` | `0x2d` | `0x2ff01` | `0x2aa01` | RMX `0x1f0000ff`, DISP0_FE `0x20ff`, DISP0_CPU0 `0x1404024f` |
+  | `dcpext` | `0x10` | `0x2d` | `0x27701` | `0x2ee01` | RMX `0x1f0000ff`, DISPEXT_FE `0x23ff`, DISPEXT_CPU0 `0x1404024f` |
+  | `gfx-asc` | skipped | | | | GFX `0x0f002b00` |
+  | `ans` | skipped | | | | ANS2 `0x0f002300`, APCIE `0xff`, APCIE_ST `0x0f000200` |
+  | `sio` | skipped | | | | SIO_BUSIF, SIO, SIO_CPU `0x0f000200` |
+  | `pmp` | skipped | | | | PMP `0x1f0000ff`, PMS_SRAM `0x0f000300` |
+
+  What this says against the captures:
+  - **`dcp` and `dcpext` run** at the driver's entry (+`0x44` `0x10`, bit 4; their blocks answer).
+    +`0x48` reads **`0x2d`** (bits 0, 2, 3, 5) for both, where macOS read `0x2e` (bits 1, 2, 3,
+    5) in every instance, each time after the two power messages and just before writing +`0x44`
+    = 0 (section 0). The mailbox words read in the bit-17 form ("empty", no message waiting).
+    Which of `dcp`'s endpoints are started, and what either answers, was not read.
+  - **`dcpext` runs under Linux with its domains on; under macOS awake it is stopped with its
+    domains off** (E2a), and macOS boots it in E2 only to stop it.
+  - **`gfx-asc`, `ans`, `sio`** have their domains at state 0 with request 0 at the driver's
+    entry; with Linux awake GFX, ANS2 and SIO_CPU read on (L14), so they go off between the two
+    (by what is not in these readings). PMP reads on (`0x1f0000ff`) and PMS_SRAM off; `pmp`'s words were not read.
+  - **The 137 domain words before the entry are the same in ds13, ds14 and ds15** (three boots)
+    except the cores' words (which core reports on: L12): ds15 against ds13 2 differ (ECPU0,
+    ECPU3), against ds14 2 (ECPU0, PCPU3). Between ds15's "ps prepare" and "ps wake" (the cores
+    started again, no driver) eight differ: ECPU1-3, PCPU0-3 `0x100` -> `0x1f0`, and NUB_SPMI0
+    `0x1400024f` -> `0x1f0002ff` (as in ds13, L1).
+  - **Request 4 at the entry**, twelve words: SOC_SPMI0-2 `0x0f000244`; PMS_FPWM0-4, AFT0,
+    DEVC0_IVDMC, FPWM0, FPWM2 `0x244` (section 4.3, form 3, seen under macOS at the wake only).
+    FPWM1 reads `0x0a00` (request 0, state 0, bits 9 and 11).
+  - **The first port's words** (R54, D4): ATC0_COMMON `0x22ff`, ATC0_USB_AON `0x2ff`, ATC0_USB
+    `0x2ff`, ATC0_PCIE, ATC0_CIO, ATC0_CIO_PCIE, ATC0_CIO_USB `0x3ff`. **The nine never written
+    by macOS** (R56): ATC1_COMMON `0x23ff`; ATC0_PCIE, ATC0_CIO, ATC0_CIO_PCIE, ATC0_CIO_USB,
+    ATC1_PCIE `0x3ff`; MSG, ATC1_USB_AON, ATC1_USB `0x2ff`: all on, bit 28 clear. ATC1_CIO,
+    ATC1_CIO_PCIE, ATC1_CIO_USB `0x300` (off).
+  - **The 792 words**: 783 equal to ds13's (L1); the nine that differ are `MCC.plane0-3+0x680` /
+    `+0x684` (`0xb67` / `0xb93`; ds13 `0x9e5` / `0xa11`) and `DCS3+0x500` (`0x2440004`; ds13
+    `0x1440004`), words that also vary between macOS's captures (R47). Against macOS H's commit
+    673 equal, 119 different (ds13: 674, 118). So the non-domain differences of L2 (DCSn+`0x7b0`
+    = 3, the clock words, the NCO, the always-on clock words) are the same on a second boot.
+  - No SError was recorded; the machine stayed up (`echo mem` returned with eight cores online).
 
 ## Appendix: scripts and extracts (all in `var/spec/`)
 
@@ -3175,6 +3579,17 @@ Run with `tools/hv-trace-kit/venv/bin/python`, from `var/spec/`, after `build_db
 | `coproc_stop.py` | the stop of `dcp`, `dcpext`, `gfx-asc`, `ans`, `sio`, `pmp` and DISP0_CPU0's values (E2a) |
 | `reset_reads.py` | `reset-reads.tsv`: words the wake reads with a value the entry did not leave (6.4) |
 | `linux_diff_list.py` | `linux-diff-list.md`: the non-domain words where Linux ds13 differs from macOS H, with addresses (L2) |
+| `r7_coproc_words.py` | `r7-coproc-words.txt`: every access to +`0x44`, +`0x48`, +`0x8110` of each coprocessor, all eight captures (section 0, E2a) |
+| `r7_stops.py` | `r7-stops.txt`: the 76 stops message by message; endpoint-stop order and alternation (E2a, R5a) |
+| `r7_mbox_seq.py CAP SIDE COPROC T0 T1` | one coprocessor's sent and received words and control-word accesses in a window, with widths |
+| `r7_dart_disp.py CAP`, `r7_dart_rule.py` | the display translators' accesses; `r7-dart-rule.txt`: the rule of every +`0xfc` write (E2a item 3) |
+| `r7_wake_display.py CAP [t]`, `r7_wake_display_sum.py` | display domains and `dcp`/`dcpext` after the wake; `r7-wake-display.txt` (W4, R58) |
+| `r7_stop_domain.py` | each `dcp`/`dcpext` start and stop in D-I against its CPU0 domain word's writes (W4, R58) |
+| `r7_rmx.py` | every RMX write in D-I with the read before and after and the pc (4.3) |
+| `r7_bit28.py` | `r7-bit28.txt`: every bit-28 clear with request kept, and the reads after (E2a) |
+| `r7_bits24.py` | bits 24-27 against bits 4-7 over every domain-word read (section 0) |
+| `r7_pcie_widths.py` | `r7-pcie-widths.txt`: the ten PCIe words with two widths, access by access (1.8) |
+| `r7_linux_ds15.py` | `linux-ds15.json`: run ds15's log lines parsed; comparisons with ds13, ds14 (L15) |
 
 Capture selection: the pairwise scripts compare the two captures named in the environment
 variable `CAPS` (default `3,4`; `3` = A, `4` = B, `d` = D); outputs of other pairs carry the
@@ -3212,7 +3627,92 @@ written but hold their awake value. The 137 domain words are in 4.2a.
 - `0x23d240000`..: `0x23d240000` `0x80100010`; `0x23d240004`-`0x23d24001c` `0x81100100`; `0x23d240020` `0x81100000`; `0x23d240024`-`0x23d240034` `0x81100100`; `0x23d240038` `0x81100000`; `0x23d24003c` `0x81100100`; `0x23d240040` `0x1101100`; `0x23d240044`-`0x23d24004c` `0x82100100`; `0x23d240050` `0x80100100`; `0x23d240054` `0x81100000`; `0x23d240304` `0x10000000`; `0x23d240308` `0x1000000`; `0x23d240314` `0x1000000`; `0x23d240320` `0x0`; `0x23d240330`-`0x23d240370` `0x0`.
 - `0x23d2c0000`..: `0x23d2c0000`-`0x23d2c000c` `0x0`; `0x23d2c0010` `0x880ff04`; `0x23d2c0014` `0x7`; `0x23d2c0018` `0x1`; `0x23d2c001c` `0xff0`; `0x23d2c0020`-`0x23d2c003c` `0x0`.
 
-## Changes in this round (2026-11-17 night: capture I, run ds14, the sixth-round gaps Q1-Q15)
+## Changes in this round (2026-11-17 late night: run ds15, Linux awake, the seventh-round gaps W1-W14, decisions D2-D4)
+
+Inputs: the spec at `b794596`; `docs/spec/gaps-reported-by-tests-round7.md` (W1-W14, D2-D4);
+the evidence file's "Linux awake, stock kernel (19:35)" and "Run ds15"
+(`docs/evidence/2026-11-17-deepsleep-clean-runs/README.md`, commit `c88cf2c`) and the log
+`var/deepsleep/ds15-snap4-dmesg.txt`; the eight captures re-queried (scripts `r7_*.py`, appendix);
+Aurora Silicon `aurora-silicon/linux`, `integration/aurora`, commit `dcce0e751c71`
+(`pmgr-pwrstate.c`, `mailbox.c`, `rtkit.c`, `afk.c`, `dcp-internal.h`, `iomfb_m4.c`,
+`apple-dart.c`, `t8103.dtsi`, `t8103-pmgr.dtsi`) and the Asahi page "ASC", as reference only,
+marked so where used. Inline marks "round 7" in the text are this round's; older inline marks
+("this round", "added this round") belong to the round that wrote them (lists below). Every ds15 number was checked against the log lines
+by `r7_linux_ds15.py`; the "Linux awake" values have no log file and rest on the evidence text.
+
+**Requirements added**
+- R58 [BOTH]: at every wake macOS restarts, boots and stops `dcp` and `dcpext` again, domains
+  off after each stop; after alarm wakes both stay stopped with their domains at the commit
+  values, after key wakes `dcp` runs; never a display coprocessor stopped with its domains on.
+- D2, D3, D4: the orchestrator's decisions about Linux (wake leaves stopped coprocessors as
+  they are; the stop rule for `dcp`, `dcpext`, `gfx-asc`, `ans`; the first port's seven words
+  off at the commit), recorded beside D1 as **decisions, not observations**, each with what the
+  captures say next to it.
+
+**Requirements changed**
+- R5a: the exchange message by message (ascending endpoint stops, each answered on its own
+  endpoint before the next; the acknowledgement `0x0070000000000201`; widths); +`0x8114` read
+  and written values distinguished; translator writes after every `dcp`/`dcpext` stop, with
+  their rule, and at every restart; "E2 has neither" withdrawn.
+- R49: the ten PCIe words' width is per access (table in 1.8); coprocessor word widths.
+- R54: the first port's seven words: what rests on A2/A3, Linux's values, D4.
+- R55: reference reading of V as a translation-table base.
+- R56: RMX's `0x300` is per place, not a rule on the read; Linux's values for the nine
+  never-written words; form 3 before a sleep, request 4 with bit 28, and a missing state `0xf`
+  not observed; no observed wait (reference comment cited).
+- D1: Linux's DISP0_CPU0 bits 16-19 and macOS's only turn-on form for it (W8).
+
+**Requirements withdrawn:** none. (Inside R5a and E2a: "`dcp`'s second stop in E2 has neither
+[translator write]" is withdrawn.)
+
+**Sections changed or added:** 0 (bits 24-27 counts; reference reading of bits 28, 24-27,
+16-19 and of the turn-off; mailbox and coprocessor word widths, +`0x48` read only before the
+stop; reference names of the control words, message types, power states, endpoint types);
+1.8 (the ten PCIe words access by access); 1.9 (reference: Aurora's device-tree domains for the
+blocks without one); E2a (item 2 values corrected; item 3 rewritten: every +`0xfc` write and its
+rule, E2 and wake included, restarts; step 1 message by message; endpoints stopped were started
+by macOS; `dcpext` stopped and off with macOS awake; what a bit-28 clear does from states 0,
+`0xf`, 4); 4.3 (RMX's second write against its first wake write; request 4 under Linux);
+6 W4 (`dcp` and `dcpext` at every wake); 8 (above); 9 (36, 37, 42, 43, 48 updated; 50-52 new);
+12 (L11 updated; L14, L15 new); appendix (scripts).
+
+**Gap list W1-W14, how each was dealt with**
+- W1: ds15 read `dcp`, `dcpext` running (+`0x44` `0x10`, +`0x48` `0x2d`, bit-17 mailbox words);
+  `gfx-asc`, `ans` not readable (domains at state 0) (L15). macOS's exchange given message by
+  message and shown to stop only endpoints macOS started (E2a, R5a). D3 recorded. What `dcp`
+  answers under Linux, and which endpoints Linux started: not observed (50).
+- W2: a bit-28 clear observed to give state `0xf` from `0xf` and from 0 (RMX), never from 4 with
+  a read after (E2a, 4.3); bits 24-27 counts (section 0); Linux DISP0_CPU0 `0x1404024f` awake and
+  at the entry with `dcp` running (L14, L15); ds14's written value not in its log (L13);
+  reference reading of bit 28 as automatic power management (section 0). Not observed: 43, 51.
+- W3: R58 (macOS's own wakes end with both display coprocessors stopped and their domains off
+  after a dark wake); D2 recorded with the note that D1 + D2 give a state in no capture (52).
+- W4: R54 note; Linux's values (L15); D4 recorded. Not observed: 41.
+- W5: (a) RMX `0x300` against `0x0f0003f0` from the same read (4.3, R56); (b) Linux's values of the
+  nine, no observed form (R56); (c) form 3 seen at the wake only, the twelve Linux words named
+  (4.3, L15); (d) not observed (R56).
+- W6: every display-translator write with the read before it and its rule, E1, E2, wake and
+  restarts (E2a item 3, R5a); E2's stop has them; `dart-disp0` not rewritten before T; reference
+  register names and domains (E2a, 1.9). Not read under Linux (L11).
+- W7: order compared (ascending, all 44 `dcp`/`dcpext` stops); reply on the stopped endpoint;
+  acknowledgement `0x0070000000000201` for all six; +`0x8114` read/written values; widths in the
+  text (section 0, E2a, R5a).
+- W8: D1 note (only form 4 seen for DISP0_CPU0/DISPEXT_CPU0; bits 16-19); request 4 over 0
+  still in no capture.
+- W9: the ten PCIe words access by access (1.8), R49 changed; guarded and start words still not
+  recorded during entry and wake (39).
+- W10: ds15 repeats ds13's non-domain differences on a second boot (L15); who writes them under
+  macOS still not observed (44).
+- W11: unchanged: no capture of a commit without power-down (45).
+- W12: unchanged: 46, 47 (no reference found for either).
+- W13: reference domains from Aurora's device tree for some blocks, none for the rest (1.9, 48);
+  not observed.
+- W14: each choice against the readings: stop -> state `0xf` not shown (E2a); state 4 kept
+  under request 0 seen once (L13); GFX, ANS2 awake under Linux equal macOS awake but off at the
+  entry (L14, L15); first port (R54, D4); `dcp`/`dcpext` running under Linux, their answers not
+  read (L15, 50).
+
+## Changes in the previous round (2026-11-17 night: capture I, run ds14, the sixth-round gaps Q1-Q15)
 
 Inputs: capture I (`det10`, section 1.7b) and the evidence file's "Hypervisor round 3" and "Run
 ds14" (`docs/evidence/2026-11-17-deepsleep-clean-runs/README.md`, commit `d7085e2`);
@@ -3292,7 +3792,7 @@ L11, L12, L13 ds14 new); appendix (scripts) and appendix B (commit values, new).
 - Q15: L9 (macOS never accesses `0x9f03`; ds14 reads `0x00`); R12 (MTR word always 0); L12
   (cores' words); bits 8 and 9 per domain (section 0, 4.3).
 
-## Changes in the previous round (2026-11-17 evening: capture H, the Linux readings, the test authors' gaps V1-V12, F1-F10, S1-S13, T1-T12, 1-15)
+## Changes in the round before the previous (2026-11-17 evening: capture H, the Linux readings, the test authors' gaps V1-V12, F1-F10, S1-S13, T1-T12, 1-15)
 
 Inputs: capture H (`det9`, section 1.7a); `var/commit-state/` (G and H at the commit, the Linux
 readings of runs ds6, ds13, dsh2); `docs/evidence/2026-11-17-deepsleep-clean-runs/README.md`;
