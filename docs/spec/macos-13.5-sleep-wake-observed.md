@@ -305,6 +305,30 @@ maintenance, the final wait instruction; the hypervisor zeroes the guest timer c
 each core before the snapshot `[ARTEFACT]`. The alarm that woke it is the hypervisor's (A6).
 Only 20.8 s after the wake were recorded.
 
+### 1.8 Access widths (all six captures)
+
+Every logged access carries its width: macOS read or wrote the word as 8, 16, 32 or 64 bits.
+`widths.py` collects, for every device address and direction, the widths seen in all six
+captures (`widths.tsv`: address, direction, bits, the captures it was seen in, the count;
+`widths-blocks.tsv`: the widths seen per 16 KiB page).
+
+- 106,235 address-and-direction pairs were accessed. 105,382 were only ever accessed as 32 bits,
+  852 only as 64 bits, 38 as 16 bits, 1 as 8 bits.
+- **The width of a word is the same in every capture it appears in.** 38 pairs were accessed
+  with two widths, the same two in every capture: thirteen words of the block at `0x23b549000`
+  (`+0x000`, `008`, `010`, `018`, `090`, `0a0`, `200`, `208`, `210`, `218`, `290`, `2a0`,
+  `400`; 32 and 64 bits) and ten words of the PCIe blocks at `0x690000000` and `0x690100000`
+  (16 and 32 bits). No other word was accessed with more than one width in any capture.
+- 64-bit words are found in 175 of the 591 pages touched; 165 of those pages hold only 64-bit
+  words. Among the blocks this document deals with: the memory controller's
+  `0x200024000`, `0x200064000`, `0x2000a4000` pages (which hold `0x200024000`, `0x200024008`,
+  `0x200027000`, `0x200067000`, `0x2000a7000`), `0x200158000`, a page of `DCS0`
+  (`0x200204000`), each core's blocks at `0x21n054000`/`0x21n058000`, the cluster blocks at
+  `0x210e20000`, `0x210e40000`-`0x210e48000`, `0x210e70000` and the same at `0x211e.....`,
+  and the power-manager table blocks `0x23200c000`, `0x23400c000`. The full list is the file.
+- What the machine does when a word is accessed with another width is not observed: macOS never
+  did it. `[UNKNOWN]`
+
 ## 2. Idle
 
 Windows used (`idle.py`, `idle_seq.py`; tables `idle-<A=3|B=4>-<pre|post>.tsv`): before the
@@ -1625,6 +1649,11 @@ After the SoC comes up, before macOS is back at idle:
   or the I5 burst back on (A for 163 s, G for the 20.8 s recorded); after a key wake it does,
   within 5 s in B and 0.7 s in D, E, F (W4, W5, section 2). Two alarm wakes, four key wakes.
   Both alarms were the hypervisor's.
+
+- **R49 [BOTH]** Every access was made with the width that word has in `widths.tsv`: 32 bits
+  unless listed there as 64 (or 16, or 8) bits; the width of a word never changed between
+  captures or between reads and writes of the same word, apart from the 23 words named in
+  section 1.8 (all six captures; `widths.py`).
 
 ## 9. Open questions
 
