@@ -16,9 +16,14 @@ near midnight), and with a tenth capture that records each core's own state at i
 write and the always-on block's words at the commit (K, section 1.7d), four runs in which the
 instrument left that state in place or kept the last core running after the commit, none of
 which powered down (section 1.7d), and the conditions a reference on other Apple chips names for
-the hardware's power-down set against the M1 readings (section 4.4a) (round 9, 2026-11-18,
-listed in "Changes in this round" at the end, with the earlier rounds' lists below it). It
-states what macOS did, not why, and not what is needed for sleep to work.
+the hardware's power-down set against the M1 readings (section 4.4a) (round 9, 2026-11-18), and
+with an eleventh capture that reads watchdog 2 inside macOS's writes of `0x23d2c4000`, the CPU
+start/stop block and the whole power-gate page at the commit (L, sections 1.7e, 4.1d), two more
+captures in which the instrument left each core's timers as macOS left them and the chip still
+powered down, and two runs in which it left only the pending virtual interrupts and the chip
+did not (section 1.7e, E7) (round 10, 2026-11-18, listed in "Changes in this round" at the end,
+with the earlier rounds' lists below it). It states what macOS did, not why, and not what is
+needed for sleep to work.
 Nothing here comes from any Linux sleep driver's code. Section 12 records what was **read on the
 machine under Linux** (the state a driver starts from); every such statement is marked
 **[LINUX]** and is an observation of Linux, not of macOS.
@@ -186,6 +191,24 @@ machine under Linux** (the state a driver starts from); every such statement is 
   after the reset and the times. They are not captures of macOS alone: **[HV-CHANGED]** marks a
   statement that rests on a run in which the instrument's change altered the outcome, so that
   the statement is about the instrument's influence on the machine, not about what macOS does.
+- **Capture L** = run `det18` (round 10, section 1.7e): K's recipe with two additions, both
+  reads: inside each of macOS's three writes of `0x23d2c4000` the instrument reads that word,
+  watchdog 2 and `0x23d2b8028`, `0x23d2b8040` just before and just after the write (10-20
+  microseconds of the instrument's reads in each write); and the commit list extended to the CPU
+  start/stop block `0x23b754000`-`0x23b75401c` and the whole power-gate page
+  `0x23b71c000`-`0x23b71c704` (1,328 words). It slept and woke at the alarm. Where L was checked
+  the text says so ("D-L", "G-L", **"all eleven"**).
+- **The round-10 runs** (section 1.7e): L's recipe with one more change of the instrument's
+  each. `det19b`, `det21`: each core's guest timers and timer FIQ enable left as macOS left them,
+  the pending virtual interrupts cleared as in every earlier power-down; **both powered down and
+  woke at the alarm**, and their logs were read, so with L they are three captures of the probe,
+  the commit list and each core's state ("L, det19b, det21"). `det20b`, `det22c`: the pending
+  virtual interrupts left, the guest timers written off as in every earlier power-down; **both
+  ended in a reset, as det13 and det17 did**. *(Round 10.)* **[HV-CHANGED]** also marks a
+  statement about what the machine did after the commit in `det19b` or `det21`: the outcome
+  there was the same as without the change, but it was reached with the change in place. Their
+  readings taken before the instrument's change (macOS's writes, each core's state at its final
+  write, the commit snapshot) are macOS's, as in K.
 - **Reference** (round 9): `docs/reference/asahi-aurora-sleep-deep-dive.md`, a compilation of
   what the Asahi Linux documentation and the Aurora Silicon repositories say about deep sleep on
   other Apple chips (T8140, T8132, T6040, T6050) and about t8103. Statements taken from it are
@@ -269,7 +292,15 @@ and the page `0x23bc34000`). Everything in sections 2-6 uses the full log only.
   hypervisor (for example hardware `0x20ff`, reported `0x2000`); its writes are held back
   ("Dangerous write") and the last held value is written by the hypervisor at the commit.
 - **A4 Core start and stop.** macOS's writes to `0x23b754000`.. are handled by the hypervisor,
-  which starts or stops the core itself.
+  which starts or stops the core itself. *(Round 10; the instrument's code, `~/m1n1-next`
+  `ff8caba0`, `src/hv/hv_detached.c` `det_cpustart`, and `proxyclient/m1n1/hv/__init__.py`
+  `cpustart_wh`, cited as the record of what the instrument did.)* In a real-sleep run a write to
+  `0x23b754000` (+`0x0`, the stop bits of R11) is passed to the hardware and logged; a write to
+  +`0x8` or +`0xc` makes the instrument start the named cores itself; every other write,
+  +`0x4` included, is logged and **not** passed on. The instrument writes nothing to the block
+  of its own. So macOS's stop bits reach the hardware; its writes of +`0x4` at the wake (W2) do
+  not. (Read in the round-10 build only; that the builds of A-K did the same is not checked
+  here.)
 - **A5 Memory-protection lock.** The words `0x200000680`-`0x20000068c` (and the same in the other
   three planes) are emulated; the system registers `CTRR_A_LWR_EL1`, `CTRR_A_UPR_EL1`,
   `CTRR_CTL_EL1`, `CTRR_LOCK_EL1` are shadowed (macOS's writes do not reach the hardware) and
@@ -316,6 +347,20 @@ and the page `0x23bc34000`). Everything in sections 2-6 uses the full log only.
   traffic after the commit**, which no other capture has; `det14` then goes down (bound 3 s, or
   watchdog 2 within 1.5 s of its bite), `det16` (`hv_s2r_sample_hold`) never does and would set
   watchdog 1 to bite at once at a 20 s bound (not reached).
+  *(Round 10: the build of L and the round-10 runs, `~/m1n1-next` `m1power/hv-detached`
+  `ff8caba0` on `2cb8a180`, same file, `hv_real_s2r_cyc_ovrd`; host side lab `546e9e4`.)*
+  `hv_s2r_core_state` on in every run. `hv_s2r_keep_timers` (`det19b`, `det21`): the guest's
+  `CNTP_CTL_EL02`, `CNTV_CTL_EL02` and `VM_TMR_FIQ_ENA_EL2` are left as they were; the pending
+  virtual IRQ and FIQ of `HCR_EL2` are cleared as in A-L. `hv_s2r_keep_vfiq` (`det20b`,
+  `det22c`): the pending virtual IRQ and FIQ are left; the three timer registers are written 0
+  as in A-L. (`hv_s2r_keep_state` of `det13`, `det17` is both at once.) In every one of them the
+  instrument's own two EL2 timers are stopped. `hv_s2r_c4_probe` (L and every round-10 run): on
+  each guest write of `0x23d2c4000`, a trapped page, the writing core reads `0x23d2c4000`,
+  watchdog 2's count, bite and control, `0x23d2b8028`, `0x23d2b8040`, then carries out the
+  write, then reads the same words again; reads only, about 10-20 microseconds inside each of
+  the three writes. The commit snapshot table holds up to 2,048 words. The instrument's comment
+  at the clearing of the pending virtual interrupts reads "a pending vFIQ is a WFI wake-up
+  event"; it is the instrument author's statement, not an observation.
 - **A7 The wake.** The chip's reset vector points into the hypervisor. It runs first, reads the
   wake status, brings its USB back (which powers that port's domains), takes the "wake"
   snapshot, then enters macOS at macOS's reset entry on core 0. The snapshot therefore shows the
@@ -328,6 +373,7 @@ and the page `0x23bc34000`). Everything in sections 2-6 uses the full log only.
   150 s at boot and turned it off before the sleep ("WDT off"). Values macOS reads there may
   reflect that. *(Round 8.)* In J the instrument also arms watchdog 1 at the commit (A6, 1.7c).
   *(Round 9.)* So in K and the round-9 runs. Watchdog 2 is not written by the instrument (A6).
+  *(Round 10.)* So in L and the round-10 runs; the probe of A6 only reads watchdog 2.
 - **A10 Power-chip scratch bytes.** After the wake macOS reads scratch `0x9f08`-`0x9f0b` as
   `ff ff 51 01`; before the sleep it read `00 00 00 00`. The change is the hypervisor's (A6).
 - **A11 The access log ends before the power-down (captures A and B only).** The log's last records are a sweep of reads
@@ -736,6 +782,71 @@ each turned a power-down and wake into a reset 5-7 s after the commit (`[HV-CHAN
 **Limits:** K is one capture; the round-9 runs have no log; the two items `det13`/`det17` left in
 place (the timers, the pending virtual interrupts) were not separated; nothing after the last
 core goes down is observed in any run.
+
+### 1.7e Capture L (`det18`) and the round-10 runs (`det19b`, `det20b`, `det21`, `det22c`) (round 10)
+
+2026-11-18 02:08-03:35 (evidence `docs/evidence/2026-11-17-deepsleep-clean-runs/README.md`,
+"Hypervisor round 7", commit `bdb9f12`). Every run used K's recipe (idle sleep, nobody at the
+machine, the instrument's alarm at the commit + 90 s, watchdog 1 armed at the commit for 150 s,
+each core's state recorded at its final write) with the build of A6's round-10 note, the probe
+of `0x23d2c4000` on, and the commit list `var/recfg/commit-snap-list-r7.json` (1,329 entries:
+K's 880, the eight words of the CPU start/stop block `0x23b754000`-`0x23b75401c`, and every word
+of the power-gate page `0x23b71c000`-`0x23b71c704` not already listed; 1,328 distinct). The same
+list was read with macOS awake ("awake-extra", the guest paused) at each detach, about 7 min
+before the commit. Files: `tools/hv-trace-kit/runs/20261116-mac135/*-det18.*`, `*-det19*`,
+`*-det20*`, `*-det21.*`, `*-det22*`; the observation stage's `var/commit-state/r7_probe.py`
+(outputs `r7-det18.txt`, `r7-det19b.txt`, `r7-det21.txt`), `r7_wd2start.py`
+(`r7-wd2start-det*.txt`), `r7-det*-core-state.txt`, `r7-pwrgate-records.md`; the power-chip dumps
+`var/m1-state/pmu-20261118-*-after-det1[89]*`, `-det2*`; this round's `var/spec/r10_checks.py`
+(output `r10-checks.txt`), which re-reads all of these and the capture databases.
+
+| Run | The instrument's change besides recording | Outcome | Whose observation |
+|---|---|---|---|
+| L (`det18`) | none (the probe's reads only) | **asleep 89.58 s, woke at the alarm**, wake status 0 / `0x400000` / 0, log read out | macOS's, under the instrument as in K |
+| `det19` | `keep_timers` | not run: macOS panicked while booting under the instrument (`i2c0::_runInterruptMode RxFIFO doesn't have enough bytes ... hpmBusManager`, as `det15`), before the instrument's options were set | none |
+| `det19b` | `keep_timers` | **asleep 89.74 s, woke at the alarm**, wake status 0 / `0x400000` / 0, log read out | macOS's up to each core's final write; after it **[HV-CHANGED]** |
+| `det20` | `keep_vfiq` | not run: the same boot panic | none |
+| `det20b` | `keep_vfiq` | **no wake; a reset about 6 s after the commit** (commit about 02:59:12 ±2 s; USB device gone 02:59:18.1; next kernel 02:59:30) | **[HV-CHANGED]** |
+| `det21` | `keep_timers` (`det19b` repeated) | **asleep 89.62 s, woke at the alarm**, wake status 0 / `0x400000` / 0, log read out | macOS's up to each core's final write; after it **[HV-CHANGED]** |
+| `det22`, `det22b` | `keep_vfiq` | not run: the same boot panic, twice | none |
+| `det22c` | `keep_vfiq` (`det20b` repeated) | **no wake; a reset about 5-7 s after the commit** (commit about 03:34:02 ±2 s; USB device gone 03:34:08.8; next kernel 03:34:21) | **[HV-CHANGED]** |
+
+The commit times of `det20b` and `det22c` are found as in 1.7d (dump time + alarm − clock − 90
+s); this round's re-computation from the dumps' bytes gives the same times within the ±2 s. Of
+nine bring-ups four ended in the boot panic, each before the options were written.
+
+**Numbers of the three captures** (`r7-det*.txt`, `r10-checks.txt`). T = the instrument's
+"last core down" record: L 445.323736 s after the detach, `det19b` 433.068187, `det21` 433.659305.
+macOS's three writes of `0x23d2c4000` = 1, all by core 0 from one guest instruction per run, at
+T-15.6 / -4.1 / -0.97 ms (L), T-16.1 / -4.6 / -0.97 ms (`det19b`), T-16.0 / -4.2 / -0.96 ms
+(`det21`); no other access to the word in the logs. The commit snapshot: 1,328 words, 0 errors,
+from T+1 microsecond to T+1.9 ms (L), +1.8 ms, +2.6 ms. In `det21` the instrument's last-core
+path ran on core 4 (counted eighth at 433.659305), while core 0's own state record was the last
+of the eight (433.659058); in L and `det19b` both are core 0's. At the wake entry, in all three:
+`0x23d2b8028` `0x8000000`, `0x23d2b8040` `0x22`, `0x23d2c001c` `0xff0`, watchdog 2 bite
+`0x7270e00`, control 0, count 0.325-0.326 s; watchdog 1 bite `0xd693a400`, control 4, count
+13.7-13.9 ms; as in J and K.
+
+**The power chip after each run** (`pmu-20261118-*`; `r10-checks.txt` does not re-read these, the
+values below are read from the dump files): `0x0201` `00` after all five; `0x9f03` `0x00` after
+the three wakes and `0x50` after `det20b` and `det22c` (1.7d: `0x50` after every run of either
+system that reached a commit and did not wake; still so); `0xd000` `0x01` after the wakes and
+`0x41` after the two resets (the alarm still armed: each reset came before the alarm's time);
+`0xa47b`-`0xa47d` `00 08 00` after all five. After `det20b` and `det22c` `0x9f04` holds the
+instrument's wake note `'W'` unconsumed and `0x9f0a` its commit mark `'P'`; its per-core bitmaps
+of macOS's own state at each core's final write: `0x9f0c` (guest timer enabled and unmasked)
+`0xff` in both; `0x9f0b` (a virtual interrupt or one the instrument held pending) `0x0f` (cores
+0-3, `det20b`) and `0x07` (cores 0-2, `det22c`). Whether the last core's real `CYC_OVRD_EL1`
+write followed the commit in `det20b` and `det22c` is not read; **what reset the SoC in either is
+not read**; whether it powered down before the reset is not read.
+
+**What it adds:** watchdog 2 armed and `0x23d2b8028` bit 24 set **before** macOS's first write
+of `0x23d2c4000` reaches the hardware, and `0x23d2c4000` reading 0 from that write on (4.1c,
+R62, R24); the CPU start/stop block and the whole power-gate page awake and at the commit (4.1d,
+R66, R67); the two items `det13` and `det17` left in place, separated (E7, R59, R68).
+**Limits:** the probe is itself a change (reads inside each write; L powered down and woke as J
+and K did without it); the two runs that reset left no log; each half of the split was run twice;
+nothing after the last core goes down is observed in any run.
 
 ### 1.8 Access widths (all six captures)
 
@@ -1387,7 +1498,9 @@ controller (`five.py`); the guarded SIO words handled in the same order with the
    j. the three SIO domains have bit 28 cleared: SIO_CPU `0x23b7001d0` `0x1400024f` ->
       **`0x0400024f`** (access log, T-0.0244); SIO `0x23b7001c8` and SIO_BUSIF `0x23b7001c0`
       written `0x0f0000ff` (hypervisor's log, held, `[ARTEFACT A3]`; position relative to the
-      SIO_CPU write not known);
+      SIO_CPU write not known); *(round 10: in L, `det19b`, `det21` the instrument's records put
+      SIO, then SIO_BUSIF, each read and written, between the write `0x23b718004` = 0 of step i
+      and the SIO_CPU write, 4-39 microseconds after the former; `r7-wd2start-det*.txt`)*;
    k. **`W 0x23d2c4000`=1** (T-0.0243), with console text "Starting S2R timer".
 9. T-0.023 to T-0.017: 22 writes to `0x23fe5f098`.. (SMC shared memory; values include kernel
    text addresses and differ between captures).
@@ -1544,7 +1657,8 @@ which are not logged; then the real `CYC_OVRD_EL1` write.
 - *(Round 8.)* Between each core's logged `CYC_OVRD_EL1` write and its real one the instrument
   writes that core's four timer controls and its guest timer FIQ enable 0 and clears the pending
   virtual IRQ and FIQ (A6), on every core, in A-J. So **every observed power-down had every core
-  in its final wait with its timers disabled and no virtual interrupt pending**; what macOS itself
+  in its final wait with its timers disabled and no virtual interrupt pending** *(round 10: the
+  timers not in `det19b`, `det21`, which also powered down; R59)*; what macOS itself
   leaves in these registers is not in any log (the timers are not trapped, 1.7). Before that, in
   burst 1, each core's last trapped writes are `PMCR0_EL1` = `0x7003400` and `IPI_SR_EL1` = 1
   (core 0 included, at T-0.0902 in J; R45). J repeats burst 2 with the values of G and H
@@ -1636,6 +1750,93 @@ event for a wait-for-interrupt instruction, and the instrument's code says so in
 (A6); Aurora's notes on T8140 say a timer left running ends the final wait and that "the sleep
 engine waits for" a raised interrupt line, so its driver masks every line and the timers after
 its commit (reference, section 2.2).
+
+**Each core's own state at its final write in L, `det19b`, `det21` (round 10;
+`r7-det*-core-state.txt`, `r10-checks.txt` part 2).** Read as in K, before any write of the
+instrument's; so these are macOS's values (and the instrument's held state) in all three, the
+two `keep_timers` runs included. Every value of K's "equal on all eight cores" table is the same
+in all three runs (`CNTP_CTL_EL02` `0x6`, `ISR_EL1` 0, `IPI_SR_EL1` 0, `IPI_CR_EL1` `0x600`,
+`PMCR0_EL1` `0x7003400`, `ACC_OVRD_EL1` `0x1800101526076207`, `CYC_OVRD_EL1` `0x2000000` before
+the write, `0x3000001` written; the interrupt-controller words as in K), except `CNTVOFF_EL2`,
+the instrument's, which differs per boot. The guest virtual timer, per core (due = its compare
+minus the guest's count at the read):
+
+| Capture | Enabled, unmasked, **fired** (`0x5`); the instrument: virtual FIQ pending, timer FIQ enable 2 | Enabled, unmasked, not fired (`0x1`); virtual FIQ clear, timer FIQ enable 3 |
+|---|---|---|
+| K (`det12`) | cores 1, 2, 0 (due -0.034 to -0.083 s) | core 3 +0.877 s; cores 4, 5, 6, 7 +89.39 s |
+| L (`det18`) | cores 1, 3, 2, 0 (due -0.010 to -0.088 s) | cores 4, 5, 6, 7 +89.39 s |
+| `det19b` | cores 1, 3, 0 (-0.077 to -0.088 s) | **core 2 +0.063 s**; cores 4, 5, 6, 7 +89.39 s |
+| `det21` | cores 1, 2, 0 (-0.051 to -0.073 s) | **core 3 +0.062 s**; cores 4, 5, 6, 7 +89.39 s |
+
+So in four captures: macOS leaves its virtual timer enabled and unmasked on all eight cores; it
+has fired on three or four of the efficiency cores, **core 0 and core 1 every time**; on the
+performance cores it is due about 89.39 s after the final write (the instrument's alarm is at
+commit + 90 s); on the remaining efficiency core it is due 0.06 to 0.88 s after. No core had a
+virtual IRQ pending; `ISR_EL1` read 0 on every core. Where the timer had fired, the instrument
+held a virtual FIQ pending and had the timer's FIQ to the core off (bit 0 of
+`VM_TMR_FIQ_ENA_EL2` clear); where it had not, no virtual FIQ and the FIQ to the core on. The
+bitmaps of `det20b` and `det22c` (1.7e) show the same kind of state on cores 0-3 and 0-2.
+
+**The two items separated (round 10; [HV-CHANGED]).** Every power-down before this round had,
+by the instrument's acts on every core between its logged `CYC_OVRD_EL1` write and its real one,
+(a) the guest timers and the timer FIQ enable written 0 and (b) the pending virtual IRQ and FIQ
+cleared (A6, R59). `det13` and `det17` kept both and did not power down. This round:
+
+| What the instrument left as macOS left it | Runs | What followed |
+|---|---|---|
+| neither (A-L) | 11 captures | power-down, wake at the alarm or a key |
+| (a) the timers: guest virtual timer enabled and unmasked on all eight cores, fired on three, and the timer FIQ enable as found (fired cores 2, others 3); (b) done: no virtual interrupt pending | `det19b`, `det21` | **power-down and wake at the alarm, 89.74 s and 89.62 s**, wake status 0 / `0x400000` / 0: as without the change |
+| (b) the pending virtual FIQ on cores 0-3 (`det20b`) / 0-2 (`det22c`); (a) done: timers and timer FIQ enable 0 | `det20b`, `det22c` | **no wake; a reset about 6 s after the commit**, `0x9f03` `0x50` |
+| both | `det13`, `det17` (round 9) | no wake; a reset about 5-6 s after the commit |
+
+So, under the instrument: **with a virtual FIQ pending at two to four cores when they made their
+final write, the chip did not power down and wake, four runs of four (two configurations); with
+no virtual interrupt pending and every core gone down, it did, thirteen of thirteen, two of them
+with every core's guest virtual timer left enabled and unmasked.** (The two runs with no virtual
+interrupt pending that did not power down, `det14` and `det16`, kept a core running, R64.) The enabled timer is not what stopped `det13` and
+`det17`; the pending virtual FIQ is the item whose presence went with every failure. What happened
+at the cores after their final write in the failed runs is not read: whether a core left its wait
+is not observed, and nothing in the record says what reset the SoC. *Reference, not an
+observation:* by the Arm architecture a pending virtual FIQ (with `HCR_EL2`.FMO set, as here)
+ends a wait for interrupt even with `PSTATE`.F masked; the instrument's code says the same in its
+comment (A6). On that reading a core with a virtual FIQ pending would not stay in its final wait,
+which would make these runs like `det14` and `det16` (a core kept running after the commit: a
+reset 6-7 s after, R64), whose timing they match; this is an inference.
+
+Two details of `det19b` and `det21` bound the timer side further, as far as they go. In each, one
+core (core 2, core 3) went down with its timer enabled, unmasked, **not fired, due 62-63 ms after
+its final write, and its FIQ to the core on** (enable 3); the chip powered down and woke at the
+alarm. What happened when that timer fell due is not in any log (the instrument's handling of
+such an FIQ after a core's final write is not recorded). Either the chip had passed the point at
+which a core's timer matters within about 62 ms of that core's final write, or a timer falling
+due after the final write does not stop the power-down; the two are not separated. And on the
+cores where the timer had already fired, the instrument had turned the timer's FIQ to the core
+off; so **no run has a core reach its final wait with a fired timer whose interrupt reaches the
+core other than as the instrument's virtual FIQ**. What macOS's own timer state does on a machine
+without the instrument is still not observed `[UNKNOWN]`.
+
+**What a core leaves at its final write, as far as the observations carry it (round 10).** For
+a driver's cores, kept apart by how firmly each rests:
+1. *Nothing pending at the core.* Every captured power-down (A-L, `det19b`, `det21`) had no
+   virtual IRQ or FIQ pending at any core at its final wait (the instrument's act, [ARTEFACT, in
+   every power-down]), and where it was read (K, L, `det19b`, `det21`) `ISR_EL1` read 0 at every
+   core's final write. With a virtual FIQ left pending: no power-down, four of four
+   [HV-CHANGED]. A physical interrupt pending at a core at its final wait (a fired timer whose
+   FIQ is on, an IPI, a performance-counter interrupt, a controller line) is in no run on either
+   system. This is R59's requirement (round 10 wording) and R68.
+2. *The timers need not be off.* Every guest virtual timer enabled and unmasked, with nothing
+   pending at the core, was followed by a power-down twice (`det19b`, `det21`, [HV-CHANGED]);
+   every other power-down had them off (the instrument's act). macOS's own values: virtual timer
+   enabled and unmasked on all eight cores, physical timer disabled (four captures).
+3. *The rest of the core's state is macOS's own and the same in all four captures* (R65): the
+   interrupt controller's lines and both IPI kinds masked, nothing software-generated,
+   `IPI_SR_EL1` 0, `PMCR0_EL1` `0x7003400` with no counter interrupt pending, `PSTATE` with D, A,
+   I, F masked, `ACC_OVRD_EL1` and `CYC_OVRD_EL1` as R43; core 0 last (R44); no core kept running
+   (R64).
+4. *Open* (open questions 57, 65, 66): the same per-core reading under Linux at its final
+   instruction; whether a fired timer whose interrupt reaches the core, with no instrument in
+   between, stops the power-down; and whether the cores with a pending virtual FIQ left their
+   wait.
 
 ### Power-domain writes in the whole entry, by domain (`ps.py pre -20 0`)
 
@@ -1947,11 +2148,18 @@ What these readings say:
    writes are logged), and the instrument does not write watchdog 2 (A6). Who armed it is not
    observed. Awake it held a different bite (`0x80befc00`) with control 0; at the wake entry its
    bite is again 5 s with control 0 and a count of 0.326 s (section 5). One capture.
+   *(Round 10, L, `det19b`, `det21`; superseded in its timing by the table after this list.)*
+   Watchdog 2 is already armed **before** macOS's first write of `0x23d2c4000` reaches the
+   hardware, its count started 31-45 microseconds before that write's record.
 2. `0x23d2b8028` is 0 awake, `0x1000000` (bit 24 alone) at the commit and `0x8000000` (bit 27
    alone) at every wake entry; `0x23d2b8040` is `0x20` awake and at the commit, `0x22` at every
    wake entry. When bit 24 was set between the awake reading and the commit is not observed.
+   *(Round 10.)* It is already set at the first reading inside macOS's first write of
+   `0x23d2c4000` (L, `det19b`, `det21`); when, relative to watchdog 2's start, is not read.
 3. **`0x23d2c4000` reads 0 at the commit** after macOS wrote it 1 three times (the last at
-   T-0.00066) and read 1 awake (R24); no write of 0 to it is logged.
+   T-0.00066) and read 1 awake (R24); no write of 0 to it is logged. *(Round 10.)* It reads 1
+   just before macOS's first write of 1 and **0 just after it**, and 0 before and after the
+   second and third (L, `det19b`, `det21`): the first write of 1 is followed by a read of 0.
 4. `0x23d0d9378` reads 0 at the commit, before the instrument's own SPMI commands: no reply
    status of the power chip's controller is left from macOS's commands (R60).
 5. The AP wake-source masks, never written by macOS in any log, hold their awake values at the
@@ -1964,12 +2172,120 @@ What these readings say:
 6. Watchdogs 0 and 1 at the commit count 455 ms from macOS's zeroing in E3 (R15); watchdog 1's
    bite reads 60 s with control 0 before the instrument writes it.
 
+**Inside macOS's three writes of `0x23d2c4000` (round 10; L, `det19b`, `det21`; the probe of A6;
+`r7-det*.txt`, `r10-checks.txt` part 1).** Read by core 0 just before the write reaches the
+hardware and again just after it; counts L / `det19b` / `det21`; every other value the same in
+the three runs:
+
+| Write (time in L) | Read | `0x23d2c4000` | Watchdog 2 count | bite | control | `0x23d2b8028` | `0x23d2b8040` |
+|---|---|---|---|---|---|---|---|
+| 1 (T-15.6 ms) | before | **1** | 42.6 / 52.7 / 56.4 microseconds | `0x7270e00` | **4** | **`0x1000000`** | `0x20` |
+| 1 | after | **0** | 52.1 / 64.4 / 65.8 microseconds | `0x7270e00` | 4 | `0x1000000` | `0x20` |
+| 2 (T-4.1 ms) | before / after | 0 / 0 | 11.575 / 11.562 / 11.776 ms; +9 microseconds | `0x7270e00` | 4 | `0x1000000` | `0x20` |
+| 3 (T-0.97 ms) | before / after | 0 / 0 | 14.712 / 15.180 / 15.040 ms; +9 microseconds | `0x7270e00` | 4 | `0x1000000` | `0x20` |
+
+Awake (the same list at each detach) watchdog 2 read bite `0x80befc00`, control 0, and
+`0x23d2b8028` 0, `0x23d2b8040` `0x20`. So **before the first write of `0x23d2c4000` reaches the
+hardware, watchdog 2 is armed (5 s, control 4) and `0x23d2b8028` has bit 24 set**; nothing of
+these six words changes at any of the three writes except the count and, at the first,
+`0x23d2c4000` itself.
+
+**When watchdog 2 started** (`r7_wd2start.py`: each count subtracted from the core's timer read
+just after it, assuming the count starts at 0 when the watchdog is armed): L t = 445.3080573,
+`det19b` 433.0520395, `det21` 433.6433051, from the first set; the later sets put it 7-10
+microseconds later, so the start is good to about ±10 microseconds. Against the access log (a
+write's record is put before the write reaches the hardware):
+
+| Core 0's records, time from watchdog 2's computed start (microseconds) | L | `det19b` | `det21` |
+|---|---|---|---|
+| `W 0x23b71c080` = `0x80000000`, `W 0x23b71c088` = `0x80000000` (E5-8i) | -29, -25 | -32, -29 | -29, -25 |
+| `R 0x23b718000` = `0xf`, `W 0x23b718000` = 0 (E5-8i) | -18, -14 | -16, -12 | -19, -15 |
+| `R 0x23b718004` = `0xf`, **`W 0x23b718004` = 0** (E5-8i) | -9, **-1.3** | -9, **-5.5** | -11, **-7.1** |
+| SIO, SIO_BUSIF read and written (held by the instrument, A3; E5-8j) | +4 to +19 | -1.5 to +14 | +9 to +32 |
+| `R`/`W 0x23b7001d0` SIO_CPU `0x1400024f` -> `0x0400024f` (E5-8j) | +22, +25 | +16, +19 | +34, +38 |
+| the first `W 0x23d2c4000` = 1 (E5-8k) | +31 | +32 | +45 |
+
+In each run the start falls 1.3-7.1 microseconds after the record of macOS's write
+`0x23b718004` = 0; within the ±10 microseconds the nearest earlier write that reaches the
+hardware is that one (the SIO and SIO_BUSIF writes are held by the instrument and do not reach
+it), and the nearest later one the SIO_CPU write at +16 to +38. That the times coincide is a
+reading; **what arms watchdog 2 and sets `0x23d2b8028` bit 24 is not observed**. Round 9's "within
+about 0.3 ms of the first write" (from the count at the commit) is replaced by this.
+
 **After the commit with one core kept running** (`det16`, **[HV-CHANGED]**, 1.7d): for 4.9 s
 none of `0x23d2b8028` (bit 24), `0x23d2b8040` (`0x20`), `0x23d2c4000` (bit 0 clear),
 `0x23b71c090` (bit 30 clear), `0x23b71c360` (bit 30 set) or power-chip `0x0201` (`00`) changed;
 watchdog 2 counted with control bit 2 set; then a reset. With all eight cores down (K) the
 chip powered down and woke. What these words do after the last core goes down is not observed
 in any run.
+
+### 4.1d The CPU start/stop block and the power-gate page at the commit (L, `det19b`, `det21`; round 10)
+
+Read awake (the "awake-extra" list at each detach) and at the commit (`r7-det*.txt`,
+`r7-pwrgate-records.md`, `r10-checks.txt` parts 3-5). Linux readings are marked **[LINUX]**: the
+lab's register scans of Linux awake on the stock kernel (`var/hwdb/m1-hw.db`, snapshot 12 of
+2026-11-16 for the power-gate page, `var/regmap/scan-pmgr-1c000/reads.txt`; snapshot 16 of
+2026-11-18 02:12 for the CPU block), not the driver's entry or commit.
+
+**The CPU start/stop block `0x23b754000`-`0x23b75401c`** (eight words):
+
+| Word | Awake (three runs) | At the commit (three runs) | Written by macOS in the entry | [LINUX] awake |
+|---|---|---|---|---|
+| `0x23b754000` | 0 | **`0xfe`** | cores 4, 1, 5, 2, 3, 6, 7 each their own bit (`0x10`, `0x2`, `0x20`, `0x4`, `0x8`, `0x40`, `0x80`) at T-0.090 s (R11), passed to the hardware (A4) | 0 |
+| `0x23b754004` | 0 | **`0xfe`** | none (no write to it in any logged entry; the instrument writes none, A4) | 0 |
+| `0x23b754008`-`0x23b75401c` | 0 | 0 | none | 0 |
+
+So at the commit both words hold bits 1-7 (cores 1-7) and not bit 0 (core 0, which writes no
+stop bit). +`0x0` holds the seven stop bits written 90 ms earlier; +`0x4` reads the same bits
+with no logged write, so something other than a logged access set them between the awake reading
+and the commit; when is not read. At the wake core 0 writes +`0x4`, +`0x8`, +`0xc` once per core
+(W2); under the instrument those writes of +`0x4` do not reach the hardware (A4).
+*Documentation, not an observation:* the Asahi page "SMP" (asahilinux.org/docs/hw/cpu/smp/)
+names +`0x4` the "system-wide CPU core startup/active bitmask" (bit = core) and +`0x8`, +`0xc`
+the core-start words of clusters 0 and 1, and says that without a core's bit in +`0x4` "AIC
+interrupts won't work"; it does not describe +`0x0` or what +`0x4` reads.
+
+**The power-gate page `0x23b71c000`-`0x23b71c704`** (450 words). Its non-zero words are a header,
+`0x80000000` at +`0x000`, +`0x010`, ... +`0x080` and +`0x088`, and from +`0x090` 69 groups of six
+words at a stride of `0x18` (the grouping is the observation stage's reading of the values'
+stride, not a documented layout; the device tree lists "pwrgate-reg" ranges at +`0x010`,
++`0x310`, +`0x610`, section 1.9). macOS's only writes to the page in any logged entry are
+`0x23b71c080` and `0x23b71c088` = `0x80000000`, each read `0x80000000` first (E5-8i).
+- **Changes between awake and the commit with no write:** 22 / 21 / 20 words in L / `det19b` /
+  `det21`; 23 words in all change or differ between runs (`r10-checks.txt` part 3): the first
+  words of groups +`0x0d8`, `0f0`, `108`, `120`, `330`, `348`, `5a0` go from bit 30 set to clear
+  (`0xc004....` -> `0x8004....`; `0f0` and `120` not in every run), those of +`0x198` and
+  `1b0` from clear to set; the sixth word of several groups between `0xc000000` (or
+  `0x6000000`) and 0 (+`0x0ec`, `104`, `11c`, `134`, `1ac`, `1c4`, `344`, `35c`, `5b4`); the
+  fifth word of the five groups +`0x1c8`-`0x228` from 0 to `0x30000000`. Every other word (427)
+  has one value in all six readings. The words of the earlier captures' list agree: `0x23b71c090`
+  `0x8004030c` and `0x23b71c360` `0xc004030b` at the commit, as in K; `0x23b71c0d8`, `0f0`,
+  `108`, `120` `[VARIES]` as in G-K (appendix B).
+- **The header** reads `0x80000000` at all ten words awake and at the commit in all three runs.
+  **At every wake** (A, B, D-L, `det19b`, `det21`: all thirteen captures with a wake;
+  `r10-checks.txt` part 4) macOS's core 0 reads **`0x23b71c000` = 0** and writes it
+  `0x80000000`, then reads `0x23b71c040` = `0x80000000` and writes it `0x80000000` (W1-2a,
+  right after the poll of `0x23b718004`); 10 ms later it reads and rewrites `0x23b71c080`,
+  `0x23b71c088` (`0x80000000`). It writes neither `0x23b71c000` nor `0x23b71c040` in any logged
+  entry. So of the four header words macOS reads at the wake, `0x23b71c000` is the one that
+  comes back from the sleep cleared, and macOS sets it again before it starts the other cores
+  (W2). (The other six header words are not read at the wake.)
+- **[LINUX] awake (snapshot 12):** `0x23b71c000` reads **0**, the other nine header words
+  `0x80000000`. Of the 450 words, 32 differ from macOS's value at the commit in every run:
+  `0x23b71c000`, and 31 words of 16 groups, mostly the bit-30 / sixth-word pattern above
+  (`0x23b71c360` reads `0x8004030b`, macOS `0xc004030b` awake and at the commit; the five fifth
+  words `0x30000000` at macOS's commit read 0, as macOS awake). Linux was awake with its own
+  devices on, so the group words are not expected to match; the header word is the one difference
+  that macOS's entry does not produce (no change of it is seen between macOS awake and its commit).
+  *Reference, not an observation* (reference section 2.2, item "Boot core power-gate enable"): on
+  T8140 the per-cluster power-manager words at the power-gate block's +`0x0` (efficiency cluster)
+  and +`0x40` (performance cluster) have a top bit (bit 31) that lets the cluster's cores power
+  down in their wait; cores the power manager started come up allowed, the boot core "only
+  follows the word", which the loader leaves clear for its cluster, and with it clear "the
+  watchdog reset the machine 5 s into every sleep" (J700); on T8132 "iBoot sets E's only". On t8103 the
+  correspondence of `0x23b71c000` / `0x23b71c040` to those words is by offset only; no source
+  names them, and no M1 run has had `0x23b71c000` clear at a commit, so its effect here is not
+  observed.
 
 ### 4.2a All 137 power-domain words at the commit (H; G for its 71)
 
@@ -2215,17 +2531,19 @@ reading). Scripts: `r8_det11.py` (J), the tables of 4.1a/4.1b, `linux-diff-list.
 | 1 | The last device accesses of the last core | R38's four power-chip commands, the third `0x23d2c4000` = 1, 11 writes to SMC shared memory, console bytes, a console-port read at T (D-J, E6-4) | the driver's last access before the glue's commit mark is a 32-bit write of `0x23d2c4000` by core 0 (ds17 and ds17-1 to -3, L17); what follows it from the driver is not in the record | same as far as read |
 | 2 | SPMI traffic after macOS's last command | the instrument's own commands at the commit (stage marks, the wake note, in A, G-K the alarm), **then `0x23d0d9378` = 1** (A6); macOS's own commands each end with `0x23d0d9378` written 1 (R38, R60); *(round 9)* at the commit, before the instrument's commands, `0x23d0d9378` reads 0 (K, 4.1c) | the glue writes its ten-byte record as three SPMI commands to `0x9f04`-`0x9f0d` after the commit point (evidence ds16b) and, with `wdt=N`, watchdog 1 (ds17); whether `0x23d0d9378` is written after those commands is in no Linux record | not read |
 | 3 | Each core's last register writes | burst 1: `PMCR0_EL1` last `0x7003400`, `IPI_SR_EL1` = 1 (R45); burst 2: `ACC_OVRD_EL1` = `0x1800101526076207`, `CYC_OVRD_EL1` = `0x3000001`, every core, core 0 last (R43; G-K); *(round 9)* read back by each core at its final write: `ACC_OVRD_EL1` `0x1800101526076207`, `CYC_OVRD_EL1` `0x2000000` before the write, `PMCR0_EL1` `0x7003400`, `IPI_SR_EL1` 0, `IPI_CR_EL1` `0x600` (K, E7) | ds9's record says every core made its `CYC_OVRD_EL1` write (L7); the values written to these registers under Linux are in no record | not read |
-| 4 | Each core's timers and pending interrupts at its final wait | written off by the instrument on every core, after macOS's last write and before the real `CYC_OVRD_EL1` write, in every power-down (A6, E7, R59) `[ARTEFACT]`. *(Round 9.)* **macOS's own values** (K, E7): the guest's virtual timer enabled and unmasked on all eight cores, already fired on three (cores 1, 2, 0), its physical timer disabled; every interrupt of the controller and both IPI kinds masked, nothing software-generated, `ISR_EL1` 0 on every core under the instrument. Left in place (`det13`, `det17`): no power-down and wake, a reset 5-6 s after the commit **[HV-CHANGED]** | not read | **not read on the Linux side.** On the macOS side every observed power-down had them off (the instrument's doing), and macOS's own state, kept under the instrument, was followed twice by no power-down |
-| 5 | The S2R timer word `0x23d2c4000` | written 1 three times (R24, R37, R38), never read by macOS in a log; reads 1 with macOS awake before every entry (the instrument's arm-time line, eight runs, 1.7c). *(Round 9.)* **Reads 0 at the commit** (K); bit 0 stays clear for 4.9 s after the commit with a core kept up (`det16`); watchdog 2 started within about 0.3 ms of the first write (4.1c) | written by the driver (row 1); its value before the entry and after the write not read (it is not in the commit list) | not read |
+| 4 | Each core's timers and pending interrupts at its final wait | written off by the instrument on every core, after macOS's last write and before the real `CYC_OVRD_EL1` write, in every power-down (A6, E7, R59) `[ARTEFACT]`. *(Round 9.)* **macOS's own values** (K, E7): the guest's virtual timer enabled and unmasked on all eight cores, already fired on three (cores 1, 2, 0), its physical timer disabled; every interrupt of the controller and both IPI kinds masked, nothing software-generated, `ISR_EL1` 0 on every core under the instrument. Left in place (`det13`, `det17`): no power-down and wake, a reset 5-6 s after the commit **[HV-CHANGED]**. *(Round 10.)* The same macOS values in L, `det19b`, `det21` (fired on three or four efficiency cores, core 0 and 1 every time; E7). Split **[HV-CHANGED]**: timers left, no virtual interrupt pending (`det19b`, `det21`): power-down and wake, 2 of 2; a virtual FIQ left pending at cores 0-3 / 0-2, timers off (`det20b`, `det22c`): a reset about 6 s after the commit, 2 of 2 | not read | **not read on the Linux side.** On the macOS side every observed power-down had no virtual interrupt pending at any core (the instrument's doing) and `ISR_EL1` 0 where read; a pending virtual FIQ was followed by no power-down four times of four; enabled timers with nothing pending were followed by a power-down twice |
+| 5 | The S2R timer word `0x23d2c4000` | written 1 three times (R24, R37, R38), never read by macOS in a log; reads 1 with macOS awake before every entry (the instrument's arm-time line, eight runs, 1.7c). *(Round 9.)* **Reads 0 at the commit** (K); bit 0 stays clear for 4.9 s after the commit with a core kept up (`det16`); watchdog 2 started within about 0.3 ms of the first write (4.1c). *(Round 10.)* Reads 1 just before the first write and 0 just after it, 0 around the second and third (L, `det19b`, `det21`) | written by the driver (row 1); its value before the entry and after the write not read (it is not in the commit list) | not read |
 | 6 | The commit list's words at the commit | 4.1a, 4.1b, R51, R52: G-J equal in 767 of 792; 21-35 words change between awake and the commit with no write by any core, among them `0x23b04003c`, `040` (bit 8 cleared) | at Linux's commit 63 (ds16) and 64 (ds16b) words of the list hold a value that is neither the driver's last write nor the reading before the entry; identified: `0x23b04003c`, `0x23b040040`, `0x23b040048`, `0x23b04004c`, and `0x23b040044` or index 41 (L16); their values not recorded | in both systems words of the list change by themselves before the commit, the same clock words among them; whether to the same values: not read |
 | 7 | Clock words | at the commit: appendix B; R18's muxes hold `0x85100000` / `0x87100000`; always-on clock words `0x23d240040` -> `0x01101100`, `0x23d240314` -> `0x01000000` between awake and the commit with no write (R52); *(round 9)* `0x23d240024`, `03c`, `048` read `0x81100100`, `0x81100100`, `0x82100100` both awake and at K's commit (4.1c) | before the entry: 50 SoC clock words, the NCO, five always-on clock words differ from macOS's commit (L2); `0x23d240040` and `0x23d240314` hold macOS's **awake** values; `0x23d24003c` `0x01101100` (macOS `0x81100100`), `0x23d240048` `0x00101100` (`0x82100100`), `0x23d240024` `0x81100000` (`0x81100100`); at Linux's commit: row 6 only | differs before the entry; at the commit not read |
 | 8 | Power-gate words and the always-on block | `0x23b71c090` `0x8004030c`, `0x23b71c0a8` `0xc0040301` (G-J); `0x23d2c0000`-`03c` appendix B values; `0x23b71c0d8`, `0f0`, `108`, `120` `[VARIES]` | before the entry (ds13, ds15): every one of these words equals its value at H's commit | same |
 | 9 | AP wake-source masks `0x23d004008`-`0x23d004018` | never written by macOS in any logged window (D-K; boot is not logged), not written by the instrument (A6); *(round 9)* at K's commit `0xf3ffafff`, `0xffb97eff`, `0xfffdeffe`, `0xffffffff`, `0x03ffff87`, equal to their awake values (4.1c) | not read | not read |
 | 10 | Power domains at the commit | 4.2a, R54 | before the entry: 4.2a's last column, L15; at the commit not read (L11) | not read |
 | 11 | Watchdog 1 armed at the commit | J: control 4, bite 150 s, armed by the instrument after every other write; the chip powered down and woke at the alarm after 89.5 s (1.7c, R61) | ds17, ds17-1 to -3: armed by the glue at the commit point with the same four writes, `wdt=120`; reset about 120 s later (L17) | the armed watchdog is not the difference (J) |
-| 12 | What follows the commit | a sleep and a wake every time (A-K); at the instrument's wake entry `0x23d2b8028` = `0x8000000`, `0x23d2b8040` = `0x22`, watchdog 2 count about 0.325 s with bite 5 s and control 0 (D-J, section 5), watchdogs 0 and 1 counts about 13.9 ms (J); power chip `0x0201` = `00` after the next boot (H, I, J, K). *(Round 9.)* In the four runs in which the instrument left the cores' timer state in place or kept a core running (`det13`, `det14`, `det16`, `det17`, **[HV-CHANGED]**): **no wake and a reset 5-7 s after the commit**, `0x0201` `00`, `0x9f03` `0x50`, `0xd000` `0x41` after it (1.7d) | no wake by the alarm, a key, a power-button tap or the lid; without the watchdog dark for 10 to 85 min until the power button is held (ds16, ds16b, ds16c); with it a reset about 120 s after the commit; `0x0201` `04` before and after ds17 (L16, L17); *(round 9)* `0x9f03` `0x50` after ds16, ds16c and ds17-1 to -3 (as after macOS's four failed runs), `0xd000` `0x01` (the alarm's time had passed) | **differs**, also from macOS's failed runs: no Linux run reset 5-7 s after its commit |
-| 13 | *(Round 9.)* The always-on side's first step, before the cores go down | **watchdog 2 armed (bite 5 s, control 4) within about 0.3 ms of R24's first write of `0x23d2c4000`**, about 15 ms before T, by no logged access and not by the instrument; `0x23d2b8028` bit 24 at the commit (awake 0) (K, 4.1c) | earlier driver (L18, run 26): with a core kept up after its end of entry, watchdog 2 read armed for 5 s from the first sample; round-7 driver (ds16 to ds17-3): not read; no reset about 5 s after the commit in any of its runs | not read for the round-7 driver |
+| 12 | What follows the commit | a sleep and a wake every time (A-K); at the instrument's wake entry `0x23d2b8028` = `0x8000000`, `0x23d2b8040` = `0x22`, watchdog 2 count about 0.325 s with bite 5 s and control 0 (D-J, section 5), watchdogs 0 and 1 counts about 13.9 ms (J); power chip `0x0201` = `00` after the next boot (H, I, J, K). *(Round 9.)* In the four runs in which the instrument left the cores' timer state in place or kept a core running (`det13`, `det14`, `det16`, `det17`, **[HV-CHANGED]**): **no wake and a reset 5-7 s after the commit**, `0x0201` `00`, `0x9f03` `0x50`, `0xd000` `0x41` after it (1.7d). *(Round 10.)* L, `det19b`, `det21`: sleep and wake as before; `det20b`, `det22c` (a virtual FIQ left pending, **[HV-CHANGED]**): the same reset about 6 s after the commit and the same power-chip bytes (1.7e) | no wake by the alarm, a key, a power-button tap or the lid; without the watchdog dark for 10 to 85 min until the power button is held (ds16, ds16b, ds16c); with it a reset about 120 s after the commit; `0x0201` `04` before and after ds17 (L16, L17); *(round 9)* `0x9f03` `0x50` after ds16, ds16c and ds17-1 to -3 (as after macOS's four failed runs), `0xd000` `0x01` (the alarm's time had passed) | **differs**, also from macOS's failed runs: no Linux run reset 5-7 s after its commit |
+| 13 | *(Round 9.)* The always-on side's first step, before the cores go down | **watchdog 2 armed (bite 5 s, control 4) within about 0.3 ms of R24's first write of `0x23d2c4000`**, about 15 ms before T, by no logged access and not by the instrument; `0x23d2b8028` bit 24 at the commit (awake 0) (K, 4.1c). *(Round 10.)* **Already armed, and bit 24 already set, before that first write reaches the hardware**; the count starts 1.3-7.1 microseconds (±10) after the record of macOS's write `0x23b718004` = 0 (E5-8i), 31-45 microseconds before the first `0x23d2c4000` write (L, `det19b`, `det21`; 4.1c) | earlier driver (L18, run 26): with a core kept up after its end of entry, watchdog 2 read armed for 5 s from the first sample; round-7 driver (ds16 to ds17-3): not read; no reset about 5 s after the commit in any of its runs | not read for the round-7 driver |
 | 14 | *(Round 9.)* One core still running after the commit | `det16` **[HV-CHANGED]**: for 4.9 s `0x23d2b8028` bit 24, `0x23d2b8040` `0x20`, `0x23d2c4000` bit 0 clear, `0x23b71c090` bit 30 clear, `0x23b71c360` bit 30 set, `0x0201` `00`, watchdog 2 counting with control bit 2; nothing changed; a reset about 6 s after the commit. `det14` (the core went down after 3 s): no wake, a reset about 7 s after (1.7d) | earlier driver (L18, run 26): the evidence's "engine progress" byte `0x01` (which of `0x23d2b8028`, `0x23d2b8040` it is, the evidence does not say), watchdog 2 control 4 bite 5 s, no change in 2.5 s, `0x0201` stayed `04`; the next start came "5 s" after the end of the entry by the chip's clock (evidence `2026-11-16-run26-watch`) | **same, as far as read**: with one core up after the commit both systems show watchdog 2 armed for 5 s, no change in the sampled words, and a reset about 5-6 s after; whether the progress values are the same is not established |
+| 15 | *(Round 10.)* The power-gate header word `0x23b71c000` | `0x80000000` awake and at the commit (L, `det19b`, `det21`); reads 0 at every wake and is written `0x80000000` by macOS there, with `0x23b71c040` (thirteen captures, W1-2a); never written in a logged entry (4.1d) | **0** with Linux awake on the stock kernel (snapshot 12, 2026-11-16), the other nine header words `0x80000000`; before the driver's entry and at its commit not read | **differs** awake; at the commit not read |
+| 16 | *(Round 10.)* The CPU start/stop block `0x23b754000`.. | awake all 0; at the commit +`0x0` = +`0x4` = `0xfe` (cores 1-7), the rest 0 (L, `det19b`, `det21`; 4.1d) | awake all 0 (snapshot 16); the secondaries' stop bits at the driver's entry and the block at its commit not read | not read at the commit |
 
 **What row 12 does and does not establish.** By the lab's decode of the always-on sleep program
 (evidence `2026-11-16-run36-38-restart`, `2026-11-16-hv-macos135-wake`, `2026-11-16-run26-watch`;
@@ -2268,10 +2586,20 @@ first from the other two (open question 56). The power chip's bytes do not: `0x9
 and the power-down: under macOS the instrument acts in between (A6) and the log ends there. So the
 captures show what the application processors had done and left when the last core went down,
 and not what the always-on side then checks or waits for. Of the items above, the ones that
-differ or are not read on the Linux side are rows 2-7, 9, 10, 12 and 13; rows 1, 8 and 11 are the
-same or ruled out, and row 14 is the same as far as read. The readings that would show what
-happens after the last core goes down are open questions 53-55 and 59-61 (macOS, under the
-hypervisor) and 56-58 and 62 (Linux).
+differ or are not read on the Linux side are rows 2-7, 9, 10, 12, 13, 15 and 16; rows 1, 8 and 11
+are the same or ruled out, and row 14 is the same as far as read. The readings that would show
+what happens after the last core goes down are open questions 53-55 and 66-67 (macOS, under the
+hypervisor) and 56-58, 62, 64 and 65 (Linux); 59-61 were answered in round 10.
+
+*(Round 10.)* **What rows 4, 13, 15 and 16 add.** Row 4: under the instrument the item whose
+presence went with every failure to power down at a core's final wait is a pending (virtual)
+interrupt, not an enabled timer. Row 13: the always-on side's first observed step follows macOS's
+write `0x23b718004` = 0 by microseconds and comes before the first write of `0x23d2c4000`; for a
+Linux reading of open question 56 the place to read watchdog 2 and `0x23d2b8028` is right after
+the driver's write of `0x23b718004` = 0. Row 15 is a word that macOS's entry never writes, that
+holds one value with macOS awake and at its commit, that Linux awake holds differently, and that
+the reference ties to the cores' power-down (4.4a C3); whether Linux's entry changes it is not
+read.
 
 ### 4.4a The conditions the reference names for the power-down, against the M1 readings (round 9)
 
@@ -2293,7 +2621,9 @@ no M1 reading covers it. The last column names the reading that would settle the
 | C1 | Every core reaches its final wait and powers down after the commit; one core left awake holds the engine until the watchdog (T8140, measured; 2.2) | every core makes its final write within 33 microseconds (0.3 ms in K), core 0 last, after macOS's last device access (R43, R44; A-K); **with core 0 kept running after the commit the chip did not power down and reset 5-7 s later** (`det14`, `det16`, **[HV-CHANGED]**, 1.7d) | ds9: every core made its `CYC_OVRD_EL1` write (L7); the values and order against the driver's `0x23d2c4000` writes not read | Linux: each core's final values and time against the driver's last device access (open question 57) |
 | C2 | Secondaries take their deep wait only after the commit; earlier stops it (T8140, measured; 2.2) | the stop bits (R11, T-0.091) do not take a core down; each core makes its final write at the commit, after the three writes of `0x23d2c4000` (E7) | not read (the order of the cores' final writes against the driver's writes) | Linux: as C1 |
 | C3 | A per-cluster (or per-core) power-manager word lets the cores, the boot core included, power down in their wait; the loader leaves the boot core's clear (T8140, T8132, T6050, measured; 2.2) | **not observed**: no such word identified on t8103. What the captures have: `CYC_OVRD_EL1` = `0x3000001` on every core (bits 24-25 = 3; the Asahi page names them "OK To Power Down", 3 "force down": documentation, reference 3.7); the core and cluster domain words at the commit (R53: cores 1-7 `0x100`, core 0 `0x1f0`, ECPM `0x21f0`, PCPM `0x2100`) | the cores' domain words before the entry (L12: one core `0x1f0`, the rest `0x100`); `CYC_OVRD_EL1` value not read | macOS: the power manager's CPU block (`0x23b754000`.., held by the instrument, A4) and the power-gate records of `0x23b71c000`.. read awake and at the commit; Linux: the same words before the entry and at the commit |
+| C3 *(round 10)* | as above | **candidate words observed** (4.1d): the power-gate header `0x23b71c000` and `0x23b71c040` (the reference's T8140 offsets +`0x0`, +`0x40` of its power-gate block; correspondence by offset only) read `0x80000000` (bit 31 set) awake and at the commit (L, `det19b`, `det21`); at every wake `0x23b71c000` reads 0 and macOS writes both `0x80000000` (thirteen captures); never written in an entry. The CPU block at the commit: +`0x0` = +`0x4` = `0xfe` | **[LINUX]** awake: `0x23b71c000` = **0**, `0x23b71c040` = `0x80000000` (snapshot 12); CPU block all 0 (snapshot 16); before the entry and at the commit not read | Linux: `0x23b71c000`, `0x23b71c040` and the CPU block before the driver's entry and at its commit (open question 64). macOS: whether `0x23b71c000` clear at the commit stops the power-down (open question 67) |
 | C4 | No interrupt pending at a core's final wait: every interrupt-controller line masked, the cores' timers masked or off (T8140, implemented; 2.2) | the controller: every line and both IPI kinds masked, nothing software-generated (K, E7, by the Asahi page's names); the timers: **macOS leaves its virtual timer enabled and unmasked, fired on three cores** (K); every observed power-down had them written off by the instrument (R59); kept, twice no power-down (**[HV-CHANGED]**) | not read (L11) | Linux: open question 57; macOS: which kept item matters (open question 59) |
+| C4 *(round 10)* | as above | **the pending interrupt, not the timer** **[HV-CHANGED]**: timers left enabled and unmasked with no virtual interrupt pending, power-down 2 of 2 (`det19b`, `det21`); a virtual FIQ left pending, timers off, no power-down 2 of 2 (`det20b`, `det22c`); every power-down (thirteen) had none pending and `ISR_EL1` 0 where read (E7). The controller part as above, the same in L, `det19b`, `det21` | not read | Linux: each core's `ISR_EL1` and timer controls at its final instruction (open questions 57, 65); macOS: a fired timer whose interrupt reaches the core (open question 66) |
 | C5 | PMP and SIO stopped (run bit +`0x44` bit 4 clear) or their domains off; a commit with them running reset the chip 5.5 s later (T8140, measured; 2.2) | **met**: +`0x44` written 0 after R4's messages (R5); PMP `0x1f0f03ff`, SIO_CPU `0x0f0002ff` at the commit (R46) | before the entry SIO's domains off, PMP's on (`0x1f0000ff`), `pmp`'s words not read (L15); at the commit not read | Linux: `pmp`'s and `sio`'s +`0x44`, +`0x48` and domain words at the commit |
 | C6 | The secure enclave gated itself after a control message (T8140, measured; 2.2) | SEP word `0x1000230f` at the commit (R46: state bits 4-7 read 0, bit 28 set); macOS sends `sep` no power message in R4 and never touches its +`0x44`/+`0x48` (section 0) | not read | Linux: the SEP domain word before the entry and at the commit |
 | C7 | Display coprocessors stopped and their domains lowered; "the sleep engine waits on DISP_CPU with no timeout" (T8140, measured/comment; 2.2) | **met**: `dcp`, `dcpext` stopped (R5a) and the display domains off at the commit (R1, R7, R46) | `dcp`, `dcpext` running with their domains on before the entry (L15); at the commit not read | Linux: their +`0x44`, +`0x48` and the display domain words at the commit |
@@ -2307,6 +2637,7 @@ no M1 reading covers it. The last column names the reading that would settle the
 | C15 | No SPMI reply status left latched; a latched one wakes the chip after the commit (T6050, implemented/measured; 2.2) | **met**: `0x23d0d9378` reads 0 at the commit (K); every command is acknowledged (R60) | not read after the glue's own commands (L11) | Linux: `0x23d0d9378` after the glue's last SPMI command (open question 57) |
 | C16 | The system management controller told "slpw", "slpa", then AP idle last, with no queued event (T8140, measured; 3.5) | **met** for the messages: R3, in that order; the outbox state at the commit not observed | not read | Linux: the `smc` messages of the entry and its outbox state at the commit |
 | C17 | The watchdog a stall ends in: watchdog 2 armed for about 5 s around the commit (Aurora writes it itself at T8140's commit; AU's notes say macOS arms a ~5 s watchdog 2 in the entry; 2.1, 3.10) | **armed for 5 s, control 4, within about 0.3 ms of R24, by no logged access** (K, 4.1c) | not read for the round-7 driver; armed in the earlier driver's runs (L18) | Linux: open question 56 |
+| C17 *(round 10)* | as above | **armed before macOS's first write of `0x23d2c4000` reaches the hardware**, its count starting 1.3-7.1 microseconds after the record of macOS's write `0x23b718004` = 0; `0x23d2b8028` bit 24 already set then (L, `det19b`, `det21`; 4.1c) | as above | Linux: watchdog 2 and `0x23d2b8028` right after the driver's `0x23b718004` = 0 (open question 56) |
 
 **What the table says, kept to the observations.** Of the conditions the M1 readings cover,
 macOS meets each at its commit (C1, C2, C4's controller part, C5-C9, C12, C14, C15, C16's
@@ -2319,6 +2650,18 @@ reference describes a stall ending (a reset some 5 s after the commit). On the L
 condition is **not read at the commit**: the readings stop before the driver's entry (L1, L15)
 or at its record (L16, L17). The conditions with no M1 word at all (C3, C10, C11) would first
 need the word named.
+
+*(Round 10.)* Three rows change. **C4**: of the two parts the instrument used to write off, the
+one that went with every failure is the pending interrupt at the core, not the enabled timer;
+macOS's own timer state is no longer an exception to the condition as the observations now
+state it (nothing pending at the core), except that what macOS's fired timers present to a core
+without the instrument is not observed. **C3**: candidate words are now read on the M1: the
+power-gate header words `0x23b71c000` and `0x23b71c040` hold bit 31 at macOS's commit, and with
+Linux awake `0x23b71c000` does not. Unlike the Linux differences of C5, C7-C9 (states macOS's
+own entry changes before its commit), macOS's entry never writes this word: it holds bit 31
+from macOS's wake (or boot) on. The reference's account of a clear word on T8140 is the 5 s
+reset; on the M1 nothing yet shows the word matters. **C17**: the
+first step is earlier than R24's write, at R22's `0x23b718004` = 0. The other rows stand.
 
 ## 5. Asleep
 
@@ -2394,6 +2737,15 @@ need the word named.
 - **The round-9 runs** `det13`, `det14`, `det16`, `det17` **[HV-CHANGED]**: not asleep as far
   as can be told; each ended in a reset 5-7 s after the commit, with no wake at the alarm
   (1.7d). Whether the chip powered down at all before the reset is not read.
+- **Capture L and the round-10 runs** *(round 10; 1.7e)*: L asleep 89.58 s, `det19b` 89.74 s
+  and `det21` 89.62 s **[HV-CHANGED: each core's guest timer left enabled]**, each woken by the
+  instrument's alarm `[ARTEFACT A6]`; wake status 0 / `0x400000` / 0 in all three, **the same in
+  all thirteen captures with a wake**; at the wake entry the always-on and watchdog words as in J
+  and K. In `det19b` and `det21` every performance core's guest virtual timer was due about
+  89.39 s after its final write (about 0.6 s before the alarm) and one efficiency core's 62-63 ms
+  after it; their times asleep and wake status are those of the runs with the timers written off
+  (J 89.51 s, K 89.47 s, L 89.58 s), and nothing in the record marks a wake by a core's timer. `det20b`, `det22c` **[HV-CHANGED]**: not asleep as far as can be
+  told; a reset about 6 s after the commit, no wake at the alarm.
 - **Watchdogs before the sleep (G, H):** macOS writes watchdog 0's count `0x23d2b0000` = 0 and
   watchdog 1's count `0x23d2b0010` = 0 in E3 (T-0.462 in H), and watchdog 0's control
   `0x23d2b000c` = 0 in E5 (T-0.035 in H); no other write to that page between the detach and
@@ -2484,7 +2836,10 @@ access for access, 53 with identical ordered writes; 6,019 accesses and 3,163 wr
       after `0x23b718004` is written `0xf` it is read until it changes: `0x1f` 154 to 243 times
       (A 163, B 154, D 237, E 228, F 243, G 242, H 235), then `0x2f` once, and the poll ends on
       `0x2f`;
-      `W 0x23b71c000`=`0x80000000`, `W 0x23b71c040`=`0x80000000`;
+      `W 0x23b71c000`=`0x80000000`, `W 0x23b71c040`=`0x80000000`; *(round 10, all thirteen
+      captures with a wake, `r10-checks.txt` part 4: each is read just before its write,
+      **`0x23b71c000` reading 0** and `0x23b71c040` `0x80000000`; both read `0x80000000` with
+      macOS awake and at the commit, 4.1d)*;
    b. tables written to both cluster blocks (`0x210e48c10`.., `0x210e480c0`.., `0x210e48480`..;
       `0x211e48c10`.., 16 and 22 writes) between reads of `0x210e70000`-`0x210e70160` and
       `0x211e70000`-`0x211e70160`; 28 + 12 + 4 + 93 + 18 + 12 byte-sized values written to
@@ -2559,7 +2914,8 @@ before the sleep**, not to a fixed table (1,089 writes in F against 1,091).
 Hypervisor's log (`hvlog-wake-N.txt`), identical in both apart from load addresses: core 0
 writes to the start words for cores 7, 6, 3, 2, 5, 1, 4 in that order: for core 7
 `0x23b754004`=`0x80`, `0x23b754008`=0, `0x23b75400c`=`0x8`; the hypervisor then starts the
-core at macOS's reset entry `[A4]`. First device access per core: core 7 W+0.796 / W+0.799,
+core at macOS's reset entry `[A4]`. *(Round 10.)* In the round-10 build the writes of +`0x4` do
+not reach the hardware (A4); what +`0x4` reads after the wake is not read. First device access per core: core 7 W+0.796 / W+0.799,
 core 6 W+0.799 / W+0.809, core 3 W+0.904 / W+0.883, cores 1 and 2 W+1.006 / W+1.007-1.009,
 cores 5 and 4 W+1.338, W+1.351 / W+1.415, W+1.424. Each core's first device writes are
 `W 0x21N155008`=`0xffbfffffffffffff`, `W 0x21N155000`=1 on its own block (for example
@@ -3026,7 +3382,9 @@ power-down]** an act of the instrument, not of macOS, that was present in every 
 captured, so that no capture shows the power-down without it; **[J]** observed in capture J
 only; *(round 9)* **[K]** observed in capture K only; **[HV-CHANGED]** resting on a run in which
 a change of the instrument's altered the outcome (section 0): a record of the machine under the
-instrument's influence, not of macOS, and never a step macOS takes. Every [BOTH] entry with a register value
+instrument's influence, not of macOS, and never a step macOS takes; *(round 10)* **[L]**
+observed in the three round-10 captures L, `det19b` and `det21` (what macOS did up to each core's
+final write; in `det19b` and `det21` the instrument's change acts only after it). Every [BOTH] entry with a register value
 was re-checked against all three captures by `reqcheck.py` (no failure). No requirement is claimed to be necessary for sleep to work: each records only
 that macOS does it. Evidence gives the section and the output file.
 
@@ -3164,7 +3522,9 @@ Before the SoC goes down:
   after the wake read and rewritten with the same value. So these six words kept their value
   through every sleep captured (1.6 s to 900 s).
 - **R22 [BOTH]** The four sub-blocks of R22a are stopped as R22a states; then `0x23b718000`,
-  `0x23b718004` = 0 (E5-8h/i). *(Changed this round, gap V6: the literal "`0x23b7487e0` polled
+  `0x23b718004` = 0 (E5-8h/i). *(Round 10, [L].)* Watchdog 2's count starts 1.3-7.1
+  microseconds (±10) after the record of the write `0x23b718004` = 0, and before the first
+  write of `0x23d2c4000` (R62). *(Changed this round, gap V6: the literal "`0x23b7487e0` polled
   until it reads `0x494900`" is withdrawn; the wait ends on the low byte, R22a.)*
   **R22a [BOTH]** The four sub-blocks, in the order `0x23b748400`, `0x23b748800`, `0x23b748c00`,
   `0x23b748000`: the control word is read (`1` in every capture), written 0, and then the
@@ -3204,6 +3564,9 @@ Before the SoC goes down:
   T-0.00066; no write of 0 logged), and its bit 0 stays clear for 4.9 s after the commit with a
   core kept running (`det16`, [HV-CHANGED]). Watchdog 2 starts counting within about 0.3 ms of
   the first of the three writes (R62).
+  *(Round 10, [L].)* Read inside each write: 1 just before the first write of 1, **0 just after
+  it**, and 0 before and after the second and third (4.1c). Watchdog 2 is armed before the first
+  write (R62).
 - **R25 [BOTH]** Apart from R1, R7, R23 and the per-transfer cycles of I2C0, I2C3, SPI2, SPI3,
   macOS writes no power-domain control word during the entry (section 3, last part): to the
   end of the log in A and B, to the real power-down in D.
@@ -3272,6 +3635,9 @@ After the SoC comes up, before macOS is back at idle:
   observed**: every poll ended on the same value, after the same one intermediate value. What
   the word reads on a chip that was not powered down (L8) is not observed under macOS
   (section 6.4).
+  *(Round 10; all thirteen captures with a wake.)* After the poll, `0x23b71c000` is read (0)
+  and written `0x80000000`, then `0x23b71c040` read (`0x80000000`) and written `0x80000000`
+  (W1-2a), before any core is started (R32). R67.
 - **R31 [BOTH]** Then the memory controller is re-enabled: `W 0x200001c00`=`0x10` inside a
   pulse, `0x200001c04` read (`0x4200`), enables rebuilt (W1-3); then `0x200155000`=
   `0xff000000`, P+`0x21008`=`0x700`, P+`0x21000`=`0xfffffc3f`, DCSn+`0x7a0`=`0xc0000` (W1-4).
@@ -3512,6 +3878,28 @@ After the SoC comes up, before macOS is back at idle:
   observations is the state of every observed power-down: timers off and no interrupt pending
   at each core's final wait; macOS's own state is not that state, and was twice followed by no
   power-down when kept under the instrument.
+  *(Changed round 10: L, `det19b`, `det20b`, `det21`, `det22c`; E7.)* **The two items are now
+  separated [HV-CHANGED]**: with the guest timers and timer FIQ enable left as macOS left them
+  and no virtual interrupt pending, the chip powered down and woke at the alarm (`det19b`,
+  `det21`, 2 of 2); with a virtual FIQ left pending at cores 0-3 / 0-2 and the timers written
+  off, it did not, and reset about 6 s after the commit (`det20b`, `det22c`, 2 of 2). So "timers
+  off" is no longer the state of every observed power-down (two had every core's guest virtual
+  timer enabled and unmasked), and the statement that holds in all thirteen captured power-downs
+  (A-L, `det19b`, `det21`) is: **at each core's final wait no virtual IRQ or FIQ was pending at
+  the core** (the instrument's act, [ARTEFACT, in every power-down]), **and, where read (K, L,
+  `det19b`, `det21`), `ISR_EL1` read 0 at each core's final write** (macOS's state under the
+  instrument's settings). macOS's own timer values are the same kind in K, L, `det19b`, `det21`
+  (E7). **The requirement on a driver's cores that rests on the observations is therefore: at
+  each core's final write nothing is pending at the core: `ISR_EL1` reads 0, and no virtual IRQ or
+  FIQ is pending if the kernel uses `HCR_EL2`'s.** Its basis: every observed power-down had it,
+  and its absence (a pending virtual FIQ) was followed by no power-down four times of four, both
+  under the instrument. **Not required by the observations: that the timers be disabled**; a
+  core's timer may be left enabled, as long as nothing is pending at the core (`det19b`,
+  `det21`, [HV-CHANGED]; one core each went down with an unfired timer due 62-63 ms later and
+  its FIQ to the core on). Not observed on either system: a physical interrupt (a fired timer
+  whose FIQ is on, an IPI, a counter interrupt, a controller line) pending at a core at its
+  final wait; what macOS's fired timers present to a core without the instrument (open questions
+  65, 66).
 - **R60 [D] and [ARTEFACT, in every power-down]** *(new round 8; R38, A6, 4.4 row 2)* When the
   cores go down, the power chip's SPMI controller `0x23d0d9300` has no reply status left
   unacknowledged: every command macOS sends ends with `0x23d0d9378` read 1 and written 1 and
@@ -3546,6 +3934,18 @@ After the SoC comes up, before macOS is back at idle:
   observed. So, for a driver: before the cores go down macOS writes nothing to watchdog 2 and
   watchdog 2 reads armed for 5 s with control 4, within about 0.3 ms of the first write of
   `0x23d2c4000`. One capture; the time is from a count, good to about 0.3 ms.
+  *(Changed round 10, [L]; 4.1c.)* Read inside macOS's three writes of `0x23d2c4000` in L,
+  `det19b`, `det21`: **watchdog 2 is already armed (bite `0x7270e00`, control 4) and
+  `0x23d2b8028` already `0x1000000` just before the first write reaches the hardware**, with a
+  count of 43-56 microseconds; nothing of watchdog 2, `0x23d2b8028` (`0x1000000`) or
+  `0x23d2b8040` (`0x20`) changes at any of the three writes but the count. Its count started 1.3
+  to 7.1 microseconds (±10) after the record of macOS's write `0x23b718004` = 0 (R22), 31-45
+  microseconds before the record of the first `0x23d2c4000` write. What arms it is still not
+  observed. So, for a driver: before the cores go down macOS writes nothing to watchdog 2, and
+  watchdog 2 reads armed for 5 s with control 4, and `0x23d2b8028` bit 24 set, by the time of
+  the first write of `0x23d2c4000`, watchdog 2's count having started just after the write
+  `0x23b718004` = 0 of R22 (three captures; this replaces "within about 0.3 ms of the first
+  write").
 - **R63 [K]** *(new round 9; 4.1c, 4.4 rows 7 and 9)* At the commit the AP wake-source masks
   `0x23d004008`, `00c`, `010`, `014`, `018` read `0xf3ffafff`, `0xffb97eff`, `0xfffdeffe`,
   `0xffffffff`, `0x03ffff87`, the values they hold with macOS awake; macOS writes none of them in
@@ -3572,6 +3972,43 @@ After the SoC comes up, before macOS is back at idle:
   `UPMSR_EL1` 0, the guest's `PSTATE` with D, A, I and F all masked; the interrupt controller as
   in R36's round-9 note. These are macOS's own values (the instrument does not change them).
   The guest virtual timer is R59's round-9 note. One capture.
+  *(Round 10.)* The same values in L, `det19b` and `det21` (E7): four captures.
+- **R66 [L]** *(new round 10; 4.1d, 4.4 row 16)* At the commit the CPU start/stop block reads
+  `0x23b754000` = `0xfe` and `0x23b754004` = `0xfe` (bits 1-7: cores 1-7), `0x23b754008`-`01c`
+  = 0; with macOS awake all eight read 0. +`0x0` holds the stop bits cores 1-7 wrote at
+  T-0.090 s (R11; passed to the hardware, A4); core 0 writes no stop bit. +`0x4` is written by
+  no logged access in the entry and by no act of the instrument's (A4). For a driver: at its
+  commit the block holds the stop bits of cores 1-7 and not core 0's, in +`0x0` by R11's writes;
+  +`0x4` = `0xfe` is a reading of the hardware's, not a write to make. [LINUX] awake all eight
+  read 0 (snapshot 16). Three captures.
+- **R67 [L] and [BOTH] for the wake** *(new round 10; 4.1d, 4.4 row 15, 4.4a C3)* At the commit
+  the power-gate header words `0x23b71c000`, `0x23b71c010`, ... `0x23b71c080` (stride `0x10`)
+  and `0x23b71c088` read `0x80000000`, as with macOS awake (L, `det19b`, `det21`). macOS writes
+  `0x23b71c080` and `0x23b71c088` = `0x80000000` in the entry (E5-8i, each read `0x80000000`
+  first), and **no other header word in any logged entry**. At **every wake** (thirteen
+  captures) it reads `0x23b71c000` = **0** and writes it `0x80000000`, and reads and writes
+  `0x23b71c040` = `0x80000000`, before it starts any other core (W1-2a, R30). [LINUX] awake
+  `0x23b71c000` reads **0**, the other nine `0x80000000` (snapshot 12). For a driver: at its
+  commit `0x23b71c000` and `0x23b71c040` hold `0x80000000` (bit 31 set), the value macOS has at
+  every commit read; the only write macOS is seen to make to either is `0x80000000`, at the wake,
+  over a read of 0 (for `0x23b71c000`). Whether bit 31 of `0x23b71c000` is needed for the
+  power-down is **not observed** (no M1 run has had it clear at a commit); *reference, not an
+  observation*: on T8140 the word at the same offset of the power-gate block lets the boot
+  cluster's cores power down in their wait, and left clear it ends every sleep in a watchdog
+  reset 5 s after the commit (4.1d). Three captures for the commit values, thirteen for the wake
+  writes. The other power-gate words: 22, 21, 20 of 450 change between awake and the commit with
+  no write of macOS's, 23 in all (4.1d); not a step macOS takes.
+- **R68 [HV-CHANGED]** *(new round 10; 1.7e, E7, 4.4 row 4, 4.4a C4)* Not a step macOS takes:
+  what the machine did when the instrument left part of each core's state as macOS left it at
+  its final write. (a) Guest timers and timer FIQ enable left (every core's guest virtual timer
+  enabled and unmasked, fired on three cores whose timer FIQ to the core the instrument had
+  turned off, due 62-63 ms later on one core with its FIQ to the core on, 89.39 s later on four),
+  no virtual interrupt pending: **power-down and alarm wake, `det19b` and `det21`**. (b) A
+  virtual FIQ left pending at cores 0-3 (`det20b`) or 0-2 (`det22c`), timers written off: **no
+  wake, a reset about 6 s after the commit**, as `det13` and `det17` with both left (round 9).
+  Recorded because it is the only M1 observation that separates the two items; it supports R59's
+  round-10 requirement (nothing pending at a core at its final write) and withdraws "timers
+  off" as a requirement. Two runs of each.
 - **D1 — a decision about Linux, not an observation of macOS** (recorded here at the gap
   file's request; the orchestrator's decision, round 6, gap Q6): *the wake keeps macOS's
   sequence, and after it puts each power domain that the Linux entry changed back to the
@@ -3906,7 +4343,8 @@ settle it; 53-55 are readings of macOS under the hypervisor, 56-58 readings of L
     entry changes what macOS reads at `0x9f08` during the entry (evidence, "Left out, and why").
     Still open. The round-9 runs bear on one part of it: of the instrument's per-core acts, the
     timer and pending-interrupt writes (R59) were needed for a power-down under the instrument
-    in two runs out of two.
+    in two runs out of two. *(Round 10.)* Of those two acts only the clearing of the pending
+    virtual interrupts was needed (R68); the timers can be left.
 56. **The always-on block after Linux's commit** (4.4 row 12, L17, L18). *Settles it:* a core
     kept running after the commit point, as in run 26 (L18), sampling the words of 53 every
     10 ms into the power chip's scratch or memory, under the round-7 driver; and `0x23d2c4000`
@@ -3916,12 +4354,19 @@ settle it; 53-55 are readings of macOS under the hypervisor, 56-58 readings of L
     write, and again just before the commit point. Under macOS the first reads a count started
     at that write with bite 5 s and control 4, and the second bit 24 set (K). Then, with a core
     kept up after the commit as in `det16`, the same words for some seconds, to set against R64.
+    *(Sharpened round 10, R62, 4.1c.)* Under macOS watchdog 2 is armed and bit 24 set already
+    before the first `0x23d2c4000` write, its count starting just after `0x23b718004` = 0. The
+    reading to take under Linux: watchdog 2's count, bite, control and `0x23d2b8028`,
+    `0x23d2b8040` right after the driver's write of `0x23b718004` = 0 and again right before its
+    first write of `0x23d2c4000`, and `0x23d2c4000` before and after that first write (under
+    macOS 1, then 0).
 57. **Each core's final state under Linux** (4.4 rows 2-4). *Settles it:* per core, recorded at
     its last instruction before the wait: `ACC_OVRD_EL1`, `CYC_OVRD_EL1`, the timer controls in
     use, `ISR_EL1`, `IPI_SR_EL1`, `PMCR0_EL1`; and `0x23d0d9378` read after the glue's last SPMI
     command. *(Round 9.)* Also, per core, the timer controls `CNTP_CTL`/`CNTV_CTL` of every
     exception level Linux runs a timer at, and the interrupt controller words of R65 / R36's
     round-9 note, to set against K's (E7) and against every observed power-down (R59).
+    *(Round 10: the item that matters most is now open question 65.)*
 58. **The commit-list words that change by themselves at Linux's commit, with values** (L16, 4.4
     rows 6-7); and the AP wake-source masks `0x23d004008`-`0x23d004018` and the always-on clock
     words `0x23d240024`, `03c`, `048` in both systems (under macOS: added to the commit list and
@@ -3939,24 +4384,78 @@ hands.
     split of `hv_s2r_keep_state` into two options (the instrument's code, A6). Way out without
     hands: the alarm at commit + 90 s, watchdog 1 at commit + 150 s, and, as in `det13`/`det17`,
     a reset 5-7 s after the commit if the power-down does not come.
+    *(Closed round 10, [HV-CHANGED], R68, E7.)* (b) timers left, no virtual interrupt pending
+    (`det19b`, `det21`): power-down and alarm wake, 2 of 2. (a) the pending virtual FIQ left,
+    timers off (`det20b`, `det22c`): a reset about 6 s after the commit, 2 of 2. The pending
+    virtual FIQ is the item. What it does at the core (whether the core leaves its wait) is open
+    question 66.
 60. **When the always-on side's first step is taken, against macOS's three writes of
     `0x23d2c4000`** (R62). *Settles it:* the instrument, which traps that page, reads watchdog 2's
     count, bite and control and `0x23d2b8028`, `0x23d2b8040` immediately before and after each of
     macOS's three writes (no write of its own). Way out without hands: K's (the alarm, watchdog 1).
+    *(Closed round 10, [L], R62, 4.1c.)* Before the first write: watchdog 2 armed (5 s, control
+    4) with a count of 43-56 microseconds, `0x23d2b8028` `0x1000000`; its count started 1.3-7.1
+    microseconds (±10) after the record of macOS's write `0x23b718004` = 0. Still open: what arms
+    it, and when bit 24 is set relative to it.
 61. **The power manager's CPU block and power-gate records at the commit** (4.4a C3). The words
     `0x23b754000`-`0x23b75401f` (held by the instrument, A4) and the power-gate records of the
     page `0x23b71c000` (K's commit list has nine: appendix B's eight and `0x23b71c360`) are not
     read at the commit in full.
     *Settles it:* add those words to the commit list and to the awake snapshot. Way out without
     hands: K's.
+    *(Closed round 10, [L], R66, R67, 4.1d.)* CPU block at the commit: +`0x0` = +`0x4` =
+    `0xfe`, awake all 0. Power-gate page: 22/21/20 words of 450 change between awake and the
+    commit (23 in all), the ten header words `0x80000000` throughout; `0x23b71c000` reads 0 at
+    every wake and is set by macOS there; with Linux awake it reads 0 (4.4a C3, open questions
+    64, 67). Still open: when +`0x4` takes `0xfe`.
 62. **Linux at its commit, against K** (4.4 rows 4, 13; 4.4a C1-C17). *Settles it:* under the
     round-7 driver, the readings of 56 and 57 with the 880 words of K's commit list read at the
     commit point (into memory, written to the power chip's scratch or kept across the watchdog
     reset). Way out without hands: watchdog 1 armed at the commit (L17).
+    *(Round 10.)* The list to read is now L's (1,328 words: K's, the CPU block and the whole
+    power-gate page; `var/recfg/commit-snap-list-r7.json`).
 63. **What `0x9f03` = `0x50` records** (1.7d). It reads `0x50` after every run of either system
     that reached a commit and did not wake, `0x00` after every wake. *Settles it:* `0x9f03` read
     awake before an entry and after a run that was ended by the power button with no commit (not
-    yet read).
+    yet read). *(Round 10: `det20b` and `det22c` add two more of the first kind, L, `det19b`,
+    `det21` three of the second.)*
+
+Added round 10 (from capture L, the round-10 runs and the Linux register scans). 64-65 are
+readings of Linux, 66-67 of macOS under the hypervisor.
+
+64. **The power-gate header and the CPU block under Linux at its commit** (R66, R67, 4.4 rows 15
+    and 16, 4.4a C3). With Linux awake `0x23b71c000` reads 0 where macOS has `0x80000000` at
+    every commit. *Settles it:* under the driver, `0x23b71c000`, `0x23b71c040` (and the other
+    eight header words) and `0x23b754000`, `0x23b754004` read before the driver's first access,
+    and again at the commit point after its last write; one 32-bit read each, into the record.
+    If `0x23b71c000` reads 0 at Linux's commit, Linux's commit differs from every macOS commit
+    read in this word; if `0x80000000`, the difference seen awake does not reach the commit. Way
+    out without hands: watchdog 1 at the commit (L17).
+65. **Whether anything is pending at a core at Linux's final instruction** (R59 round 10, R68, E7;
+    sharpens 57). *Settles it:* on each core, as the last thing before its final write and wait,
+    record `ISR_EL1`, the control registers of every timer the kernel runs on that core
+    (`CNTP_CTL`, `CNTV_CTL` at the exception levels in use, and their compare values against the
+    count), `IPI_SR_EL1`, `PMCR0_EL1` and `PMSR_EL1`, and, if the kernel runs at EL2, the
+    pending-virtual-interrupt bits of `HCR_EL2`; plus the interrupt controller words of R65 once.
+    Under macOS, at every captured power-down, `ISR_EL1` read 0 and no virtual interrupt was
+    pending; the failures had a virtual FIQ pending. Way out without hands: watchdog 1 at the
+    commit.
+66. **What a pending interrupt does at a core after its final write, under macOS** (R68). Two
+    readings, each a change of the instrument's ([HV-CHANGED]): (a) `keep_vfiq` again with each
+    core counting, into power-chip scratch, the times its guest leaves the wait after its final
+    write (whether the cores with a virtual FIQ pending leave their wait, and how often); (b)
+    `keep_timers` with, on the cores whose timer has fired, the timer's FIQ to the core turned on
+    (`VM_TMR_FIQ_ENA_EL2` bit 0 set) and no virtual FIQ: the nearest the instrument can come to a
+    fired timer whose interrupt reaches the core, as it would on a machine without it (what the
+    instrument then does with that FIQ is its own and must be recorded too). Way out without
+    hands: the alarm, watchdog 1, and the reset of `det20b`/`det22c`.
+67. **Whether `0x23b71c000` bit 31 matters for the M1's power-down** (R67, 4.4a C3). *Settles
+    it:* K's recipe with one change: the instrument writes `0x23b71c000` = 0 after macOS's last
+    write and before the cores' final writes (at the first core's `CYC_OVRD_EL1` write), and reads
+    it back at the commit; once also with `0x23b71c040` = 0. A power-down and alarm wake would
+    set the word aside; a reset some 5 s after the commit would match the reference's T8140
+    account. [HV-CHANGED] by construction. Way out without hands: the alarm, watchdog 1, and the
+    5-7 s reset seen in every failed run.
 
 ## 10. With and without the cable
 
@@ -4206,7 +4705,8 @@ captured on. The numbers L1-L15 are for reference from tests and from section 4.
   2 and `0x0201` after the commit while the SoC is still up (4.4).)* *(Round 9: no new Linux
   reading. K's commit list (880 words) and each core's state at its final write (E7) are the
   macOS side of every comparison above; on the Linux side all of them are still unread at the
-  commit, 4.4a.)*
+  commit, 4.4a.)* *(Round 10: no new reading at the commit; L19 adds two register scans of Linux
+  awake.)*
 - **L12: the domain dumps of ds6 and ds13 ("ps prepare", two boots) are equal** in 135 of 137
   words; they differ only in which core's domain reports on (ds6: PCPU1 `0x1f0`, ECPU3 `0x100`;
   ds13 the other way round). *(This round, gap Q15.)* ds13's dump was taken after Linux had parked
@@ -4363,6 +4863,25 @@ captured on. The numbers L1-L15 are for reference from tests and from section 4.
   still running, and the readings `0x0201` and "a reset about 5 s after the end of the entry"
   have moved under Linux before; under the round-7 driver (L16, L17) neither moved, and the
   progress word was not sampled.
+- **L19 (Linux awake, stock kernel 7.3.0-0test5, two register scans; added round 10).** The
+  lab's register scans (`tools/regmap`, database `var/hwdb/m1-hw.db`): snapshot
+  12 (2026-11-16 05:28, on battery, no cable; raw reads `var/regmap/scan-pmgr-1c000/reads.txt`)
+  read the whole power-gate page `0x23b71c000`-`0x23b71c704`, 450 words, no fault; snapshot 16
+  (2026-11-18 02:12, before hypervisor round 7) read the CPU start/stop block
+  `0x23b754000`-`0x23b75401c`, no fault. No driver ran in either. Against macOS (4.1d,
+  `r10-checks.txt` part 5):
+  - CPU block: all eight words 0, as with macOS awake (at macOS's commit +`0x0` and +`0x4` read
+    `0xfe`).
+  - Power-gate header: **`0x23b71c000` = 0**; `0x23b71c010`-`0x23b71c080` (stride `0x10`) and
+    `0x23b71c088` `0x80000000`. macOS awake and at the commit: all ten `0x80000000`; at every
+    wake macOS reads `0x23b71c000` = 0 and sets it (R67).
+  - The rest of the page: 31 words of 16 groups differ from macOS's commit value in every run,
+    mostly first words with bit 30 clear where macOS has it set (`0x23b71c168`, `198`, `1b0`,
+    `1c8`, `1f8`, `240`, `258`, `360`, `390`, `5d0`, `600`, `618`) with the sixth word 0 where
+    macOS has `0xc000000`; `0x23b71c348` `0xc0040302` and `35c` `0xc000000` where macOS's commit
+    has `0x80040302` and 0; the fifth words of the groups +`0x1c8`-`0x228` 0 where macOS's commit
+    has `0x30000000`. Linux had its own devices on, so these group words are not compared as
+    requirements; they are listed for a reading at Linux's commit (open question 64).
 
 ## Appendix: scripts and extracts (all in `var/spec/`)
 
@@ -4434,6 +4953,8 @@ Run with `tools/hv-trace-kit/venv/bin/python`, from `var/spec/`, after `build_db
 | `r8_det11.py` | `r8-det11.txt`: capture J read from its log (no database): T, the cores' records, the instrument's commit writes and wake reads, the watchdog page, the last 40 ms of power-manager and SPMI accesses, phase starts, burst 2, the commit and wake snapshots against G, H, I (1.7c) |
 | `r9_det12.py` | `r9-det12.txt`: capture K read from its log (no database): T, the three writes of `0x23d2c4000`, the watchdog page in the last second, the cores going down, the commit snapshot's always-on, watchdog and wake-mask words with each count's start time (1.7d, 4.1c, R62) |
 | (observation stage) `var/commit-state/r6_core_state.py`, `r6_snapdiff.py` | `r6-det12.txt` (each core's state at its final write, E7), `macos135-det12-vs-det11.txt` (K's commit and wake snapshots against J, 1.7d) |
+| (observation stage) `var/commit-state/r7_probe.py`, `r7_wd2start.py`; `r6_core_state.py` on the round-10 logs | `r7-det18.txt`, `r7-det19b.txt`, `r7-det21.txt` (the probe sets, the CPU block and the power-gate page awake and at the commit), `r7-wd2start-det*.txt` (watchdog 2's start against the log), `r7-det*-core-state.txt` (E7), `r7-pwrgate-records.md` (1.7e, 4.1c, 4.1d) |
+| `r10_checks.py` | `r10-checks.txt`: the probe sets and the start of watchdog 2 against `0x23b718004` = 0; each core's guest timer, due time, virtual FIQ and timer FIQ enable in L, `det19b`, `det21`; the CPU block and the 23 power-gate words that change; every access to the four header words in all thirteen captures with a wake (databases and detached logs); Linux's register scans (snapshots 12 and 16) against macOS (1.7e, E7, 4.1c, 4.1d, L19) |
 
 Capture selection: the pairwise scripts compare the two captures named in the environment
 variable `CAPS` (default `3,4`; `3` = A, `4` = B, `d` = D); outputs of other pairs carry the
@@ -4471,7 +4992,95 @@ written but hold their awake value. The 137 domain words are in 4.2a.
 - `0x23d240000`..: `0x23d240000` `0x80100010`; `0x23d240004`-`0x23d24001c` `0x81100100`; `0x23d240020` `0x81100000`; `0x23d240024`-`0x23d240034` `0x81100100`; `0x23d240038` `0x81100000`; `0x23d24003c` `0x81100100`; `0x23d240040` `0x1101100`; `0x23d240044`-`0x23d24004c` `0x82100100`; `0x23d240050` `0x80100100`; `0x23d240054` `0x81100000`; `0x23d240304` `0x10000000`; `0x23d240308` `0x1000000`; `0x23d240314` `0x1000000`; `0x23d240320` `0x0`; `0x23d240330`-`0x23d240370` `0x0`.
 - `0x23d2c0000`..: `0x23d2c0000`-`0x23d2c000c` `0x0`; `0x23d2c0010` `0x880ff04`; `0x23d2c0014` `0x7`; `0x23d2c0018` `0x1`; `0x23d2c001c` `0xff0`; `0x23d2c0020`-`0x23d2c003c` `0x0`.
 
-## Changes in this round (round 9, 2026-11-18: capture K, the round-9 runs det13 to det17, the reference's conditions)
+## Changes in this round (round 10, 2026-11-18: capture L, the round-10 runs det19b to det22c, the power-gate page and the CPU block, pending interrupts at the cores' last step)
+
+Inputs: the spec at `fca5a6f` (repository at `bdb9f12`); the evidence file's "Hypervisor round 7"
+(`docs/evidence/2026-11-17-deepsleep-clean-runs/README.md`, commit `bdb9f12`); the runs
+`tools/hv-trace-kit/runs/20261116-mac135/*-det18*` to `*-det22c*`; the observation stage's
+`var/commit-state/r7_probe.py`, `r7_wd2start.py` and their outputs, `r7-det*-core-state.txt`,
+`r7-pwrgate-records.md`; `var/recfg/commit-snap-list-r7.json`; the power-chip dumps
+`var/m1-state/pmu-20261118-*-after-det1[89]*`, `-det2*`; the capture databases `var/spec/db/` and
+the detached logs of J and K (for the wake writes of the power-gate header); the lab's Linux
+register scans `var/hwdb/m1-hw.db` (snapshots 12, 16) and `var/regmap/scan-pmgr-1c000/`; the
+instrument's code (`~/m1n1-next` `ff8caba0`: `src/hv/hv_cpu_power.c`, `src/hv/hv_detached.c`;
+`proxyclient/m1n1/hv/__init__.py`), cited as the record of what the instrument did; the reference
+`docs/reference/asahi-aurora-sleep-deep-dive.md` and the Asahi documentation page "SMP" (local
+clone `docs/hw/cpu/smp.md`, commit `e8bcfea`), marked as reference or documentation where used.
+Every reading the observation stage reported was re-read from its output files and, for the
+wake writes, the Linux scans and the per-core due times, from the logs and databases by this
+round's `r10_checks.py` (`r10-checks.txt`). Inline marks "round 10" are this round's.
+
+**Checked against the data, and where the data say otherwise than the summary handed over**
+- Watchdog 2 armed before the first write of `0x23d2c4000` reaches the hardware (bite 5 s,
+  control 4, count 43-56 microseconds), its start 1.3-7.1 microseconds after the record of
+  `W 0x23b718004` = 0: confirmed in all three captures. `0x23d2c4000` reads 1 **only** before the
+  first write; it reads 0 after it and 0 both before and after the second and third (not "1 before
+  each of the three writes").
+- The keep-state split: confirmed (`keep_timers` power-down and wake 2 of 2; `keep_vfiq` reset
+  2 of 2); the per-core states of L, `det19b`, `det21` re-read (fired on cores 1, 3, 2, 0 / 1, 3,
+  0 / 1, 2, 0).
+- CPU block `0xfe` / `0xfe` at the commit: confirmed. Power-gate page: **23** of 450 words change
+  between awake and the commit or between runs (22, 21, 20 per run), not 25; with the CPU
+  block's two the round's changed words number 25.
+- Added from earlier captures and Linux scans, not in the summary: `0x23b71c000` reads 0 and is
+  written `0x80000000` by macOS at every wake (thirteen captures), and reads 0 with Linux awake.
+
+**Requirements added**
+- R66 [L]: the CPU start/stop block at the commit (+`0x0` = +`0x4` = `0xfe`, the rest 0).
+- R67 [L] and [BOTH] for the wake: the power-gate header words `0x80000000` at the commit;
+  `0x23b71c000` read 0 and set at every wake; for a driver, `0x23b71c000` and `0x23b71c040` hold
+  `0x80000000` at its commit (whether bit 31 is needed is not observed).
+- R68 [HV-CHANGED]: the two items separated: timers left, nothing pending: power-down; a virtual
+  FIQ pending: reset.
+
+**Requirements changed**
+- R59: the requirement on a driver's cores is now "nothing pending at the core at its final
+  write" (`ISR_EL1` 0; no virtual IRQ/FIQ pending), resting on all thirteen captured
+  power-downs and on four of four failures with a virtual FIQ pending; **"timers off" withdrawn
+  as a requirement** (two power-downs with every guest virtual timer enabled and unmasked).
+- R62: watchdog 2 armed and `0x23d2b8028` bit 24 set before the first write of `0x23d2c4000`, the
+  count starting just after `0x23b718004` = 0 (replaces "within about 0.3 ms of the first write").
+- R22, R24, R30, R65: round-10 readings added (watchdog 2 after `0x23b718004` = 0; `0x23d2c4000`
+  0 after the first write; the header writes at the wake; R65's values in four captures).
+
+**Requirements withdrawn:** none as an entry; within R59 "timers off" as stated above. D1-D4
+unchanged.
+
+**Sections changed or added:** status; 0 (capture L, the round-10 runs, [HV-CHANGED] for a run
+whose outcome was unchanged); 1.3 A4 (what the instrument does with the CPU block), A6 (the
+round-10 options), A9; 1.7e (new); E5-8j (where SIO and SIO_BUSIF fall); E7 (the per-core state
+in three more captures, the split, what a core leaves at its final write and how firmly); 4.1c
+(inside the three writes; watchdog 2's start against the log); 4.1d (new: the CPU block and the
+power-gate page, with Linux awake); 4.4 (rows 4, 5, 12, 13 updated, 15 and 16 new; what they add);
+4.4a (C3, C4, C17 round-10 rows; what changes); 5; 6 W1-2a, W2; 8 (marks: [L]; above); 9 (55, 56,
+57, 62, 63 updated; 59, 60, 61 closed; 64-67 new); 12 (L11, L19 new); appendix.
+
+**What the spec now says a driver's cores must leave at their final write** (E7, R59, R65, R68)
+1. Nothing pending at the core: `ISR_EL1` 0 and no virtual interrupt pending. Observed in every
+   captured power-down (the instrument's act for the virtual part) and its absence followed by
+   no power-down four of four, both under the instrument **[HV-CHANGED]**; not observed for a
+   physical interrupt on either system.
+2. Timers may be left enabled (two power-downs, [HV-CHANGED]); not required off.
+3. macOS's own values, four captures: the interrupt controller's lines and both IPI kinds masked,
+   `IPI_SR_EL1` 0, `PMCR0_EL1` `0x7003400`, no counter interrupt pending, `PSTATE` D, A, I, F
+   masked, `ACC_OVRD_EL1` / `CYC_OVRD_EL1` as R43, core 0 last, no core kept running.
+4. Open: the same reading under Linux at its final instruction (65); a physical pending interrupt
+   under macOS (66).
+
+**The orchestrator's questions, how each was dealt with**
+1. Round 7's readings, checked, each marked: 1.7e's table (macOS's / [HV-CHANGED] per run and
+   per part of a run), 4.1c (the probe, macOS's under the probe's reads), 4.1d (macOS's commit and
+   awake values; Linux awake marked [LINUX]), E7 (macOS's per-core values; the split
+   [HV-CHANGED]). Two corrections to the summary handed over (above).
+2. Pending interrupts at the cores' last step: E7's round-10 parts keep apart what macOS leaves
+   (four captures), what the instrument changes (A6: the virtual FIQ it holds for a fired timer,
+   the timer's FIQ to the core turned off, and in every power-down the clearing), what followed
+   with and without that clearing, and the inference (marked, with its reference). The
+   requirement goes as far as R59's round-10 wording; the rest is open questions 65 and 66.
+3. 4.4a: C3, C4, C17 answered for Q59-Q61 as far as read; open questions 64-67.
+4. D1-D4 kept unchanged.
+
+## Changes in round 9 (2026-11-18: capture K, the round-9 runs det13 to det17, the reference's conditions)
 
 Inputs: the spec at `9450b3d` (repository at `a3b8280`); the evidence file's "Hypervisor round 6"
 (`docs/evidence/2026-11-17-deepsleep-clean-runs/README.md`, commit `0e6bd8d`); capture K and the
