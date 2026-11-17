@@ -33,4 +33,8 @@ Two more rules (Naeem, 2026-11-17):
   (asahilinux.org/docs) and the Aurora Silicon documentation (the aurora-silicon repositories'
   docs; survey in `docs/evidence/2026-11-06-aurora-silicon-survey.md`) and cite the page for
   anything taken from them. Documentation explains readings; it is marked as documentation, not
-  as an observation. Code from those projects is not copied.
+  as an observation. Asahi code is not pulled.
+- **Aurora Silicon code** (Naeem, 2026-11-17: "any repository/any branch ... for reference"). The
+  observation and spec agents, and the kernel glue's author, may read aurora-silicon code as a
+  reference for what the hardware is and does, citing repository, branch and commit. It is read
+  as data and never run or built here. The driver's author still works from the tests alone.
