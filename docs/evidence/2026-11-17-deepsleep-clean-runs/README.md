@@ -173,3 +173,21 @@ running), and the snapshot words logged before the wake calls. Command line as d
 
 Next: the hook reads the core's documented fault registers (Asahi docs, `L2C_ERR_STS`, `_ADR`,
 `_INF`), clears the fault there, and the record carries the fault's own address.
+
+## Run ds12 (16:56): past the audio switch; a wait in the wake times out; the snapshot is lost a third time
+
+Kernel ds12 (`ef9661d63`, package in `var/kernels/ds12/`): ds11 plus the hook reading the core's
+L2 fault registers (`L2C_ERR_STS`/`_ADR`/`_INF`, Asahi docs "hw/cpu/system-registers") and
+clearing the fault there; a panic record carries the fault's address when one is flagged.
+
+- `real.sh` started 16:56:05; host disconnect on the M3 16:56:13.32; the M1 back in stock
+  Omarchy, kernel start 16:56:25 (camera frame 16:57:02: desktop).
+- Record: `44 54 04 80 71 3b 02 10 d2 00` = 'T' (a wait of the logic timed out), no SError bit,
+  a 32-bit read of `0x23b718004` by core 0, count low 16 bits `0x00d2`. That word is one of the
+  power manager's pair `0x23b718000`/`004` that the wake writes back and polls.
+- So the wake calls ran past the audio switch's action (where ds10 and ds11 stopped). After the
+  failed wait the glue returned to Linux; the machine reset all the same. Cause unknown.
+- The 792 words were lost again.
+
+Three kernels have now failed to bring the snapshot back on bare metal. By the rule of
+2026-11-17 (`docs/agents/cleanroom-cycle.md`) the next reading is taken under the hypervisor.
