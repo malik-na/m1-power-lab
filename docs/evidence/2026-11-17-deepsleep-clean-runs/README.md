@@ -131,3 +131,30 @@ their coprocessors shut down first); the other device-level shutdowns of phase E
 storage, always-on processor) are not done; `DCS0`-`7`, `PMP`, `SEP` control words differ in the
 bits above the request; 59 domain words are not observed for macOS; many written values are
 macOS's own.
+
+## Run ds10 (16:31): the commit snapshot is read; the way back panics in the audio switch's wake action
+
+Both Macs were restarted before this run (the M3's Thunderbolt driver fault after ds9 is gone;
+the Thunderbolt link is back). Kernel ds10 (`b9dc545ba`, package sha256 `66084bd4...47ee`): the
+same logic as ds9, plus `apple_deepsleep.snap=1`: at the commit point the glue reads the 792
+words of macOS's commit snapshot, then runs the logic's `leave_early` and `leave_late` without
+powering anything down, and is to log the words afterwards. Command line: ds7's plus `snap=1`.
+
+- `real.sh` started 16:31:56. The M3 logged the M1's retimer and host disconnect at 16:32:04.86.
+  The M1 was next seen in stock Omarchy with a kernel start time of 16:32:16 (camera frame
+  16:34:46: desktop). So it reset; `real.out` holds only its first line.
+- Record in the power chip: `44 d0 04 82 40 38 02 30 4b 00` = 'P' (panic) with bit 7 (an SError
+  pending), last access a 32-bit write to `0x238408204` by core 0, count low 16 bits `0x004b`.
+- `0x238408204` is in neither `enter` nor the snapshot reads (host sequence with `DS_SNAP=1`).
+  The logic writes it only in the audio switch's wake action (W3): block 2 of six at
+  `0x238400000`, offset `0x204`, the third write of that block. So `enter`, the snapshot and
+  `leave_early` (the memory controller's re-enable among it) completed, and `leave_late` ran up
+  to that action. The count is then 65536 + 75.
+- Inferred, not read: the first write to block 2 raised an asynchronous SError that was taken
+  two writes later (`cpu_suspend()` has restored the exception masks by then) and the kernel
+  panicked on it. Blocks 0 and 1 took their 22 writes.
+- The reset followed the panic within about 2 s, not after the 10 s of `panic=10`. Cause unknown.
+- The 792 words were lost: they are printed after the wake calls and never reached the disk.
+
+Next: the glue keeps the snapshot's way back alive across SErrors (records each, continues), so
+the words reach the log.
