@@ -752,3 +752,141 @@ Not known: whether the chip powered down after the commit or stayed up with its 
 The M3 cannot tell the two apart here, because the driver itself now turns the first port's
 domains off during the entry. The M1 was on mains with a full battery, so the battery does not
 tell either.
+
+## Observation round 4: after ds16's commit (readings taken 2026-11-17 21:55-22:05)
+
+Readings from what already existed, plus read-only reads on the M1 in stock Omarchy (boot of
+21:52:28). No run.
+
+### 1. Power-chip bytes that differ between the groups of dumps
+
+Source: `var/m1-state/pmu-*.txt` (`tools/tb/m1-pmu-dump`, read through the kernel's nvmem
+device). **There is no dump after ds9**; its record and alarm bytes exist only in this file's
+ds9 section. No dumps after ds13 or ds15. Every byte not listed below is equal in all of these
+dumps, apart from the scratch record `0x9f04`-`0x9f0c` and the clock/alarm bytes `0xd002`-`0xd00a`.
+
+| Register | before run 41 / 42 | 07:50 | ds2-ds5 | ds8 | ds10, ds11, ds12 | dsh1 | det9, det10 | ds14 | **ds16** |
+|---|---|---|---|---|---|---|---|---|---|
+| `0x0201` | 01 / 01 | 00 | 00 | 00 | **04** | 04 | 00 | 00 | **04** |
+| `0x9f03` | 50 / 30 | 50 | 30 | 50 | 50 | 50 | 00 | 00 | **50** |
+| `0xa47c` | 08 | 08 | 08 | 08 | **1c** | 1c | 08 | 08 | **0c** |
+| `0xa47d` | 00 | 00 | 00 | 00 | **04** | 04 | 00 | 00 | **04** |
+| `0xd000` | 41 / 01 | 41 | 01 | 01 | **03** | 03 | 01 | 01 | 01 |
+| `0xd00c` | 00 | 00 | 00 | 00 | **01** | 01 | 00 | 00 | **00** |
+| second chip `0x2808` | 04 / 04 | 05 | 05 | 05 | 05 | 05 | 05 | 05 | 05 |
+
+What the sources say these registers are:
+- **`0x0201`.** The lab's decode of macOS's always-on sleep program
+  (`docs/evidence/2026-11-16-run36-38-restart/README.md`,
+  `docs/evidence/2026-11-16-hv-macos135-wake/README.md`) says sequence 1 (entering sleep)
+  writes 01, sequence 5 writes 02 and the wake sequence 10 writes 00. `docs/hardware/m1-air-j313.md`
+  says it reads 04 after a power-button start and 01 after a wake-restart.
+  - Readings here: the self-resets of ds10-ds12 and dsh1, and the reboots of ds14, left it
+    unchanged (04 carried from the cold start before ds10; 00 carried from det10).
+  - After ds16 it reads 04. In ds14's dump (19:14) it read 00.
+- **`0x9f03`.** "boot-error-stage" (the M1's device tree, `docs/hardware/m1-air-j313.md`). The
+  lab guide `var/s2r-static/PMU-WAKE-READING-GUIDE.md` expects 0x50 after a reset or cold boot;
+  that expectation is not measured.
+- **`0xa47b`-`0xa47e`, the fault shadow.** The ADT's `info-fault_shadow`; the bit names are the
+  ADT's `info-fault_name-N`, as read by `pmu_postmortem.py` (e.g.
+  `runs/20261106/mac27/try44/postmortem-*.json`). The bytes are a little-endian word starting at
+  `0xa47b`:
+  - `0x000800` = bit 11 `wdog,reset_in_1` (every dump except the two groups below);
+  - after ds10-ds12 and dsh1, `0x041c00` = bits 10 `btn_rst,btn_seq_reset`, 11
+    `wdog,reset_in_1`, 12 `dbg_rst,reset_in_2` and 18 `timeout,dblclick_timeout`;
+  - **after ds16, `0x040c00` = bits 10 `btn_rst,btn_seq_reset`, 11 and 18
+    `timeout,dblclick_timeout`.** Bits 10 and 18 were not set at ds14's dump (19:14).
+- **`0xd000`, `0xd00c`.** The ADT's "rtc_alarm block"; `0xd001` is "pm-setting". The lab
+  guide (partly inferred, citing Aura's tests) reads `0xd00c` = 01 as the alarm event latched and
+  `0xd000` = 03 as a fired-alarm status.
+  - Readings: 03/01 only after ds10-ds12 and dsh1. In those runs the driver's alarm time passed
+    while the M1 had restarted and Linux was running.
+  - After det9 and det10, whose alarm did wake the chip (under macOS), both read 01/00 after the
+    reboot.
+  - After ds16 the clock (`0xd004`-`0xd007`, s) had passed the alarm (`0xd008` = 615186 s) by
+    5115 s, with `0xd000`/`0xd00c` = 01/00.
+  - Not known: whether a power-button start, or macOS, clears these.
+- **Second chip `0x2808`.** Written 05 by macOS's wake sequence 10 (lab decode). 05 since 07:50
+  in every dump, including after ds16's restart, so it carries no information about ds16.
+
+Read on the M1 now (`/sys/bus/nvmem/devices/spmi_nvmem0/nvmem`, read-only, 21:58):
+- fault log `0xd200`: 16 bytes of 0;
+- `0x9f00`-`0x9f1f`, `0xa470`-`0xa48f` and `0xd000`: as in the 21:53 dump;
+- `0xd100` (rtc offset): `6f 3d 2d 84 79 35 00 00`;
+- `0xa67b`: a different value at each read since 2026-11-06, not interpreted.
+
+### 2. The M3's flight recorder
+
+Source: `var/m3-blackbox/d84a42bc-*.log` (ds16) and `612cd1db-*.log` (ds9), one BEAT line a
+second. The M1 is on the M3's `port2`: the partner left that port during the M1's reboot at
+14:02:44.
+
+| | ds9 (14:03:16-14:10:09) | ds16 (20:26:49-21:52:41) |
+|---|---|---|
+| port2 partner | present, the M3's role `source`, throughout | present, the M3's role `source`, throughout |
+| `thunderbolt0` | interface present, carrier 0 | **interface absent (`-`)** |
+| M3 mains, battery current | `ac=1`, 0 | `ac=1`, 0 |
+| Gaps in the record | none | **21:02:41-21:47:22: the M3 itself was in s2idle (45 min)** |
+
+- After the restart: `tb0` = 0 at 21:52:41, 1 at 21:52:42.
+- At 21:52:51 the M3's mains partner on `port0` left (`ac=0`, battery -0.79 A).
+- The record has no current or voltage of `port2`, so it cannot tell how much power the M1 drew.
+
+### 3. The M3's kernel log
+
+Source: `journalctl -k`, this boot for ds16 and boot -1 for ds9.
+- **ds9:** after the tunnel teardown at 14:03:16, nothing about the port until the module swap
+  of 14:10:09. The link stayed trained; there was no lane message in between.
+- **ds16:**
+  - 20:26:49.27-.33: 60 `Gen2/3 link error` lines (both lanes);
+  - 20:26:49.37 `retimer disconnected`, 20:26:49.40 `host disconnected`;
+  - from 20:26:50.42, `lane_init.c:936: Timeout reading AT register` about every 0.1 s (21,513
+    lines to 21:02:42);
+  - 21:02:42 the M3's own `PM: suspend entry (s2idle)`. On resume at 21:47:22 the M3 restarted
+    its USB-C/Thunderbolt stack, and the same timeouts went on (2,872 lines to 21:52:10.58);
+  - **21:52:10.654 `SBX disconnected!`**, then the lane state machine restarted, timeouts again
+    21:52:28-21:52:34.9, `Entering Connected` 21:52:35.07, `new host found` 21:52:40.96.
+- **Comparison with an ordinary reboot.** The same sequence ("SBX disconnected!", Phase 1, about
+  9 s of "Timeout reading AT register", "SBX disconnected!", "Connected") appears at the
+  ordinary reboot that started ds16's kernel (20:25:48-20:26:15).
+- So for 85 minutes the M3's controller saw a partner on the port whose sideband did not
+  answer its AT-register reads. In ds9 the link stayed trained with no such lines.
+  Which state of the M1 gives these timeouts (powered down, or up with the port's domains off)
+  is not read: no capture shows what this log looks like while the M1 is known to be powered
+  down.
+
+### 4. On the M1 now: what the restart was
+
+Read-only:
+- **Power chip:** the fault shadow gained `btn_rst,btn_seq_reset` (bit 10) and
+  `timeout,dblclick_timeout` (bit 18) after 19:14, and `0x0201` = 04, the value the lab's notes
+  record after a power-button start.
+- **Kernel log of this boot:** `macsmc-reboot: PMU logged 1 boot error(s) and 0 panic(s)` at
+  21:52:35. The three boots before it printed no such line. The same line followed ds2-ds3's
+  resets. Per the Aurora survey (`docs/evidence/2026-11-06-aurora-silicon-survey.md`, B3: aura
+  `src/pmu_counter.c`), iBoot counts unclean boots at `leg_scrpad+2` = `0x9f02`; the dump reads
+  `0x9f02` = 00 after Linux's boot.
+- **Times:** M3 `SBX disconnected!` at 21:52:10.654; the M1's kernel start at 21:52:28; its RTC
+  set the system clock at 21:52:28.57.
+
+These readings are what the chip records for a button reset. Whether Naeem pressed it is his
+answer, not yet in.
+
+**Not readable:**
+- How long the SoC was powered. The power chip's clock runs in every state. The previous
+  boot's journal ends at 20:26:46 (`real.sh` start).
+- The boot loader's wake mailbox counters: the loader published a new mailbox this boot
+  (`0x8021cca40`; `0x802df4a40` at 17:06), so the previous boot's counters were not read.
+- SMC keys that count sleep or power events: none is known to this lab, so none was read.
+
+### An observation design for the next bare-metal run (readings only)
+
+| To tell | Reading | What it needs |
+|---|---|---|
+| Whether the chip powered down | The M1's battery charge (`macsmc-battery` `charge_now`/`energy_now`) logged right before the entry and right after the restart, divided by the dark time. The two states differ by about an order of magnitude in draw; the size comes from the Aurora survey's macOS 0.109 W asleep, so it is documentation, not a reading on this M1. | The M1 not charging during the run: on battery with the charger out **and** the M3 not sourcing power on `port2` (it is `source` in every run so far). Either a cable or hub that carries no power (a second cable), or the M3's port set to sink, which is an M3 setting and a risk to weigh. |
+| The same, from the M3 | Repeat this log's port readings (section 3) with the M1 in a known powered-down sleep: bare-metal macOS sleeping with the cable in. That gives the "powered down" signature of the AT-register timeouts. | A bare-metal macOS sleep. Without the hypervisor, the wake needs a key or macOS's own alarm, so hands or a macOS login. |
+| Whether the always-on processor's sleep program ran (sequence 1), or a wake sequence ran | Power chip `0x0201` after the restart: 01 = sequence 1, 02 = sequence 5, 00 = wake sequence 10, unchanged = none (lab decode). | The run must **not** end with the power button, which writes 04. Read before the run (it reads 00 now if nothing writes it), and after a self-reset. |
+| Whether the alarm fired | `0xd00c` and `0xd000` after the restart, with the clock past the alarm. | Two calibrations, both read-only: (a) the alarm passing while the chip is known up (dsh1, ds10-ds12 give 01/03); (b) a known sleep and wake (det9 and det10 give 00/01 after macOS ran). Whether a power-button start clears them is unknown and needs hands to calibrate. |
+| Whether a wake began | A marker written at the wake entry before anything else, in the boot loader (stage 1 v1.6.1-dirty), and read after the restart. The hypervisor does this with 'W' -> 'Z' at `0x9f04`/`0x9f0a`. | A boot-loader change, writing only inside `0x9f04`-`0x9f0d` (the glue's record shares those bytes). Not done. |
+| Whether the M3 missed part of it | The M3 must not sleep during a run: it was in s2idle 21:02-21:47. | An inhibitor on the M3 (`systemd-inhibit` around the run). |
+| What ends the run without hands | (1) Watchdog 1 armed by the glue just before the commit, at most 178.9 s (32-bit at 24 MHz). If the SoC stays up, it resets and that reset is itself a reading; whether it counts while powered down is unknown (det9/det10: watchdog 2 read 0.325 s at both wakes). This is a glue change, an AON register, not the power chip. (2) The alarm, already armed, which did not end ds16. (3) A reset over the cable (`tools/m1-reboot/m1-reboot.sh`, a USB-C VDM): barred, because it crashed the M3's Thunderbolt driver today. | (1) needs the implementation stage; (3) would need the M3-side risk removed first. No power-chip write outside `0x9f04`-`0x9f0d` and the alarm register is needed by any of these. |
