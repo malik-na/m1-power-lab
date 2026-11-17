@@ -52,3 +52,16 @@ bytes to the power chip's spare bytes `0x9f04`-`0x9f0d` (the only state that sur
 'D', reason, address (5 bytes), kind and core, access count. `tools/tb/m1-pmu-dump` reads them
 after the reboot; `DS_SCENARIO=g DS_POLL=1 cargo test --offline --test sequence -- --ignored
 --nocapture` in `drivers/soc/apple/deepsleep/hosttest` prints the driver's sequence to match.
+
+## Run ds4 (11:19): past the memory controller, stopped at the power manager's table
+
+Kernel ds4 (`751f8724a`: the driver with the seven widths corrected; 63/63 tests). Same timing
+(devices suspended 11:19:51.20, port dropped 11:20:02.21). Record: `44 c5 00 90 54 3b 02 20 ad
+00` = oops with SError pending, 64-bit read of `0x23b549000`, core 0, access count 173: the
+first read of the power manager's quiesce after the memory controller and error handler steps.
+
+Reading `0x23b549000` (32 bits, `/dev/mem`) under the stock kernel at 11:21: the M1 reset at
+once (back at 11:22:10, `PMU logged 1 boot error(s)`). `apple_pmp` was loaded. In the captures
+macOS reads this block (`0x23b52c000`-`0x23b55bffc`, R6) only after it has stopped the `pmp`
+coprocessor (R4, R5). Linux's pmp driver does nothing at suspend. So the power manager's quiesce
+depends on a step the tests had left out of the driver's scope.
