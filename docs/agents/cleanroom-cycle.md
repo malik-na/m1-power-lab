@@ -22,3 +22,15 @@ Rules for the orchestrator:
 - The kernel glue (`drivers/soc/apple/deepsleep/` outside `logic/`) wires the tested logic in and
   takes readings. It never changes what the logic does; `logic/` is a copy made by
   `sync-logic.sh`.
+
+Two more rules (Naeem, 2026-11-17):
+
+- **Three strikes.** When something keeps failing and three different approaches have been tried,
+  the next step is an observation round under the hypervisor (`tools/tb/m1-hvboot`,
+  `tools/hv-trace-kit/harness/`): fresh readings, then spec, tests and driver in that order. No
+  fourth workaround on Linux alone.
+- **Documentation.** The observation and spec agents consult the Asahi Linux documentation
+  (asahilinux.org/docs) and the Aurora Silicon documentation (the aurora-silicon repositories'
+  docs; survey in `docs/evidence/2026-11-06-aurora-silicon-survey.md`) and cite the page for
+  anything taken from them. Documentation explains readings; it is marked as documentation, not
+  as an observation. Code from those projects is not copied.
