@@ -312,12 +312,13 @@ Every logged access carries its width: macOS read or wrote the word as 8, 16, 32
 captures (`widths.tsv`: address, direction, bits, the captures it was seen in, the count;
 `widths-blocks.tsv`: the widths seen per 16 KiB page).
 
-- 106,235 address-and-direction pairs were accessed. 105,382 were only ever accessed as 32 bits,
-  852 only as 64 bits, 38 as 16 bits, 1 as 8 bits.
+- 106,235 address-and-direction pairs were accessed: 105,344 only ever as 32 bits, 828 only as
+  64 bits, 25 only as 16 bits, and 38 with two widths.
 - **The width of a word is the same in every capture it appears in.** 38 pairs were accessed
-  with two widths, the same two in every capture: thirteen words of the block at `0x23b549000`
-  (`+0x000`, `008`, `010`, `018`, `090`, `0a0`, `200`, `208`, `210`, `218`, `290`, `2a0`,
-  `400`; 32 and 64 bits) and ten words of the PCIe blocks at `0x690000000` and `0x690100000`
+  with two widths, the same two in every capture but for `0x23b549400`: thirteen words of the block at `0x23b549000`
+  (`+0x000`, `008`, `010`, `018`, `090`, `0a0`, `200`, `208`, `210`, `218`, `290`, `2a0`:
+  32 and 64 bits; and `+0x400`, read as 8 and as 32 bits, the 8-bit read in captures A and B
+  only) and ten words of the PCIe blocks at `0x690000000` and `0x690100000`
   (16 and 32 bits). No other word was accessed with more than one width in any capture.
 - 64-bit words are found in 175 of the 591 pages touched; 165 of those pages hold only 64-bit
   words. Among the blocks this document deals with: the memory controller's
@@ -326,8 +327,10 @@ captures (`widths.tsv`: address, direction, bits, the captures it was seen in, t
   (`0x200204000`), each core's blocks at `0x21n054000`/`0x21n058000`, the cluster blocks at
   `0x210e20000`, `0x210e40000`-`0x210e48000`, `0x210e70000` and the same at `0x211e.....`,
   and the power-manager table blocks `0x23200c000`, `0x23400c000`. The full list is the file.
-- What the machine does when a word is accessed with another width is not observed: macOS never
-  did it. `[UNKNOWN]`
+- `widths.tsv` has no line for a word the access log does not contain (the core start/stop
+  words at `0x23b754000` and the guarded power-domain words): their width is not observed.
+- What the machine does when a word is accessed with another width is not observed in the
+  captures: macOS never did it. `[UNKNOWN]`
 
 ## 2. Idle
 
