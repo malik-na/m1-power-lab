@@ -332,6 +332,29 @@ captures (`widths.tsv`: address, direction, bits, the captures it was seen in, t
 - What the machine does when a word is accessed with another width is not observed in the
   captures: macOS never did it. `[UNKNOWN]`
 
+### 1.9 The power domains when the platform sleep actions begin (captures D, E, F, G)
+
+`ps_at_e3.py` gives, for each of the 137 power-domain control words of the power manager's
+table, the value macOS has it at when phase E3 begins ("IOCPUSleepKernel enter"): the last value
+read or written before that moment, else the idle snapshot taken before the entry
+(`ps-at-e3.tsv`: address, name, the value in D, E, F, G, whether the requested state is the
+same in all four, the source).
+
+- 78 words are observed, 59 are not (never accessed and in no snapshot). For 77 of the 78 the
+  requested state (low four bits) is the same in all four captures; `FPWM1` is on in D, E, G
+  and off in F.
+- Requested on (`0xf`) at E3 start, among others: `GPIO`, `SIO_BUSIF`, `SIO`, `SIO_CPU`
+  (`0x1400024f`), `SPI_P`, `UART_P`, `UART_N`, `UART0`-`UART8`, `AUDIO_P`, `PMS_SRAM`
+  (`0x1000030f`), `PMP` (`0x1000030f`), `ANS2` (`0x1f0023ff`), `DCS0`-`DCS7` (`0x1000030f`),
+  `SEP` (`0x1000230f`). Requested off: `RMX`, `DISP0_FE`, `DISP0_CPU0`, `DISPEXT_FE`,
+  `DISPEXT_CPU0`, `ATC1_COMMON`, `SIO_ADMA`, `FPWM0`, `FPWM2` and the others the file lists
+  with request 0 (the display and second-port domains were set off in E1 and E2, R1, R7).
+- The words the hypervisor guards for its own link (`SIO`, `SIO_BUSIF`, `UART_P`, `UART0`,
+  artefacts A3, A4) are in this list with the values the snapshot read; what macOS itself asks
+  for there is not observed.
+- The platform sleep actions of E3 and E5 touch blocks in several of these domains (`sio`'s
+  mailbox and translator, the pin controller, the temperature sensors, the `pmp` block).
+
 ## 2. Idle
 
 Windows used (`idle.py`, `idle_seq.py`; tables `idle-<A=3|B=4>-<pre|post>.tsv`): before the
@@ -1657,6 +1680,10 @@ After the SoC comes up, before macOS is back at idle:
   unless listed there as 64 (or 16, or 8) bits; the width of a word never changed between
   captures or between reads and writes of the same word, apart from the 23 words named in
   section 1.8 (all six captures; `widths.py`).
+
+- **R50 [D]** When the platform sleep actions begin, each power-domain control word has the
+  requested state of `ps-at-e3.tsv` (section 1.9): the same in D, E, F and G for 77 of the 78
+  observed words.
 
 ## 9. Open questions
 
