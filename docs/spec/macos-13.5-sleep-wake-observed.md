@@ -4,8 +4,12 @@ Status: observation record, written 2026-11-17 from two captures (A, B) and brou
 the same day with a third (D, section 1.4), which has the last accesses before power-down, and
 with two more taken with the cable out (E, F, sections 1.5, 1.6, 10, 11), and with one that
 adds a register snapshot at the commit and each core's system registers on the way down (G,
-sections 1.7, 3 E7, 4). It states what macOS did, not
-why, and not what is needed for sleep to work. Nothing here comes from any Linux sleep driver.
+sections 1.7, 3 E7, 4), and with a repeat of G whose commit snapshot also covers all 137
+power-domain words (H, sections 1.7a, 4; round of 2026-11-17 evening, listed in "Changes in this
+round" at the end). It states what macOS did, not why, and not what is needed for sleep to work.
+Nothing here comes from any Linux sleep driver's code. Section 12 records what was **read on the
+machine under Linux** (the state a driver starts from); every such statement is marked
+**[LINUX]** and is an observation of Linux, not of macOS.
 
 ## 0. Terms used in this document
 
@@ -24,13 +28,39 @@ why, and not what is needed for sleep to work. Nothing here comes from any Linux
   manager's own table in the device tree (`var/map-20261117/adt/pmgr-devices.json`). In a control
   word the low four bits are the state macOS asks for and bits 4-7 the state the hardware reports
   (`0xf` = on, `0x0` = off, `0x4` = clock-gated, as far as the values seen here show).
+  *Reference, not an observation* (gap T7): Aurora Silicon's Linux driver
+  (`aurora-silicon/linux`, branch `integration/aurora`, commit `dcce0e751c71`,
+  `drivers/pmdomain/apple/pmgr-pwrstate.c`) names the other bits: 31 reset, 28 "auto enable",
+  27-24 "auto" state, 19-16 minimum state, 12 "PS reset", 11 busy, 10 device disable, 9 "was
+  clock-gated", 8 "was power-gated", 7-4 actual, 3-0 target; states `0xf` active, `0x4`
+  clock-gated, `0x0` power-gated. Those names are that driver's; none of them is established by
+  the captures. In the captures bits 8 and 9 are set by the hardware when a domain goes down
+  (`0x3f0` is read back as `0x200`), bit 28 is set by macOS's third write of a turn-on, and bits
+  24-27 read `0xf` after a coprocessor in the domain has been stopped (`PMP` `0x1f0f03ff`).
 - **Memory controller (`mcc`)**: the block at `0x200000000`-`0x2003fffff`: four identical planes
   at `0x200000000`, `0x200040000`, `0x200080000`, `0x2000c0000`, common words at `0x200100000` and
   `0x200150000`, and eight DRAM channel controllers `DCS0`-`DCS7` at `0x200200000` + n x `0x40000`.
 - **Coprocessor**: a small processor inside the chip running Apple firmware. macOS talks to each
   through a **mailbox**: it writes a message into two words at +`0x8800`/+`0x8808` of the
   coprocessor's block and reads replies from +`0x8830`/+`0x8838`. The low byte of the second word
-  is the **endpoint** (channel); endpoint 0 carries power management messages. Coprocessors seen:
+  is the **endpoint** (channel); endpoint 0 carries power management messages. Two status words
+  are read around each message: +`0x8110` (towards the coprocessor) and +`0x8114` (towards the
+  main processor). Forms read (`mbox_status.py`, `gaps_gh.py`, gaps S4, F3): `0x2XY01` (bit 17
+  set, bits 20-23 zero) and `0xNXY01` with N in bits 20-23 non-zero (`0x100101`, `0x101201`,
+  `0x202401`, `0x402601`, `0x608e01`, `0x818001` ...), where X and Y are hexadecimal digits that
+  step by one per message. In all seven captures, over every mailbox: no read of +`0x8830`
+  follows a read of +`0x8114` in the bit-17 form (29 to 49 such reads per capture, each followed
+  by no reply read), and every read of +`0x8830` follows a +`0x8114` read with bits 20-23
+  non-zero (bit 20 alone in 14,974 to 64,086 cases per capture; bits 21-23 at some mailboxes),
+  apart from one to three reads per capture at blocks whose +`0x8114` reads `0x0`-`0xa` and a
+  few reads at the very start of E's and F's logs. Whether bits 20-23 count waiting messages is
+  not established. *Documentation, not an observation:* the Asahi Linux page "ASC"
+  (asahilinux.org/docs/hw/soc/asc/) says these status registers show "empty" in bit 17 and
+  "not empty" in bit 16; in the captures the reply follows bits 20-23 being non-zero. The
+  same page names +`0x44` CPU_CTRL (bit 4 "CPU_START") and +`0x48` CPU_STATUS (bit 5 mailboxes to
+  the main processor empty, bit 3 FIQ not pending, bit 2 IRQ not pending, bit 1 CPU stopped,
+  bit 0 CPU idle). macOS reads +`0x48` = `0x2e` before writing +`0x44` = 0 in all seven captures
+  (gap F9); by that page's names `0x2e` has bits 1, 2, 3 and 5 set. Coprocessors seen:
   `smc` (system management: battery, sensors, lid, keys), `pmp` (power metering), `sio` (serial
   I/O helper), `aop` (always-on sensors, audio), `ans` (storage), `dcp` and `dcpext` (internal
   and external display), `gfx-asc` (graphics), `sep` (secure enclave).
@@ -54,6 +84,12 @@ why, and not what is needed for sleep to work. Nothing here comes from any Linux
   to sleep by itself after idling; woken after 90 s by the alarm the hypervisor set. It adds a
   snapshot of 792 registers at the commit and the system-register accesses of every core before
   the sleep. "The detached captures" now means D, E, F and G.
+- **Capture H** = run `det9`: G's recipe and hypervisor build repeated unattended (idle sleep,
+  alarm after 90 s), with the commit snapshot extended by the 66 power-domain words G's list
+  lacked (858 words). "G, H" means both; "the detached captures" means D-H. **"All seven"**
+  means A, B, D, E, F, G, H.
+- **[LINUX]** marks a reading taken with Linux running on the same machine (section 12). It is
+  not an observation of macOS and not a requirement.
 - **T** = the time of the last recorded access before the sleep; **W** = the time of the first
   recorded access after the wake. In A and B the log stops early (artefact A11), so their T is
   some milliseconds before the real power-down; in D, T is the real last access. `T-2.6` means 2.6 s before T, `W+0.09` means 0.09 s after W.
@@ -305,6 +341,49 @@ maintenance, the final wait instruction; the hypervisor zeroes the guest timer c
 each core before the snapshot `[ARTEFACT]`. The alarm that woke it is the hypervisor's (A6).
 Only 20.8 s after the wake were recorded.
 
+### 1.7a Capture H (`det9`): G repeated, with all 137 domain words at the commit
+
+2026-11-17 17:38-17:54. G's recipe, build (v2.0.0-138), boot arguments, removed devices and
+untrapped pages unchanged; nobody at the machine; the hypervisor's alarm at the commit + 90 s.
+The one difference: the commit list is G's 793 entries (792 addresses) read first, then the 66
+power-domain words G's list lacked (858 addresses). Files `detached-det9.jsonl`,
+`touch-det9.jsonl`, `run-det9.out`, `vuart-det9.log`; `build_db_det.py det9 h` -> `db/caph.db`
+(kernel text slide, A minus: `0x1a4c000`).
+
+| | Capture H |
+|---|---|
+| Lines in the file / entries reported | 1,229,124 / 1,230,245, 0 dropped (difference 1,121: the two snapshots stored word by word, as in G) |
+| Access records | 1,228,347 |
+| First sign of the entry (audio "Set PowerStage (4 -> 6)") | T-7.558 (426.8 s after the detach) |
+| Last device access before the sleep (T) | 434.399456 s |
+| Last core enters its sleep path | 434.399473 s |
+| "commit" snapshot, 858 words | 434.399473 s to 434.400534 s (1.061 ms), 0 errors |
+| Hypervisor's writes of the guarded words (7 "commit-write" records) | from 434.400636 s, the same seven words and values as G |
+| Wake record; asleep | 524.682696 s; 90.283 s |
+| First access after the wake (W) | 524.683235 s |
+| Read-out | 545.45 s (20.8 s of macOS after the wake) |
+
+**What it adds.** (1) A second commit snapshot of G's 792 words: 774 equal to G's, 18 different
+(section 4.1). (2) The commit values of all 137 power-domain control words (section 4.2a).
+(3) A third alarm wake, dark like A's and G's (section 6, W4). (4) A seventh capture of every
+statement checked by `reqcheck.py`: 69 checks pass in H, 2 are on untrapped pages, no failure.
+**Limits.** As G. The 66 added words have no snapshot value with macOS awake (they are not in
+the "pre-full"/"pre-detach" list), so for them only the commit value and the few reads in the
+log are known.
+
+**H against D and G, by console-marker segment** (`phases.py` with `CAPS=d,h`, `g,h`, `3,h`;
+`seven_h.py`): E3 sleep actions, ordered writes identical in 39 of 42 against D and 37 against G
+(the three that differ against D are `smc`'s, `sio`'s and `pmp`'s, which carry message counters);
+E5 and E6, all 36 quiesce actions: 34 against D (the two power-chip actions, which in H run in
+F's and G's order) and 35 against G (the alarm bytes); W1 active actions: 54 of 57 against D and
+against G; W3 wake actions: 24 (D) and 26 (G) of 30. Phase times (console markers, seconds from
+T or W): display request -7.488, "PM response" -0.877, "IOCPUSleepKernel enter" -0.478, PMP sleep
+action -0.432, first address-translator action -0.125, first quiesce action -0.090,
+memory-controller quiesce -0.030, power-manager quiesce -0.022, interrupt-controller quiesce
+-0.016; power-manager active +0.005, memory-controller active +0.018, first wake action +0.127,
+PMP wake action +0.142, power-manager wake action +0.349, "IOCPUSleepKernel exit" +0.414,
+"system wake events" +0.671: within 15 ms of G throughout.
+
 ### 1.8 Access widths (all six captures)
 
 Every logged access carries its width: macOS read or wrote the word as 8, 16, 32 or 64 bits.
@@ -354,6 +433,26 @@ same in all four, the source).
   for there is not observed.
 - The platform sleep actions of E3 and E5 touch blocks in several of these domains (`sio`'s
   mailbox and translator, the pin controller, the temperature sensors, the `pmp` block).
+- **Which block is in which domain** (gaps T2, T3). macOS's device tree names domains for a
+  device in its `clock-gates` / `power-gates` properties, as numbers of the power manager's own
+  table (`adt_domains.py`, `adt-domains.tsv`; 60 nodes carry them). For the blocks of sections
+  3-6 it names: PCIe `apcie` (`0x690000000`, `0x680000000`, `0x681000000`.., `0x68c000000`, ...):
+  APCIE, APCIE_GP, PCIE_REF; `dwi` (`0x23b200000`): DWI; `pmp` (`0x23bc00000`): PMP, PMS_SRAM;
+  `sio` (`0x236400000`): a virtual domain `SIO-CPU-V`; `dart-sio` (`0x235004000`):
+  `SIO-CPU-DART`; `ans`: APCIE_ST; `mca-switch` (the audio switch, `0x238400000`,
+  `0x238300000`, `0x238500000`, and the clock word `0x23b0400d4` as its third register range):
+  MCA0-MCA5; `admac-sio`: SIO_ADMA; `i2c0`, `i2c1`, `i2c3`, `spi1`-`spi4`, `uart0`, `uart2`,
+  `fpwm` (FPWM1), `pwm` (FPWM0), `aes`: their own domains. `aop`, `sep`, `smc`, `dart-pmp`
+  (`0x23b300000`) and `dispext0` carry the property with no value. **No domain is named** for the
+  watchdogs, the SPMI controllers, the temperature sensors, the pin controllers, the NCO, the
+  interrupt controller, the memory controller or the power manager's own blocks. That a block
+  stops answering when its domain is off is not observed for macOS (macOS never accessed a block
+  whose domain it had off); for Linux see section 12, L5.
+- The device tree's power-manager table also lists four "perf-reg" ranges (`pmgr-devices.json`):
+  `0x23b734000` and `0x23d2b4000` (0x100 bytes each), `0x23b77c000` and `0x23b778000` (0xa bytes
+  each): the first words of the blocks R19 writes 0 and E5-8c reads out. It lists "pwrgate-reg"
+  ranges at `0x23b71c010`, `0x23b71c310`, `0x23b71c610` (the words at `0x23b71c0d8`.. of section
+  4 lie in the first). The blocks at `0x23b720000` and `0x23b748000` are in none of its tables.
 
 ## 2. Idle
 
@@ -482,6 +581,13 @@ shutdown exchanges; E3 (36 of 42 actions with ordered writes identical to A's, 3
 captures); the last steps E6 (identical to D access for access in the interrupt-controller
 action; power-chip actions in F's order; alarm bytes `85 c1 08 00`, about 975 s after T by the
 inference of E6); the core stop order. `reqcheck.py`: all 71 values hold in G.
+**Capture H** (the second idle sleep) repeats every point of this list: audio "Set PowerStage
+(4 -> 6)" at T-7.558 to "(7 -> 1)" at T-7.517, display request T-7.488, "awdl0 disable"
+T-7.480, last memory-controller burst T-7.508 (20 ms before the display request), "PM response
+took 1578 ms" T-0.877, "(1 -> 0)" T-0.710; E1 starts with the audio path in both idle sleeps
+and with "awdl0 disable" or the display request in the four clicked ones. Alarm bytes in H:
+`d8 41 09 00`. Idle before it (20-400 s after the detach): I5 1.82 a second, cores 4-7 make
+no logged access.
 
 ### E0. Operator input (T-16.6 / T-18.1 to about T-10.5): not part of the sleep
 
@@ -582,8 +688,8 @@ identical access for access, 36 with identical ordered writes. What each does to
 | AppleARMWatchdogTimer | `W 0x23d2b0000`=0, `W 0x23d2b0010`=0. In the same interval, SPMI: write power-chip register `0x9f01`=`0x50`, then reads of `0x9f01` (`50`), `0x9f08` (`00000000`), `0x9f02` (`00`), `0x9f18` (`00`), `0x9f19` (`00 04`), `0x9f00` (`00`), `0x9f1f` (`00`). Each SPMI command is followed by a read of the controller's status words +`0x320`..+`0x380` and `W 0x23d0d9378`=1. Which driver issues the SPMI commands is not certain: 3 cores are active |
 | AppleDialogSPMIPMU (2), AppleS5L8940XI2CController (3), AppleSPIMCController (4), AppleStockholmSPMI, AppleT8103PMGR, AppleT8103MemCacheController, AppleThunderboltHALType5 | nothing attributable (accesses falling in these intervals differ between captures and belong to other threads) |
 | AppleGen1SPMIController (3) | per controller: read +`0x338` twice, then **`W` +`0x338` = 1**: `0x23d0d9338` (was `0x3f003ff1`), `0x23d0e1338` (was `0x3f003ff1`), `0x24a829338` (was `0x3d003ff1`) |
-| AppleSmartIO | `sio`: "AP power `0x201`" echoed; "coprocessor power `0x201`" acknowledged; `R 0x236408114`, `W 0x236408114` with bit 0 cleared (`0x24401`->`0x24400` A, `0x28801`->`0x28800` B); `R 0x236400048`, `R 0x236400044`=`0x10`, **`W 0x236400044`=0** |
-| ApplePMP | `pmp`: same four management words; `W 0x23bc08114` bit 0 cleared (`0x22201`->`0x22200`); **`W 0x23bc00044`=0** (was `0x10`); address translator `0x23b3000fc`: `W`=0 twice; then **49,152 reads, one per 32-bit word, of `0x23b52c000`-`0x23b55bffc`** in address order (T-2.426 to T-0.39; 2.04 s under the hypervisor) |
+| AppleSmartIO | `sio`: "AP power `0x201`" echoed; "coprocessor power `0x201`" acknowledged; `R 0x236408114`, `W 0x236408114` with bit 0 cleared (`0x24401`->`0x24400` A, `0x28801`->`0x28800` B and D, `0x20001`->`0x20000` H: the value read, in the bit-17 form, with bit 0 cleared, in all seven); `R 0x236400048` (`0x2e` in all seven), `R 0x236400044`=`0x10`, **`W 0x236400044`=0** |
+| ApplePMP | `pmp`: same four management words; `W 0x23bc08114` bit 0 cleared (`0x22201`->`0x22200`, all seven); `R 0x23bc00048`=`0x2e`; **`W 0x23bc00044`=0** (was `0x10`); address translator `0x23b3000fc`: `W`=0 twice; then **49,152 reads, one per 32-bit word, of `0x23b52c000`-`0x23b55bffc`** in address order (T-2.426 to T-0.39; 2.04 s under the hypervisor) |
 | AppleT8020DART (19) | three do something: `dart-apcie0` `0x6810080fc`: 15 writes stepping `0x6`->`0x4`->`0x0`, each after reading one of +`0x104`..+`0x13c`; `dart-sio` `0x2350040fc`: `0x3`->`0x2`->`0x0` (4 writes); `dart-aop` `0x24a8080fc`.. read only. Each ends `R` +`0x40`, `R` +`0x100c` |
 
 Also in E3, not tied to an action: T-2.51 `R 0x200155004`, `R 0x200155000`=`0xff000000`, plane
@@ -629,8 +735,14 @@ controller (`five.py`); the guarded SIO words handled in the same order with the
 
 1. **Temperature sensors** (T-0.257 to T-0.150; 17 + 2 actions, 3 writes each). Per sensor at
    base S: read +`0x0`, +`0x15c`, +`0x164`, +`0x14`, +`0x18` (or +`0x8`, +`0xc`, +`0x98`,
-   +`0xa0`, +`0x5c`, +`0x60`), then `W` +`0x4`=`0xffffffff`, `R` +`0x10`, `W` +`0x10` with bit
-   24 set, `R`, `W` +`0x10` with bit 25 set instead. The 17 bases: `0x23b281000`,
+   +`0xa0`, +`0x5c`, +`0x60`), then `W` +`0x4`=`0xffffffff`, then the control word C (read,
+   written with bit 24 set, read, written with bit 25 set instead of 24). **Correction (gap
+   S7):** C is +`0x8` for fourteen sensors and +`0x10` for three (`0x23b2c4000`, `0x23b2c8000`,
+   `0x23b2cc000`); checked in D and H (`sensor writes`, `gaps_gh.py` session): at +`0x8` the
+   writes are `0x1013c00` then `0x2003c00` (twelve sensors) or `0x1010000` then `0x2000000`
+   (`0x23b2a1000`, `0x23b299200`); at +`0x10` `0x1013c00` then `0x2013c00`. The second write is
+   the value read back after the first with bit 24 replaced by bit 25 (at +`0x8` bit 16 reads
+   back clear: `0x13c00` -> `0x3c00`). The 17 bases: `0x23b281000`,
    `0x23b281200`, `0x23b281400`, `0x23b299200`, `0x23b2a1000`, `0x23b2c4000`, `0x23b2c8000`,
    `0x23b2cc000`, `0x210ee1000`, `0x210ee1600`, `0x211ee1400`, `0x211ee1600`, `0x211ee1800`,
    `0x211ee9000`, `0x211ef1200`, `0x211ef1400`, `0x211ef1600` (segments
@@ -653,7 +765,16 @@ controller (`five.py`); the guarded SIO words handled in the same order with the
       `W 0x200100014`=0;
    b. **wait**: `R 0x200001c04` repeated until it reads 0: 39 reads in both captures, values
       falling `0x41e0`, `0x41c0`, ... `0x4020`, `0x1800`, `0`, in 1.5 ms; then two reads each of
-      `0x200041c04`, `0x200081c04`, `0x2000c1c04` (all 0);
+      `0x200041c04`, `0x200081c04`, `0x2000c1c04` (all 0). **In all seven** (gap V8;
+      `gaps_gh.py`): the first read after the pulse is `0x41e0` (A, B) or `0x4200` (D-H); the
+      reads then fall by `0x20` to `0x4020`, each value read 1 to 4 times; the last one to three
+      non-zero values vary (`0x1800` A, B; `0x3800`, `0x1800` D; `0x3800`, `0x2000`, `0x800` E;
+      `0x4000`, `0x2800`, `0x800` F; `0x3800`, `0x1c00` G; `0x3800`, `0x2000` H); the wait ends
+      on 0, read twice, in every capture. Before the entry (A, B) and at the wake before
+      `0x200001c00` = `0x10` (D-H) the word reads `0x200`; after that write, `0x4200`. A wait
+      that starts from another value was never seen. The first read of the wait comes after the
+      pulse is released in every capture, so whether the value starts to fall at the write of
+      `0x200001c00` or at the release is not observed (first-round gap 13);
    c. `0x200158000` cleared one bit at a time from `0x3fcffffffff` to 0 (40 writes), interleaved
       with `0x200024000` and `0x200024008` cleared one bit at a time from `0x1ffff` to 0 (17
       writes each); before each step the matching counters at `0x200159000`+ and
@@ -690,9 +811,10 @@ controller (`five.py`); the guarded SIO words handled in the same order with the
       `0x0001b20026f02400`; `0x8001b2005df05200` -> `0x0001b2005df05200`); `0x210e40240`,
       `0x211e40240` rewritten unchanged; `0x210e48400`, `0x211e48400` written with bit 63
       cleared;
-   h. `W 0x23b748400`=0, then **wait**: `R 0x23b7487e0` repeated until it changes from
-      `0x494002` to `0x494900` (9 polls in A, 6 in B); `W 0x23b748800`=0, `W 0x23b748c00`=0,
-      `W 0x23b748000`=0, each followed by reads of +`0x7e0`;
+   h. the four sub-blocks `0x23b748400`, `0x23b748800`, `0x23b748c00`, `0x23b748000`, in that
+      order: each read (1), written 0, then its status word +`0x3e0` (`0x23b7487e0`,
+      `0x23b748be0`, `0x23b748fe0`, `0x23b7483e0`) read until its low byte is 0 (values in R22a;
+      9 polls of `0x23b7487e0` in A, 6 in B);
    i. `W 0x23b71c080`=`0x80000000`, `W 0x23b71c088`=`0x80000000` (unchanged values);
       `W 0x23b718000`=0, `W 0x23b718004`=0 (each was `0xf`);
    j. the three SIO domains have bit 28 cleared: SIO_CPU `0x23b7001d0` `0x1400024f` ->
@@ -729,8 +851,17 @@ Capture D has the same console text and every access behind it (`phases-pre-d.ts
       `0x80`k = `0x80000001`**, `R 0x23b105004`+`0x80`k (reads 0);
    d. 16 reads `0x23b106000`+`0x10`k (first reads `0x800000c0`, the rest 0); `R 0x23b100010` =
       `0xe0777971`.
-   At the wake all 991 words written back in W1-1 were seen here: 913 carry the value last read
-   here, 18 the value last written, 38 another value (`saverestore.py` with `CAPS=d`).
+   At the wake all 991 words written back in W1-1 were seen here. **Corrected (gaps V3, 11):**
+   the earlier count "913 / 18 / 38" did not add up. Checked word by word in D, E, F, G and H
+   (`gaps_gh.py`, block V3; no exception in any of the five): 913 words are written the value
+   read from that same word here (the 896 of a., the 16 of d., and `0x23b100010`); the 28 words
+   `0x23b104100`+4k are written the value read here from `0x23b104180`+4k; the 28 words
+   `0x23b104180`+4k (k = 0..27, up to `0x23b1041ec`) are written the bitwise inverse of the
+   value read from that same word; the 11 words `0x23b105028`+`0x80`k are written the inverse of
+   the value read from that same word (`0x80000001` read, `0x7ffffffe` written); the 11 words
+   `0x23b105024`+`0x80`k are written `0x80000001`. 913 + 28 + 28 + 11 + 11 = 991. A and B cannot
+   show it (their read sweep was cut, A11). What the words are, and why a value is written
+   inverted, is not established.
 2. **First power-chip action** (T-0.0060): console "pmu go hib (0x7)"; one register access:
    **`W 0x23d2c4000`=1** at T-0.004355 (the second such write; console "Starting S2R timer").
    No SPMI traffic.
@@ -870,8 +1001,10 @@ either.
 
 792 words read from the hardware on core 0, starting 1 microsecond after core 0's own
 sleep-path record and ending 0.914 ms later, before any of the hypervisor's own commit actions.
-All other cores had entered their sleep path. One capture; the list is the 792-word list of the
-earlier snapshots, so it answers for these words and not for the others.
+All other cores had entered their sleep path. The list is the 792-word list of the earlier
+snapshots, so it answers for these words and not for the others. Capture H repeats it and adds
+the 66 domain words G lacked; the two are compared in 4.1a, which supersedes the single-capture
+counts below wherever they differ.
 
 **Against idle.** 764 of the 792 words have the value of G's "pre-detach" snapshot taken about
 440 s earlier at idle (761 of "pre-full"); against the idle snapshots of the other captures 752 to
@@ -941,6 +1074,153 @@ the chip actually goes down with differs from the snapshot in those: UART0, UART
 controller's shutdown words (`0x200001c00`, `0x200158000`, `0x200024000`, P+`0x21000`,
 DCSn+`0x7a0`, ...), `0x23d2c4000`, the timer and cluster words, the interrupt controller, the
 SPMI controllers, the watchdog words, the pin controllers.
+
+### 4.1a The commit in G and H, word by word (858 words)
+
+Scripts `commit_gh.py`, `snapvar_gh.py`, `ps_commit_gh.py`; tables (all in `var/spec/`):
+`commit-state-gh.tsv` (one row per word: address, name, G and H values in the "pre-detach"
+snapshot taken with macOS awake at the detach, G and H commit values, whether G and H agree, how
+the word got from the one to the other in each capture, the reads of it in the log, and the
+Linux readings of section 12), `snapvar-gh.tsv` (the words that changed or vary, with their
+value in every snapshot of all seven captures), `ps-commit-gh.tsv` (the 137 domain words).
+**Method.** "Written" means a logged write between the detach and T, or a write of a guarded
+word handled by the hypervisor ("pmgr" record, the value macOS wrote). Each write is placed in a
+phase by the console line before it, re-derived for G and H (E1 starts at the first of the audio
+"Set PowerStage (4 -> 6)", the display request, "awdl0 disable"; E2 at "PM response took"; E3 at
+"IOCPUSleepKernel enter"; E4 at the first stop-bit record; E5 at the first quiesce action; E6 at
+the interrupt-controller quiesce action). (The phase column of
+`var/commit-state/macos135-det9-125words-writes.tsv` was not derived this way: it puts the
+display-domain writes of T-0.73 in E3 and SIO_CPU's write of T-0.016 in E6. By the console lines
+they are in E2 and E5. This section uses the re-derived phases.) The awake value is the
+"pre-detach" snapshot, 434 s (H) and 438 s (G) before T.
+
+**G against H at the commit** (792 words): **774 equal, 18 vary** (`[VARIES]`, values G / H):
+- `MCC.plane0-3+0x680` `0x800` / `0xe59` and `+0x684` `0x82c` / `0xe85` (8 words; emulated by the
+  hypervisor, A5; seven values seen in the 12 idle snapshots, so they vary at idle too);
+- `DCS3+0x500` (`0x2002c0500`) `0x2440004` / `0x1440004` (both values seen at idle);
+- clock word `0x23b040020` `0x85100000` / `0xc5100000`;
+- domain words DCS0, DCS1, DCS5 `0x1000030f` / `0x1f0003ff`; DCS2, DCS3 `0x1f0003ff` /
+  `0x1400034f`;
+- power-gate words `0x23b71c0d8`, `0x23b71c108`, `0x23b71c120` `0xc0040307` / `0x80040307`.
+
+**How each word got to its commit value** (counts of G's 792 words; H in brackets):
+1. **Unchanged from awake and not written: 752 [746].** Among them all 80 memory-controller
+   words and all 448 DRAM-controller words in both captures (`DCS3+0x500` and the plane words
+   +`0x680`/`684` differ between G and H, but each equals its own awake value): **the memory and
+   DRAM controllers, in what the list covers, look at the commit as they did awake, in both.**
+2. **Written by macOS, 18 words in both (19 in H's 858)**, the same words, phases, counts and
+   values in G and H (I2C3: 140 writes in both; SPI3: 100 in G, 116 in H):
+   - E1/E2 bus cycles: I2C3 (E1, the audio path), I2C0, SPI2, SPI3 (E2): last write `0x3f0`;
+     commit `0x200`, which is what macOS read after its last write.
+   - display and graphics (E1 and E2): RMX last write `0x300`, commit `0x0f000300`; DISP0_FE and
+     DISPEXT_FE `0x23f0` -> `0x2300`; DISP0_CPU0 and DISPEXT_CPU0 `0x0f0403f0` -> `0x0f040300`;
+     GFX `0x0f0023f0` -> `0x0f002300`. Each commit value is what macOS read after its last write.
+   - storage, H only (not in G's list): APCIE_ST written `0x0f0000ff` then `0x0f0003f0` (E2,
+     T-0.642), read back `0x0f000200` three times; **commit `0x0f000300`**: bit 8 is set at the
+     commit and was not in the last read, with no logged write in between.
+   - E5 power-manager quiesce, clock muxes `0x23b040140`, `144`, `148` (`0x85100000`), `14c`,
+     `154` (`0x87100000`): one write each of `0x80100000` (T-0.0204 G, T-0.0208 H), read back at
+     once as the old value; commit = the old value = awake value.
+   - E5-8j, SIO_CPU `0x23b7001d0`: read `0x1400024f`, written `0x0400024f` (T-0.0156 G, T-0.0160
+     H), not read again; **commit `0x0f0002ff`** in both. SIO `0x23b7001c8` and SIO_BUSIF
+     `0x23b7001c0`: macOS's writes of `0x0f0000ff` held by the hypervisor (A3), the hardware read
+     `0x1400024f` just before; commit SIO **`0x1f0002ff`**, SIO_BUSIF `0x1400024f` (unchanged)
+     in both. So SIO and SIO_CPU went from `0x1400024f` to their commit values although the
+     write that reached SIO_CPU was `0x0400024f` and none reached SIO.
+3. **Changed with no logged write: 22 [28]; 21 in both.** No core's write to these words is in
+   the log (none lies on an untrapped page). Of these, only ANS2 is read by macOS between the
+   detach and T, so for the others the change happened somewhere between the detach and the
+   commit, not located further.
+   - **The same change in G and H, from a value that is the same in all 12 idle snapshots of
+     the seven captures** (so a change that comes with the sleep):
+     - clock words, bit 8 cleared: `0x23b04003c`, `0x23b040040` (`0x87100100` -> `0x87100000`),
+       `0x23b040114`, `0x23b040118`, `0x23b04011c` (`0x85100100` -> `0x85100000`); bit 8 set:
+       `0x23b040088` (`0x88100000` -> `0x88100100`), `0x23b040094` (`0x87100000` ->
+       `0x87100100`), `0x23b04009c`, `0x23b0400a0` (`0x85100000` -> `0x85100100`). In the wake
+       snapshot of all seven, `03c`, `040`, `088`, `09c`, `0a0` keep the commit value, `114`-`11c`
+       read the awake value again and `094` reads `0x86100000`;
+     - PMP `0x1000030f` -> `0x1f0f03ff`; PMS_SRAM `0x1000030f` -> `0x1f0003ff`; ANS2
+       `0x1000230f` -> `0x1f0023ff`. ANS2 reads `0x1000230f` at T-7.36 and `0x1f0023ff` at
+       T-2.39 (G: T-7.36, T-2.40), in E1, before the storage coprocessor's shutdown exchange
+       (T-0.65 in H). Wake snapshot: PMP `0x0f0003ff`, PMS_SRAM `0x0f000300`, ANS2 `0x0f002300`;
+     - power-gate word `0x23b71c0f0` `0xc0040307` -> `0x80040307` (bit 30 cleared);
+     - `0x23b720030` `0x014d514d` -> `0x01515151`, `0x23b720034` `0x01404940` -> `0x01494949`,
+       `0x23b720044` `0x01404940` -> `0x01494949`. Wake snapshot (all seven): `0x01515151`,
+       `0x01676767`, `0x016c6c6c`. (Values only: the bytes `0x49` and `0x51` are also the second
+       and third bytes of the final status values of R22a, `0x494900` and `0x515100`; for Linux
+       see section 12, L3.)
+     - always-on clock words `0x23d240040` `0x02100100` -> `0x01101100` and `0x23d240314` 0 ->
+       `0x01000000`; the wake snapshot keeps both.
+   - **Changed in both, to different values** `[VARIES]`: `0x23b040020` (`0x85100100` -> G
+     `0x85100000`, H `0xc5100000`); DCS2 (G `0x1000030f` -> `0x1f0003ff`; H `0x1f0003ff` ->
+     `0x1400034f`); DCS3 (G `0x1000030f` -> `0x1f0003ff`; H `0x1000030f` -> `0x1400034f`).
+     These three also vary between idle snapshots. (With the 18 above: the 21 changed in both.)
+   - **Changed in one capture only, in words that also vary between idle snapshots**
+     `[VARIES]`: DCS0, DCS1, DCS5 (H, `0x1000030f` -> `0x1f0003ff`); power-gate words
+     `0x23b71c0d8`, `108`, `120` (H, bit 30 cleared); always-on clock words `0x23d240000` (G,
+     `0x91100010` -> `0x80100010`) and `0x23d240024` (H, `0x81100000` -> `0x81100100`).
+4. **The 66 domain words added in H** have no awake snapshot value. Eight are read in H's log:
+   DISPDFR_FE `0x2300`, JPG `0x0f000300`, MSR and AVD_SYS `0x0f002300`, ATC1_COMMON `0x2300`
+   (each read from T-7.43 to T-0.017 with the commit value); APCIE_GP read `0x1400234f` at
+   T-7.43 and `0x1000230f` at T-0.017 (= commit); APCIE_ST (item 2). The other 58 are not
+   accessed in the log; their values with macOS awake are not observed.
+5. **The cores' domains** (H): ECPU1-3 and PCPU0-3 read `0x100` (requested 0, reported 0), ECPU0
+   `0x1f0` (requested 0, reported `0xf`), ECPM `0x21f0`, PCPM `0x2100`. At the commit every core
+   but core 0 has made its `CYC_OVRD_EL1` write (E7) and been taken down; the performance
+   cluster's PCPM reports 0, the efficiency cluster's ECPM `0xf`. `[ARTEFACT in part]`: under
+   the hypervisor each core's final register write is carried out by the hypervisor (A4, E7).
+
+**After the snapshot** (H as G): the hypervisor's seven held writes, UART0 and UART_P
+`0x100000ff`, SIO and SIO_BUSIF `0x0f0000ff`, ATC0_USB and ATC0_USB_AON `0x3f0`, ATC0_COMMON
+`0x23f0` `[ARTEFACT]`.
+
+### 4.2a All 137 power-domain words at the commit (H; G for its 71)
+
+From `ps-commit-gh.tsv`. Grouped by H's commit value. "[G x]" gives G's value where it differs;
+the last column gives Linux's value **[LINUX]** read on bare metal in the suspend path just
+before the driver's entry (run ds13, section 12, L1) where it differs from H.
+
+| H at commit | Domains | Linux ds13 before the entry, where different |
+|---|---|---|
+| `0x200` | PMS_FPWM0-4, PMGR_SOC_OCLA, AFT0, DEVC0_IVDMC, FPWM0, FPWM2, I2C0-I2C4, SIO_ADMA, SPI0-SPI4, MCA0-MCA5, DPA0, DPA1, MSG | `0x244`: PMS_FPWM0-4, AFT0, DEVC0_IVDMC, FPWM0, FPWM2; `0x2ff`: MSG |
+| `0xff` | AIC, DWI, GPIO, SOC_DPE, SPI_P, UART_P, UART_N, UART0-UART8, APCIE, NUB_GPIO, ATC0_USB_AON, ATC0_USB | `0x200`: GPIO, SPI_P, UART_P, UART_N, UART0-UART8; `0x2ff`: ATC0_USB_AON, ATC0_USB |
+| `0x300` | AES, DISPDFR_BE, MIPI_DSI, MSR_ASE_CORE, ATC0_PCIE, ATC0_CIO, ATC0_CIO_PCIE, ATC0_CIO_USB, ATC1_PCIE, ATC1_CIO, ATC1_CIO_PCIE, ATC1_CIO_USB, VENC_DMA, VENC_PIPE4, VENC_PIPE5, VENC_ME0, VENC_ME1, ANE_SYS_CPU, ATC1_USB_AON, ATC1_USB | `0x3ff`: ATC0_PCIE, ATC0_CIO, ATC0_CIO_PCIE, ATC0_CIO_USB, ATC1_PCIE; `0x2ff`: ATC1_USB_AON, ATC1_USB |
+| `0x100` | ECPU1-3, PCPU0-3 | `0x1f0`: ECPU3 (which core ran the read under Linux is not in the log) |
+| `0x1f0` | ECPU0 | `0x100` |
+| `0x21f0` | ECPM | |
+| `0x2100` | PCPM | `0x21f0` |
+| `0x1000030f` | DCS4, DCS6, DCS7, NUB_SRAM, DEBUG_USB, DEBUG_AUTH | `0x1f0002ff`: DCS4, DCS6, DCS7 |
+| `0x1f0003ff` | DCS0, DCS1, DCS5 [G `0x1000030f`], PMS_SRAM, NUB_FABRIC | `0x1f0002ff`: DCS0, DCS1, DCS5; `0x0f000300`: PMS_SRAM |
+| `0x1400034f` | DCS2, DCS3 [G `0x1f0003ff`] | `0x1f0002ff` |
+| `0x2300` | DISP0_FE, DISPEXT_FE, DISPDFR_FE, ISP_SYS, ATC1_COMMON | `0x20ff`: DISP0_FE; `0x23ff`: DISPEXT_FE, ATC1_COMMON |
+| `0x0f002300` | MSR, GFX, VENC_SYS, AVD_SYS, ANE_SYS | `0x0f002b00`: GFX |
+| `0x1f0000ff` | SBR, IMX, MCC, SMX | |
+| `0x1f0002ff` | PMS_BUSIF, PMS, SIO, NUB_AON | `0x1f0000ff`: PMS; `0x0f000200`: SIO |
+| `0x4000200` | ISPSENS0-3 | |
+| `0x1400024f` | PCIE_REF, SIO_BUSIF, NUB_SPMI0, NUB_SPMI1 | `0x1f0000ff`: PCIE_REF; `0x0f000200`: SIO_BUSIF |
+| `0x0f000300` | RMX, MMX, JPG, APCIE_ST | `0x1f0000ff`: RMX; `0x0f000200`: APCIE_ST |
+| `0x0f000200` | SOC_SPMI0-2 | `0x0f000244` |
+| `0x2ff` | FPWM1, AUDIO_P, DEBUG | `0xa00`: FPWM1; `0x200`: AUDIO_P |
+| `0x0f040300` | DISP0_CPU0, DISPEXT_CPU0 | `0x1404024f` |
+| `0x1000230f` | APCIE_GP, SEP | `0x1f0020ff` |
+| `0x0f0002ff` | SIO_CPU | `0x0f000200` |
+| `0x1f0f03ff` | PMP | `0x1f0000ff` |
+| `0x1f0023ff` | ANS2 | `0x0f002300` |
+| `0x20ff` | ATC0_COMMON `[A3]` | `0x22ff` |
+
+**Requested state** (low four bits) at macOS's commit: on (`0xf`) for SBR, IMX, MCC, SMX, PMS,
+PMS_BUSIF, PMS_SRAM, NUB_AON, NUB_FABRIC, NUB_SRAM, NUB_SPMI0/1, PCIE_REF, SIO, SIO_BUSIF,
+SIO_CPU, DCS0-7, PMP, ANS2, SEP, APCIE_GP, DEBUG_USB, DEBUG_AUTH, AIC, DWI, GPIO, SOC_DPE, SPI_P,
+UART_P, UART_N, UART0-8, APCIE, NUB_GPIO, ATC0_USB, ATC0_USB_AON, FPWM1, AUDIO_P, DEBUG,
+ATC0_COMMON (`0x20ff`, hypervisor-held, A3): 54 words; the other 83 request 0. **[LINUX]**
+Linux before its entry (ds13) requests on where macOS's commit requests 0: RMX, DISP0_FE,
+DISP0_CPU0, DISPEXT_FE, DISPEXT_CPU0, ATC1_COMMON, ATC0_PCIE, ATC0_CIO, ATC0_CIO_PCIE,
+ATC0_CIO_USB, ATC1_PCIE, MSG, ATC1_USB_AON, ATC1_USB (14); requests 0 where macOS requests on:
+GPIO, SIO_BUSIF, SIO, SIO_CPU, FPWM1, SPI_P, UART_P, AUDIO_P, UART_N, UART0-UART8, PMS_SRAM,
+ANS2 (20); requests 4 where macOS requests 0: SOC_SPMI0-2, PMS_FPWM0-4, AFT0, DEVC0_IVDMC,
+FPWM0, FPWM2 (12). The other 91 words request the same state; of those, the reported bits
+differ for the DCS words, PMS, PMP, SEP, APCIE_GP, GFX, the cores' and clusters' words,
+APCIE_ST, ATC0_COMMON and the ATC0 USB words (table).
 
 ### 4.2 Last values written (all captures)
 
@@ -1039,6 +1319,18 @@ is the real last access.
   After the wake `0xd00c` reads `01` (as in A; `00` after the key wakes). Console: "system wake
   events: NUB.SPMI0Sw3IRQ nub-spmi.0x02 nub-spmi.0xC0 rtc", the same sources as A. The count at
   `0x23d2b0020` is `0x76e68f` (7.79 million).
+- **Capture H**: asleep 90.283 s (last core down 434.399473 s, wake record 524.682696 s); woken
+  by the hypervisor's alarm (commit + 90 s) `[ARTEFACT A6]`, which replaced macOS's own
+  (`d8 41 09 00`, written 4.8 ms before T). Wake status `0x23d00401c` / `020` / `024` = 0 /
+  `0x400000` / 0: **the same in all seven captures**. The hypervisor read at its wake entry
+  `0x23d2b8028` = `0x8000000`, `0x23d2b8040` = `0x22`, `0x23d2c001c` = `0xff0`, watchdog 2's
+  count `0x23d2b0020` = `0x76e28b`, alarm `0x23d2b0024` = `0x7270e00`, control 0 (G: count
+  `0x76e68f`). After the wake `0xd00c` reads `01`.
+- **Watchdogs before the sleep (G, H):** macOS writes watchdog 0's count `0x23d2b0000` = 0 and
+  watchdog 1's count `0x23d2b0010` = 0 in E3 (T-0.462 in H), and watchdog 0's control
+  `0x23d2b000c` = 0 in E5 (T-0.035 in H); no other write to that page between the detach and
+  T. Whether a watchdog counts while the chip is asleep is not observed: the count read at the
+  wake is 7.7 to 7.8 million (0.32 s at 24 MHz) after sleeps of 1.6 s to 415 s.
 - **Not known**: anything the chip or the power chip did while asleep; whether any register
   changed during the sleep other than as seen in the wake snapshot; the power drawn.
 
@@ -1108,13 +1400,20 @@ access for access, 53 with identical ordered writes; 6,019 accesses and 3,163 wr
    `W 0x210055008`=`0xffbfffffffffffff`, `W 0x210055000`=1; `W 0x210e49008`=
    `0xff5fffffffffffff`, `W 0x210e49000`=1.
 1. **Interrupt controller** (W+0.004 to W+0.087): **991 writes, no reads, identical in both**:
-   `0x23b100010`=`0xe0777971`; 896 words `0x23b103000`-`0x23b103dfc`; 48 words
-   `0x23b104100`-`0x23b1041dc`; 22 words `0x23b105024`-`0x23b105528`; the first 408 / 372
-   written values equal what the cut sweep of E5-10 had read.
+   `0x23b100010`=`0xe0777971`; 896 words `0x23b103000`-`0x23b103dfc`; 56 words
+   `0x23b104100`-`0x23b1041ec`; 22 words `0x23b105024`+`0x80`k and `0x23b105028`+`0x80`k
+   (k = 0..10, the last `0x23b105524`, `0x23b105528`); 16 words `0x23b106000`-`0x23b1060f0` (stride `0x10`). (Corrected count, gap
+   11: 1 + 896 + 56 + 22 + 16 = 991.) The rule tying each written value to the entry's reads is
+   in E6-1. The first 408 / 372 written values equal what the cut sweep of E5-10 had read.
 2. **Power manager** (W+0.087 to W+0.227; 1,175 writes in each capture, 2,737 / 2,728 accesses;
    address order of writes identical, 175 written values differ: they are the values saved in
    E5-8). In order:
-   a. `W 0x23b718000`=`0xf`, `W 0x23b718004`=`0xf` (poll of `0x23b718004`: 9 more reads in A);
+   a. `W 0x23b718000`=`0xf`, `W 0x23b718004`=`0xf` (poll of `0x23b718004`: 9 more reads in A).
+      **In all seven** (gap V7; `gaps_gh.py`): before its write `0x23b718000` reads `0xf` (it
+      already holds the value written; it reads `0xf` again after) and `0x23b718004` reads 0;
+      after `0x23b718004` is written `0xf` it is read until it changes: `0x1f` 154 to 243 times
+      (A 163, B 154, D 237, E 228, F 243, G 242, H 235), then `0x2f` once, and the poll ends on
+      `0x2f`;
       `W 0x23b71c000`=`0x80000000`, `W 0x23b71c040`=`0x80000000`;
    b. tables written to both cluster blocks (`0x210e48c10`.., `0x210e480c0`.., `0x210e48480`..;
       `0x211e48c10`.., 16 and 22 writes) between reads of `0x210e70000`-`0x210e70160` and
@@ -1137,7 +1436,10 @@ access for access, 53 with identical ordered writes; 6,019 accesses and 3,163 wr
       `0x1000000015`, `0x210059000`.. (4 cores), `0x210e48000`, `0x210e48080`=
       `0xa000000000000000`; same for `0x211e..`;
    g. `W` DCSn+`0xdc4`=`0x0813057f`, `W` DCSn+`0xdbc`=`0x01800180` for n = 0..7;
-   h. 12 writes to `0x23b549000`+; `W 0x23b748000`, `c00`, `800`, `400` = 1;
+   h. 12 writes to `0x23b549000`+; `W 0x23b748000`, `c00`, `800`, `400` = 1. **In all seven**
+      (gap V1): each of the four reads **0** just before this write (after the sleep; at the
+      entry they read 1 and were written 0), and none of the four status words +`0x3e0` is read
+      at the wake;
       `0x210e48400`, `0x211e48400`, `0x210e40240`/`250`, `0x211e40240`/`250` written back with
       bit 63 set again.
    Guarded words in this action, from the hypervisor's log `[A3]`: UART_P, UART0 `0x100000ff`;
@@ -1168,7 +1470,10 @@ this basis in each capture, same addresses in order, values differ where they ar
 the poll of `0x23b718004` runs 239 reads in D. Guarded words with times (hypervisor's records,
 `[A3]`): UART_P W+0.01202, UART0 W+0.01208 (`0x100000ff`); SIO_BUSIF W+0.01375, SIO W+0.01377
 (`0x0f0000ff` twice, then `0x1f0000ff`); the hardware held `0x3ff` (UART) and `0x0f0003ff`
-(SIO) before. Item 4: one written value differs from A and B. DCS domain values at item 2c:
+(SIO) before. Item 4: one written value differs from A and B: plane 3's `0x2000e1004` (the
+read-and-write-back word P+`0x21004` of plane `0x2000c0000`) is first written `0x8000000` in
+A and B and `0` in D, E, F, G and H, then `0x4000000` in all seven (gap 9; `gaps_gh.py`). The
+value it read before the sleep is not compared here. DCS domain values at item 2c:
 DCS2 `0x1400004f`, DCS3, DCS4, DCS5 `0x1f0000ff` in D: a third combination.
 
 **Captures E and F**: ordered writes identical to D's in 53 (E) and 54 (F) of 57 actions;
@@ -1188,7 +1493,14 @@ core at macOS's reset entry `[A4]`. First device access per core: core 7 W+0.796
 core 6 W+0.799 / W+0.809, core 3 W+0.904 / W+0.883, cores 1 and 2 W+1.006 / W+1.007-1.009,
 cores 5 and 4 W+1.338, W+1.351 / W+1.415, W+1.424. Each core's first device writes are
 `W 0x21N155008`=`0xffbfffffffffffff`, `W 0x21N155000`=1 on its own block (for example
-`0x210155008` for core 1, `0x211055008` for core 4).
+`0x210155008` for core 1, `0x211055008` for core 4). **Core 7**, the first core of the
+performance cluster to start, then also writes `0x211e49008`=`0xff5fffffffffffff`,
+`0x211e49000`=1 (the cluster pair, as core 0 does for `0x210e49...`); cores 4 and 6 do not
+(D, G, H checked; gap 4).
+**Before each core's start words** core 0 writes `0xc5acce55` to `0x21N30fb0` of that core
+(`0x211330fb0` for core 7, then `0x211230fb0`, `0x210330fb0`, `0x210230fb0`, `0x211130fb0`,
+`0x210130fb0`, `0x211030fb0`, in start order), 11 microseconds before the first start word of
+the same core in D, G and H (gap S1). What the word is, is not established.
 
 **Capture D, timed** (`det_events.py`): the start-word writes and the hypervisor's start of
 each core: core 7 at W+0.113746, 6 at W+0.114855, 3 at W+0.115973, 2 at W+0.117166, 5 at
@@ -1233,8 +1545,20 @@ Console: 30 lines "IOPlatformWakeAction -> driver", then "IOCPUSleepKernel exit"
 - AppleMCA2Switch (W+1.381 / W+1.479): 106 writes, identical; before it the domains SIO_ADMA,
   MCA0-5 are turned on (`0x0`, `0xf`, `0x1000000f`) and after it set to `0x3f0`.
 - **ApplePMP** (W+1.412 / W+1.517 to W+3.49): **49,152 words written to
-  `0x23b52c000`-`0x23b55bffc`; of the 49,154 words first written in this action 49,143 carry the
-  value last read in E3** (`saverestore.py`);
+  `0x23b52c000`-`0x23b55bffc`, each with the value read from it in E3** (corrected wording, gap
+  S8: checked word by word in D, G and H, 49,152 of 49,152; the earlier "49,143 of 49,154" counted
+  first writes of the whole action, which includes the translator words). This write-back comes
+  first in the action. Then `pmp`'s address translator `0x23b300000` gets ten writes, the same in
+  D and H in this order (gap S2): +`0xfc`=1, +`0x200`=V, +`0x2f0`=0, +`0x34`=`0xffffffff`,
+  +`0x20`=`0x100000`, +`0x60`=`0x80016100`, +`0x68`=`0xf0f0f`, +`0x6c`=`0x80808`,
+  +`0x100`=`0x80`, +`0x13c`=`0x100`. V differs in every capture (`0x80822788` D,
+  `0x80821240` G, `0x80822b80` H) and the word is not read or written in the log before the
+  sleep in any capture; the same holds for `sio`'s translator words `0x235004200`,
+  `0x235004210` of W1-8 (D `0x80822760`, `0x808225fc`; G `0x80820990`, `0x808209a0`; H
+  `0x80822764`, `0x808225c8`). Where macOS takes these values from is not observed (its own
+  memory is not in the log). Then, in both `sio`'s and `pmp`'s wake action, in all seven:
+  +`0x8114` read `0x20001` and written `0x20001`, +`0x44` read 0 and written `0x10`, and the
+  coprocessor's first message is read (+`0x8114` reads `0x100101`);
   then the coprocessor is started and boots: hello `0x00100000000c000c` / acknowledgement
   `0x00200000000c000c`, two endpoint-map exchanges, "power acknowledged `0x20`", "AP power
   `0x20`" echoed (W+3.493 to W+3.496).
@@ -1243,7 +1567,9 @@ Console: 30 lines "IOPlatformWakeAction -> driver", then "IOCPUSleepKernel exit"
   message pattern as `pmp`).
 - AppleGen1SPMIController (3): **`W` +`0x338` restored** (`0x23d0d9338`=`0x3f003ff1`, and the
   other two controllers).
-- AppleDialogSPMIPMU: SPMI read of power-chip register `0xd00c` (`01` in A, `00` in B).
+- AppleDialogSPMIPMU: SPMI read of power-chip register `0xd00c` (`01` in A, `00` in B). After
+  the three alarm wakes (A, G, H) and after none of the four key wakes, the SPMI controller word
+  `0x23d0d9320` is also written, `0` then `4` (gap S11; `gaps_gh.py`).
 - AppleARMWatchdogTimer: SPMI write `0x9f01`=`0x00` and the same seven scratch reads as in E3
   (`0x9f08` now `ff ff 51 01`, A10).
 - AppleSMC, AppleSMCPMU: `smc` "AP power `0x20`" echoed (W+3.643); key `MBSE` = `0x77616b61`
@@ -1295,7 +1621,9 @@ read of `0x23d2b9040`.. that A showed starts (first at W+4.4). The key wakes (B,
 turn the display on within 0.6 s, write `WKTP`=`00` and resume I5 within 0.7 s. So **both
 alarm wakes stay dark and all four key wakes light the display**; two captures against four.
 G was read out before macOS could go back to sleep, so what a dark wake does next is not
-captured.
+captured. **Capture H** (alarm) is dark too: no "OFF to ON" line, no `WKTP` key in the 20.8 s
+recorded, "system wake events: NUB.SPMI0Sw3IRQ nub-spmi.0x02 nub-spmi.0xC0 rtc" at W+0.671,
+`0xd00c` reads `01`. Three alarm wakes (A, G, H) against four key wakes.
 
 ### W5. Back at idle
 
@@ -1507,14 +1835,38 @@ requirement values (`reqcheck.py`; 2 words invisible in D-G, 2 in A, B).
 Resting on G alone: section 4.1 and E7. Resting on two alarm wakes (A, G) against four key
 wakes: W4/W5. The order of the two power-chip actions is now 2 (D, E) against 2 (F, G).
 
+### 7.7 Seven captures (H added this round)
+
+`phases.py` with `CAPS=d,h`, `g,h`, `3,h`; `seven_h.py`; `reqcheck.py` (now over A-H);
+`commit_gh.py`. Ordered writes identical unless said:
+
+| Comparison | H-D | H-G | H-A |
+|---|---|---|---|
+| E3 sleep actions, 42 | 39 | 37 | 38 |
+| E5 and E6 quiesce actions (36; 34 against A, whose log ends early) | 34 (the two power-chip actions) | 35 (the alarm bytes) | 33 |
+| W1 active actions, 57 | 54 | 54 | 53 |
+| W3 wake actions, 30 | 24 | 26 | 20 |
+| Requirement values (`reqcheck.py`, 71) | 69 pass in H, 2 not visible (untrapped pages), 0 fail | | |
+| Commit snapshot, 792 words | | 774 equal | |
+| Wake snapshot, 264 words | | 259 equal (`ps_dcs2`-`5`, `0x23d240000` differ) | |
+
+Identical in all seven: the 135 memory-controller writes; the wake status words; the core stop
+order 4, 1, 5, 2, 3, 6, 7 and start order 7, 6, 3, 2, 5, 1, 4; the `smc` key writes; the four
+sub-blocks of R22a with their status values; the six words of R21; the read-before-write values
+of R19; the wait of R30 ending on `0x2f`; the start of the `sio` and `pmp` wake actions (R5w);
+the system-register writes after the wake (6.3; H not re-checked register by register, its
+684 records have the same count as G's). The order of the two power-chip quiesce actions is
+now 2 (D, E) against 3 (F, G, H). Resting on G and H: section 4.1a, 4.2a, E7.
+
 ## 8. Requirements
 
 Form: what macOS was observed to have done before the SoC went down, or after it came up.
 Marks: **[BOTH]** observed as stated in every capture that can show it: all three (A, B, D)
 unless the entry says otherwise, and since section 7.5 all five (A, B, D, E, F); **[D]** observed
 in the detached captures only, because only they reach that point: D, E, F and G agree unless
-the entry says otherwise; **[G]** observed in capture G only (the commit snapshot and the
-system registers before the wake exist nowhere else); **[UNKNOWN]** observed, cause or necessity not known, or observed incompletely;
+the entry says otherwise (since this round D-H); **[G]** observed in the captures with a commit
+snapshot and the system registers before the wake: G, and H where the entry says "(G, H)" or
+"(H)"; **[VARIES]** the captures that show it disagree, and the values seen are given; **[UNKNOWN]** observed, cause or necessity not known, or observed incompletely;
 **[ARTEFACT]** hypervisor artefact, not a requirement. Every [BOTH] entry with a register value
 was re-checked against all three captures by `reqcheck.py` (no failure). No requirement is claimed to be necessary for sleep to work: each records only
 that macOS does it. Evidence gives the section and the output file.
@@ -1535,23 +1887,43 @@ Before the SoC goes down:
   `0x201`" (echoed) then "coprocessor power `0x201`" (acknowledged) as its last management
   exchange; `aop` and `smc` have received "AP power `0x201`" only (E2, E3; `mbox-pre-N.txt`).
 - **R5 [BOTH]** For `sio` and `pmp`, after R4: bit 0 of the mailbox control word +`0x8114` is
-  cleared and the coprocessor's word +`0x44` is written 0 (was `0x10`) (E3).
+  cleared and the coprocessor's word +`0x44` is written 0 (was `0x10`) (E3). *(Changed this
+  round.)* In all seven captures, in this order: +`0x8114` read (it reads in the bit-17 form,
+  section 0: `0x22201` for `pmp` in all seven; `0x24401`, `0x28801`, `0x20001` for `sio`,
+  varying), +`0x8114` written with **the value read, bit 0 cleared**; +`0x48` read (`0x2e` in
+  all seven); +`0x44` read (`0x10`); +`0x44` written 0. The written +`0x8114` value is a rule
+  on the value read, not a constant. What +`0x8114`, +`0x48`, +`0x44` read for a coprocessor
+  that is not running or does not answer is **not observed** (macOS never met one; gaps F3, F6).
+  **R5w [BOTH]** *(new)* At the wake, in each of `sio`'s and `pmp`'s wake actions, in all seven:
+  +`0x8114` reads `0x20001` and is written `0x20001`; +`0x44` reads **0** and is written `0x10`;
+  the next read of +`0x8114` is `0x100101` and the coprocessor's first message (`0x00100000000c000c`)
+  is read (W3). So after a sleep both coprocessors read +`0x44` = 0 before macOS starts them.
 - **R6 [BOTH]** The 196,608 bytes at `0x23b52c000`-`0x23b55bffc` have been read word by word in
   address order after `pmp` was stopped (E3). **R6w [BOTH]** After the wake the same range is
-  written back before `pmp` is started (W3).
+  written back before `pmp` is started (W3): *(changed this round, gap S8)* every one of the
+  49,152 words is written once with the value read from it in E3 (D, G, H checked word by
+  word), as the first writes of `pmp`'s wake action, followed by the ten translator writes of
+  R55.
 - **R7 [BOTH]** Domains GFX, DISPEXT_CPU0, DISPEXT_FE, DISP0_CPU0, DISP0_FE, RMX, APCIE_ST have
   been written to their off values of section 4, each after its coprocessor's R4 exchange (E2).
 - **R8 [BOTH]** `W` +`0x338` = 1 on each SPMI controller (`0x23d0d9338`, `0x23d0e1338`,
   `0x24a829338`) (E3). **R8w [BOTH]** restored to the earlier value at the wake (W3).
 - **R9 [UNKNOWN]** Power-chip register `0x9f01` has been written `0x50` (E3); at the wake it is
-  written `0x00` (W3). Meaning not known; label "boot stage" is the decoding tool's.
+  written `0x00` (W3). Meaning not known; label "boot stage" is the decoding tool's. *(Place
+  added this round, gap S5.)* The write falls between the console lines of the watchdog's sleep
+  action and the first power-chip sleep action, after the watchdog's two words (D: T-0.468, G:
+  T-0.458, H: T-0.462), before the SPMI controllers' R8 and before any write of `0x23d0d9338`.
+  Which driver issues it is not established.
 - **R10 [BOTH]** The address translators of PCIe port 0 and of `sio` have had +`0xfc` stepped to
   0 (E3).
 - **R11 [BOTH]** Cores 1-7 have written their stop bit to `0x23b754000` before any quiesce action
   runs; from then on only core 0 touches devices (E4, E5). In D the stop bits are written
   T-0.0893 to T-0.0889 and the cores enter their final sleep path only at the end (R39).
-- **R12 [BOTH]** Each temperature sensor has had +`0x4` written `0xffffffff` and +`0x10` written
-  with bit 24 then bit 25 set (E5-1). Order among sensors not fixed.
+- **R12 [BOTH]** Each temperature sensor has had +`0x4` written `0xffffffff` and its control word
+  written with bit 24 then bit 25 set (E5-1). Order among sensors not fixed. *(Changed this
+  round, gap S7.)* The control word is +`0x8` for fourteen sensors and +`0x10` for
+  `0x23b2c4000`, `0x23b2c8000`, `0x23b2cc000`; each write is the value just read with bit 24
+  set, then the value read back after it with bit 24 replaced by bit 25 (E5-1).
 - **R13 [BOTH]** `0x24a820900`, `0x24a820904`, `0x23d1f0900` have been written `0xffffffff`
   (E5-2).
 - **R14 [BOTH]** The 17 PCIe writes of E5-3 have been made in that order.
@@ -1560,7 +1932,9 @@ Before the SoC goes down:
   and the hypervisor's own use of this watchdog (A1, A9) may have changed what macOS does here.
 - **R16 [BOTH]** Memory controller, in this order: pulse (`0x20010000c`=1, `0x200100014`=1)
   around `W 0x200001c00`=0, pulse released; `0x200001c04` polled until it reads 0 (39, 39, 64
-  polls); then
+  polls; *changed this round, gap V8:* in all seven it starts at `0x41e0` or `0x4200`, falls
+  and ends on 0, the last non-zero values varying, E5-5b; it reads `0x200` before the pulse);
+  then
   `0x200158000`, `0x200024000`, `0x200024008` cleared bit by bit to 0; `0x200200584` cleared bit
   by bit to 0; zeros to `0x200027000`, `0x200067000`, `0x2000a7000` (E5-5).
 - **R17 [BOTH]** After R16: `0x200155000`=0; P+`0x21008`=0 then P+`0x21000`=0 for the four
@@ -1571,22 +1945,50 @@ Before the SoC goes down:
   cluster state read out (E5-8b/c/d); `0x210e20660`, `0x211e20660`, `0x210e48080`,
   `0x211e48080` written 0. **R19w [BOTH]** all written back at the wake (W1-2e/f). The words
   `0x210e20660`, `0x211e20660` and the cluster reads at `0x210e20400`.., `0x211e20400`.. rest on
-  A and B only (untrapped in D, E, F).
+  A and B only (untrapped in D-H). *(Changed this round, gap V11.)* Each of these words, and
+  `0x23b718000`/`004` of R22 and the four sub-block words of R22a, is read before it is written
+  0, and the value written at the wake equals the value that read returned, in every capture
+  that logs the word (`gaps_gh.py`, block V11): `0x23b718000`, `004`: read `0xf`, written back
+  `0xf` (all seven); `0x23b734000`, `0x23b77c000`, `0x23b778000`: 1, 1 (all seven);
+  `0x210e48080`, `0x211e48080`: `0xa000000000000000` (all seven); `0x210e20660`, `0x211e20660`:
+  `0x1000000015` (A, B); `0x23b748000`/`400`/`800`/`c00`: 1, 1 (all seven). No capture shows
+  any of them read with another value, so a capture cannot tell "written back what was read"
+  from "written a fixed value".
 - **R20 [BOTH]** On `0x68c008000`, `0x234008000`, `0x279008000`: +`0x14`=1, then +`0x2bc`=1, 2,
   4 (E5-8f).
 - **R21 [BOTH]** Bit 63 cleared in `0x210e40250`, `0x211e40250`, `0x210e48400`, `0x211e48400`
-  (E5-8g); set again at the wake (W1-2h).
-- **R22 [BOTH]** `0x23b748400`=0, then `0x23b7487e0` polled until it reads `0x494900`, then
-  `0x23b748800`, `0x23b748c00`, `0x23b748000` = 0; then `0x23b718000`, `0x23b718004` = 0
-  (E5-8h/i). The number of polls varies (9, 6, 9).
-  **R22a [BOTH]** (added after the first runs on Linux) The same holds for each of the four
-  sub-blocks, in the order `0x23b748400`, `0x23b748800`, `0x23b748c00`, `0x23b748000`: the word
-  is read (`1` in every capture), written 0, and then the sub-block's status word 0x3e0 above
-  it (`0x23b7487e0`, `0x23b748be0`, `0x23b748fe0`, `0x23b7483e0`) is read until its low byte is
-  0: `0x494002` (6 to 9 reads) then `0x494900`; `0` at the first read; `0x494002` (2 or 3
-  reads) then `0x494900`; `0x514d02` (1 or 2 reads) then `0x515100`. Identical in all six
-  captures (`db/cap*.db`). In each final value the second and third bytes are equal. What the
-  sub-blocks are is not known. At the wake all four are written 1 again (W1-2).
+  (E5-8g); set again at the wake (W1-2h). *(Changed this round, gap V10.)* In all seven: each of
+  the four is read (`0x8001b20026f02400`, `0x8001b2005df05200`, `0x8003b20026f02400`,
+  `0x8001b2005df05200`), written with bit 63 cleared; **after the wake its first read returns
+  the value last written before the sleep** (bit 63 clear), and it is then written that value
+  with bit 63 set, which equals the value read before the sleep. `0x210e40240` (`0x2000026f00000`)
+  and `0x211e40240` (`0x100005df00000`) are read and rewritten unchanged before the sleep, and
+  after the wake read and rewritten with the same value. So these six words kept their value
+  through every sleep captured (1.6 s to 900 s).
+- **R22 [BOTH]** The four sub-blocks of R22a are stopped as R22a states; then `0x23b718000`,
+  `0x23b718004` = 0 (E5-8h/i). *(Changed this round, gap V6: the literal "`0x23b7487e0` polled
+  until it reads `0x494900`" is withdrawn; the wait ends on the low byte, R22a.)*
+  **R22a [BOTH]** The four sub-blocks, in the order `0x23b748400`, `0x23b748800`, `0x23b748c00`,
+  `0x23b748000`: the control word is read (`1` in every capture), written 0, and then the
+  sub-block's status word `0x3e0` above it (`0x23b7487e0`, `0x23b748be0`, `0x23b748fe0`,
+  `0x23b7483e0`) is read until its low byte is 0. Values in all seven captures (`gaps_gh.py`,
+  block V4/V5; source also `phases-pre-<cap>.tsv`): `0x23b7487e0` `0x494002` 6 to 9 times, then
+  `0x494900`; `0x23b748be0` `0` at the first read; `0x23b748fe0` `0x494002` 2 or 3 times, then
+  `0x494900`; `0x23b7483e0` `0x514d02` 1 or 2 times, then `0x515100`. *(Changed this round,
+  gaps V1, V4, V5, V12.)* What is and is not observed:
+  - the low byte was only ever seen as `0x02` (while waiting) or `0x00` (done);
+  - in each value the second and third bytes are equal when done and differ while waiting
+    (`0x40`/`0x49`, `0x4d`/`0x51`); `0x23b748be0` reads 0 in all bytes;
+  - **a status word is never read while its sub-block is on**: in every capture the first read
+    of each status word comes after the write of 0 to its control word, no snapshot contains the
+    status words, and they are not read at the wake (gap V4: not observed);
+  - **at the wake the four control words read 0** before macOS writes them 1 (all seven; W1-2h):
+    so "written 1 at the wake" is not "written back what was read at the wake";
+  - what a write of 0 does to a sub-block that is already 0, and what the entry does when a
+    control word reads 0, are **not observed** (macOS always found 1). Under Linux the four read
+    0 (section 12, L3);
+  - what the sub-blocks are is not established (no device-tree table names `0x23b748000`,
+    section 1.9).
 
 - **R23 [BOTH]** SIO_CPU `0x23b7001d0` written with bit 28 cleared (E5-8j). **R23a [ARTEFACT]**
   The same for SIO and SIO_BUSIF is seen only through the hypervisor's guard (A3); D gives the
@@ -1605,6 +2007,10 @@ Before the SoC goes down:
   `0x23b105028`+`0x80`k read, `0x23b105024`+`0x80`k written `0x80000001`, `0x23b105004`+`0x80`k
   read; 16 words `0x23b106000`+`0x10`k read; `0x23b100010` read (E6-1). The first 408 / 372
   reads are also in A / B. **R36w [BOTH]** At the wake 991 words are written back (R29).
+  *(Changed this round, gap V3.)* The value of each is given by the entry's reads, in D-H
+  without exception (E6-1): 913 words the value read from the same word; `0x23b104100`+4k the
+  value read from `0x23b104180`+4k; `0x23b104180`+4k and `0x23b105028`+`0x80`k the bitwise
+  inverse of the value read from the same word; `0x23b105024`+`0x80`k `0x80000001`.
 - **R37 [D]** Then `0x23d2c4000` is written 1 a second time, with no other register access, in
   the first power-chip quiesce action (E6-2). The console text of this step is in all three.
 - **R38 [D]** Then, in the second power-chip quiesce action, four SPMI commands to the power
@@ -1629,14 +2035,24 @@ After the SoC comes up, before macOS is back at idle:
 
 - **R28 [BOTH]** Core 0's first device writes: `0x210055008`=`0xffbfffffffffffff`,
   `0x210055000`=1, `0x210e49008`=`0xff5fffffffffffff`, `0x210e49000`=1; every other core
-  writes the first pair on its own block when it starts (W1-0, W2).
+  writes the first pair on its own block when it starts (W1-0, W2). *(Changed this round, gap
+  4.)* Core 7, the first performance core started, then also writes `0x211e49008` =
+  `0xff5fffffffffffff`, `0x211e49000` = 1.
+  **R28a [BOTH]** *(new, gap S1)* Before the start words of each core (R32), core 0 writes
+  `0xc5acce55` to `0x21N30fb0` of that core, about 11 microseconds earlier (W2).
 - **R29 [BOTH]** Then 991 interrupt-controller words are written before anything else (W1-1).
 - **R30 [BOTH]** Then the power manager: `0x23b718000`/`004`=`0xf`; cluster tables; every
   domain of the table written to a target state; timer and cluster state back; DCSn+`0xdc4`,
   +`0xdbc`; `0x23b748000`/`400`/`800`/`c00`=1 (W1-2). Values of DCS2, DCS3, DCS5 differ.
+  *(Changed this round, gaps V1, V7.)* Before its write `0x23b718000` reads `0xf` and
+  `0x23b718004` reads 0; after `0x23b718004` = `0xf` it is read `0x1f` (154 to 243 times) until
+  it reads `0x2f`, in all seven (W1-2a). The four sub-block words read 0 before they are
+  written 1 (W1-2h).
 - **R31 [BOTH]** Then the memory controller is re-enabled: `W 0x200001c00`=`0x10` inside a
   pulse, `0x200001c04` read (`0x4200`), enables rebuilt (W1-3); then `0x200155000`=
   `0xff000000`, P+`0x21008`=`0x700`, P+`0x21000`=`0xfffffc3f`, DCSn+`0x7a0`=`0xc0000` (W1-4).
+  *(Added this round, gap 9.)* Plane 3's `0x2000e1004` is first written `0x8000000` (A, B) or 0
+  (D-H) `[VARIES]`, then `0x4000000`.
 - **R32 [BOTH]** Cores are started only after all active actions, in the order 7, 6, 3, 2, 5,
   1, 4; the "wake actions" run after that (in D the first wake action follows the last core
   start by 1.5 ms); `pmp`, `sio` are booted inside their wake actions, `smc` receives "AP power `0x20`" and
@@ -1659,7 +2075,14 @@ After the SoC comes up, before macOS is back at idle:
 - **R43 [G]** Each core, immediately before it goes down, reads `ACC_OVRD_EL1`, writes
   `ACC_OVRD_EL1` = `0x1800101526076207` (it read `0x180010102001c207` before the first write),
   reads `CYC_OVRD_EL1` = `0x2000000` and writes `CYC_OVRD_EL1` = `0x3000001`; no other trapped
-  system register is touched on any core in the 91 ms before (E7, burst 2).
+  system register is touched on any core in the 91 ms before (E7, burst 2). *(Changed this
+  round: G and H, gap 12.)* H repeats it with the same values (316 records; no trapped access
+  on any core between T-0.0897 and T-0.000026). Which value a core reads from `ACC_OVRD_EL1`
+  follows the time of its read: a core whose read comes after another core's write reads
+  `0x1800101526076207` (G: cores 3 and 0; H: core 0 only, all seven others having read before
+  the first write); a core whose read comes before every write reads `0x180010102001c207`. No
+  core read the old value after any core had written. Whether the register is shared between
+  cores is not established.
 - **R44 [G]** All eight cores do R43 within 33 microseconds, after core 0's last device access
   of R39 for cores 3 and 0, core 0 last (E7). With D, E, F this timing is seen four times
   (their "sleep path" records), the registers once.
@@ -1674,16 +2097,49 @@ After the SoC comes up, before macOS is back at idle:
   ANS2 `0x1f0023ff`; SEP `0x1000230f`; the I2C, SPI, MCA domains `0x200`; DCS domains
   `0x1000030f` (six) or `0x1f0003ff` (two) (section 4.1 table). Which DCS domains read which
   value varies between captures at the wake, so the split six/two is not claimed as fixed.
+  *(Changed this round: G and H.)* H agrees for every word named here except the DCS words
+  `[VARIES]`: H has DCS4, DCS6, DCS7 `0x1000030f`, DCS0, DCS1, DCS5 `0x1f0003ff`, DCS2, DCS3
+  `0x1400034f`. All 137 words at H's commit: section 4.2a.
 - **R47 [G]** At the commit the 80 memory-controller and 448 DRAM-controller words of the
-  snapshot list hold their idle values (section 4.1).
+  snapshot list hold their idle values (section 4.1). *(Changed this round: G and H.)* In H as
+  in G each of the 528 words equals its own awake ("pre-detach") value; between G and H nine of
+  them differ (`MCC.plane0-3+0x680`/`684`, `DCS3+0x500`), in values that also vary at idle
+  (4.1a).
+- **R51 [G] (G, H)** *(new)* At the commit the 858 words of `commit-state-gh.tsv` read as that
+  file's `H_det9_commit` column; G's 792 agree with H's in 774 and vary in 18 (listed in 4.1a,
+  `[VARIES]`). Of G's 792 words, 752 (H: 746) hold the value they had with macOS awake and were
+  not written; the 18 macOS writes (19 in H's list) are those of R1, R7, R18, R23, R23a and the
+  bus cycles of R25, and each reads at the commit what macOS last read from it, except SIO_CPU
+  (written `0x0400024f`, commit `0x0f0002ff`), SIO (write held, commit `0x1f0002ff`) and
+  APCIE_ST (read `0x0f000200`, commit `0x0f000300`) (4.1a item 2).
+- **R52 [G] (G, H)** *(new)* Changed between macOS awake and the commit **with no logged write
+  by any core**, identically in G and H: nine SoC clock words in bit 8, PMP (`0x1f0f03ff`),
+  PMS_SRAM (`0x1f0003ff`), ANS2 (`0x1f0023ff`, already in E1), the power-gate word
+  `0x23b71c0f0` (bit 30 cleared), `0x23b720030`, `034`, `044` (`0x01515151`, `0x01494949`,
+  `0x01494949`), and the always-on clock words `0x23d240040`, `0x23d240314` (4.1a item 3).
+  Further changes of this kind occur in one capture only, in words that vary at idle. What
+  changes these words is not observed. `[UNKNOWN]`
+- **R53 [G] (H)** *(new)* At the commit the domain words of cores 1-7 read `0x100`, core 0's
+  `0x1f0`, the efficiency cluster's ECPM `0x21f0`, the performance cluster's PCPM `0x2100`
+  (4.1a item 5). `[ARTEFACT in part, A4]`
+- **R54 [G] (H)** *(new)* At the commit the requested state of the 137 domain words is as in
+  section 4.2a: on for the 54 listed there, 0 for the other 83.
 - **R48 [G] / [ARTEFACT]** The clock muxes written `0x80100000` in R18 hold `0x85100000` /
   `0x87100000` at the commit: the write of R18 is observed (all six captures), its effect on
   the word is not. The values of SIO, SIO_BUSIF, UART_P, UART0, ATC0_COMMON at the commit are
   the hypervisor's doing (A3) and are not requirements.
 - **R35 [BOTH] (was UNKNOWN)** After an alarm wake macOS does not turn the display, graphics
   or the I5 burst back on (A for 163 s, G for the 20.8 s recorded); after a key wake it does,
-  within 5 s in B and 0.7 s in D, E, F (W4, W5, section 2). Two alarm wakes, four key wakes.
-  Both alarms were the hypervisor's.
+  within 5 s in B and 0.7 s in D, E, F (W4, W5, section 2). *(Changed this round.)* Three
+  alarm wakes (A, G, H), four key wakes. All three alarms were the hypervisor's. After each alarm
+  wake (and no key wake) the SPMI word `0x23d0d9320` is written 0 then 4 in the power chip's
+  wake action (gap S11, W3).
+- **R55 [BOTH]** *(new, gap S2)* In `pmp`'s wake action, after R6w: ten writes to `pmp`'s
+  address translator in this order: +`0xfc`=1, +`0x200`=V, +`0x2f0`=0, +`0x34`=`0xffffffff`,
+  +`0x20`=`0x100000`, +`0x60`=`0x80016100`, +`0x68`=`0xf0f0f`, +`0x6c`=`0x80808`,
+  +`0x100`=`0x80`, +`0x13c`=`0x100` (base `0x23b300000`; D, H). V, and `sio`'s translator
+  values at `0x235004200`, `0x235004210` (W1-8), differ in every capture, are never 0, and are
+  not read or written before the sleep in any log. Their source is not observed `[UNKNOWN]`.
 
 - **R49 [BOTH]** Every access was made with the width that word has in `widths.tsv`: 32 bits
   unless listed there as 64 (or 16, or 8) bits; the width of a word never changed between
@@ -1718,7 +2174,8 @@ Still open (numbers kept):
    words read at the commit (`commit-snapshot-g.tsv`). Still open: the words the entry writes
    that are not in that list (about 615 of 630: the memory-controller shutdown words,
    `0x23d2c4000`, the timer and cluster words, the interrupt controller, ...). Needs a snapshot
-   list built from `commit-last-writes.tsv`.
+   list built from `commit-last-writes.tsv`. *This round:* H repeats the 792 and adds all 137
+   domain words (4.1a, 4.2a); the written words outside the list are still unread at the commit.
 3. **Whether the guarded words and removed devices change the sequence** (A2, A3). Unchanged.
 4. **Whether the boot arguments change the sequence** (A1). Unchanged; all three captures use
    the same arguments.
@@ -1732,7 +2189,7 @@ Still open (numbers kept):
    final wait instruction; and the meaning of the two values.
 9. **Which thread issues the SPMI commands of E3** (R9) and the two `0xd100` writes of E1.
 11. **Invariance beyond three runs**, and wakes from other sources (lid, power button,
-    network). There is still only one alarm wake.
+    network). There are now three alarm wakes (A, G, H), all with the hypervisor's alarm.
 12. **Counts that do not add up.** Snapshots: logs say 793 and 265 words, the files hold 792
     and 264 distinct addresses (D's table says 265, its snapshot record 264). **Closed for the
     detached logs:** the read-out reports 263 more entries than the file has lines in each of
@@ -1794,7 +2251,57 @@ New:
 29. **The record of the snapshot has no time per word** (one start, one end): the order of
     reading within the 0.914 ms is the list's order, not checked.
 30. **Whether an idle sleep differs on a machine in use** (apps open, lid, power source): G is
-    one idle sleep at the login window.
+    one idle sleep at the login window. (H is a second, identical in kind.)
+
+Added this round (from the test authors' gap list and from G against H). Each says which reading
+would settle it.
+
+31. **macOS's sequence from another starting state** (gaps V1, V2, V4, F1, F2, F6, T1, T5, S3,
+    first-round 1 and 5). Every capture is the same macOS on the same machine at the login
+    window: the sub-blocks of R22a read 1, `sio` and `pmp` run and answer, the domains are as in
+    1.9, the pin controller, PCIe and audio switch hold macOS's configuration. So no capture
+    shows a write that depends on the state differing from what macOS found, and none shows
+    what macOS does when a step's precondition is missing (a coprocessor that does not answer,
+    a sub-block already off, a domain off). Values written that equal values read cannot be
+    told from constants. *Settles it:* a capture of macOS entering sleep from a changed state
+    (for example a domain or sub-block set off by the hypervisor before the entry), or reading
+    the words in question under macOS just before the entry in a capture with another
+    configuration (another display, a USB device on the second port).
+32. **What the sub-blocks of R22a and the words at `0x23b720030`-`0x23b720048` are**, and
+    whether the equal bytes of section 12 L3 mean anything. *Settles it:* documentation of the
+    block; or a capture that reads `0x23b720000`.. and the four status words together at several
+    moments of macOS's entry (a snapshot list with them in it, read at each sub-block write).
+33. **What a sub-block's status word reads while it is on** (gap V4). *Settles it:* add
+    `0x23b7483e0`, `7e0`, `be0`, `fe0` to the "pre-detach" and periodic snapshot lists of the
+    next macOS capture.
+34. **What changes the words of R52** (clock bit 8, PMP, PMS_SRAM, ANS2, `0x23b71c0f0`,
+    `0x23b720030`.., `0x23d240040`, `0x23d240314`) between macOS awake and the commit with no
+    logged write, and when; and the same for the words of 4.1a item 3 that change in one capture
+    or to varying values (DCS0-3, DCS5, `0x23b040020`, `0x23b71c0d8`/`108`/`120`, `0x23d240000`,
+    `0x23d240024`). *Settles it:* periodic snapshots of these 29 words during G's recipe
+    (for example every 100 ms from E1 on, and at each console marker of E3-E6).
+35. **The 58 domain words of 4.1a item 4 with macOS awake.** *Settles it:* the 66 words added to
+    the "pre-full" / "pre-detach" snapshot list of the next capture.
+36. **Where the translator values V of R55 come from** (gap S2, F4), and whether 0 is acceptable
+    there. *Settles it:* the same words read at boot under macOS (touch map before the detach
+    with these pages logged in full), or macOS memory at the address the value names.
+37. **What macOS's mailbox, `+0x44` and `+0x48` read for a coprocessor that is stopped, not
+    started, or not answering** (gaps F3, F6, F8). Seen only: after a sleep, before macOS starts
+    them, `sio` and `pmp` read +`0x44` = 0 and +`0x8114` = `0x20001` (R5w). *Settles it:* a
+    capture in which the hypervisor withholds one coprocessor's boot, or a Linux reading of these
+    words with `sio` stopped (section 12, L6).
+38. **How long a reply may take** (gap F7). In D-H every "coprocessor power `0x201`" reply of
+    `sio` and `pmp` came 0.1 to 0.4 ms after the message (`mbox-pre-<cap>.txt`), with the
+    hypervisor trapping every access; no reply ever failed. A bound for a missing reply is not
+    observed.
+39. **The widths of accesses not in the log** (first-round gap 2, S6): the core start/stop words
+    and the guarded words, and which of the two widths of `0x690000004` E5-3 uses. *Settles
+    it:* a capture that logs the guarded words' accesses with their width (the hypervisor sees
+    them), and the PCIe write with its pc.
+40. **The alarm wake against the key wake** (R35): three alarm wakes, all the hypervisor's;
+    whether macOS's own alarm (R38) gives the same dark wake. *Settles it:* a capture with the
+    hypervisor's alarm left off and a sleep longer than macOS's own alarm interval (about
+    950-1,070 s).
 
 ## 10. With and without the cable
 
@@ -1918,6 +2425,101 @@ cancelled entry in the capture is the one of 11.1, **before** the committed slee
 from the account given with the capture (a second Sleep click after the wake, cancelled by a
 key): see open question 22.
 
+## 12. Readings under Linux: the state a driver starts from **[LINUX]**
+
+Everything in this section was read on the same machine with Linux running (Omarchy, the lab's
+kernels), recorded in `docs/evidence/2026-11-17-deepsleep-clean-runs/README.md` and its private
+files. It is **not** an observation of macOS and **not** a requirement. It is here so that the
+reader knows in which respects the machine a Linux driver meets differs from the one macOS was
+captured on. The numbers L1-L12 are for reference from tests and from section 4.
+
+- **L1 (run ds13, bare metal, 17:59).** In Linux's suspend path, after its devices were
+  suspended and cores 1-7 parked and before the deep-sleep driver's first access, the 792 words
+  of the commit list were read (`var/commit-state/linux-ds13-bare-preentry.json`, 0 unread, no
+  fault). Against macOS H at its commit (`commit-state-gh.tsv`, column
+  `linux_ds13_vs_H_commit`): **674 equal, 118 different**: 54 SoC clock words, 40 power-domain
+  words, 8 memory-controller words, 8 DRAM-controller words, 5 always-on clock words, 3 other
+  power-manager words. The 137 domain words were logged in the same run just before the cores
+  were parked ("ps prepare") and after the return ("ps wake")
+  (`var/commit-state/linux-ds13-bare-ps-words.json`); their values are in the table of 4.2a.
+  Between the two dumps only the cores' domain words and NUB_SPMI0 differ.
+- **L2 (ds13): the non-domain words that differ from macOS's commit.** Linux / macOS H:
+  - `MCC.plane0-3+0x680` / `+0x684`: `0x9e5` / `0xa11` (macOS awake and at the commit: one of
+    seven values between `0x800` and `0xf62`; under the hypervisor these words are emulated, A5);
+  - `DCSn+0x7b0`, n = 0..7: **3** (macOS: 0 in every snapshot of all seven captures, awake and
+    at the commit; macOS never accesses these words in any log);
+  - SoC clock words at `0x23b040000`-`0x23b040154` (50 words). Most often Linux has byte 3
+    `0x86` where macOS has `0x87` (`0x86100100` / `0x87100100` in 18 words, `0x86100000` /
+    `0x87100000` in 7, `0x86100100` / `0x87100000` in 2, `0x86100000` / `0x87100100` and
+    `0x86200100` / `0x87200100` in one each); bit 8 differs alone in 12 (`0x85100100` /
+    `0x85100000` in 5, the reverse in 4, `0x80100100` / `0x80100000` in 3); `0x23b0400b0`
+    `0x82100000` / `0x87100100`; `0x23b04001c` `0x85100000` / `0x85120000`; `0x23b040020`
+    `0x85100100` / `0xc5100000` (G: `0x85100000`); and **`0x23b0400d4`-`0x23b0400e8`, six words
+    that read `0x100` under macOS awake and at the commit, read `0x85100100`, `0x86100100`,
+    `0x87100100`, `0x88100100`, `0x89100100`, `0x89100100` under Linux.** (`0x23b0400d4` is the
+    third register range of the audio switch `mca-switch` in the device tree, section 1.9.)
+  - `0x23b048000` (the NCO block's first word): 0 / `0x80000000`; `0x23b058000`, `0x23b05c000`,
+    `0x23b060000`: `0x444`, `0x666`, `0x333` / `0x333`, `0x444`, `0x222`;
+  - `0x23b720030`, `0x23b720034`, `0x23b720044`: `0x01616161`, `0x017f7f7f`, `0x016c6c6c` /
+    `0x01515151`, `0x01494949`, `0x01494949` (macOS awake: `0x014d514d`, `0x01404940`,
+    `0x01404940`);
+  - always-on clock words `0x23d240024` `0x81100000` / `0x81100100`, `0x23d24003c` `0x01101100` /
+    `0x81100100`, `0x23d240040` `0x02100100` / `0x01101100` (= macOS awake), `0x23d240048`
+    `0x00101100` / `0x82100100`, `0x23d240314` 0 / `0x01000000` (= macOS awake).
+- **L3 (run ds8, read under the stock kernel after the run).** The four sub-blocks of R22a:
+  control words `0x23b748000`, `400`, `800`, `c00` all read **0** (macOS awake: 1 in every
+  capture). Status words: `0x23b7483e0` = `0x616100`, `0x23b7487e0` = `0x7f7f00`,
+  `0x23b748be0` = 0, `0x23b748fe0` = `0x6c6c00`. In both systems the second and third bytes of
+  each non-zero status word equal the byte repeated in one of the words of L2: `0x61` in
+  `0x23b720030` (Linux) and `0x51` (macOS's final `0x515100`, its commit `0x01515151`) for
+  `0x3e0`; `0x7f` in `0x23b720034` (Linux) and `0x49` (macOS `0x494900`, `0x01494949`) for
+  `0x7e0`; `0x6c` in `0x23b720044` (Linux) and `0x49` for `0xfe0`. While macOS waits, the status
+  words read `0x494002` and `0x514d02`, whose bytes are those of macOS's awake values
+  `0x01404940` and `0x014d514d`. These are coincidences of values in two systems; what ties the
+  words together is not established.
+- **L4 (ds2-ds4): widths and order.** A 32-bit read of `0x200024000`, which macOS accesses only
+  as 64 bits, raised an SError (ds3). A 32-bit read of `0x23b549000` (the R6 block) through
+  `/dev/mem` under the stock kernel, with Linux's `pmp` driver loaded and `pmp` running, reset
+  the machine at once (ds4); macOS reads this block only after it has stopped `pmp` (R4, R5),
+  and the same read did not fault in ds8 after `pmp` had been stopped.
+- **L5 (ds5): a block whose domain Linux had off.** With `sio`'s domains off, a 32-bit read of
+  `0x235004200` (`sio`'s address translator) raised an SError (panic record, count 1).
+- **L6 (ds6, ds13): `sio` and `pmp` under Linux.** ds6's and ds13's domain dumps have SIO_BUSIF,
+  SIO, SIO_CPU at `0x0f000200` (off). In ds7, with the domains turned on by the driver, `sio`
+  did not answer the first mailbox message ("wait on 0x236408114 did not end"); on that boot
+  Linux's own `sio` driver had failed to start it ("error -ETIME"). What `sio`'s +`0x44`,
+  +`0x48`, +`0x8110`, +`0x8114` read in that state was not logged. In ds13 the driver logged
+  `pmp`'s translator word `0x23b300200` as read **0**, and gave 0 for `sio`'s `0x235004200`,
+  `0x235004210` (domains not on). Under macOS these words are only written, at the wake, with a
+  non-zero value (W3, W1-8).
+- **L7 (ds9): an entry that ran to its end on Linux.** The driver's entry completed (its record
+  'R'), including every core's `CYC_OVRD_EL1` write; the chip did **not** power down (the
+  Thunderbolt link stayed up for 7 minutes), did not reset, and did not wake at the alarm the
+  driver had written (`0xd008` held it). The state at that commit was not read.
+- **L8 (ds10, ds11, ds12): the way back without a power-down.** After an entry that did not power
+  down, the driver's wake writes ran: a 32-bit write to `0x238408204` (the audio switch, block 2
+  of six, third write of that block) was followed by an SError panic (ds10, ds11); in ds12 the
+  run got past that action and timed out in the poll of `0x23b718004` (R30; under macOS this poll
+  reads `0x1f` and ends on `0x2f`); what Linux read there was not logged. Under macOS the audio
+  switch's wake action comes after SIO_ADMA and MCA0-5 have been turned on (W3); at Linux's
+  entry those domains read `0x200` (off), as at macOS's commit.
+- **L9 (ds8): power chip.** After that run byte `0x9f03` read `0x50` (`0x30` before) and `0x9f01`
+  read `0x30`. Under macOS `0x9f01` is written `0x50` before the sleep and `0x00` at the wake
+  (R9). Not explained.
+- **L10 (dsh1, dsh2): Linux as the hypervisor's guest.** dsh1's entry stopped before the commit
+  (the hypervisor took one core out of the guest at its `CYC_OVRD_EL1` write and the driver
+  waited for it); dsh2 reached a real commit and did not wake. The 792 words read with Linux
+  awake under the hypervisor 46 s before dsh2's entry: 667 equal to G's commit
+  (`linux-ds12-hv-vs-macos-det8.tsv`). L1 is the better reading of what a driver finds; dsh2 is
+  kept in `commit-state-gh.tsv` (column `linux_awake_dsh2`) only for comparison.
+- **L11: what has not been read under Linux.** The 858 words at Linux's own commit; the
+  status words of R22a while a sub-block is on; `sio`'s and `pmp`'s mailbox and control words
+  when they do not answer; SIO_CPU's control word after a driver has turned the domain on
+  (gap V9); the 66 domain words' values after the entry's writes; any register while asleep.
+- **L12: the domain dumps of ds6 and ds13 ("ps prepare", two boots) are equal** in 135 of 137
+  words; they differ only in which core's domain reports on (ds6: PCPU1 `0x1f0`, ECPU3 `0x100`;
+  ds13 the other way round).
+
 ## Appendix: scripts and extracts (all in `var/spec/`)
 
 Run with `tools/hv-trace-kit/venv/bin/python`, from `var/spec/`, after `build_db.py 3` and
@@ -1954,6 +2556,15 @@ Run with `tools/hv-trace-kit/venv/bin/python`, from `var/spec/`, after `build_db
 | `commit_snap.py` | `commit-snapshot-g.tsv`: the commit snapshot against idle, the wake and macOS's last writes |
 | `det_down.py` | `det-down-g.tsv`: each core's system-register accesses on the way down, named |
 | `det_events.py`, `det_misc.py` with `DET=e` / `DET=f` | `det-events-e.tsv`, `det-sysreg-e.tsv`, `-f`; idle and phase times |
+| `build_db_det.py det9 h` | `db/caph.db` (capture H; `lib.py` now lists `h` in `ALLCAPS`, `DET`, `SLIDE`) |
+| `commit_gh.py` | `commit-state-gh.tsv`: the 858 commit words of G and H, awake value, path, reads, Linux readings |
+| `snapvar_gh.py` | `snapvar-gh.tsv`: the changed or varying commit words in every snapshot of all seven captures |
+| `ps_commit_gh.py` | `ps-commit-gh.tsv`: the 137 domain words, macOS G and H at the commit, at E3, at the wake, Linux ds6, dsh1, ds13 |
+| `gaps_gh.py` | `gaps-gh.txt`: readings for the gap list (sub-blocks, waits, R21 words, R19 words, R36w rule, mailboxes, S1, S11, gap 9, core order) in all seven captures |
+| `mbox_status.py` | the +`0x8114` forms before reply reads, every mailbox, all seven captures |
+| `adt_domains.py` | `adt-domains.tsv`: the domains each device-tree node names |
+| `seven_h.py` | H against D, G, A by console segment (needs `phases.py` with `CAPS=d,h`, `g,h`, `3,h`) |
+| `buses.py` with `CAPS=h,h` | `spmi-pre-h.txt`, `spmi-post-h.txt`, `mbox-pre-h.txt`, `mbox-post-h.txt` |
 
 Capture selection: the pairwise scripts compare the two captures named in the environment
 variable `CAPS` (default `3,4`; `3` = A, `4` = B, `d` = D); outputs of other pairs carry the
@@ -1962,3 +2573,54 @@ ending `-no4` are A or B with the four pages D did not trap removed. Window argu
 seconds or console anchors (`'@awdl0 disable'`, `@START`, `@END`). Per-capture extracts of D:
 `phases-pre-d.tsv`, `phases-post-d.tsv`, `console-d-pre.txt`, `console-d-post.txt`,
 `ps-pre-d.tsv`, `ps-post-d.tsv`, `mbox-*-d.txt`, `spmi-*-d.txt`, `saverestore-d.tsv`.
+
+## Changes in this round (2026-11-17 evening: capture H, the Linux readings, the test authors' gaps V1-V12, F1-F10, S1-S13, T1-T12, 1-15)
+
+Inputs: capture H (`det9`, section 1.7a); `var/commit-state/` (G and H at the commit, the Linux
+readings of runs ds6, ds13, dsh2); `docs/evidence/2026-11-17-deepsleep-clean-runs/README.md`;
+`docs/spec/gaps-reported-by-tests.md`. Every number below was re-derived from the logs by the
+scripts named (appendix), not taken from the evidence file's prose.
+
+**Requirements added**
+- R5w: the start of `sio`'s and `pmp`'s wake actions (+`0x8114` `0x20001`, +`0x44` 0 -> `0x10`).
+- R28a: `0xc5acce55` to `0x21N30fb0` before each core's start words.
+- R51: the 858 commit words of G and H (`commit-state-gh.tsv`), 774 / 18 `[VARIES]`.
+- R52: words changed between awake and commit with no logged write `[UNKNOWN]`.
+- R53: the cores' and clusters' domain words at the commit.
+- R54: the requested state of all 137 domain words at the commit (4.2a).
+- R55: `pmp`'s translator writes at the wake; the translator values' source not observed.
+
+**Requirements changed**
+- R5: the +`0x8114` write is the value read with bit 0 cleared (a rule, not a constant);
+  +`0x48` = `0x2e`; states what is not observed for a coprocessor that does not run.
+- R6w: all 49,152 words written back with the value read in E3 (was "49,143 of 49,154").
+- R9: its place among the sleep actions.
+- R12: control word +`0x8` for fourteen sensors, +`0x10` for three; the written values' rule.
+- R16: the values of the wait in all seven captures; the value before the pulse.
+- R19 / R19w: the values read before each write of 0 and written back, in all seven; no capture
+  tells "written back" from "fixed".
+- R21: the six words keep their value through the sleep (first read after the wake = last
+  write before it).
+- R22: the literal `0x494900` withdrawn; refers to R22a.
+- R22a: source files; low-byte values; status words never read while a sub-block is on; the
+  control words read 0 at the wake; behaviour from another start state not observed.
+- R28: core 7 also writes the performance cluster's pair.
+- R30: `0x23b718000` reads `0xf` and `0x23b718004` 0 before the wake writes; the poll reads
+  `0x1f` 154-243 times and ends on `0x2f`; the sub-block words read 0 before being written 1.
+- R31: plane 3's `0x2000e1004` first value `[VARIES]` (`0x8000000` A, B; 0 D-H).
+- R35: three alarm wakes; `0x23d0d9320` written 0, 4 after alarm wakes only.
+- R36w: the rule for each of the 991 words (913 as read; 28 from the neighbour word; 39
+  inverted or constant).
+- R43: G and H; which `ACC_OVRD_EL1` value a core reads follows the order of reads and writes.
+- R46, R47: H added; the DCS domain words `[VARIES]`.
+
+**Requirements withdrawn:** none. (R22's literal value is withdrawn inside R22.)
+
+**Sections changed or added:** 0 (control-word bits and mailbox status words, as documentation
+and reference; the `+0x8114` forms as observation); 1.7a (capture H); 1.9 (device-tree domains
+of each block; the "perf-reg" and "pwrgate-reg" tables); 3 (idle sleep H; E3 `sio`/`pmp` rows;
+E5-1 sensors; E5-5b wait values; E5-8h; E6-1 rule and counts); 4.1a and 4.2a (the commit in G and
+H, word by word; all 137 domain words, with Linux's values); 5 (H asleep; watchdog writes);
+6 (W1-1 counts, W1-2a, W1-2h, W1-4 item 4, W2 core 7 and `0xc5acce55`, W3 `pmp` write-back,
+translator writes, `sio`/`pmp` start, `0x23d0d9320`, W4 H dark); 7.7 (seven captures); 9 (open
+questions 31-40, 2 and 11 updated); 12 (readings under Linux, L1-L12, all `[LINUX]`).
