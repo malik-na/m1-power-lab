@@ -38,3 +38,7 @@ Two more rules (Naeem, 2026-11-17):
   observation and spec agents, and the kernel glue's author, may read aurora-silicon code as a
   reference for what the hardware is and does, citing repository, branch and commit. It is read
   as data and never run or built here. The driver's author still works from the tests alone.
+- **What the hypervisor is for** (Naeem, 2026-11-17, after a Linux guest left the M1 dark). The
+  hypervisor stage reads macOS, the system whose sleep and wake work, by the recipe that has
+  already run unattended (det8). Linux is read on bare metal. Before any hypervisor run the
+  observation agent names the step that ends the run without hands if the wake does not come.
