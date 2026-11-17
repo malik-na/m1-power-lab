@@ -1643,3 +1643,11 @@ The whole page in det18 (hex, "a -> **c**" where the commit value differs from t
 In stock Omarchy (kernel 7.3.0-0test5-1-ARCH, up since 2026-11-18 03:34:21 after det22c's
 reset), reached over Thunderbolt. The camera frame
 `var/m1-look/20261118-033445-state-after-det22c.jpg` shows the desktop.
+
+## Linux awake, stock kernel (2026-11-18 03:54): the power-gate header and CPU block words
+
+Read over `/dev/mem` on the M1 in stock Omarchy (kernel 7.3.0-0test5, awake, nothing
+suspended), one 32-bit read each, for the spec's open question 64: `0x23b71c000` = `0x0`;
+`0x23b71c040` = `0x80000000`; `0x23b754000` = `0x0`; `0x23b754004` = `0x0`. (The spec: macOS
+reads `0x23b71c000` = `0x80000000` awake and at its commit in every capture.) The same words at
+Linux's commit are not read.
