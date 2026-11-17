@@ -1,0 +1,49 @@
+#!/bin/bash
+# Read Linux's state at the deep-sleep driver's commit point one word per run, unattended.
+#   tools/tb/m1-commit-walk <kernel.tar.zst> <tag> <show: 3|4> <file of k values> <out.tsv>
+# Before the first use: tools/tb/m1-bootonce <kernel.tar.zst> <tag> <cmdline file> with
+# apple_deepsleep.snap=2 and apple_deepsleep.wdt=N on the command line (that puts the kernel,
+# its initramfs and the Limine entry "m1tb-<tag>" on the M1).
+# Each run: the stock kernel is up -> the test kernel's modules go back (the lab agent removes
+# them at every stock boot) -> next boot only into the test kernel -> snap_show and snap_k are
+# set, a real sleep is started -> the glue writes the commit record with word k and arms the
+# watchdog -> the watchdog resets the M1 into the stock kernel -> the record (power-chip bytes
+# 0x9f04-0x9f0d) is read and appended to <out.tsv> as "k <time> <ten bytes>".
+# A k already in <out.tsv> is skipped, so the walk can be stopped and started again.
+# Over Thunderbolt (m1tb) when the link is up, else over the tailnet (ssh m1ts).
+set -u
+here=$(cd "$(dirname "$0")" && pwd)
+pkg=${1:?kernel.tar.zst}; tag=${2:?tag}; show=${3:?3 or 4}; list=${4:?file of k values}; out=${5:?out.tsv}
+krel=$(zstd -dc "$pkg" | tar -t | sed -n 's|^usr/lib/modules/\([^/]*\)/vmlinuz$|\1|p' | head -1)
+[ -n "$krel" ] || { echo "no usr/lib/modules/<krel>/vmlinuz in $pkg"; exit 1; }
+log() { echo "$(date +%T) $*"; }
+m1() { timeout "${T:-25}" "$here/m1tb" "$1" 2>/dev/null || timeout "${T:-25}" ssh -o ConnectTimeout=6 m1ts "$1" 2>/dev/null; }
+m1in() { timeout 90 "$here/m1tb" "$1" 2>/dev/null; }
+kernel() { T=8 m1 'uname -r'; }
+wait_kernel() { # <substring> <seconds>
+	local end=$(( $(date +%s) + $2 )) r
+	while [ "$(date +%s)" -lt "$end" ]; do r=$(kernel) && case "$r" in *"$1"*) return 0;; esac; sleep 3; done
+	return 1
+}
+REC='python3 -c "import os;f=os.open(\"/sys/bus/nvmem/devices/spmi_nvmem0/nvmem\",os.O_RDONLY);os.lseek(f,0x9f04,0);print(os.read(f,10).hex(\" \"))"'
+touch "$out"; fails=0
+for k in $(grep -v '^#' "$list"); do
+	grep -q "^$k	" "$out" && continue
+	[ "$fails" -ge 5 ] && { log "five runs in a row failed; stopping"; exit 1; }
+	wait_kernel 0test5 240 || { log "k=$k: the stock kernel does not answer"; fails=$((fails+1)); continue; }
+	cat "$pkg" | m1in "tar -C / --zstd -x usr/lib/modules/$krel && depmod $krel && bootctl set-oneshot m1tb-$tag && sync && systemctl reboot" \
+		|| cat "$pkg" | timeout 240 ssh -o ConnectTimeout=6 m1ts "tar -C / --zstd -x usr/lib/modules/$krel && depmod $krel && bootctl set-oneshot m1tb-$tag && sync && systemctl reboot" 2>/dev/null
+	wait_kernel "$tag" 180 || { log "k=$k: the test kernel did not come up"; fails=$((fails+1)); continue; }
+	m1 "sleep 10; cd /sys/module/apple_deepsleep/parameters && echo $show > snap_show && echo $k > snap_k && [ \$(cat snap) = 2 ] && [ \$(cat wdt) -ge 1 ] && systemd-run --unit=walk-$k /bin/bash /var/lib/m1power-ds/real.sh >/dev/null 2>&1 && echo started" | grep -q started \
+		|| { log "k=$k: the sleep was not started"; fails=$((fails+1)); T=10 m1 'systemctl reboot'; continue; }
+	if ! wait_kernel 0test5 150; then
+		# No watchdog reset: the entry stopped before the commit and Linux came back, or it hangs.
+		log "k=$k: no reset within 150 s (kernel now: $(kernel || echo none)); rebooting"
+		T=10 m1 'systemctl reboot'; fails=$((fails+1)); continue
+	fi
+	rec=$(m1 "$REC") || rec=
+	[ -n "$rec" ] || { log "k=$k: the record was not read"; fails=$((fails+1)); continue; }
+	printf '%s\t%s\t%s\n' "$k" "$(date +%T)" "$rec" >> "$out"
+	log "k=$k: $rec"; fails=0
+done
+log "walk done: $(grep -c . "$out") records in $out"
