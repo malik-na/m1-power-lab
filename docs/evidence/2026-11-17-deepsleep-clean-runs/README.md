@@ -158,3 +158,18 @@ powering anything down, and is to log the words afterwards. Command line: ds7's 
 
 Next: the glue keeps the snapshot's way back alive across SErrors (records each, continues), so
 the words reach the log.
+
+## Run ds11 (16:46): the same panic; skipping the SError is not enough
+
+Kernel ds11 (`683d833a3`, package sha256 `4453febb...8fa3`): ds10 plus a hook that records an
+SError on the `snap=1` way back and returns from it (at most 64, and not the same one five times
+running), and the snapshot words logged before the wake calls. Command line as ds10.
+
+- `real.sh` started 16:46:28; the M3 logged the M1's host disconnect at 16:46:36.43; the M1 was
+  back in stock Omarchy, kernel start 16:46:48 (camera frame 16:48:54: desktop).
+- Record: `44 d0 04 82 40 38 02 30 42 00` = 'P', bit 7 set, last access the same 32-bit write to
+  `0x238408204` by core 0, count low 16 bits `0x0042`.
+- Nothing else survived. Whether the hook ran and gave up, or was not reached, is not read.
+
+Next: the hook reads the core's documented fault registers (Asahi docs, `L2C_ERR_STS`, `_ADR`,
+`_INF`), clears the fault there, and the record carries the fault's own address.
