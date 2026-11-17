@@ -1039,3 +1039,27 @@ did not count through the 89.5 s of sleep.**
 
 The M1 is left in stock Omarchy (kernel 7.3.0-0test5, up since 23:11:04); the camera frame
 `var/m1-look/20261117-231127-state-after-det11.jpg` shows the desktop.
+
+## Runs ds17-1, ds17-2, ds17-3 (23:13-23:23): three watchdog runs, the same result each time
+
+Kernel ds17, command line `var/deepsleep/ds17.cmdline` (`wdt=120`, `alarm_secs=60`, snap and
+trace off), the M3 cable and charger plugged in (`ac=1`), Naeem at the desk and not touching the
+M1. Taken after Hypervisor round 5 showed macOS powering down and waking with watchdog 1 armed
+at its commit (the watchdog does not keep that chip up, and its count does not run in sleep).
+
+| Run | Sleep started | M3: host disconnect | Kernel start after reset | Record (`0x9f04`) |
+|---|---|---|---|---|
+| 1 | 23:13:32 | 23:13:35.38 | 23:15:47 | `44 57 00 40 2c 3d 02 30 7f 00` |
+| 2 | 23:17:04 | 23:17:07.95 | 23:19:20 | `44 57 00 40 2c 3d 02 30 81 00` |
+| 3 | 23:20:42 | 23:20:46.05 | 23:22:58 | `44 57 00 40 2c 3d 02 30 80 00` |
+
+- In each: no wake at the alarm (+60 s); a reset about 135 s after the start (the 120 s watchdog
+  plus the entry and the boot); record 'W' (the commit point reached, the watchdog armed there),
+  last access a 32-bit write to `0x23d2c4000` by core 0.
+- Power chip after each: `0x0201` = `00` (as macOS's wake in det11 left it: no sleep entry wrote
+  `01`), `0x9f03` = `50`, fault shadow `0x000800` (bit 11 `wdog,reset_in_1` only: a watchdog
+  reset, no button bits), `0xd000` = `01`, `0xd00c` = `00`.
+
+With ds17 on battery (22:36) that is four of four: after Linux's commit the SoC stays powered
+until the watchdog resets it, with and without the M3's cable and charger; under macOS the same
+armed watchdog does not stop the power-down (det11).
