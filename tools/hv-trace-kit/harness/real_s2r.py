@@ -31,7 +31,7 @@ def wdt_state(tag=""):
           f"WD1 {p.read32(b+0x10):#x}/{p.read32(b+0x14):#x}/{p.read32(b+0x1c):#x}  WD2 {p.read32(b+0x20):#x}/{p.read32(b+0x24):#x}/{p.read32(b+0x2c):#x}  "
           f"extra 8008/800c/8020 {p.read32(0x23d2b8008):#x}/{p.read32(0x23d2b800c):#x}/{p.read32(0x23d2b8020):#x}  s2r-timer {p.read32(0x23d2c4000):#x}")
 _CLKGEN = (0x23b040140, 0x23b040144, 0x23b040148, 0x23b04014c, 0x23b040154)  # muxes macOS parks (= 0x80100000) before the commit
-def real_s2r_on(spin=0, alarm=0, mask=(), wake="reset"):
+def real_s2r_on(spin=0, alarm=0, mask=(), wake="reset", wd1=0):
     p.write32(_A_CNT, 0); _slots.clear()
     try:
         # wake="proxy": the handler keeps the hypervisor image alive, restores these clkgen words,
@@ -65,6 +65,16 @@ def real_s2r_on(spin=0, alarm=0, mask=(), wake="reset"):
         print(f"[s2r-real] RTC alarm at the commit: {'now + %d s' % alarm if alarm else 'left as macOS set it'}")
     except KeyError:
         pass
+    try:
+        # wd1 = N s: arm watchdog 1 at the commit, right after the alarm (m1n1-next calibration
+        # build, hv_s2r_wd1_secs; 32-bit bite word at 24 MHz, so at most 178 s). 0: off.
+        if wd1 > 178:
+            raise ValueError("wd1 > 178 s does not fit the 32-bit bite word at 24 MHz")
+        p.write32(_base + _sym("hv_s2r_wd1_secs"), wd1)
+        print(f"[s2r-real] watchdog 1 at the commit: {'bites %d s after the commit' % wd1 if wd1 else 'off'}")
+    except KeyError:
+        if wd1:
+            print("[s2r-real] this m1n1 build cannot arm watchdog 1 at the commit")
     try:
         # mask = AP wake-source numbers (ADT order, e.g. 81 = SMC.OutboxNotEmpty) to mask at the commit
         a = _base + _sym("hv_s2r_wake_mask_or")

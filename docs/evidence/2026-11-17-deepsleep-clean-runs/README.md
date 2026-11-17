@@ -951,3 +951,91 @@ M1 read `ac=0`, "Discharging", -377 mA at 22:36:04; the run was started over the
 Read together: 120 s after the commit, with nothing plugged into the M1, the SoC's watchdog
 still counted and reset the machine, and the power chip's sleep byte was not written. The
 earlier dark periods (ds16, ds16b, ds16c) ended only with the power button.
+
+## Hypervisor round 5: macOS with watchdog 1 armed at the commit (det11, 2026-11-17 22:57-23:11)
+
+**Short answer: with watchdog 1 armed at the commit (bite 150 s), macOS powered down and woke at
+the 90 s alarm exactly as in det8-det10. At the wake entry watchdog 1's count read 13.9 ms: it
+did not count through the 89.5 s of sleep.**
+
+### The change and the run
+
+- **Hypervisor:** `~/m1n1-next` branch `m1power/hv-detached`, local commit `bb8873c0`, not
+  pushed (on top of ed07f5bb), in `src/hv/hv_cpu_power.c` and `src/hv/hv_detached.c`:
+  - `hv_s2r_wd1_secs`, 0 (off) by default. When set, the last core writes watchdog 1 with the
+    same four writes as the glue (`0x23d2b001c` <- 0, `0x23d2b0010` <- 0, `0x23d2b0014` <- N x
+    24 MHz, `0x23d2b001c` <- 4) right after it programs the power chip's alarm, so as late as
+    the commit path allows, before the core's own power-down write. The four writes are logged
+    as `commit-write` records.
+  - The wake path reads watchdog 1's count, bite and control, and watchdog 0's count, as its
+    first instructions, before it re-arms watchdog 1 as its own 60 s fallback (it always did
+    that). They go into the log as `wake-reg` records.
+- **Host side:** `harness/real_s2r.py` `real_s2r_on(wd1=N)` and `harness/drive135.sh` `WD1=N`.
+- **N = 150 s:** later than the 90 s alarm, so "woke at the alarm" (about 90 s) and "reset by
+  the watchdog" (about 150 s) are told apart by time. It is also below the bite word's limit
+  (178.9 s at 24 MHz).
+- **No-hands ways out:** the alarm; and, if the chip stayed up, the watchdog itself.
+- **Commands:** `WD1=150 ALARM=90 FULL_SKIP=<det8's four pages> harness/macos-up.sh det11`
+  (22:57:25; READY 23:01:24). `harness/detach135.sh det11` with det10's commit list, at
+  23:08:22-23:08:23: late, because the M1 was on hold for the coordinator meanwhile; no
+  awake-extra snapshot this time. `harness/detached-wake-readout.sh det11`. Then
+  `harness/hv-reboot.sh` (23:10:50) and `tools/tb/m1-pmu-dump`.
+- Files (private): `tools/hv-trace-kit/runs/20261116-mac135/*-det11.*`,
+  `var/commit-state/macos135-det11-*`, `var/m1-state/pmu-20261117-231124-after-det11.txt`.
+
+### Readings
+
+1. **Sleep and wake.**
+   - At arm: `RTC alarm at the commit: now + 90 s`, `watchdog 1 at the commit: bites 150 s
+     after the commit`.
+   - Last core in its sleep path (T) at 24.438 s after the detach (about 23:08:47). The
+     hypervisor's watchdog writes went out at T+1.3 ms: bite `0xd693a400` = 3,600,000,000 = 150 s.
+   - Wake record at 113.951 s: **asleep 89.51 s** (det9 90.28, det10 90.18). USB device
+     left/back 23:10:16.039 / 23:10:16.653, as at det8-det10's wakes.
+   - Wake status `+0x1c/+0x20/+0x24` = `0x0 / 0x400000 / 0x0`, as det8-det10. No reset.
+   - Read out at 134.7 s; 332,701 entries, 0 dropped.
+2. **The watchdog at the wake entry** (before the wake path touched it):
+
+   | Word | Value at the wake entry |
+   |---|---|
+   | Watchdog 1 count `0x23d2b0010` | **`0x51ae8` = 334,568 ticks = 13.9 ms at 24 MHz** |
+   | Watchdog 1 bite `0x23d2b0014` | `0xd693a400` (as written) |
+   | Watchdog 1 control `0x23d2b001c` | `0x4` (as written) |
+   | Watchdog 0 count `0x23d2b0000` | `0x51b57` (13.9 ms) |
+   | Watchdog 2 count `0x23d2b0020` | `0x76f11b` (0.325 s; det8-det10 also 0.325 s) |
+
+   So the bite time and control survived the sleep. The count read 13.9 ms, not about 89.5 s:
+   it did not keep counting through the sleep, and watchdog 0's count reads the same 13.9 ms.
+   Whether the counts restarted at the chip's power-up or were held is not separated by this
+   reading.
+
+   Writes to the watchdog page in the log:
+   - macOS, before T only, as in det9 and det10: WD0 count <- 0 and WD1 count <- 0 at T-0.466 s,
+     WD0 control <- 0 at T-0.035 s.
+   - After the wake: none in the 20.8 s logged.
+   - The hypervisor's wake path re-armed watchdog 1 for 60 s at its start and wrote its control
+     to 0 before re-entering macOS (its existing code).
+3. **Power chip afterwards** (after the reboot, 23:11:24):
+
+   | Register | det11 | det9, det10 |
+   |---|---|---|
+   | `0x0201` | 00 | 00 |
+   | `0x9f03` | 00 | 00 |
+   | fault shadow `0xa47b` | `0x000800` | `0x000800` |
+   | `0xd000` / `0xd00c` | 01 / 00 | 01 / 00 |
+   | `0x9f04`- | `48 00 01 3f ff ff 47 50 00` | the same |
+
+   The fault shadow's button bits, set after ds16 and ds17, were clear again after this
+   macOS boot.
+4. **The entry's last second against det10.**
+   - Phase starts (console lines, s from T): E1 -7.528, E2 -0.849, E3 -0.483, E4 -0.0908,
+     E5 -0.0902, E6 -0.0152 (det10: -7.548, -0.876, -0.481, -0.0911, -0.0906, -0.0157).
+   - Commit snapshot: 862 words, 0 errors. Against det10 (792 words): 772 equal, 20 different,
+     all in the groups that varied before: `MCC.planeN+0x680/684`, `DCSn+0x500` (n = 1, 2, 4-7),
+     `ps_dcs0`, `ps_dcs1`, power-gate `0x23b71c0d8`, `0f0`, `108`, `120`.
+   - Wake snapshot against det8: 261 equal, 3 different.
+   - This capture's idle period before the entry was 24 s instead of about 430 s: the detach
+     came late.
+
+The M1 is left in stock Omarchy (kernel 7.3.0-0test5, up since 23:11:04); the camera frame
+`var/m1-look/20261117-231127-state-after-det11.jpg` shows the desktop.
