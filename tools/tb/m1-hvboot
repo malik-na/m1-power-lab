@@ -8,6 +8,7 @@
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd); repo=$(cd "$here/../.." && pwd)
 S="$repo/tools/hv-trace-kit/harness"; source "$S/lib.sh"
+"$here/m1-claim" check
 if [ -n "${1:-}" ]; then
 	krel=$(zstd -dc "$1" | tar -t | sed -n 's|^usr/lib/modules/\([^/]*\)/vmlinuz$|\1|p' | head -1)
 	[ -n "$krel" ] || { echo "no usr/lib/modules/<krel>/vmlinuz in $1"; exit 1; }

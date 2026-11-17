@@ -16,6 +16,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 pkg=${1:?kernel.tar.zst}; tag=${2:?tag}; show=${3:?3 or 4}; list=${4:?file of k values}; out=${5:?out.tsv}
 krel=$(zstd -dc "$pkg" | tar -t | sed -n 's|^usr/lib/modules/\([^/]*\)/vmlinuz$|\1|p' | head -1)
 [ -n "$krel" ] || { echo "no usr/lib/modules/<krel>/vmlinuz in $pkg"; exit 1; }
+"$here/m1-claim" check || exit 1
 log() { echo "$(date +%T) $*"; }
 m1() { timeout "${T:-25}" "$here/m1tb" "$1" 2>/dev/null || timeout "${T:-25}" ssh -o ConnectTimeout=6 m1ts "$1" 2>/dev/null; }
 m1in() { timeout 90 "$here/m1tb" "$1" 2>/dev/null; }

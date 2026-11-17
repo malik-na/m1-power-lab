@@ -1,0 +1,22 @@
+#!/bin/bash
+# One user of the M1 at a time. On 2026-11-17 an observation agent moved the M1 to the
+# hypervisor while the orchestrator had just booted a test kernel on it; the run was lost.
+#   tools/tb/m1-claim take <who> <for what>    claim the M1 (fails if someone else holds it)
+#   tools/tb/m1-claim release <who>            give it back
+#   tools/tb/m1-claim check                    exit 0 if free or held by $M1_CLAIM, else 1 and say who
+#   tools/tb/m1-claim show
+# The tools that reboot the M1 (m1-bootonce, m1-hvboot, m1-commit-walk, the hypervisor's
+# preflight) run "check": they refuse while another user's claim stands. Set M1_CLAIM=<who>
+# in the environment of the one who holds it.
+f="$(cd "$(dirname "$0")/../.." && pwd)/var/m1-claim"
+case "${1:-show}" in
+take)	who=${2:?who}; what=${3:-}
+	if [ -s "$f" ] && [ "$(cut -f1 "$f")" != "$who" ]; then echo "m1-claim: the M1 is held by: $(tr '\t' ' ' < "$f")"; exit 1; fi
+	printf '%s\t%s\t%s\n' "$who" "$(date '+%F %T')" "$what" > "$f"; echo "m1-claim: $who holds the M1";;
+release) who=${2:?who}
+	if [ -s "$f" ] && [ "$(cut -f1 "$f")" != "$who" ]; then echo "m1-claim: held by $(cut -f1 "$f"), not $who"; exit 1; fi
+	: > "$f"; echo "m1-claim: free";;
+check)	if [ -s "$f" ] && [ "$(cut -f1 "$f")" != "${M1_CLAIM:-}" ]; then echo "m1-claim: the M1 is held by: $(tr '\t' ' ' < "$f") (you are '${M1_CLAIM:-nobody}')"; exit 1; fi;;
+show)	[ -s "$f" ] && tr '\t' ' ' < "$f" || echo free;;
+*)	echo "usage: m1-claim take|release|check|show"; exit 2;;
+esac

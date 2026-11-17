@@ -10,6 +10,7 @@
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 pkg=${1:?kernel.tar.zst}; tag=${2:?tag}; extra=${3:?cmdline file}
+"$here/m1-claim" check
 krel=$(zstd -dc "$pkg" | tar -t | sed -n 's|^usr/lib/modules/\([^/]*\)/vmlinuz$|\1|p' | head -1)
 [ -n "$krel" ] || { echo "no usr/lib/modules/<krel>/vmlinuz in $pkg"; exit 1; }
 words=$(tr '\n' ' ' < "$extra")

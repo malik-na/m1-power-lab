@@ -14,6 +14,7 @@ hv_run_guests() { ps -eo pid=,args= | awk '{for (i = 2; i <= 5; i++) if ($i ~ /\
 # Refuse to start a run while anything holds the Mac's ports or an earlier run_guest.py lives.
 hv_preflight() {
 	local bad=0 t h
+	"$(dirname "${BASH_SOURCE[0]}")/../../tb/m1-claim" check || bad=1
 	for t in ${HV_TTYS:-$(hv_ttys)}; do
 		# fuser exits 1 when nothing holds the file: under a caller's "set -e -o pipefail" that
 		# ended the caller silently (m1-hvboot, 2026-11-17).
