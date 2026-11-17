@@ -114,6 +114,8 @@ K_ACC, K_DETACH, K_CORE_DOWN, K_LAST_DOWN, K_WAKE, K_WAKE_REG, K_SNAP, K_SECONDA
 K_HOST, K_UNHANDLED, K_UNHANDLED2, K_UNHANDLED_HOOK, K_PMGR, K_CPUSTART = range(8, 14)
 K_SYSREG, K_AMCC, K_CONST, K_BRK, K_IRQ, K_PANIC, K_UPMC_FIQ, K_RESUME, K_CPU_UNKNOWN = range(14, 23)
 K_CSNAP, K_COMMIT_WRITE = 23, 24
+# round 6 (m1n1-next 2ced1fab): a core's own state at its sleep write; the last core's sampler
+K_CORE_STATE, K_SAMPLE, K_SAMPLE_END = 25, 26, 27
 # how a system register access was handled: by the host's rules run on the M1 (pass, shadow,
 # skip), or by the hypervisor's C side itself (c: fast path, c-locked: under its lock, s2r: the
 # write that takes the core down for a real sleep, logged before it acts)
@@ -232,6 +234,17 @@ def records(entries, t0, frq, snap_names=None):
         elif k == K_COMMIT_WRITE:
             yield {"ev": "commit-write", "addr": h(e["addr"]), "data": h(e["data"]),
                    "cpu": e["cpu"], "t": t}
+        elif k == K_CORE_STATE:
+            a = e["addr"]
+            what = sysreg_name(a) if a < (1 << 22) else ("pseudo-%#x" % (a & 0xff) if a >> 20 == 0xfff else h(a))
+            yield {"ev": "core-state", "cpu": e["cpu"], "reg": what, "data": h(e["data"]),
+                   "error": e["w"], "t": t}
+        elif k == K_SAMPLE:
+            yield {"ev": "sample", "addr": h(e["addr"]), "data": h(e["data"]), "error": e["w"],
+                   "cpu": e["cpu"], "t": t}
+        elif k == K_SAMPLE_END:
+            yield {"ev": "sample-end", "reason": {1: "bound", 2: "wd2-near-bite"}.get(e["addr"], e["addr"]),
+                   "samples": e["data"], "cpu": e["cpu"], "t": t}
         elif k == K_CPU_UNKNOWN:
             yield {"ev": "cpu-not-found", "reg": h(e["addr"]), "cpu": e["cpu"], "t": t}
         else:

@@ -5,6 +5,7 @@
 # without the owner; 0 = left as macOS set it).
 # WD1=<s>: the hypervisor arms watchdog 1 at the commit to bite that many seconds later (calibration
 # build of ~/m1n1-next only; 0 = off).
+# S2R_ARGS='core_state=1, ...': more keyword arguments for real_s2r_on() (round 6 options).
 S=$(cd "$(dirname "$0")" && pwd); T=${1:?tag}; WAKE=${WAKE:-resume}
 R=/home/naeem/Projects/m1-power-lab/tools/hv-trace-kit/runs/20261116-mac135; O=$R/run-$T.out; HVIN=$S/hvin
 until [ -f $O ] && grep -q Jumping $O; do sleep 1; done
@@ -17,7 +18,7 @@ if [ "${REAL_S2R:-1}" = 0 ]; then
 	printf 'p.write32(0x23d2b0000 + 0x1c, 0); print("WDT off", hex(p.read32(0x23d2b0000 + 0x1c)))\n' > $HVIN
 	timeout 60 bash -c "until tail -n 40 $O | grep -q 'WDT off'; do sleep 0.5; done" && echo "watchdog off $(date +%T)" || echo "watchdog write did not confirm"
 else
-printf 'p.write32(0x23d2b0000 + 0x1c, 0); print("WDT off", hex(p.read32(0x23d2b0000 + 0x1c)))\nreal_s2r_on(wake="%s", alarm=%d, wd1=%d)\n' "$WAKE" "${ALARM:-0}" "${WD1:-0}" > $HVIN
+printf 'p.write32(0x23d2b0000 + 0x1c, 0); print("WDT off", hex(p.read32(0x23d2b0000 + 0x1c)))\nreal_s2r_on(wake="%s", alarm=%d, wd1=%d%s)\n' "$WAKE" "${ALARM:-0}" "${WD1:-0}" "${S2R_ARGS:+, $S2R_ARGS}" > $HVIN
 timeout 60 bash -c "until tail -n 40 $O | grep -q 'wake handler registered'; do sleep 0.5; done" && echo "real S2R armed $(date +%T)" || echo "real_s2r_on did not confirm"
 fi
 # cont() over the FIFO does not resume (2026-11-16, Python 3.14); end the shell's input instead:

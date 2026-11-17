@@ -1063,3 +1063,265 @@ at its commit (the watchdog does not keep that chip up, and its count does not r
 With ds17 on battery (22:36) that is four of four: after Linux's commit the SoC stays powered
 until the watchdog resets it, with and without the M3's cable and charger; under macOS the same
 armed watchdog does not stop the power-down (det11).
+
+## Hypervisor round 6: macOS's last steps, each core's own state, and after the commit (det12-det17, 2026-11-17 23:52 to 2026-11-18 01:00)
+
+Readings only. Where a reading was not taken, the text says "unknown". Times are the M3's clock
+unless "s from the detach" is given; T is the last core's sleep-path record.
+
+### The change and the runs
+
+- **Hypervisor:** `~/m1n1-next` branch `m1power/hv-detached`, two local commits on top of
+  `bb8873c0`, not pushed:
+  - `2ced1fab`: three options, each 0 (off) by default.
+    - `hv_s2r_core_state`: each core records its own state at its sleep `CYC_OVRD_EL1` write,
+      before the hypervisor stops a timer or clears a pending bit. Records go into the detached
+      log as kind 25 (`core-state`). The last core also writes two per-core bitmaps into power-chip
+      scratch `0x9f0b` and `0x9f0c`, over the alarm byte.
+    - `hv_s2r_keep_state`: the guest's timers (`CNTP_CTL_EL02`, `CNTV_CTL_EL02`), the guest timer
+      FIQ enable and the pending virtual IRQ/FIQ bits are left as macOS left them. Only the
+      hypervisor's own EL2 timers are stopped.
+    - `hv_s2r_sample_ms` / `_max_ms` / `_pmu_every`: the last core samples the brief's words after
+      its whole commit, then goes down (kind 26 `sample`).
+  - `2cb8a180`: `hv_s2r_sample_hold`, 0 by default. The sampler never goes down. It keeps a summary
+    in power-chip scratch `0x9f04`-`0x9f0c`, because a reset keeps that scratch and loses the RAM
+    log. At its bound it resets through watchdog 1.
+- **Host side:** `harness/real_s2r.py` `real_s2r_on(core_state=, keep_state=, sample_ms=,
+  sample_max_ms=, sample_pmu_every=, sample_hold=)`. `harness/drive135.sh` takes `S2R_ARGS`.
+  `harness/detached_fmt.py` names kinds 25-27.
+- **Commit list:** `var/recfg/commit-snap-list-r6.json` (880 entries) is det10's list plus 17
+  words:
+  - the AP wake-source masks `0x23d004008`-`0x23d004018`;
+  - `0x23d2b8028`, `0x23d2b8040`;
+  - watchdog 0's count; watchdog 1's count, bite and control; watchdog 2's count, bite and
+    control;
+  - `0x23d2c4000`, `0x23b71c360`, `0x23d0d9378`.
+
+  The always-on clock words `0x23d240024`, `03c` and `048` were already in the list. The same list
+  was read awake ("awake-extra") before det12's detach.
+- **Recipe:** det11's recipe for every run:
+  - `WD1=150 ALARM=90 FULL_SKIP=<det8's four pages> S2R_ARGS='...' harness/macos-up.sh detNN`;
+  - `harness/detach135.sh detNN` with `commit_snap=<r6 list>`;
+  - `harness/detached-wake-readout.sh detNN`;
+  - afterwards `harness/hv-reboot.sh` (det12) or nothing (the runs that reset), then
+    `tools/tb/m1-pmu-dump`.
+
+  The M1 was claimed as `observation` throughout.
+- **The no-hands way out, named before each run:**
+  - the hypervisor's alarm at commit + 90 s;
+  - watchdog 1 at commit + 150 s (the four writes of R61);
+  - for the hold sampler, its own bound of 20 s, then watchdog 1 set to bite at once.
+
+  Every run ended without hands.
+- **Files (private):**
+  - `tools/hv-trace-kit/runs/20261116-mac135/*-det1[2-7].*`;
+  - `var/commit-state/r6_core_state.py` with its output `r6-det12.txt`;
+  - `var/commit-state/r6_snapdiff.py` with `macos135-det12-vs-det11.txt`;
+  - `var/m1-state/pmu-20261118-*-after-det1[2-7].txt`;
+  - camera frames `var/m1-look/20261118-*`.
+
+| Run | Options (besides `core_state=1`, WD1 150, alarm 90) | T (from the RTC alarm, or the log) | Outcome |
+|---|---|---|---|
+| det12 | none | 431.639 s after the detach (log), about 00:04:10 | **asleep 89.47 s, woke at the alarm** (wake status `0 / 0x400000 / 0`), log read out |
+| det13 | `keep_state=1` | about 00:18:44 | **no wake; reset about 5-6 s after the commit**: USB gone 00:18:50.2, Linux kernel start 00:19:02 |
+| det14 | `sample_ms=10, sample_max_ms=3000, sample_pmu_every=10` | about 00:31:27 | sampler ran 2.9-3.0 s, then core 0 went down; **no wake; reset**: USB gone 00:31:34.3, kernel 00:31:47 |
+| det15 | as det16 | - | not run: macOS panicked while booting under the hypervisor, before the arm (`i2c0::_runInterruptMode RxFIFO doesn't have enough bytes ... hpmBusManager`, `vuart-det15.log`); the M1 restarted into Linux at 00:34:20 |
+| det16 | `sample_ms=10, sample_max_ms=20000, sample_pmu_every=10, sample_hold=1` | about 00:47:14 | sampler ran 4.9 s with no change; **reset**: USB gone 00:47:20.4, kernel 00:47:33 |
+| det17 | `keep_state=1` (det13 repeated) | about 00:59:31 | **no wake; reset about 6 s after the commit**: USB gone 00:59:37.0, kernel 00:59:49 |
+
+How T was found for the runs that reset (their RAM log was lost):
+- At the commit the hypervisor set the alarm to the power chip's clock + 90 s. The dump after
+  the reset reads both the alarm `0xd008` and the clock `0xd004`, so T = dump time + (alarm −
+  clock) − 90 s. The error is about ±2 s: whole seconds, plus the dump's own time stamp.
+- In det13, det14 and det17, `0x9f04` still held the hypervisor's `'W'` wake note, unconsumed.
+  The wake trampoline consumes that note, so the next start was a normal boot, not a wake. In
+  det16 the hold sampler had replaced the note with its own `'E'` record.
+- Power chip after each reset: `0x0201` = `00`, `0x9f03` = `50`, `0xd000` = `41`, fault shadow
+  `0xa47b`-`d` = `00 08 00`.
+- After det11 and det12 (alarm wakes): `0x9f03` = `00`, `0xd000` = `01`, the same fault shadow.
+
+### 1. Each core's own state at its final `CYC_OVRD_EL1` write (det12; `r6-det12.txt`)
+
+**How the readings were taken.**
+- Each core read these at the start of the hypervisor's `CYC_OVRD` handler, before any write of
+  the hypervisor's. Timer and `HCR_EL2` values are what the hypervisor had last set, or what the
+  guest had left.
+- At EL2 (E2H), `CNTP_CTL_EL0` / `CNTV_CTL_EL0` are the hypervisor's own EL2 timers.
+- `ISR_EL1` read at EL2 gives the physical I/F/A lines.
+- `IPI_SR_EL1` and `PMCR0_EL1` are given twice: the hardware register, and the guest's view that
+  the hypervisor keeps (it emulates both).
+- These reads made the cores' way down longer: the first `CYC_OVRD` write came at 431.639064 s,
+  the last core-down at 431.639360 s, about 0.3 ms. In J it was 31 µs. The outcome was unchanged
+  (89.47 s asleep, alarm wake).
+
+Order of the `CYC_OVRD` writes: cores 4, 5, 1, 3, 7, 6, 2, then core 0 about 30 µs later. Every
+core wrote `0x3000001`, from guest PC `0xfffffe0014a05f1c`.
+
+Equal on all eight cores:
+
+| Register | Value |
+|---|---|
+| `CNTP_CTL_EL02` (guest physical timer) | `0x6`: disabled, masked, status set; `CNTP_CVAL_EL02` 0 |
+| `CNTKCTL_EL12` | `0x4f` |
+| `CNTVOFF_EL2` / `CNTHCTL_EL2` | `0x1286d8f3` / `0xc00` |
+| `ISR_EL1` at EL2 | 0 |
+| `IPI_SR_EL1` hardware | 0; guest view (hypervisor's "IPI pending") 0; "IPI queued" 0 |
+| `IPI_CR_EL1` | `0x600` |
+| `PMCR0_EL1` hardware and guest view | `0x7003400`; PMC pending 0; `PMSR_EL1` 0; `UPMCR0_EL1` 0; `UPMSR_EL1` 0 |
+| `ACC_OVRD_EL1` | `0x1800101526076207` |
+| `CYC_OVRD_EL1` before the write | `0x2000000` |
+| SPRR timer pending (hypervisor) | 0 |
+| hypervisor's EL2 timers | physical `CTL` 1 (enabled), compare 0.4-0.7 ms ahead; virtual `CTL` 7 (enabled, masked, status set) |
+| guest `PSTATE` (`SPSR_EL2`) | D, A, I, F all masked, EL1t; `SSBS` set on cores 1, 3, 2, 0 |
+
+Differing between cores:
+
+| Core (order down) | 4 | 5 | 1 | 3 | 7 | 6 | 2 | 0 |
+|---|---|---|---|---|---|---|---|---|
+| `CNTV_CTL_EL02` (guest virtual timer) | `0x1` | `0x1` | `0x5` | `0x1` | `0x1` | `0x1` | `0x5` | `0x5` |
+| its compare minus the guest's counter then | +89.387 s | +89.387 s | −0.034 s | +0.877 s | +89.387 s | +89.387 s | −0.083 s | −0.083 s |
+| `VM_TMR_FIQ_ENA_EL2` | 3 | 3 | 2 | 3 | 3 | 3 | 2 | 2 |
+| `HCR_EL2` | `..0029` | `..0029` | `..0069` | `..0029` | `..0029` | `..0029` | `..0069` | `..0069` |
+
+How to read the per-core rows:
+- `0x1` = enabled, unmasked, not fired; `0x5` = enabled, unmasked, fired.
+- The guest's counter is `CNTPCT_EL0` − `CNTVOFF_EL2`.
+- `HCR_EL2` is `0x80032480200029` or `...69`. Bit 6 is the virtual FIQ pending bit (VF).
+- So the guest's virtual timer was **enabled and unmasked on all eight cores**. It had already
+  fired on cores 1, 2 and 0. On those three cores the hypervisor held a virtual FIQ pending
+  (VF) and had masked that timer's FIQ (`VM_TMR_FIQ_ENA` bit 0 clear). No core had a virtual IRQ
+  pending.
+- On the other five the timer was due 0.88 s later (core 3) or 89.39 s later (cores 4, 5, 7, 6).
+
+These are the values that R59's writes turn off in every power-down.
+
+**The interrupt controller as each core read it** (`0x23b100000` +). Every core read the same
+values:
+- `+0x2024` (IPI mask, read through the SET register) `0x80000001`;
+- all 28 `+0x4180` words (IRQ mask, read through the CLR register, which macOS reads)
+  `0xffffffff`;
+- all 28 `+0x4000` software-pending words 0;
+- the 11 `+0x5004` words 0, and the 11 `+0x5028` words `0x80000001`;
+- line state `+0x4200` (HW_IRQ_MON) non-zero in 13 words: `+0x4214` `0x8000000`, `4218` `0x1020`,
+  `421c` `0xa0155000`, `4220` `0xa0000000`, `4230` `0x1550000`, `4234` `0x2800`, `4238`
+  `0x140000`, `423c` `0x80000000`, `4240` `0x2`, `4244` `0x80000a00`, `4248` `0x2282`, `4250`
+  `0x5`; the rest 0.
+
+The register names and the SET/CLR read convention are taken from the Asahi Linux
+documentation, https://asahilinux.org/docs/hw/soc/aic/ (documentation, not an observation). That
+page also says reading `+0x2004` acknowledges, so it was not read. That every IRQ is masked
+follows from that convention; it was not tested here.
+
+Each core's last logged writes before T (det12 log): `PMCR0_EL1` `0x7003400` and `IPI_SR_EL1` 1
+on cores 0, 1, 2, 3, 5, 6, 7, at T-0.092 to T-0.091 s. Core 4's are not in the logged window.
+
+**Leaving them as macOS left them (det13 and det17, `keep_state=1`).** The hypervisor still
+stopped its own two EL2 timers, and did everything else of A6 as in det12. **Both runs: no
+alarm wake; the M1 restarted into a normal boot about 5-6 s after the commit** (T from the
+alarm register; the reset from the USB loss and the kernel start time).
+- The commit itself got through the held words, the wake note and the alarm. Scratch `0x9f0a`
+  read `'P'`, and the bitmaps written after the alarm are present. Whether the last core's
+  `CYC_OVRD` write followed is not read.
+- Bitmaps (written at the commit, read after the reset):
+
+  | Bitmap | det13 | det17 |
+  |---|---|---|
+  | `0x9f0c` (guest timer enabled and unmasked) | `0xff`, all eight cores | `0xff` |
+  | `0x9f0b` (virtual IRQ/FIQ or a hypervisor-held IPI/PMC interrupt pending) | `0x03`, cores 0 and 1 | `0x09`, cores 0 and 3 |
+
+- Whether the SoC powered down before the reset: unknown. What reset it: unknown.
+
+### 2. After the commit: seven cores down, core 0 sampling
+
+**At the commit, before the instrument's writes** (det12 snapshot, read about 1 ms after T),
+against the same list read awake about 7 min earlier:
+
+| Word | Awake | At the commit | At the wake entry (det12) |
+|---|---|---|---|
+| `0x23d2b8028` | `0x0` | `0x1000000` | `0x8000000` |
+| `0x23d2b8040` | `0x20` | `0x20` | `0x22` |
+| watchdog 2 count / bite / control | `0x4ee0c17e` / `0x80befc00` / 0 | `0x62189` (16.7 ms) / `0x7270e00` (5 s) / **4** | `0x770474` (0.326 s) / `0x7270e00` / 0 |
+| watchdog 0 / 1 count | running | 0.455 s / 0.455 s; watchdog 1 bite `0x55d4a800`, control 0 | 14.1 ms / 14.1 ms (watchdog 1 control 4, bite 150 s, the instrument's) |
+| `0x23d2c4000` | 1 | **0** | not read |
+| `0x23b71c090` | `0x8004030c` | `0x8004030c` | not read |
+| `0x23b71c360` | `0xc004030b` | `0xc004030b` | not read |
+| `0x23d0d9378` | 0 | 0 | not read |
+
+So at the commit watchdog 2 had been armed, about 16.7 ms earlier, with a 5 s bite and control 4.
+No write of macOS's to the watchdog page is in the log after T-0.035 s (the counts at T-0.466 s,
+`0x23d2b8008`, `800c` and `000c` at T-0.035 s; R15). Who armed it is not read.
+
+**det16, sampling with seven cores down** (`sample_hold=1`). This is the scratch summary read
+after the reset:
+- `'E'`; 4.9 s sampled (`0x31` tenths);
+- last `0x23d2b8040` low byte `0x20`; last `0x23d2b8028 >> 24` = `0x01`; last power chip `0x0201`
+  `00`;
+- flags `0x19`:
+  - watchdog 2 control bit 2 set;
+  - watchdog 2 counting;
+  - `0x23b71c360` bit 30 set;
+  - `0x23d2c4000` bit 0 clear;
+  - `0x23b71c090` bit 30 clear;
+  - no read failed, the 0x0201 reads included;
+- first change / last change / changes: **0 / 0 / 0**.
+
+So for the 4.9 s that core 0 kept sampling, none of these changed:
+- the progress words, `0x23d2c4000` and the two power gates (read every 10 ms);
+- power-chip `0x0201` (read every 100 ms).
+
+Watchdog 2 counted with control bit 2 set. The scratch stopped at 4.9-5.0 s, the bound (20 s) was
+not reached, and the M1 started a normal boot. 4.9-5.0 s after sampling began is about when
+watchdog 2's 5 s bite, armed about 16.7 ms before T, falls due. What reset the SoC was not read.
+
+**det14** (the sampler logs to RAM and goes down after a 3 s bound): the RAM log was lost with the
+reset. The scratch read:
+- `'q'` (the sampler stopped and core 0 went on to its `CYC_OVRD` write);
+- last update at 2.9 s;
+- progress low byte `0x20`.
+
+No alarm wake followed. The reset came about 7 s after the commit (±2 s).
+
+**Not read in any run:** the progress words after 4.9 s with a core up; and anything after the
+last core goes down in a run that then resets.
+
+### 3. Wake-source masks and always-on clock words
+
+| Word | Awake (det12, 23:56:5x) | At the commit (det12) |
+|---|---|---|
+| `0x23d004008` | `0xf3ffafff` | `0xf3ffafff` |
+| `0x23d00400c` | `0xffb97eff` | `0xffb97eff` |
+| `0x23d004010` | `0xfffdeffe` | `0xfffdeffe` |
+| `0x23d004014` | `0xffffffff` | `0xffffffff` |
+| `0x23d004018` | `0x03ffff87` | `0x03ffff87` |
+| `0x23d240024` | `0x81100100` | `0x81100100` |
+| `0x23d24003c` | `0x81100100` | `0x81100100` |
+| `0x23d240048` | `0x82100100` | `0x82100100` |
+
+The commit snapshot against det11 (862 common words): 850 equal, 12 differ, all in groups that
+varied before:
+- `MCC.planeN+0x680/684` (`0xb48`/`0xb74`);
+- `ps_dcs0`, `ps_dcs2`, `ps_dcs6`;
+- power gate `0x23b71c120`.
+
+Wake snapshot: 259 of 264 equal to det11 (five DCS domain words).
+
+### Left out, and why
+
+- **The brief's item 4** (a commit with nothing of the instrument's own except macOS's final writes
+  and watchdog 1): not run. That run leaves macOS's own alarm in place, and its time is not read.
+  Watchdog 1 does not count while the chip is asleep (J, R61). So if such a run powered down
+  properly, nothing named would wake it without hands. Moving the wake note before the entry
+  also changes what macOS reads at `0x9f08` during the entry (the code comment in
+  `hv_s2r_register_wake`).
+- **The sampler's full history after the commit:** each run that sampled ended in a reset that
+  lost the RAM log. Only the scratch summaries above survive.
+- **Which of the two kept items matters in det13/det17:** the guest timers left enabled, or the
+  virtual FIQs left pending. Not separated: one keep-state configuration was run, twice.
+- **AON wake status words, SMC, and the second power chip** at the commit: not added. The brief did
+  not ask for them, and their read side effects are not established.
+
+### M1 left
+
+In stock Omarchy (kernel 7.3.0-0test5-1-ARCH, up since 2026-11-18 00:59:49), reached over
+Thunderbolt. The camera frame `var/m1-look/20261118-010014-state-after-round6.jpg` shows the
+desktop.
