@@ -86,3 +86,20 @@ depends on a step the tests had left out of the driver's scope.
   `sio` got no reply. On this boot `apple-sio` had failed to probe (`error -ETIME: sending SIO
   parameter 0x23`), so `sio` was not running. `begin` logged `sio translator ... (domains not
   on: 0 given), pmp translator +0x200 0x0 (read)`.
+
+## Run ds8 (13:23): through the sleep actions, stopped in the power manager's quiesce
+
+Kernel ds8 (`1897a7ea6`: `sio` and `pmp` taken as found; 145 tests). Devices suspended
+13:23:03.07, port dropped 13:23:16.12 (13.0 s; the entry is longer now). Record
+`44 54 e0 87 74 3b 02 10 b9 00` = 'T' (a wait of the logic timed out), no SError pending,
+address `0x23b7487e0`, 32-bit read, core 0. That is the wait of R22 in the power manager's
+quiesce: the entry had done the domain turn-on, every platform sleep action (including the read
+of the `pmp` block, which did not fault with `pmp` stopped), the memory controller and the error
+handler. The machine reset afterwards (the hardware was quiesced and the entry has no way back).
+
+Read under the stock kernel afterwards: `0x23b748000`, `400`, `800`, `c00` all 0 (macOS: 1);
+status words `0x23b7483e0` = `0x616100`, `7e0` = `0x7f7f00`, `be0` = 0, `fe0` = `0x6c6c00`. In
+all six captures macOS stops each of the four sub-blocks and reads its status until the low
+byte is 0 (`0x494900`, 0, `0x494900`, `0x515100`); the spec had only the first, as a literal
+(now R22a). Also seen in the power chip after this run: byte `0x9f03` reads `0x50` (`0x30`
+before); `0x9f01` reads `0x30`. Not explained.
