@@ -656,7 +656,7 @@ Files (private): `tools/hv-trace-kit/runs/20261116-mac135/*-det10.*`;
 In Omarchy, stock kernel `7.3.0-0test5-1-ARCH`, up since 18:40:18, reached over Thunderbolt;
 the camera frame `var/m1-look/20261117-184049-state-after-det10.jpg` shows the desktop.
 
-## Run ds14 (19:12): the round-6 driver; the entry stops at DISP0_FE, which does not report off
+## Run ds14 (19:12): the round-6 driver; the entry stops at DISP0_CPU0, which does not report off
 
 Kernel ds14 (`097627a21`, package in `var/kernels/ds14/`): the driver logic at `63e2b0f`
 (196/196 from tests `e0161ed`: the power domains brought to macOS's commit state from Linux's
@@ -669,7 +669,8 @@ line ds7's plus `apple_deepsleep.snap=2`.
 - The driver's log: `enter: the entry stopped before the commit: -110, wait on 0x23b710018 did
   not end`. Record in the power chip: `44 54 18 00 71 3b 02 10 02 00` = 'T', a 32-bit read of
   `0x23b710018` by core 0.
-- `0x23b710018` is DISP0_FE. Before the entry it read `0x1404024f`; after the failed entry it
+- `0x23b710018` is DISP0_CPU0 (first written here as DISP0_FE, a misreading of the spec by the
+  orchestrator; corrected by the spec agent, DISP0_FE is `0x23b700360`). Before the entry it read `0x1404024f`; after the failed entry it
   reads `0x14040240`: the request (low four bits) went from `0xf` to 0, the state bits (4-7)
   stayed at 4.
 - The 137 power-domain words at `prepare` and at `wake` of this run
@@ -682,3 +683,12 @@ line ds7's plus `apple_deepsleep.snap=2`.
   once a second. The M1 was rebooted to stock Omarchy (kernel 7.3.0-0test5) afterwards.
 - Also read after this run: power-chip byte `0x9f03` is `0x00` (`0x50` after ds8 to ds12).
   Not explained.
+
+## Linux awake, stock kernel (19:35): the display, graphics, storage and I/O domain words
+
+Read over `/dev/mem` on the M1 in stock Omarchy (kernel 7.3.0-0test5, display on, nothing
+suspended), one 32-bit read each: `0x23b710018` (DISP0_CPU0) = `0x1404024f`; `0x23b700360`
+(DISP0_FE) = `0x20ff`; `0x23b700368` = `0x23ff`; `0x23b700378` = `0x1404024f`; `0x23b7003f8`
+(GFX) = `0x1000230f`; `0x23b7003f0` = `0x1000230f`; `0x23b7003e0` = `0x0f000300`; `0x23b7001d0`
+(SIO_CPU) = `0x1400024f`; `0x23d280060` = `0x1400024f`. So DISP0_CPU0 reads state 4 with the
+display on and Linux awake, not only in the suspend path.
