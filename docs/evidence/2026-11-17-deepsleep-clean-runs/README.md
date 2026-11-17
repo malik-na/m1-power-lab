@@ -655,3 +655,30 @@ Files (private): `tools/hv-trace-kit/runs/20261116-mac135/*-det10.*`;
 
 In Omarchy, stock kernel `7.3.0-0test5-1-ARCH`, up since 18:40:18, reached over Thunderbolt;
 the camera frame `var/m1-look/20261117-184049-state-after-det10.jpg` shows the desktop.
+
+## Run ds14 (19:12): the round-6 driver; the entry stops at DISP0_FE, which does not report off
+
+Kernel ds14 (`097627a21`, package in `var/kernels/ds14/`): the driver logic at `63e2b0f`
+(196/196 from tests `e0161ed`: the power domains brought to macOS's commit state from Linux's
+state, the extra coprocessor reads, the wake putting back what the entry changed). Command
+line ds7's plus `apple_deepsleep.snap=2`.
+
+- `real.sh` started 19:12:07; `echo mem` returned 1 at 19:12:12 with all eight cores online.
+  The machine stayed up on ds14 (no reset, no hang); the log reached the disk
+  (`var/deepsleep/ds14-dmesg.txt`).
+- The driver's log: `enter: the entry stopped before the commit: -110, wait on 0x23b710018 did
+  not end`. Record in the power chip: `44 54 18 00 71 3b 02 10 02 00` = 'T', a 32-bit read of
+  `0x23b710018` by core 0.
+- `0x23b710018` is DISP0_FE. Before the entry it read `0x1404024f`; after the failed entry it
+  reads `0x14040240`: the request (low four bits) went from `0xf` to 0, the state bits (4-7)
+  stayed at 4.
+- The 137 power-domain words at `prepare` and at `wake` of this run
+  (`var/commit-state/linux-ds14-bare-ps-words.json`, private): 41 differ. Among them: the cores'
+  words `0x100` -> `0x1f0`; twelve words `..244` -> `..200`; FPWM1 `0xa00` -> `0x200`;
+  `0x23b7001c0`/`1c8`/`1d0` `0x0f000200` -> `0x1400024f`; nineteen words `0x200` -> `0x2ff`;
+  `0x23b7003e0` `0x0f000300` -> `0x1f0003ff`, `0x23b7003f0` `0x0f002300` -> `0x1f0023ff`;
+  `0x23d280060` `0x1400024f` -> `0x1f0002ff`.
+- After the return Linux logged `thunderbolt 0-1: failed request link state change, aborting`
+  once a second. The M1 was rebooted to stock Omarchy (kernel 7.3.0-0test5) afterwards.
+- Also read after this run: power-chip byte `0x9f03` is `0x00` (`0x50` after ds8 to ds12).
+  Not explained.
