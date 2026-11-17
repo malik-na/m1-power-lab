@@ -15,7 +15,7 @@ mkdir -p $R; cd $R
 trap hv_cleanup EXIT
 hv_start_reader $R $T || exit 1
 hv_start_fifo
-timeout ${GUEST_TIMEOUT:-7200} $PY -u /home/naeem/m1n1/proxyclient/tools/run_guest.py "$@" -m $S/arm_wdt.py -m $S/real_s2r.py -m $K/hv_s2r_trace.py \
+timeout ${GUEST_TIMEOUT:-7200} $PY -u /home/naeem/m1n1/proxyclient/tools/run_guest.py "$@" -m $S/arm_wdt.py -m $S/real_s2r.py -m ${S2R_TRACER:-$K/hv_s2r_trace.py} \
   -l hv-$T.log $K/kc/kernelcache-13.5.macho \
   -- "${BOOTARGS:-debug=0x14e serial=3 apcie=0xfffffffe -enable-kprintf-spam wdt=-1 clpc=0}" > run-$T.out 2>&1 < $S/hvin
 echo "run_guest exit $? $(date +%T)"

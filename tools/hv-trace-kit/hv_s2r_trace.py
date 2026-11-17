@@ -55,6 +55,7 @@ if str(_KIT) not in sys.path:
     sys.path.insert(0, str(_KIT))
 
 import s2r_decode as _D                      # noqa: E402
+import hv_tick as _TICK                      # noqa: E402
 from m1n1.hv import TraceMode               # noqa: E402  (hv/types.py:50-61)
 from m1n1.utils import irange               # noqa: E402  (utils.py:979)
 
@@ -125,6 +126,7 @@ CFG = {
     # controller from the guest's start, and sample DCS0+0x7b0, ps_dcs0 and power gate +0xd8 at
     # every AP->AOP message (needs afk_dump: read from its synchronous hook), logged on change.
     "dcs": _env_int("S2R_DCS", 0),
+    "dcs_tick": _env_int("S2R_DCS_TICK", 250),   # ms between clocked series with S2R_DCS=3; 0 = off
     # group-3 bisection: "0" no hook, "pass" hook installed but transparent, "1" block the
     # AOP's ep0 SET_AP_POWER/SET_IOP_POWER (swapped for a PING, its PONG relabelled as the ack)
     "block_aop": os.environ.get("S2R_BLOCK_AOP", "0"),
@@ -373,7 +375,46 @@ class S2RTrace:
         self.hv.u.write(addr, val, width)
         self._mbox(ev, b, "aop-mbox", "aop", True, val)
 
+    # S2R_DCS=3: as 2, plus every write to the PMGR power-state pages, and after each event a
+    # short series of the eight ps_dcs words (how many of 5 reads show the domain fully on),
+    # at most one series per 30 ms: the time in a Linux boot at which the controllers stop
+    # idling, and the writes around it. A clock (hv_tick.py, S2R_DCS_TICK ms) adds a series
+    # every 250 ms whether or not the guest writes anything, until the last CPU's commit:
+    # without it lx21 had no series for 42 s before the commit.
+    def _tick_start(self):
+        ms = CFG["dcs_tick"]
+        if ms <= 0:
+            return
+        from m1n1.proxy import START, EXC_RET
+        from m1n1.hv.types import HV_EVENT
+        self._tick = _TICK.Tick(
+            self.hv, lambda: self._dcs_idle("tick"), ms / 1000.0, EXC_RET.HANDLED,
+            lambda fn: self.hv.iface.set_handler(START.HV, HV_EVENT.USER_INTERRUPT, fn),
+            on_error=lambda e: self.rec("afk-error", text=f"dcs tick: {e}"))
+        self._tick.start()
+        self.say(1, f"dcs clock: a series every {ms} ms")
+
+    def _tick_stop(self):
+        t = getattr(self, "_tick", None)
+        if t is not None and t.on:
+            t.stop()
+            self.rec("dcs-tick-end", kicks=t.kicks, events=t.events)
+
+    def _dcs_idle(self, trigger):
+        now = time.time()
+        if now - getattr(self, "_idle_t", 0) < 0.03:
+            return
+        self._idle_t = now
+        on = [0] * 8
+        for _ in range(5):
+            for i, o in enumerate((0x300, 0x310, 0x308, 0x318, 0x320, 0x330, 0x328, 0x338)):
+                if (self.hv.p.read32(0x23b700000 + o) >> 4) & 0xf == 0xf:
+                    on[i] += 1
+        self.rec("dcs-idle", on=on, trigger=trigger)
+
     def _dcs_sample(self, trigger=""):
+        if CFG["dcs"] >= 3:
+            self._dcs_idle(trigger)
         v = tuple(self.hv.p.read32(a) for a in (0x2002007b0, 0x2003c07b0, 0x23b700300, 0x23b71c0d8))
         key = (v[0] & 0xf, v[1] & 0xf) if CFG["dcs"] >= 2 else v
         if key != getattr(self, "_dcs_last", None):
@@ -506,11 +547,16 @@ class S2RTrace:
             hooks += [(0x200100000, 0x4000, "mcc-global"), (0x23b7002f8, 0x50, "ps-mcc-dcs"),
                       (0x23b718000, 0x4000, "pmgr-18000"), (0x23b71c000, 0x4000, "pmgr-pwrgate-h"),
                       (0x23b734000, 0x4000, "pmgr-34000")]
+            if CFG["dcs"] >= 3:
+                hooks += [(0x23b700000, 0x4000, "pmgr-ps"), (0x23b70c000, 0x4000, "pmgr-ps-c000"),
+                          (0x23b710000, 0x4000, "pmgr-ps-10000")]
             for start, size, name in hooks:
                 zone = irange(start, size)
                 self.hv.add_tracer(zone, S2R_IDENT_ALWAYS, TraceMode.HOOK, None, self._dcs_w, region=name)
                 self.zone_names.append((S2R_IDENT_ALWAYS, start, size, "HOOK", name))
             self._dcs_last = None
+            if CFG["dcs"] >= 3:
+                self._tick_start()
         elif CFG["dcs"]:
             for i in range(8):
                 self._add(S2R_IDENT_ALWAYS, 0x200200000 + 0x40000 * i, 0x20000, TraceMode.ASYNC,
@@ -933,6 +979,7 @@ class S2RTrace:
                                           f"hw CYC_OVRD_EL1 = {cyc}", cpu=me, cyc_ovrd_hw=cyc)
                 print(f"[s2r] cpu{me} entered its sleep WFI path; {left - 1} guest CPUs left")
                 if left <= 1:
+                    self._tick_stop()
                     self.snap("last-cpu")
             except Exception as e:
                 print(f"[s2r] exit hook error: {e}")

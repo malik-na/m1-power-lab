@@ -15,7 +15,9 @@ hv_run_guests() { ps -eo pid=,args= | awk '{for (i = 2; i <= 5; i++) if ($i ~ /\
 hv_preflight() {
 	local bad=0 t h
 	for t in ${HV_TTYS:-$(hv_ttys)}; do
-		h=$(fuser "$t" 2>/dev/null | tr -s ' ' | sed 's/^ //')
+		# fuser exits 1 when nothing holds the file: under a caller's "set -e -o pipefail" that
+		# ended the caller silently (m1-hvboot, 2026-11-17).
+		h=$({ fuser "$t" 2>/dev/null || true; } | tr -s ' ' | sed 's/^ //')
 		if [ -n "$h" ]; then
 			echo "preflight: $t is held by pid(s) $h:"
 			ps -o pid=,lstart=,args= -p "${h// /,}" | cut -c1-140 | sed 's/^/preflight:   /'
