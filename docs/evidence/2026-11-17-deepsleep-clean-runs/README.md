@@ -692,3 +692,28 @@ suspended), one 32-bit read each: `0x23b710018` (DISP0_CPU0) = `0x1404024f`; `0x
 (GFX) = `0x1000230f`; `0x23b7003f0` = `0x1000230f`; `0x23b7003e0` = `0x0f000300`; `0x23b7001d0`
 (SIO_CPU) = `0x1400024f`; `0x23d280060` = `0x1400024f`. So DISP0_CPU0 reads state 4 with the
 display on and Linux awake, not only in the suspend path.
+
+## Run ds15 (19:35): Linux on bare metal, the coprocessors' state words just before the entry
+
+Kernel ds15 (`8c3a99266`: the logic as ds14, the glue's `snap=4` reading extended), command line
+ds13's (`snap=4`). In the suspend path, cores 1-7 parked, before the driver's first access: the
+792 snapshot words, then for six coprocessors the words +`0x44`, +`0x48`, +`0x8110`, +`0x8114`,
+each coprocessor's reads skipped if one of its power-domain words reports state 0, and those
+domain words read before and after. The driver is not called.
+
+- `real.sh` started 19:35:06; `echo mem` returned 1 at 19:35:09, eight cores online, machine up,
+  log on disk (`var/deepsleep/ds15-snap4-dmesg.txt`). 792 of 792 words read; no SError recorded.
+
+| Coprocessor | +0x44 | +0x48 | +0x8110 | +0x8114 | Its domain words (same before and after the reads) |
+|---|---|---|---|---|---|
+| `dcp` | `0x10` | `0x2d` | `0x2ff01` | `0x2aa01` | RMX `0x1f0000ff`, DISP0_FE `0x20ff`, DISP0_CPU0 `0x1404024f` |
+| `dcpext` | `0x10` | `0x2d` | `0x27701` | `0x2ee01` | RMX `0x1f0000ff`, DISPEXT_FE `0x23ff`, DISPEXT_CPU0 `0x1404024f` |
+| `gfx-asc` | skipped | | | | GFX `0x0f002b00` |
+| `ans` | skipped | | | | ANS2 `0x0f002300`, APCIE `0xff`, APCIE_ST `0x0f000200` |
+| `sio` | skipped | | | | SIO_BUSIF, SIO, SIO_CPU all `0x0f000200` |
+| `pmp` | skipped | | | | PMP `0x1f0000ff`, PMS_SRAM `0x0f000300` |
+
+So at the point where the driver's entry begins under Linux, `dcp` and `dcpext` read +`0x44` =
+`0x10` with their processor domains at state 4 and their blocks answering; the domains of
+`gfx-asc`, `ans` and `sio` report state 0; `pmp`'s were not read because PMS_SRAM reports
+state 0 (PMP itself reports on).
