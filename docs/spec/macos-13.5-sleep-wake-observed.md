@@ -2,7 +2,9 @@
 
 Status: observation record, written 2026-11-17 from two captures (A, B) and brought up to date
 the same day with a third (D, section 1.4), which has the last accesses before power-down, and
-with two more taken with the cable out (E, F, sections 1.5, 1.6, 10, 11). It states what macOS did, not
+with two more taken with the cable out (E, F, sections 1.5, 1.6, 10, 11), and with one that
+adds a register snapshot at the commit and each core's system registers on the way down (G,
+sections 1.7, 3 E7, 4). It states what macOS did, not
 why, and not what is needed for sleep to work. Nothing here comes from any Linux sleep driver.
 
 ## 0. Terms used in this document
@@ -48,6 +50,10 @@ why, and not what is needed for sleep to work. Nothing here comes from any Linux
   other computer physically out during the sleep entry, the sleep and the wake. E slept 415.5 s;
   F slept 1.6 s. "D/E/F" gives three values in that order; "the detached captures" means D, E
   and F. Five values are given as A/B/D/E/F.
+- **Capture G** = run `det8`: detached like D (cable in), but nobody clicked Sleep: macOS went
+  to sleep by itself after idling; woken after 90 s by the alarm the hypervisor set. It adds a
+  snapshot of 792 registers at the commit and the system-register accesses of every core before
+  the sleep. "The detached captures" now means D, E, F and G.
 - **T** = the time of the last recorded access before the sleep; **W** = the time of the first
   recorded access after the wake. In A and B the log stops early (artefact A11), so their T is
   some milliseconds before the real power-down; in D, T is the real last access. `T-2.6` means 2.6 s before T, `W+0.09` means 0.09 s after W.
@@ -258,6 +264,47 @@ of macOS after that wake, including the cable going back in.
 **Limits.** As E. The cause of the early wake is not identifiable from the log (section 11.2).
 The log shows one committed sleep only and no sleep entry after the wake (section 11.3).
 
+### 1.7 Capture G (`det8`): an idle sleep, with a snapshot at the commit and the cores' registers
+
+2026-11-17 08:31-08:44. No host, cable in, nobody at the machine. Hypervisor build v2.0.0-138;
+same boot arguments, removed devices and untrapped pages as D. Files `detached-det8.jsonl`,
+`touch-det8.jsonl`, `run-det8.out`, `vuart-det8.log`; `build_db_det.py det8 g` -> `db/capg.db`.
+
+| | Capture G |
+|---|---|
+| Lines in the file / entries reported | 1,220,324 / 1,221,379 (difference 1,055 = the two snapshots stored word by word) |
+| Access records | 1,219,548 |
+| Idle after detaching, to the first sign of the entry | 430.5 s |
+| Last device access before the sleep (T) | 438.067188 s |
+| Last core enters its sleep path | 438.067204 s |
+| "commit" snapshot, 792 words | 438.067205 s to 438.068119 s (0.914 ms) |
+| Hypervisor's own writes of the guarded words (7 "commit-write" records) | 438.068242 s to 438.068251 s |
+| Wake record; asleep | 528.393519 s; 90.326 s |
+| First access after the wake (W) | 528.394064 s |
+| Read-out | 549.231 s (20.84 s of macOS after the wake) |
+| Kernel text slide (A minus) | `0x13b0000` |
+
+**What it adds.**
+1. **A register snapshot at the commit** (section 4): 792 words read on core 0 between its own
+   sleep-path entry and the first of the hypervisor's own commit actions. The values are the
+   hardware's, also for the guarded words (`commit_snap.py`, `commit-snapshot-g.tsv`).
+2. **System-register accesses before the wake**: 315 records from the first core's stop-bit
+   write to the last core's sleep-path entry, each with its time, the core, the value and how
+   the hypervisor dealt with it (section 3, E7; `det_down.py`, `det-down-g.tsv`).
+3. **The hypervisor's own power-word writes at the commit**, as records (A3, A6 made visible).
+4. **An idle sleep**: an entry macOS started by itself (section 3, "idle sleep").
+5. **A second alarm wake** (A's was the first), section 6 W4.
+**Limits.** As D. In addition: the snapshot list is the 792-word list of the earlier snapshots
+(memory controller 80, DRAM controllers 448, clock generator 96, power-domain words 74, other
+power-manager words 32, always-on block 46 + 16); **only 16 of its words are among the roughly
+630 the entry writes**, so most last-written values of section 4 are still unconfirmed by a
+read-back. The log's snapshot record has one start and one end time, not a time per word.
+Not trapped and so in no log (the builder's list): the standard EL1 registers (SCTLR, TTBR,
+TCR, VBAR, CPACR, DAIF), the timers, SPRR/GXF, pointer-authentication keys, cache and TLB
+maintenance, the final wait instruction; the hypervisor zeroes the guest timer controls on
+each core before the snapshot `[ARTEFACT]`. The alarm that woke it is the hypervisor's (A6).
+Only 20.8 s after the wake were recorded.
+
 ## 2. Idle
 
 Windows used (`idle.py`, `idle_seq.py`; tables `idle-<A=3|B=4>-<pre|post>.tsv`): before the
@@ -327,6 +374,10 @@ are the same. In both, cores 4-7 make no logged access during idle, as in D. Wit
 out (E from 40 s, F from 188 s) the idle patterns I2-I7 continue unchanged; what the cable
 events themselves cause is in section 10.
 
+**Capture G** (430 s of idle; `DET=g IDLE=20,400 det_misc.py`): I2 136.0 a second; I5 the same
+five writes 2.09 times a second (median gap 0.552 s); cores 4-7 silent as in D, E, F; core 0
+makes 115,377 of the 115,402 reads of `0x23b102004`. macOS then goes to sleep by itself.
+
 ## 3. Sleep entry
 
 Phases are named E0-E6. Times are A / B relative to T. "Console" means the line appears in
@@ -356,6 +407,31 @@ on, cable in or out. E1 starts 0.09 s before the display request ("awdl0 disable
 E1 lasts 6.8 / 6.9 / 6.6 / 6.6 / 6.6 s: it is waiting, not register work. Everything after
 it is 3 to 6 times shorter in D. In D the operator's first input (E0) is at T-10.134, the last
 memory-controller burst at T-7.439, the display domains go off at T-7.255.
+
+**Capture G's times** (same markers, seconds before T): display request -7.478; "PM response"
+-0.865; "IOCPUSleepKernel enter" -0.474; PMP sleep action -0.427; first address-translator
+action -0.127; first quiesce action -0.091; memory-controller quiesce -0.030; power-manager
+quiesce -0.022; interrupt-controller quiesce -0.016: within 10 ms of D, E, F throughout.
+
+**Idle sleep (G) against clicked sleep (A, B, D, E, F).** What differs:
+- there is no E0: no trackpad traffic (283 writes to the SPI3 block in the last 30 s against
+  11,179 in D);
+- the first sign is the audio path, 60 ms before the display request: console "Set PowerStage
+  (4 -> 6)", "(6 -> 7)", "(7 -> 1)" for both audio devices at T-7.554 to T-7.514, with the 621
+  writes to `i2c3` that the clicked captures make in E2 (T-0.7 in D); in E2 only "(1 -> 0)"
+  remains (T-0.697). In the clicked captures the stages go 4 -> 5 -> 0, all in E2;
+- the display request (T-7.478) comes before "awdl0 disable" (T-7.470); in the clicked captures
+  the other way round;
+- the last memory-controller burst is at T-7.504, 26 ms **before** the display request (after
+  it by up to 30 ms in the others).
+What does not differ: E1 lasts the same 6.6 s ("PM response took 1585 ms"); the 33 non-bus
+domain writes and their values (display pairs turned on again in A's order); the `smc` keys
+(`MBSE`=`0x736c7077` T-0.846, `WKTP`=2 T-0.758, `MBSE`=`0x736c7061` T-0.464); the coprocessor
+shutdown exchanges; E3 (36 of 42 actions with ordered writes identical to A's, 38 to D's); the
+33 quiesce actions before the interrupt controller (ordered writes identical to all other
+captures); the last steps E6 (identical to D access for access in the interrupt-controller
+action; power-chip actions in F's order; alarm bytes `85 c1 08 00`, about 975 s after T by the
+inference of E6); the core stop order. `reqcheck.py`: all 71 values hold in G.
 
 ### E0. Operator input (T-16.6 / T-18.1 to about T-10.5): not part of the sleep
 
@@ -649,6 +725,69 @@ Capture D has the same console text and every access behind it (`phases-pre-d.ts
   T+0.000006 to T+0.000008, core 0 at T+0.000018; F: T-0.000017 to T-0.000007, core 0 at
   T+0.000015).
 
+### E7. Each core's way down: system registers (capture G; `det_down.py`, `det-down-g.tsv`)
+
+Register names are the hypervisor's (its register tables); an encoding is given where it has
+no name. 315 records, 182 reads and 133 writes, on ten registers: `PMC0_EL1`, `PMC1_EL1`
+(77 each), `PMCR0_EL1` (37), `s3_5_c15_c10_1` (26), `PMCR1_EL1` (24), `IPI_SR_EL1` (24),
+`ACC_OVRD_EL1` (16), `CYC_OVRD_EL1` (16), `IPI_RR_LOCAL_EL1` (9), `IPI_RR_GLOBAL_EL1` (9).
+Only registers the hypervisor traps appear (limits in 1.7). Two bursts, with **no record on
+any core in the 91 ms between them**:
+
+**Burst 1, T-0.091694 to T-0.0912: the cores are told to stop** (the stop-bit writes of E4).
+For each core in the order 4, 1, 5, 2, 3, 6, 7, about 80 microseconds per core:
+- core 0: reads `PMC0_EL1`, `PMC1_EL1`; writes `s3_5_c15_c10_1` = 0 (twice, each after a pair of
+  counter reads); writes `IPI_RR_LOCAL_EL1` = 1, 2, 3 for cores 1, 2, 3 or `IPI_RR_GLOBAL_EL1` =
+  `0x10000`, `0x10001`, `0x10002`, `0x10003` for cores 4-7 (the hypervisor carries these out
+  itself, "c-locked"); writes `PMCR0_EL1` = `0x7003400`; later writes `PMC0_EL1`, `PMC1_EL1`
+  back, `PMCR1_EL1` = `0x3030303` (read `0x30300`), `PMCR0_EL1` = `0x7003403`, and reads then
+  writes `IPI_SR_EL1` = 1;
+- the addressed core (27 records each; core 4's begin before the first stop bit and only its
+  last 4 are logged): writes `PMC0_EL1`, `PMC1_EL1`; `PMCR1_EL1` read `0x30300`, written
+  `0x3030303`; `PMCR0_EL1` read `0x7003400`, written `0x7003403`; `IPI_SR_EL1` read 1, written
+  1; counter reads; `s3_5_c15_c10_1` = 0 and `IPI_RR_LOCAL_EL1` = 0, twice; `PMCR0_EL1` =
+  `0x7003400`; counter reads; then, 50-60 microseconds after its first record, **its stop bit
+  to `0x23b754000`** (core 4 T-0.091694, 1 T-0.091611, 5 T-0.091535, 2 T-0.091447, 3 T-0.091373,
+  6 T-0.091296, 7 T-0.091211).
+Then core 0 runs the quiesce actions (E5: first console line T-0.091) and the last steps (E6:
+`0x23d2c4000` written at T-0.015607, T-0.003840, T-0.000696; interrupt-controller action
+T-0.0129 to T-0.0067), with no trapped system-register access of its own and none on the
+stopped cores.
+
+**Burst 2, T-0.000017 to T+0.000016: every core makes the same four accesses**:
+1. read `ACC_OVRD_EL1` (cores 1, 2, 4, 5, 6, 7 read `0x180010102001c207`; cores 3 and 0, which
+   come later, read `0x1800101526076207`);
+2. **write `ACC_OVRD_EL1` = `0x1800101526076207`**;
+3. read `CYC_OVRD_EL1` = `0x2000000`;
+4. **write `CYC_OVRD_EL1` = `0x3000001`**: the write the hypervisor marks as taking the core down
+   ("s2r"; logged before it acts) and the moment of its "core enters its sleep path" record.
+Cores 2, 4, 5, 1, 6, 7 do this between T-0.000017 and T-0.000002, core 3 between T-0.000007
+and T+0.000002, **core 0 last, T+0.000011 to T+0.000016**, 16 microseconds after its last
+device access (the console-port read of E6-4). Nothing trapped follows on any core. What a
+core executes after the `CYC_OVRD_EL1` write (the wait instruction) is not in the log.
+
+**After macOS** `[ARTEFACT A6]`, on core 0, still running: the commit snapshot (T+0.000017 to
+T+0.000931), then the hypervisor's writes of the held guarded words at T+0.001054 to
+T+0.001063: UART0 and UART_P = `0x100000ff`, SIO and SIO_BUSIF = `0x0f0000ff`, ATC0_USB and
+ATC0_USB_AON = `0x3f0`, ATC0_COMMON = `0x23f0`; then its power-chip commands and USB detach,
+which are not logged; then the real `CYC_OVRD_EL1` write.
+
+**What this does and does not say about what powers the chip down** (open question 14):
+- It is not any device-register write of macOS. After the last one that could matter
+  (`0x23d2c4000` = 1, T-0.7 ms) and after macOS's last access of any kind (T), the chip is
+  demonstrably still running for more than 1.06 ms: 792 registers are read and seven written.
+- Every core's last act is the pair `ACC_OVRD_EL1`, `CYC_OVRD_EL1`, all eight within 33
+  microseconds, core 0 last. The chip goes down only after the last core has done it. This
+  fits "the chip powers down once all cores have set these two registers and wait", but the
+  captures cannot separate that from the alternatives: the hypervisor's own acts come between
+  core 0's logged write and its real one, the wait instruction is not seen, and no capture has
+  a core set the registers without the chip going down.
+- The stop bits of E4 do not power a core down: each core is alive and executes burst 2
+  91 ms later.
+- Which of the earlier steps are preconditions (`0x23d2c4000`, the alarm, the memory-controller
+  shutdown, the masked interrupt controller) cannot be told from captures in which all of them
+  always happen.
+
 ### Power-domain writes in the whole entry, by domain (`ps.py pre -20 0`)
 
 Excluding E0's SPI3 cycles the access log holds these domain writes, the same count in both:
@@ -675,9 +814,88 @@ before the sleep (34 non-bus writes), and at the wake restores FPWM1 to `0x340`
 instead of on (section 6, W1). No domain is written after the first `0x23d2c4000` write in
 either.
 
-## 4. The state at the commit, as far as the captures show it
+## 4. The state at the commit
 
-"Commit" here is T, the end of the log, not the true power-down (A11).
+### 4.1 The snapshot at the commit (capture G; `commit_snap.py`, `commit-snapshot-g.tsv`)
+
+792 words read from the hardware on core 0, starting 1 microsecond after core 0's own
+sleep-path record and ending 0.914 ms later, before any of the hypervisor's own commit actions.
+All other cores had entered their sleep path. One capture; the list is the 792-word list of the
+earlier snapshots, so it answers for these words and not for the others.
+
+**Against idle.** 764 of the 792 words have the value of G's "pre-detach" snapshot taken about
+440 s earlier at idle (761 of "pre-full"); against the idle snapshots of the other captures 752 to
+756. All 80 memory-controller words and all 448 DRAM-controller words (56 per controller,
+including +`0x500`) are unchanged from idle: **in what the list covers, the memory and DRAM
+controllers look at the commit as they do at idle.** The 28 that changed: 11 power-domain words
+(below), 10 clock-generator words at `0x23b040020`-`0x23b04011c` (bit 8 differs),
+and `0x23b71c0f0`, `0x23b720030`, `0x23b720034`, `0x23b720044`, `0x23d240000`, `0x23d240040`,
+`0x23d240314`; 22 of the 28 were never written by macOS in the log.
+
+**Against what macOS last wrote.** Only 16 snapshot words were written by macOS in the log
+(15 during the entry):
+- 10 power-domain words read in the snapshot exactly what macOS itself last read after its last
+  write (the written request plus status bits): I2C0, I2C3, SPI2, SPI3 wrote `0x3f0`, read and
+  snapshot `0x200`; DISP0_FE, DISPEXT_FE wrote `0x23f0`, `0x2300`; DISP0_CPU0, DISPEXT_CPU0 wrote
+  `0x0f0403f0`, `0x0f040300`; GFX wrote `0x0f0023f0`, `0x0f002300`; RMX wrote `0x300`,
+  `0x0f000300`. **Confirmed.**
+- the 5 clock muxes `0x23b040140`-`0x23b040154`: macOS wrote `0x80100000` (E5-8a); the snapshot
+  holds `0x85100000` (three) and `0x87100000` (two), which is also what macOS read back at once.
+  **The written value is not what the word holds at the commit.** Not guarded.
+- SIO_CPU `0x23b7001d0`: macOS wrote `0x0400024f` (bit 28 cleared, E5-8j) and did not read it
+  again; the snapshot holds **`0x0f0002ff`** (idle: `0x1400024f`). Not guarded. The domain is
+  fully on at the commit, not in the state it idles in.
+- Guarded words `[A3]`: SIO `0x23b7001c8`: macOS wrote `0x0f0000ff` (held back); snapshot
+  `0x1f0002ff` (idle `0x1400024f`): the hardware word changed although macOS's write never
+  reached it. SIO_BUSIF `0x23b7001c0`: macOS wrote `0x0f0000ff` (held); snapshot `0x1400024f`,
+  unchanged. UART_P, UART0 `0xff` and ATC0_COMMON `0x20ff`: unchanged from idle, not written by
+  macOS in the log. A machine without the hypervisor would hold other values in these five.
+  The emulated lock words `0x2000x0680`.. (A5) are unchanged from idle.
+
+**The 74 power-domain words at the commit** (was at idle, where different):
+
+| Value | Domains |
+|---|---|
+| `0xff` | AIC, GPIO, SOC_DPE, SPI_P, UART_P, UART_N, UART0-UART8 |
+| `0x200` | FPWM0, FPWM2, I2C0-I2C4, SIO_ADMA, SPI0-SPI4, MCA0-MCA5, DPA0, DPA1 |
+| `0x2ff` | FPWM1, AUDIO_P |
+| `0x1f0000ff` | SBR, IMX, MCC, SMX |
+| `0x1f0002ff` | PMS, SIO (was `0x1400024f`) |
+| `0x0f0002ff` | SIO_CPU (was `0x1400024f`) |
+| `0x1400024f` | SIO_BUSIF |
+| `0x1000030f` | DCS0, DCS1, DCS4, DCS5, DCS6, DCS7 |
+| `0x1f0003ff` | DCS2, DCS3, PMS_SRAM (each was `0x1000030f`) |
+| `0x1f0f03ff` | PMP (was `0x1000030f`) |
+| `0x1f0023ff` | ANS2 (was `0x1000230f`) |
+| `0x1000230f` | SEP |
+| `0x0f000300` | RMX (was `0x1000030f`), MMX, ISP_SET1, ISP_SET2 |
+| `0x2300` | DISP0_FE (was `0x20ff`), DISPEXT_FE, ISP_SYS |
+| `0x0f002300` | GFX (was `0x1000230f`), VENC_SYS, ANE_SYS |
+| `0x0f040300` | DISP0_CPU0 (was `0x1404024f`), DISPEXT_CPU0 |
+| `0x300` | AES, ISP_SET0, ANE_SYS_CPU |
+| `0x20ff` | ATC0_COMMON `[A3]` |
+
+So at the commit the display and graphics domains are off; **everything else that is on at
+idle is still on** (interrupt controller, pin controller, UARTs, memory controller, PMS, SBR);
+PMP, ANS2, PMS_SRAM, SIO, SIO_CPU and two of the eight DRAM-controller domains read as more
+on than at idle (their coprocessors were stopped, and the words read `..3ff` / `..2ff` instead
+of `..30f` / `..24f`); six DRAM-controller domains read `0x1000030f` as at idle. This agrees
+with R25: macOS turns no domain off for the sleep apart from the display path.
+
+**After the snapshot** the hypervisor writes the seven held words (E7, last part); the state
+the chip actually goes down with differs from the snapshot in those: UART0, UART_P
+`0x100000ff`; SIO, SIO_BUSIF `0x0f0000ff`; ATC0_USB, ATC0_USB_AON `0x3f0`; ATC0_COMMON `0x23f0`
+`[ARTEFACT]`.
+
+**Not in the snapshot list**, so still known only as last written values (4.2): the memory
+controller's shutdown words (`0x200001c00`, `0x200158000`, `0x200024000`, P+`0x21000`,
+DCSn+`0x7a0`, ...), `0x23d2c4000`, the timer and cluster words, the interrupt controller, the
+SPMI controllers, the watchdog words, the pin controllers.
+
+### 4.2 Last values written (all captures)
+
+In A and B "commit" is T, the end of the log, not the true power-down (A11); in D, E, F, G it
+is the real last access.
 
 - **Last value written to each word written in the entry** (T-10.6 to T): 602 words; 600 written
   in both captures; **534 with the same last value**, 538 with the same number of writes
@@ -725,6 +943,9 @@ either.
   counters, PWM, the alarm bytes). Every value of the list above holds in E and F
   (`reqcheck.py`: 71 checks on each of five captures, no failure). "pre-full" snapshot: 792
   words, **772 equal in all five**, 777 equal among D, E, F.
+- **Capture G**: from the display request to T, 619 words are written in both D and G; the
+  last value is equal in 537. All 71 values of `reqcheck.py` hold in G. "pre-full" snapshot:
+  **768 of 792 words equal in all six captures**.
 
 ## 5. Asleep
 
@@ -762,6 +983,12 @@ either.
   `0x770765` in D, E, F: about 7.80 million in each, after sleeps of 119 s, 415 s and 1.6 s.
   It does not follow the sleep length; if it counts at the timer's 24 MHz from the wake event
   (not established), 0.325 s pass between that event and the hypervisor's wake entry.
+- **Capture G**: asleep 90.326 s; woken by the alarm the hypervisor set at the commit to now +
+  90 s `[ARTEFACT A6]`, which replaced the alarm macOS had set 4.8 ms earlier (about 975 s
+  ahead). Wake status `0x23d004020` = `0x400000` again: **the same in all six captures**.
+  After the wake `0xd00c` reads `01` (as in A; `00` after the key wakes). Console: "system wake
+  events: NUB.SPMI0Sw3IRQ nub-spmi.0x02 nub-spmi.0xC0 rtc", the same sources as A. The count at
+  `0x23d2b0020` is `0x76e68f` (7.79 million).
 - **Not known**: anything the chip or the power chip did while asleep; whether any register
   changed during the sleep other than as seen in the wake snapshot; the power drawn.
 
@@ -786,6 +1013,13 @@ Phases W0-W5. Times are A / B relative to W. Extracts: `phases-post-N.tsv` (W1-W
 
 In D the first access is 0.505 ms after the hypervisor's wake record and 0.211 ms after it
 re-entered macOS (E: 0.493 ms, F: 0.492 ms after the wake record); the time from the chip's reset to the wake record is not recorded.
+
+**Capture G's times** (seconds after its first access): power-manager active action +0.005;
+memory-controller active +0.018; first wake action +0.130; PMP wake action +0.145;
+power-manager wake action +0.354; "IOCPUSleepKernel exit" +0.420; "system wake events" +0.697.
+First access 0.545 ms after the wake record. Cores started W+0.1226 to W+0.1292 in the order
+7, 6, 3, 2, 5, 1, 4; the 368 system-register records after the wake carry the same writes as
+D's. Ordered writes identical to D's in 54 of 57 active actions and 24 of 30 wake actions.
 
 ### W0. Before macOS runs `[ARTEFACT A7]`, and the "wake" snapshot
 
@@ -1002,6 +1236,17 @@ OFF to ON" at W+0.567 (E) and W+0.512 (F); `WKTP`=`00` at W+0.484, W+0.671 (E) a
 W+0.759 (F). Pages written from kernel exit to "system wake events": ordered writes identical
 in 26 of 65 (D, E), 24 of 65 (D, F).
 
+**Capture G (alarm wake) against A (alarm) and the key wakes.** In the 20.8 s recorded G
+behaves as A did for 163 s: `dcp` is sent "AP power `0x20`" (W+0.464) and then "`0x201`"
+(W+0.477) and nothing more; DISP0_FE is turned on (W+0.458) and off again (`0x3f0`, W+0.487);
+there is no "OFF to ON" console line and no "full wake promotion"; no `WKTP` key is written;
+4 graphics messages in all; the memory-controller burst I5 does not return; the once-a-second
+read of `0x23d2b9040`.. that A showed starts (first at W+4.4). The key wakes (B, D, E, F) all
+turn the display on within 0.6 s, write `WKTP`=`00` and resume I5 within 0.7 s. So **both
+alarm wakes stay dark and all four key wakes light the display**; two captures against four.
+G was read out before macOS could go back to sleep, so what a dark wake does next is not
+captured.
+
 ### W5. Back at idle
 
 Distinct (address, direction) pairs not seen in the idle before the sleep, per second after W
@@ -1181,13 +1426,45 @@ Changes to the classification:
   10).
 - The cluster words on the untrapped pages and I1 still rest on A and B only.
 
+### 7.6 Six captures
+
+`five.py` now takes G as well (pairs `3,g` and `d,g`). Ordered writes identical unless said:
+
+| Comparison | All six | A-B | A-D | A-E | A-F | A-G |
+|---|---|---|---|---|---|---|
+| E5 quiesce, 33 actions before the interrupt controller | **33 (253 writes)** | 33 | 33 | 33 | 33 | 33 |
+| the same, identical access for access | 30 | 30 | 30 | 30 | 30 | 30 |
+| E3 sleep actions, 42 | 34 | 36 | 38 | 38 | 36 | 36 |
+| W1 active actions, 57 | 52 | 53 | 53 | 52 | 53 | 53 |
+| W3 wake actions, 30 | 20 | 25 | 21 | 22 | 20 | 21 |
+
+| Detached captures (reference D) | D, E, F, G | D-E | D-F | D-G |
+|---|---|---|---|---|
+| E5 and E6, all 36 quiesce actions | 34 (292 of D's 313 writes) | 35 | 34 | 34 |
+| interrupt-controller action of E6 | identical access for access | yes | yes | yes |
+| E3 sleep actions, 42 | 34 | 39 | 35 | 38 |
+| W1 active actions, 57 | 53 | 53 | 54 | 54 |
+| W3 wake actions, 30 | 24 | 26 | 26 | 24 |
+| Pages written E1 / E2 / E3-to-power-down (identical of written), D-G | - | | | 8 of 37 / 27 of 49 / 59 of 68 |
+| Pages written W1 / W3 / W4, D-G | - | | | 72 of 93 / 22 of 42 / 18 of 66 |
+| Last value of words written, display request to T, D-G | - | | | 619 in both, 537 equal |
+| "pre-full" snapshot, 792 words | 772 (all six: 768) | | | 776 |
+| "wake" snapshot, 264 words | 258 (all six: 252) | | | 258 |
+
+Identical in all six: the 135 memory-controller writes; the wake status; core stop order and
+core start order; the system-register writes after the wake; the `smc` key writes; all 71
+requirement values (`reqcheck.py`; 2 words invisible in D-G, 2 in A, B).
+Resting on G alone: section 4.1 and E7. Resting on two alarm wakes (A, G) against four key
+wakes: W4/W5. The order of the two power-chip actions is now 2 (D, E) against 2 (F, G).
+
 ## 8. Requirements
 
 Form: what macOS was observed to have done before the SoC went down, or after it came up.
 Marks: **[BOTH]** observed as stated in every capture that can show it: all three (A, B, D)
 unless the entry says otherwise, and since section 7.5 all five (A, B, D, E, F); **[D]** observed
-in the detached captures only, because only they reach that point: D, E and F agree unless the
-entry says otherwise; **[UNKNOWN]** observed, cause or necessity not known, or observed incompletely;
+in the detached captures only, because only they reach that point: D, E, F and G agree unless
+the entry says otherwise; **[G]** observed in capture G only (the commit snapshot and the
+system registers before the wake exist nowhere else); **[UNKNOWN]** observed, cause or necessity not known, or observed incompletely;
 **[ARTEFACT]** hypervisor artefact, not a requirement. Every [BOTH] entry with a register value
 was re-checked against all three captures by `reqcheck.py` (no failure). No requirement is claimed to be necessary for sleep to work: each records only
 that macOS does it. Evidence gives the section and the output file.
@@ -1277,7 +1554,8 @@ Before the SoC goes down:
   `0x23d0d9378` written 1 after the command; then `0x23d2c4000` written 1 a third time (E6-3).
   The meaning of the registers is the decoding tool's label. The console text is in all five.
   D and E as stated; in F the commands and the second write of `0x23d2c4000` (R37) come in the
-  first action and the third write alone in the second. The four alarm bytes differ each time.
+  first action and the third write alone in the second; G is like F. The four alarm bytes
+  differ each time.
 - **R39 [D]** After R38 macOS makes no further device-register write (11 writes to SMC shared
   memory, console bytes and one console-port read are all that follow), sends the power chip
   nothing else, and all eight cores enter their final sleep path within 31 microseconds, cores
@@ -1316,9 +1594,37 @@ After the SoC comes up, before macOS is back at idle:
   `ps-post-f.tsv`).
 - **R41 [BOTH] (D, E, F)** The alarm commands of R38, the stop of the cores and the whole of
   R1-R39 are the same with the cable out as with it in (section 10).
-- **R35 [UNKNOWN]** After an alarm wake macOS did not turn the display, graphics, or the I5
-  burst back on within 163 s (A); after a key wake it did, within 5 s in B and 0.7 s in D
-  (W4, W5, section 2). One capture of an alarm wake, two of a key wake.
+- **R42 [BOTH] (G against A, B, D, E, F)** R2-R39 hold unchanged when macOS goes to sleep by
+  itself instead of on a click; only the first steps differ (audio path first, no input; R1's
+  display shutdown follows 60 ms later) (section 3, "idle sleep"; `reqcheck.py`, `five.py`).
+- **R43 [G]** Each core, immediately before it goes down, reads `ACC_OVRD_EL1`, writes
+  `ACC_OVRD_EL1` = `0x1800101526076207` (it read `0x180010102001c207` before the first write),
+  reads `CYC_OVRD_EL1` = `0x2000000` and writes `CYC_OVRD_EL1` = `0x3000001`; no other trapped
+  system register is touched on any core in the 91 ms before (E7, burst 2).
+- **R44 [G]** All eight cores do R43 within 33 microseconds, after core 0's last device access
+  of R39 for cores 3 and 0, core 0 last (E7). With D, E, F this timing is seen four times
+  (their "sleep path" records), the registers once.
+- **R45 [G]** When a core is told to stop (R11) it writes `PMC0_EL1`, `PMC1_EL1`, `PMCR1_EL1` =
+  `0x3030303`, `PMCR0_EL1` = `0x7003403` then `0x7003400`, acknowledges `IPI_SR_EL1` = 1, writes
+  `s3_5_c15_c10_1` = 0 and `IPI_RR_LOCAL_EL1` = 0, and then writes its stop bit; core 0 has sent
+  it `IPI_RR_LOCAL_EL1` or `IPI_RR_GLOBAL_EL1` (E7, burst 1). `[ARTEFACT in part: the hypervisor
+  carries out the IPI writes itself.]`
+- **R46 [G]** At the commit the hardware holds, for the power-domain words: display and graphics
+  domains off (`0x2300`, `0x0f040300`, `0x0f002300`, RMX `0x0f000300`); AIC, GPIO, SOC_DPE, the
+  UART domains `0xff`; MCC, SBR, IMX, SMX `0x1f0000ff`; SIO_CPU `0x0f0002ff`; PMP `0x1f0f03ff`;
+  ANS2 `0x1f0023ff`; SEP `0x1000230f`; the I2C, SPI, MCA domains `0x200`; DCS domains
+  `0x1000030f` (six) or `0x1f0003ff` (two) (section 4.1 table). Which DCS domains read which
+  value varies between captures at the wake, so the split six/two is not claimed as fixed.
+- **R47 [G]** At the commit the 80 memory-controller and 448 DRAM-controller words of the
+  snapshot list hold their idle values (section 4.1).
+- **R48 [G] / [ARTEFACT]** The clock muxes written `0x80100000` in R18 hold `0x85100000` /
+  `0x87100000` at the commit: the write of R18 is observed (all six captures), its effect on
+  the word is not. The values of SIO, SIO_BUSIF, UART_P, UART0, ATC0_COMMON at the commit are
+  the hypervisor's doing (A3) and are not requirements.
+- **R35 [BOTH] (was UNKNOWN)** After an alarm wake macOS does not turn the display, graphics
+  or the I5 burst back on (A for 163 s, G for the 20.8 s recorded); after a key wake it does,
+  within 5 s in B and 0.7 s in D, E, F (W4, W5, section 2). Two alarm wakes, four key wakes.
+  Both alarms were the hypervisor's.
 
 ## 9. Open questions
 
@@ -1340,16 +1646,22 @@ Closed by capture D:
 
 Still open (numbers kept):
 
-2. **The state at the true commit as a snapshot.** D gives the last value written to every word
-   up to the power-down, but no read-out of the rest at that moment.
+2. **PARTLY CLOSED by G.** *The state at the true commit as a snapshot.* Section 4.1: 792
+   words read at the commit (`commit-snapshot-g.tsv`). Still open: the words the entry writes
+   that are not in that list (about 615 of 630: the memory-controller shutdown words,
+   `0x23d2c4000`, the timer and cluster words, the interrupt controller, ...). Needs a snapshot
+   list built from `commit-last-writes.tsv`.
 3. **Whether the guarded words and removed devices change the sequence** (A2, A3). Unchanged.
 4. **Whether the boot arguments change the sequence** (A1). Unchanged; all three captures use
    the same arguments.
 5. **What the per-core idle cycle I1 and the memory-controller burst I5 are.** I1 now rests on
    A and B only.
 6. **Meaning of the words** written in R16-R24 and R36-R38.
-7. **System registers** not trapped by the hypervisor, and each core's power-down registers:
-   D has no system-register record before the wake.
+7. **PARTLY CLOSED by G.** *Each core's power-down registers.* E7: `ACC_OVRD_EL1` and
+   `CYC_OVRD_EL1` on every core, and the performance-counter and IPI registers at the stop
+   (`det-down-g.tsv`). Still open: the registers the hypervisor does not trap (standard EL1
+   registers, timers, SPRR/GXF, pointer-authentication keys, cache and TLB maintenance) and the
+   final wait instruction; and the meaning of the two values.
 9. **Which thread issues the SPMI commands of E3** (R9) and the two `0xd100` writes of E1.
 11. **Invariance beyond three runs**, and wakes from other sources (lid, power button,
     network). There is still only one alarm wake.
@@ -1361,18 +1673,22 @@ Still open (numbers kept):
 
 New:
 
-14. **What actually powers the chip down.** macOS's last hardware acts are the alarm commands,
-    `0x23d2c4000`=1 and the cores' own sleep path. No "sleep" command to the power chip is seen.
-    Whether the write of `0x23d2c4000`, the cores' system registers, or something the
-    hypervisor does afterwards (A6) triggers it cannot be told from these captures. Needs the
-    cores' power-down registers logged, and a run in which the hypervisor's own commit work is
-    recorded too.
+14. **What actually powers the chip down. NARROWED by G (E7, last part).** Established: no
+    device-register write of macOS does it (the chip runs on for more than 1 ms after macOS's
+    last access); the stop bits do not take a core down; every core's last trapped act is
+    `ACC_OVRD_EL1` then `CYC_OVRD_EL1` = `0x3000001`, all within 33 microseconds, core 0 last,
+    and the chip goes down only after that. Not established: that these writes plus the wait
+    are sufficient (the hypervisor's own power-chip commands, USB detach and power-word writes
+    come between core 0's logged write and its real one; the wait is not logged); which earlier
+    steps are preconditions. Needs a run in which the hypervisor does nothing of its own at the
+    commit, or one in which a single step of macOS's is withheld.
 15. **What "(0x7)" in "pmu go hib (0x7)" is**, and why the first power-chip action sends
     nothing.
 16. **The alarm macOS sets** (R38). **Partly answered by E and F:** it is set before every
     sleep, with or without the cable, and is not the same interval each time (about 948, 972
-    and 1,069 s after T if the inference in E6 holds). Still open: what determines it, and
-    whether it explains the alarm wake of A. No capture has slept long enough to see it fire.
+    and 1,069 s after T if the inference in E6 holds; 975 s in G, the idle sleep). Still open:
+    what determines it, and whether it explains the alarm wake of A. No capture has slept long
+    enough to see it fire: both alarm wakes are the hypervisor's.
 17. **Why cores 4-7 touch no logged device during idle in D, E and F** while every core reads
     the interrupt controller in A and B (section 2): an effect of the host being attached, or
     of what was trapped? E and F show it does not depend on the cable.
@@ -1398,6 +1714,19 @@ New:
 25. **A cancelled entry later than 0.2 s**: F's stopped before the display request. What macOS
     undoes when an entry is cancelled after the coprocessors have been shut down, or inside
     the kernel path, has not been captured.
+
+26. **Why the written clock-mux value does not hold** (R18, R48): `0x80100000` is written, the
+    word reads `0x85100000` / `0x87100000` at once, at the commit and after the wake. Are the
+    differing bits status, or is the write refused?
+27. **What `s3_5_c15_c10_1` is** (written 0 by every core as it stops, E7), and what the two
+    override values mean.
+28. **What a dark wake does next.** A was recorded 163 s, G 20.8 s; neither shows macOS going
+    back to sleep or the display coming on. And whether macOS's own alarm produces the same
+    dark wake as the hypervisor's.
+29. **The record of the snapshot has no time per word** (one start, one end): the order of
+    reading within the 0.914 ms is the list's order, not checked.
+30. **Whether an idle sleep differs on a machine in use** (apps open, lid, power source): G is
+    one idle sleep at the login window.
 
 ## 10. With and without the cable
 
@@ -1553,6 +1882,9 @@ Run with `tools/hv-trace-kit/venv/bin/python`, from `var/spec/`, after `build_db
 | `five.py` | five-way segment comparison, and D against E and F |
 | `cable.py` | what the machine's log shows around the cable events (`DET=e` or `f`) |
 | `cancelled.py` | the cancelled entry of capture F |
+| `build_db_det.py det8 g` | `db/capg.db` (capture G) |
+| `commit_snap.py` | `commit-snapshot-g.tsv`: the commit snapshot against idle, the wake and macOS's last writes |
+| `det_down.py` | `det-down-g.tsv`: each core's system-register accesses on the way down, named |
 | `det_events.py`, `det_misc.py` with `DET=e` / `DET=f` | `det-events-e.tsv`, `det-sysreg-e.tsv`, `-f`; idle and phase times |
 
 Capture selection: the pairwise scripts compare the two captures named in the environment

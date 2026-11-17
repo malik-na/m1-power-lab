@@ -256,3 +256,23 @@ commit and a log of each core's system-register accesses on its way down. Not ye
   (Omarchy up 08:03:04). The same as det3: twice now.
 - `harness/detached-wake-readout.sh` (watch for the wake from this Mac, read out 20 s later) was
   written for this and has not run.
+
+### The moment of sleep, read on the M1 (det8, 2026-11-17 08:31-08:44, unattended)
+
+m1n1 `m1power/hv-detached` ed07f5bb. macOS booted 08:31:25, detached 08:35:01, cable in, nobody
+at the M1, the hypervisor's alarm at 90 s. macOS put itself to sleep (last core down at 438.067 s
+from the detach, 08:42:19, about 11 minutes after boot), slept 90.3 s, woke on the alarm;
+`harness/detached-wake-readout.sh` saw the wake from this Mac (USB device gone 08:43:48.45, back
+08:43:49.16) and read the log out 20 s later: 1,221,379 entries, none dropped, no unhandled exit.
+
+- **Register snapshot at the commit**: 792 words, 0 errors, read in 0.91 ms on the last core
+  before any of the hypervisor's own commit actions. Saved privately as
+  `var/commit-state/macos135-det8-real-commit.json`. Against the earlier snapshot of a non-real
+  macOS commit (135snap2) 18 words differ; against Linux run 41's (lx14) 51 differ, 34 of them
+  where the two macOS commits agree (the eight `DCSn+0x7b0`, 8 clock words, 17 power-state words,
+  1 other).
+- **Each core's system-register accesses on its way down**: 315 records before the wake. Every
+  core's last one is the write that takes it down, `s3_5_c15_c5_0 = 0x3000001` (read back
+  `0x2000000` just before), after `s3_5_c15_c6_0 = 0x1800101526076207` and others.
+- **What the hypervisor wrote for macOS at the commit** (the guarded power words): 7 writes,
+  logged.
