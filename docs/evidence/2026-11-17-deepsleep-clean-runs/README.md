@@ -191,3 +191,136 @@ clearing the fault there; a panic record carries the fault's address when one is
 
 Three kernels have now failed to bring the snapshot back on bare metal. By the rule of
 2026-11-17 (`docs/agents/cleanroom-cycle.md`) the next reading is taken under the hypervisor.
+
+## Hypervisor round 1: Linux's entry as the guest (dsh1, dsh2, 2026-11-17 17:05-17:25)
+
+Observation round under the three-strikes rule. Two runs of the ds12 kernel as the m1n1
+hypervisor's guest. Neither produced the 792 words at Linux's commit. What was read is below.
+
+### What was run
+
+- **Guest image** `var/hvlinux/guest-ds12hv.bin` (dsh1) and `guest-ds12hv-d240.bin` (dsh2)
+  (private), assembled with `tools/hv-trace-kit/guest/mkguest.py` from: guest m1n1
+  `~/m1n1-guest` 0504a43d (the earlier guests' stage, checked byte for byte against
+  `guest-run43hv.bin`); kernel `7.2.11-ds12` from `var/kernels/ds12/kernel-ds12.tar.zst`
+  (sha256 `cbb9426f...`); the initramfs `m1-bootonce` built for ds12 on the M1, copied from
+  `/boot/efi/s2r/ds12/initramfs.img` (sha256 `eda5652d...`, equal on both ends); DTB
+  `var/hvlinux/ds12/j313-hv-ds.dtb`. This DTB is `j313-hv.dts` (the run39 DTB with the proxy
+  port disabled; the ds12 package's own `t8103-j313.dtb` decompiles to the same text) plus
+  the mailbox below. Command line `var/hvlinux/ds12/bootargs-ds12hv.txt`: the M1's root/LUKS
+  words, `console=ttySAC0,115200 earlycon loglevel=7`, all of `var/deepsleep/ds7.cmdline`
+  (`enable=1 alarm_secs=60 trace=1 dump=1`, `snap` left at 0), and `m1hv.ds=1 m1hv.delay=120`
+  (dsh1) or `240` (dsh2). `apple_sep` was not blacklisted (ds7's line has no blacklist).
+- **The mailbox.** The driver needs `/chosen/asahi,s2r-mailbox`. On bare metal (Omarchy,
+  stock kernel, read 17:06) it is `0x802df4a40`. Under the hypervisor nothing provides
+  one: `s2r-mailbox` / `S2RMBOX1` appear in no branch of `~/m1n1`, `~/m1n1-guest` or
+  `~/m1n1-next`. So for this round:
+  - the DTB names `0x9d0000000` and reserves 16 KiB there (`/reserved-memory/s2r-mailbox@9d0000000`);
+  - `tools/hv-trace-kit/harness/ds_mailbox.py` (a `run_guest.py -m` module) writes a mailbox of
+    the layout the driver checks at boot (magic, version 1, 8 cores, armed 1, boot core 0, one slot
+    per MPIDR). The reset-vector field is 0, and no loader reads the slots at a wake.
+
+  The driver accepted it both times: `mailbox at 0x00000009d0000000: version 1, 8 cores,
+  loader reset vector 0x0, 0 resumes so far`, then `enabled: mem_sleep "deep" ...; alarm +60 s`.
+- **The entry** is made by `m1hv-ds.service` / `tools/hv-trace-kit/guest/ds.sh`, installed on
+  the M1 (runs only with `m1hv.ds=1`). It runs `/var/lib/m1power-ds/real.sh` (as ds9) after
+  `m1hv.delay` seconds.
+- Before each run: `tools/tb/m1-hvboot var/kernels/ds12/kernel-ds12.tar.zst` (17:09:42 -> proxy
+  17:09:57; 17:14:52 -> 17:15:08). Nothing else was on the M3's USB, and the preflight was clean.
+
+### dsh1 (17:10-17:12): no real commit; the entry stops before the commit
+
+Setup: installed hypervisor image (v2.0.0-131), `harness/golinux.sh dsh1 -m harness/ds_mailbox.py`
+with `S2R_SNAP_LIST=var/recfg/commit-snap-list-wide.json` (the tracer reads the 792 words when
+the last core leaves the guest, as in lx14), and `harness/drivelinux.sh` with the new
+`REAL_S2R=0` (watchdog 1 off, real sleep not armed). Tracer `hv_s2r_trace.py`, as the 13.5
+entry captures. Files: `tools/hv-trace-kit/runs/20261116-linux/{run,vuart,console,go}-dsh1.*`,
+`s2r-trace-dsh1.jsonl` (8,491 MMIO events, 565 SPMI commands; private).
+
+- Guest kernel up; entry 17:12:23.8 (guest clock). `PM: suspend entry (deep)` at 132.35 s, then
+  `begin` (power-chip clock 603463 s, alarm bytes `83 35 09 00` for `0xd008`), 137
+  power-domain words dumped (`ps prepare`, in `vuart-dsh1.log`), and cores 7..1 `offline, parked`.
+  The last line was `enter: mailbox armed: core 0 resumes at 0x81eb41038, cores 1-7 enter at
+  0x81eb41514`.
+- Trace at the end (tracer time): the seven `CPUSTART W 23b754000+0` writes (`0x10, 0x2, 0x20,
+  0x4, 0x8, 0x40, 0x80`, swallowed by the hypervisor in this mode) at 136.47-136.51. Then
+  `ps_cpu` words `0x23b7001c8`/`1c0` <- `0xf0000ff`, and at 136.68 core 1: `ACC_OVRD_EL1 <-
+  0x1800101526076207` (skipped), `CYC_OVRD_EL1 <- 0x3000001`. With bit 0 set, the hypervisor
+  takes the core out of the guest ("Guest is shutting down CPU"; hardware CYC_OVRD read back
+  `0x2000000`).
+- The guest then logged `enter: the entry stopped before the commit: -110, core 1 did not
+  answer` and `Enabling non-boot CPUs ...`. So without a real commit the hypervisor cannot
+  hold this driver at its commit point: the last-core snapshot never ran (one core left the
+  guest, not eight).
+- Power-chip records written afterwards (trace): `0x9f04 <- 44 46 00 f5` ('D','F') and then
+  `44 58 00 f5` ('D','X') at 137.41. The last access traced was at 139.656: core 0
+  `W32 0x23d2b0010 = 0x0` (tracer label: AON watchdog, WD1 +0x10).
+- The M1 then left USB (host `SerialException`, `run_guest exit 1` 17:12:32) and was next in
+  Omarchy with a kernel start of 17:12:43 (frame `var/m1-look/20261117-171325-state-after-dsh1.jpg`:
+  desktop). The cause of this restart is unknown.
+- Power chip after it (`var/m1-state/pmu-20261117-171335-after-dsh1.txt`): `0x9f00: 00 30 00 50
+  44 58 00 f5 1d 00 00 61 05 00`. The record is 'D', reason byte `0x58` ('X'), and bytes 2-8 are
+  `00 f5 1d 00 00 61 05`. The trace had written `0x9f0d = 0xc8`, and it reads 0 now.
+
+### dsh2 (17:15-17:25): real commit, detached hypervisor (the det8 means); no wake
+
+The same means as det8 (`macos135-det8-real-commit.json`): `~/m1n1-next` `m1power/hv-detached`
+ed07f5bb (v2.0.0-138), chainloaded with `chainload.py -r` (17:15:16); `golinux.sh dsh2` with
+`M1N1_ELF=~/m1n1-next/build/m1n1-raw.elf`, the touch map (`S2R_TRACER=hv_touch_map.py`,
+epoch 5 s) and the mailbox module; `drivelinux.sh dsh2` with `WAKE=resume`
+(`real_s2r_on(wake="resume")`, alarm left to the guest, 7 deferred PS words, "wake lands in THIS
+image"); then `detach()` (`harness/detach.py`, as `detach135.sh` does) with the default
+`commit_snap` = `var/recfg/commit-snap-list-wide.json`.
+
+Detach was timed to 45 s before the guest's entry. The detached log keeps its first entries
+when it fills, and the commit snapshot goes into the same log, so a short full-logging
+window keeps room for it.
+
+| Time (M3) | Reading |
+|---|---|
+| 17:15:22 | run start; mailbox written; touch map trapping 20,479 MiB of device space |
+| 17:15:41 | guest `m1hv-ds: start; entry in 240 s` (driver enabled, same lines as dsh1) |
+| 17:16:4x | watchdog 1 off, real sleep armed (resume) |
+| 17:18:55.7-57.2 | `pre-detach` snapshot (793 words, 0 errors); full logging of 16 zones; tables: 8 power-manager words, 793 commit-snapshot words, 265 wake-snapshot words; log 4,126,208 entries (125 MiB) at `0x80d8c8000`; wake re-enters the guest at `0x817968000`; `DETACHED` |
+| 17:19:41 | the guest's scheduled entry (`real.sh`) |
+| 17:19:45.707 | M3 kernel: `usb 1-1: USB disconnect` (the hypervisor's own USB detach is part of its commit path) |
+| 17:20:4x | the driver's alarm (+60 s from `begin`): no USB device returned |
+| 17:22:13, 17:23:12, 17:24:02 | `m1-state.sh`: not reachable over USB or Thunderbolt. Frames `var/m1-look/20261117-1722*`/`1723*`/`1724*`: dark room, the panel a faint uniform dim rectangle. Whether the backlight is on is not read. |
+| to 17:24:45 | USB watcher (`runs/20261116-linux/usbwatch-dsh2.log`): device not back |
+
+The M3 kernel logged nothing after the USB disconnect (no link errors). Under m1n1 the M1 shows
+the M3 a USB device only, not a Thunderbolt one. So "powered down" and "running with USB
+off" cannot be told apart from here. For macOS under the same build (det8), the device left
+and came back within a second at the alarm wake.
+
+### Readings and files
+
+- **Commit snapshot (792 words): not read.** dsh1 never reached the commit. In dsh2 the words
+  were to be written by the last core into the detached log in the M1's RAM, and that log
+  is read out only over USB after a wake. No wake came, so the words are unread, and a
+  power cycle loses them. `var/commit-state/linux-ds12-hv-commit.json` does not exist.
+- **Nearest reading:** the same 792 words read over the proxy at 17:18:55.7, Linux awake under
+  the hypervisor, 46 s before its entry (`var/commit-state/linux-ds12-hv-dsh2-predetach.json`,
+  private). This is not Linux at its commit. Against macOS det8 at its commit, word for word:
+  **667 equal, 125 different, 0 unreadable**. By block: 55 SoC clock-generator words, 40
+  power-state words, 9 other PMGR words, 8 memory-cache words (`MCC.planeN+0x680` `0xc15`
+  vs `0x800`, `+0x684` `0xc41` vs `0x82c`), 8 `DCSn+0x7b0` (3 vs 0), 5 AON clock words.
+- **Comparison table** `var/commit-state/linux-ds12-hv-vs-macos-det8.tsv` (private): address,
+  name, macOS det8 at commit, Linux at commit (all 792 "not read"), Linux awake pre-detach,
+  comparison. **At commit: 0 equal, 0 different, 792 unreadable.**
+- **MMIO trace across the entry:** dsh1 traced with `hv_s2r_trace.py` up to the stopped entry
+  and the return (above). dsh2's full log of the entry is in the M1's RAM, unread. The touch map
+  up to the detach is `runs/20261116-linux/touch-dsh2.jsonl` (670 touch records, 37 epochs).
+- **After the commit under the hypervisor (dsh2):** by 17:24:45 (5 min after the USB
+  disconnect) there was no wake at the driver's +60 s alarm, no reset, and no USB or
+  Thunderbolt answer. Whether the SoC powered down is unknown.
+
+### Not done, and why
+
+- No commit snapshot and no comparison at the commit (above).
+- dsh2's detached log was not read out: it needs a wake.
+- The M1 was left as of 17:24: not reachable, screen dark in the frame. Getting it back needs
+  a power-button hold. Detached mode arms no watchdog, and `tools/m1-reboot/m1-reboot.sh` is
+  not to be used.
+- No Asahi or Aurora documentation was needed: no register is interpreted here beyond the
+  tracer's own labels.

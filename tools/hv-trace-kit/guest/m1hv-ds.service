@@ -1,0 +1,11 @@
+[Unit]
+Description=m1hv-ds: one unattended deep-sleep entry (apple_deepsleep) under the m1n1 hypervisor
+ConditionKernelCommandLine=m1hv.ds=1
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/m1hv/ds.sh
+
+[Install]
+WantedBy=multi-user.target
