@@ -324,3 +324,151 @@ and came back within a second at the alarm wake.
   not to be used.
 - No Asahi or Aurora documentation was needed: no register is interpreted here beyond the
   tracer's own labels.
+
+## Hypervisor round 2: macOS 13.5, fresh capture (det9, 2026-11-17 17:37-17:54)
+
+A repeat of det8 (`docs/evidence/2026-11-16-dram-controller-state/README.md`, "The moment of
+sleep, read on the M1"), unattended. Run B (the same with watchdog 1 armed) was not run;
+see the end of this section.
+
+### The no-hands way out, checked before the run
+
+The only step that ends a det8-type run without hands is the hypervisor's alarm:
+`ALARM=90`, so `real_s2r_on(alarm=90)`, so at the commit the hypervisor writes the power chip's
+alarm register `0xd008` to its clock plus 90 s (`~/m1n1-next` `src/hv/hv_cpu_power.c`).
+Nothing else ends the run if that wake fails:
+- `drive135.sh` writes watchdog 1's control to 0 before arming, and all three AON watchdogs
+  read control 0 at arm;
+- detached mode arms no watchdog;
+- the hypervisor's software watchdog (`hv_wdt.c`) needs a CPU withheld from the guest.
+
+Naeem allowed the `0xd008` write for this run, and accepted that a missed wake needs his hands.
+After a wake, the read-out leaves macOS stopped in the hypervisor's proxy, and
+`harness/hv-reboot.sh` reboots the M1 over USB.
+
+### What was run
+
+Exactly det8's recipe and build, with one addition:
+
+- `ALARM=90 FULL_SKIP=<det8's four pages> harness/macos-up.sh det9` (17:37:48):
+  `to-proxy.sh` (Omarchy -> proxy), chainload `~/m1n1-next` ed07f5bb (v2.0.0-138, the build
+  of 07:19, unchanged), `go135.sh` with the touch map and det8's boot arguments, then
+  `drive135.sh` (`WDT off 0x0`, `RTC alarm at the commit: now + 90 s`, 7 deferred power words,
+  "wake lands in THIS image"). Full logging started after the settle (about 1,645 accesses/s,
+  the four busy pages `0x23b738000`, `0x23bc34000`, `0x210e20000`, `0x211e20000` left out as
+  in det8). READY at 17:41:47.
+- `harness/detach135.sh det9` with `ARGS='commit_snap=".../var/recfg/commit-snap-list-wide-ps.json"'`
+  (17:41:53). **The one addition:** the commit list is det8's 793 entries, unchanged and read
+  first, plus the 66 power-domain words of the driver's `ps_words.h` that are not in it (859
+  entries, 858 addresses; sha256 `2b9f4955...`). Then `nohup harness/detached-wake-readout.sh det9`.
+- Nobody at the M1. Afterwards: `harness/hv-reboot.sh` (17:52:23), then `tools/tb/m1-pmu-dump`.
+
+Files (private): `tools/hv-trace-kit/runs/20261116-mac135/*-det9.*`, among them
+`detached-det9.jsonl` (1,229,123 lines), `touch-det9.jsonl`; `var/commit-state/macos135-det9-*`;
+`var/m1-state/pmu-20261117-175256-after-det9.txt`.
+
+### Readings
+
+| | det9 | det8 |
+|---|---|---|
+| Hypervisor run start / detach (M3 clock) | 17:38:12 / 17:41:53 | 08:31:24 / 08:35:01 |
+| Last core in its sleep path (T), from the detach | 434.399 s (about 17:49:07) | 438.067 s |
+| Order of the cores going down | first core 5 at 434.399453 | |
+| Wake record, asleep | 524.683 s; **90.28 s** | 528.394 s; 90.33 s |
+| USB device left / back (the wake, M3 clock) | 17:50:36.699 / 17:50:37.312 | 08:43:48.45 / 08:43:49.16 |
+| AON wake status `+0x1c / +0x20 / +0x24` at the wake | `0x0 / 0x400000 / 0x0` | the same |
+| Log entries / dropped | 1,230,245 / 0 (1,228,347 accesses, 684 system-register records) | 1,221,379 / 0 |
+| Handled by the hypervisor alone | pmgr 30, cpustart 28, sysreg 368, secondary 7 | the same counts |
+| Read-out | 545.45 s from the detach (20.8 s after the wake) | 549.23 s |
+
+**b. Commit snapshot: 858 words, 0 errors.** Against det8 on the 792-word list
+(`var/commit-state/macos135-det9-vs-det8-commit.tsv`): **774 equal, 18 different, 0
+unreadable.** The 18:
+- `MCC.plane0-3+0x680` (`0xe59`, det8 `0x800`) and `+0x684` (`0xe85`, det8 `0x82c`): 8 words;
+- `DCS3+0x500` `0x1440004` (det8 `0x2440004`);
+- SoC clock word `0x23b040020` `0xc5100000` (det8 `0x85100000`);
+- `ps_dcs0`, `ps_dcs1`, `ps_dcs5` `0x1f0003ff` (det8 `0x1000030f`); `ps_dcs2`, `ps_dcs3`
+  `0x1400034f` (det8 `0x1f0003ff`);
+- power-gate words `0x23b71c0d8`, `+108`, `+120`: `0x80040307` (det8 `0xc0040307`).
+
+Saved as `macos135-det9-real-commit.json` (det8's format and word list). The 66 extra
+domain words are in `macos135-det9-commit-psextra.json` (0 errors). The time the read took is
+not in the read-out.
+
+**b. Wake snapshot: 264 words.** Against det8 (`macos135-det9-vs-det8-wake.tsv`): 259 equal,
+5 different: `ps_dcs2`, `ps_dcs3` (`0x1f0003ff`, det8 `0x1000030f`), `ps_dcs4`, `ps_dcs5`
+(`0x1000030f`, det8 `0x1f0003ff`), and AON clock `0x23d240000` `0x91100010` (det8 `0x80100010`).
+
+**a. The 125 words that differ between Linux awake (dsh2) and macOS at its commit.** Table:
+`var/commit-state/macos135-det9-125words-writes.tsv`, one row per write. Columns: macOS's
+value in the touch map's `pre-full` snapshot (about 17:41) and in its `pre-detach` snapshot
+(17:41:53, both awake, before any sleep request), the commit value, and every write between the
+detach and T. A write is either a logged access or a power-manager word the hypervisor handled
+itself. Each row has its time relative to T, its core and PC. The phase column uses the
+spec's time windows (sections E1-E6 of `docs/spec/macos-13.5-sleep-wake-observed.md`); the
+windows were not re-derived for this capture.
+- None of the 125 lies in the four untrapped pages: every write to them by the main
+  processors is in the log.
+- **12 of the 125 were written** between the detach and T, 194 writes:
+  - 145 in the E1 window (ps_i2c3 140, ps_i2c0 20 over E1 and E3);
+  - 45 in E3 (display front ends and coprocessors, rmx, gfx, disp0_cpu0);
+  - 3 in E5: the clock words `0x23b04014c` and `0x23b040154` <- `0x80100000` at T-0.0208 s,
+    and `ps_sio` <- `0xf0000ff` at T-0.0160 s (a hypervisor-handled word);
+  - 1 in E6: `ps_sio_cpu` <- `0x400024f` at T-0.0160 s.
+- Awake (`pre-detach`) against the commit: 93 equal, 32 different. **6 of the 32 have a logged
+  write. 26 changed with no write by the main processors in the log:**
+  - 10 SoC clock words, in bit 8 or bit 30, e.g. `0x23b040020` `0x85100100` -> `0xc5100000`;
+  - 8 power-state words: `ps_dcs0`, `1`, `2`, `3`, `5`, `ps_pmp` (`0x1000030f` -> `0x1f0f03ff`),
+    `ps_pms_sram`, `ps_ans2`;
+  - 3 power-gate words;
+  - `0x23b720030`, `34`, `44` (`0x14d514d` -> `0x1515151`, `0x1404940` -> `0x1494949`);
+  - AON clock words `0x23d240040` and `0x23d240314`.
+
+  What changed them is not read.
+- Periodic snapshots were not needed: none of the 125 is in an untrapped page.
+
+**c. The 66 power-domain words not in the 792-word list:** read at the commit with the rest,
+0 errors (`macos135-det9-commit-psextra.json`). With the 71 already in the list, all 137 domain
+words of `ps_words.h` now have a macOS value at the commit.
+
+**d. The wake.**
+- The alarm as armed: the hypervisor's, now + 90 s at the commit. The wake record came 90.28 s
+  after T, with AON wake status `+0x20 = 0x400000`, as in det8. The earlier captures read the
+  same status for a key-press wake: an alarm and a key are not told apart by this word.
+- Words read by the hypervisor at the wake:
+  - `0x23d2b8028 = 0x8000000`, `0x23d2b8040 = 0x22`, `0x23d2c001c = 0xff0`;
+  - watchdog 2: count `0x23d2b0020 = 0x76e28b` (0.325 s at 24 MHz), alarm `0x7270e00`,
+    control 0. det8 read count `0x76e68f`, 0.325 s, the same within 1 ms.
+- Power chip after the reboot (17:52:56): alarm register `0xd008 = 3a 3e 09 00` (605754 s).
+  The clock then read 605895 s, so the alarm fell at about 17:50:35; the M3 saw the wake at
+  17:50:36.7. Scratch from `0x9f04`: `48 00 01 3f ff ff 47 50 00`, which is:
+  - 'H', the hypervisor's wake note (layout in `hv_cpu_power.c`: status map `0x0100`,
+    `0x3f` = "no message pending", command `0xff`);
+  - 'G' at `0x9f0a`: guest entered without a host.
+
+  `0xd000 = 01` (03 after dsh1). Which power-chip register holds the wake cause is not known
+  here, so the chip's own record of the wake source is not read.
+- macOS's own watchdog writes before the sleep (log): WD0 count `0x23d2b0000 <- 0` and
+  **WD1 count `0x23d2b0010 <- 0` at T-0.462 s**, WD0 control `0x23d2b000c <- 0` at T-0.035 s.
+  No other write to the watchdog page between the detach and T.
+
+### Run B (watchdog 1 armed 600 s before the detach): not run
+
+Readings that make it impossible as specified:
+- **600 s does not fit.** The AON watchdog's alarm word is 32 bits at 24 MHz
+  (`arm_wdt.py`: `WDT_SECONDS * 24_000_000`): the longest alarm is 178.9 s.
+- **It would fire before the sleep.** Armed just before the detach, any value would expire
+  about 179 s later, while macOS is still awake: T came 434-438 s after the detach in det8 and
+  det9 (the idle sleep, about 11 min after boot). So the M1 would reset before the sleep.
+- **macOS restarts the count anyway.** It writes watchdog 1's count to 0 at T-0.462 s (det9
+  log) and does not touch its control word in that window. An armed watchdog 1 would restart
+  its count there.
+
+Whether an AON watchdog counts while the chip is asleep is still unknown. The nearest
+reading: watchdog 2's count at the wake was 0.325 s in both det8 and det9, though the two
+captures slept 90.33 s and 90.28 s.
+
+### M1 left
+
+In Omarchy, stock kernel `7.3.0-0test5-1-ARCH`, up since 17:52:36. Reached over Thunderbolt;
+the camera frame `var/m1-look/20261117-175359-state-after-det9.jpg` shows the desktop.
