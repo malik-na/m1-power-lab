@@ -271,6 +271,27 @@ def test_commit_snapshot_and_the_way_down():
     assert recs[6]["tag"] == "wake" and "_kind" not in recs[6]
 
 
+def test_s2r_timer_write_probe_records():
+    """Round 7: the words read around a guest write of 0x23d2c4000 come back with their write
+    number, before/after, the word and its value; a failed read is marked; addr 0 is the tick."""
+    entries = [F.decode_entry(r) for r in (
+        F.make_entry(1000, 100, 24000000, 0, F.K_DETACH),
+        F.make_entry(2000, 0x23d2c4000, 1, 0xfffffe0014a00000, F.K_ACC, cpu=0, write=True, width=2),
+        F.make_entry(2001, 0x23d2b002c, 0, (1 << 4) | 0, F.K_PROBE, cpu=0),
+        F.make_entry(2002, 0, 2001, (1 << 4) | 0, F.K_PROBE, cpu=0),
+        F.make_entry(2010, 0x23d2b002c, 4, (1 << 4) | 1, F.K_PROBE, cpu=0),
+        F.make_entry(2011, 0x23d2b8028, 0, (3 << 4) | 1, F.K_PROBE, cpu=2, write=True),
+    )]
+    recs = list(F.records(entries, 1000, 24000000))
+    assert [r["ev"] for r in recs] == ["detached", "acc", "c4-probe", "c4-probe", "c4-probe", "c4-probe"]
+    assert {k: recs[2][k] for k in ("seq", "phase", "addr", "data", "error")} == \
+        {"seq": 1, "phase": "before", "addr": "0x23d2b002c", "data": "0x0", "error": False}
+    assert recs[3]["addr"] == "tick" and recs[3]["data"] == "0x7d1"
+    assert recs[4]["phase"] == "after" and recs[4]["data"] == "0x4"
+    assert recs[5]["seq"] == 3 and recs[5]["error"] and recs[5]["cpu"] == 2
+    assert F.MAX_CSNAP >= 1400      # round 7's commit list (r6 + CPU block + power-gate records)
+
+
 def test_first_layout_still_decodes_and_the_list_reaches_the_block():
     c = F.Ctl()
     c.set("magic", F.MAGIC_V1)

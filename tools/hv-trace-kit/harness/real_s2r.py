@@ -32,7 +32,8 @@ def wdt_state(tag=""):
           f"extra 8008/800c/8020 {p.read32(0x23d2b8008):#x}/{p.read32(0x23d2b800c):#x}/{p.read32(0x23d2b8020):#x}  s2r-timer {p.read32(0x23d2c4000):#x}")
 _CLKGEN = (0x23b040140, 0x23b040144, 0x23b040148, 0x23b04014c, 0x23b040154)  # muxes macOS parks (= 0x80100000) before the commit
 def real_s2r_on(spin=0, alarm=0, mask=(), wake="reset", wd1=0, core_state=0, keep_state=0,
-                sample_ms=0, sample_max_ms=0, sample_pmu_every=0, sample_hold=0):
+                sample_ms=0, sample_max_ms=0, sample_pmu_every=0, sample_hold=0,
+                keep_timers=0, keep_vfiq=0, c4_probe=0):
     p.write32(_A_CNT, 0); _slots.clear()
     try:
         # wake="proxy": the handler keeps the hypervisor image alive, restores these clkgen words,
@@ -102,7 +103,12 @@ def real_s2r_on(spin=0, alarm=0, mask=(), wake="reset", wd1=0, core_state=0, kee
     for _n, _v in (("hv_s2r_core_state", core_state), ("hv_s2r_keep_state", keep_state),
                    ("hv_s2r_sample_ms", sample_ms), ("hv_s2r_sample_max_ms", sample_max_ms),
                    ("hv_s2r_sample_pmu_every", sample_pmu_every),
-                   ("hv_s2r_sample_hold", sample_hold)):
+                   ("hv_s2r_sample_hold", sample_hold),
+                   # round 7 (m1n1-next ff8caba0): keep_timers=1 leaves only the guest's timers and
+                   # timer FIQ enable, keep_vfiq=1 only the pending virtual IRQ/FIQ (keep_state = both);
+                   # c4_probe=1 reads the always-on words around each guest write of 0x23d2c4000
+                   ("hv_s2r_keep_timers", keep_timers), ("hv_s2r_keep_vfiq", keep_vfiq),
+                   ("hv_s2r_c4_probe", c4_probe)):
         try:
             p.write32(_base + _sym(_n), _v)
             print(f"[s2r-real] {_n} = {_v}")

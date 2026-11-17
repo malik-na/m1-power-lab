@@ -37,7 +37,7 @@ detach(leave=True, mb=None, m1n1_mb=0, skip="", force=False, snap=True,
   snap         take the touch map's 793-word snapshot ("pre-detach") first, and have the
                hypervisor read the power-manager/always-on words of that list at the wake.
 
-  commit_snap  JSON [[address, name], ...] (up to 1024 words): read by the last core when it goes
+  commit_snap  JSON [[address, name], ...] (up to 2048 words): read by the last core when it goes
                down for the sleep, before the hypervisor's own commit actions ("snap" record,
                tag "commit"). None: no commit snapshot.
   commit_delay_us  wait this long on the last core before the first read (default 0: the other

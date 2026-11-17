@@ -9,10 +9,10 @@ import os
 import struct
 import subprocess
 
-MAGIC = 0x4445544143480002      # HV_DET_MAGIC, layout version in the low 16 bits
+MAGIC = 0x4445544143480003      # HV_DET_MAGIC, layout version in the low 16 bits (3: csnap 2048)
 MAGIC_V1 = 0x4445544143480001   # the first layout: the same block without the fields after saved_usage
 MAX_SEG, MAX_CPU, MAX_PMGR, MAX_CONST, MAX_AMCC = 4, 32, 32, 8, 32
-MAX_SYSREG, MAX_SHADOW, MAX_SNAP, MAX_CSNAP = 64, 32, 320, 1024
+MAX_SYSREG, MAX_SHADOW, MAX_SNAP, MAX_CSNAP = 64, 32, 320, 2048
 MAX_CPUS, USB_IODEV_COUNT = 32, 8
 
 # (name, words per element, elements), in the order of the C struct.
@@ -116,6 +116,9 @@ K_SYSREG, K_AMCC, K_CONST, K_BRK, K_IRQ, K_PANIC, K_UPMC_FIQ, K_RESUME, K_CPU_UN
 K_CSNAP, K_COMMIT_WRITE = 23, 24
 # round 6 (m1n1-next 2ced1fab): a core's own state at its sleep write; the last core's sampler
 K_CORE_STATE, K_SAMPLE, K_SAMPLE_END = 25, 26, 27
+# round 7 (m1n1-next ff8caba0): a word read just before (phase 0) or after (phase 1) a guest write
+# of the S2R timer word 0x23d2c4000; addr 0 is the timer count at the end of that set of reads
+K_PROBE = 28
 # how a system register access was handled: by the host's rules run on the M1 (pass, shadow,
 # skip), or by the hypervisor's C side itself (c: fast path, c-locked: under its lock, s2r: the
 # write that takes the core down for a real sleep, logged before it acts)
@@ -245,6 +248,11 @@ def records(entries, t0, frq, snap_names=None):
         elif k == K_SAMPLE_END:
             yield {"ev": "sample-end", "reason": {1: "bound", 2: "wd2-near-bite"}.get(e["addr"], e["addr"]),
                    "samples": e["data"], "cpu": e["cpu"], "t": t}
+        elif k == K_PROBE:
+            seq, phase = e["pc"] >> 4, e["pc"] & 0xf
+            yield {"ev": "c4-probe", "seq": seq, "phase": {0: "before", 1: "after"}.get(phase, phase),
+                   "addr": h(e["addr"]) if e["addr"] else "tick", "data": h(e["data"]),
+                   "error": e["w"], "cpu": e["cpu"], "t": t}
         elif k == K_CPU_UNKNOWN:
             yield {"ev": "cpu-not-found", "reg": h(e["addr"]), "cpu": e["cpu"], "t": t}
         else:
