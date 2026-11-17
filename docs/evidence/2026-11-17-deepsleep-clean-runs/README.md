@@ -472,3 +472,28 @@ captures slept 90.33 s and 90.28 s.
 
 In Omarchy, stock kernel `7.3.0-0test5-1-ARCH`, up since 17:52:36. Reached over Thunderbolt;
 the camera frame `var/m1-look/20261117-175359-state-after-det9.jpg` shows the desktop.
+
+## Run ds13 (17:59): Linux on bare metal, the snapshot words read just before the entry
+
+Kernel ds13 (`7089d2873`, package in `var/kernels/ds13/`), command line ds7's plus
+`apple_deepsleep.snap=4`: in the suspend path, with cores 1-7 parked and before the driver's
+first access, the glue reads the 792 words of macOS's commit snapshot list and returns without
+calling the driver.
+
+- `real.sh` started 17:59:18; `echo mem` returned 1 at 17:59:22 with all eight cores online
+  again. The machine stayed up; the log reached the disk.
+- All 792 words were read ("0 not read"); no SError was recorded.
+- Against macOS det9 at its commit, word for word: 674 equal, 118 different. The 118 by the
+  tracer's block labels: 54 SoC clock words, 40 power-state words, 8 memory-cache words, 5
+  always-on words, 3 other power-manager words, and one word in each of the eight DRAM channels.
+- The 137 power-domain words were also logged twice in this run (`dump=1`): at `prepare` and at
+  `wake`.
+
+Files (private): `var/deepsleep/ds13-snap0-dmesg.txt` (the log lines),
+`var/commit-state/linux-ds13-bare-preentry.json` (same word list and format as the macOS
+snapshots), `var/commit-state/linux-ds13-bare-preentry-vs-macos-commit.tsv` (det8, det9, Linux,
+per word), `var/commit-state/linux-ds13-bare-ps-words.json` (the 137 domain words at the two
+phases).
+
+This is Linux's state before the driver runs, not at its commit. What the driver's entry then
+changes is not read here.
