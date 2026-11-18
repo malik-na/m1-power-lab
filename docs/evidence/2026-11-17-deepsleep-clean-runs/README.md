@@ -1819,3 +1819,22 @@ value; `[8..9]` = 76 values captured).
 So at every core's final write nothing is pending at the core (`ISR_EL1`, fast IPI), while most
 timers' conditions are met (ISTATUS 1). Whether those timers are enabled and unmasked is not in
 these two values (the per-core controls are probe k = 18 + 7c + r, r 2-5; not read).
+
+## Runs ds19p, k 20-28 and 67-70 (2026-11-18 17:31-18:16): the timer controls at the final write
+
+Twelve probe runs of ds19 (`probe=1`, `wdt=120`, cable and charger in), one value each, the
+per-core timer controls at the core's final write (probe k = 18 + 7c + r; r 2 EL2 virtual
+`CNTV_CTL_EL0`, 3 EL2 physical `CNTP_CTL_EL0`, 4 `CNTV_CTL_EL02`, 5 `CNTP_CTL_EL02`; bit 0
+ENABLE, 1 IMASK, 2 ISTATUS). Every run ended in the watchdog reset; every record was 'q' with the
+value captured.
+
+| Core | EL2 virtual | EL2 physical | guest virtual | guest physical |
+|---|---|---|---|---|
+| 0 | `0x4` (off, condition met) | `0x7` (on, masked, met) | `0x7` | `0x7` |
+| 1 | `0x0` | `0x0` | `0x0` | `0x7` |
+| 7 | `0x0` | `0x0` | `0x0` | `0x7` |
+
+So no timer is on and unmasked at any of these cores' final write; several are on, masked, with
+their condition met. Each value is from a separate run. For core 7, run ds19p-75 (07:11) showed
+all four ISTATUS bits set, while these runs read ISTATUS 0 for three of them: run-to-run
+variation or a misreading in one of the two modes; not settled. Cores 2-6 not read.
