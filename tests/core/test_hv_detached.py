@@ -309,6 +309,24 @@ def test_detached_tick_sample_records():
     assert recs[3]["n"] == 2 and recs[3]["error"] and not recs[3]["skipped"]
 
 
+def test_held_mailbox_write_records():
+    """Round 11: a held-back message comes back as two hold records, the message word and the
+    send word, with the guest's values and PC."""
+    entries = [F.decode_entry(r) for r in (
+        F.make_entry(1000, 100, 24000000, 0, F.K_DETACH),
+        F.make_entry(2000, 0x23bc08800, 0x0020e00000550000, 0xfffffe00153e5258, F.K_HOLD, cpu=1,
+                     write=True, width=3),
+        F.make_entry(2001, 0x23bc08808, 0x20, 0xfffffe00153e5258, F.K_HOLD, cpu=1, write=True,
+                     width=3, multi=True),
+    )]
+    recs = list(F.records(entries, 1000, 24000000))
+    assert [r["ev"] for r in recs] == ["detached", "hold", "hold"]
+    assert {k: recs[1][k] for k in ("addr", "data", "half", "cpu")} == \
+        {"addr": "0x23bc08800", "data": "0x20e00000550000", "half": "msg", "cpu": 1}
+    assert recs[2]["half"] == "send" and recs[2]["data"] == "0x20"
+    assert recs[1]["pc"] == "0xfffffe00153e5258"
+
+
 def test_first_layout_still_decodes_and_the_list_reaches_the_block():
     c = F.Ctl()
     c.set("magic", F.MAGIC_V1)

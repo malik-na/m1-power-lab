@@ -122,6 +122,9 @@ K_PROBE = 28
 # round 10 (m1n1-next 5c696a89): the detached clock's sample of one word; pc = sample number,
 # write = the read faulted, multi = not read (its condition word's domain was not on; data = that word)
 K_TICK = 29
+# round 11 (m1n1-next be2bd182): a guest write held back (not done) by hv_hold_msg; pc = guest PC,
+# multi = the send half (+8, the endpoint word) of a held message
+K_HOLD = 30
 # how a system register access was handled: by the host's rules run on the M1 (pass, shadow,
 # skip), or by the hypervisor's C side itself (c: fast path, c-locked: under its lock, s2r: the
 # write that takes the core down for a real sleep, logged before it acts)
@@ -259,6 +262,9 @@ def records(entries, t0, frq, snap_names=None):
         elif k == K_TICK:
             yield {"ev": "tick-sample", "n": e["pc"], "addr": h(e["addr"]), "data": h(e["data"]),
                    "error": e["w"], "skipped": e["multi"], "cpu": e["cpu"], "t": t}
+        elif k == K_HOLD:
+            yield {"ev": "hold", "addr": h(e["addr"]), "data": h(e["data"]), "pc": h(e["pc"]),
+                   "half": "send" if e["multi"] else "msg", "cpu": e["cpu"], "t": t}
         elif k == K_CPU_UNKNOWN:
             yield {"ev": "cpu-not-found", "reg": h(e["addr"]), "cpu": e["cpu"], "t": t}
         else:

@@ -34,7 +34,8 @@ _CLKGEN = (0x23b040140, 0x23b040144, 0x23b040148, 0x23b04014c, 0x23b040154)  # m
 def real_s2r_on(spin=0, alarm=0, mask=(), wake="reset", wd1=0, core_state=0, keep_state=0,
                 sample_ms=0, sample_max_ms=0, sample_pmu_every=0, sample_hold=0,
                 keep_timers=0, keep_vfiq=0, c4_probe=0, pg_clear=0, cand=0,
-                tick_ms=0, tick_words=()):
+                tick_ms=0, tick_words=(), hold_msg=0, hold_reg=0x23bc08800, hold_where=0,
+                hold_max=0):
     p.write32(_A_CNT, 0); _slots.clear()
     try:
         # wake="proxy": the handler keeps the hypervisor image alive, restores these clkgen words,
@@ -143,6 +144,22 @@ def real_s2r_on(spin=0, alarm=0, mask=(), wake="reset", wd1=0, core_state=0, kee
             p.write32(_base + _sym("hv_det_tick_ms"), 0)
         except KeyError:
             pass
+    # round 11 (m1n1-next be2bd182, local): hold_msg=V drops the guest's 64-bit write of V to
+    # hold_reg (default pmp's mailbox send word 0, 0x23bc08800) and that core's next write to
+    # hold_reg+8 (the send): the message is never sent. hold_where 0 = from now, 1 = only after a
+    # detached wake. hold_max = at most that many (0 = all). Count and CNTPCT: hv_hold_count, hv_hold_t.
+    try:
+        p.write64(_base + _sym("hv_hold_reg"), hold_reg)
+        p.write32(_base + _sym("hv_hold_where"), hold_where)
+        p.write32(_base + _sym("hv_hold_max"), hold_max)
+        p.write64(_base + _sym("hv_hold_msg"), hold_msg)
+        print(f"[s2r-real] hold back: " + (f"{hold_msg:#x} to {hold_reg:#x} (+8 send dropped too), "
+              f"{'from now' if hold_where == 0 else 'after a detached wake only'}, max {hold_max or 'all'}; "
+              f"count at {_base + _sym('hv_hold_count'):#x}, times at {_base + _sym('hv_hold_t'):#x}"
+              if hold_msg else "off"))
+    except KeyError:
+        if hold_msg:
+            raise
     wdt_state("at arm")
     try:
         import time as _t
@@ -162,3 +179,13 @@ def real_s2r_on(spin=0, alarm=0, mask=(), wake="reset", wd1=0, core_state=0, kee
     p.call(_base + _sym("hv_s2r_register_wake"))
     print(f"[s2r-real] ON: flag {_A_FLAG:#x} = {p.read32(_A_FLAG)}, base {_base:#x}, {len(_slots)} PS words queued, wake handler registered")
 print("[s2r-real] real_s2r_on() defined")
+def hold_state(tag=""):
+    """Round 11: how many messages the hold-back dropped, and when (CNTPCT; with CNTPCT now)."""
+    try:
+        n = p.read32(_base + _sym("hv_hold_count")); a = _base + _sym("hv_hold_t")
+        ts = [p.read64(a + 8 * i) for i in range(min(n, 16))]
+        print(f"[s2r-real] hold {tag}: msg {p.read64(_base + _sym('hv_hold_msg')):#x} count {n} "
+              f"woke {p.read32(_base + _sym('hv_hold_woke'))} at CNTPCT " + " ".join(f"{t:#x}" for t in ts) +
+              f"; CNTPCT now {u.mrs((3, 3, 14, 0, 1)):#x}", flush=True)
+    except KeyError:
+        print("[s2r-real] this m1n1 build has no hold-back")

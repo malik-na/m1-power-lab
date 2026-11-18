@@ -3121,3 +3121,257 @@ Sources:
     early; lx15's console has no `PMPv1` line);
   - dsh1 and dsh2 have no `pmp` traffic and no touch of `0x23bc…` either. dsh2's pre-detach
     words read `0x444/0x666/0x333`, PMS_SRAM `0xf000300`.
+
+## Hypervisor round 11: macOS without the endpoint-0x20 0x55 message (det35, det36, det37, 2026-11-19 01:20-02:04)
+
+Readings only. Taken to test round 10's open point: does macOS's endpoint-`0x20` message
+`0x0020e00000550000` to `pmp` (mailbox `0x23bc08000`) cause the three words `0x23b058000`,
+`0x23b05c000`, `0x23b060000` (written `058000/05c000/060000`) to change? The hypervisor **dropped**
+the message: it was never put into the mailbox. It was not delayed. Where a reading was not taken,
+the text says "unknown".
+
+**Short answer.**
+- **With the message dropped (det36, every send of it; det37, only the one after the wake):**
+  - **Boot (det36):** at the drop (t 69.348) and for the 123 s sampled after it, the words stayed
+    at `0x444/0x444/0x444`. `060000` never read `0x222` and `058000` never read `0x333`
+    (481 samples, t 70-192; none of the 734 boot samples). `ps_PMP` and `ps_PMS_SRAM` **never read
+    `0x1000030f`** in the whole run. They read `0x1f0f03ff` / `0x1f0003ff` in every sample from
+    `pmp`'s start to the sleep (728 boot samples, 1815 detached samples of idle and entry), and in
+    141 of the 143 after the wake (the first two: `0xf0003ff` / `0xf000300`, then `0x1f0003ff`). `pmp` +`0x44` read
+    `0x10` throughout (`pmp` running). In det35 and det37, where the boot message was sent, all three
+    changed together to `0x333/0x444/0x222`. The change came in the first sample after the send:
+    214 ms after it in det35 and 72 ms in det37. `ps_PMP` and `ps_PMS_SRAM` then read `0x1000030f`
+    in 344-394 of the following 452-495 samples.
+  - **Idle and entry without it (det36):**
+    - `058000` went `0x444` -> `0x333` in the first sample after macOS's `0x0020e00000540000`
+      (t 447.65, the only endpoint-`0x20` message between those two samples).
+    - `060000` went `0x444` -> `0x222` in the first sample after `pmp` was stopped (`W 0x23bc00044`
+      = 0 at t 454.512; the 0x55 message had been dropped at 454.220).
+    - So at the commit the snapshot read `0x333/0x444/0x222`, as in det35.
+  - **Wake without it (det36, det37):**
+    - The first sample after the re-entry read `0x333/0x555/0x333`, as in det33 and det35.
+    - The sample after `pmp`'s restart and macOS's messages (0x55 dropped) read
+      **`0x333/0x444/0x444`**, and it stayed so in all 141 samples to the read-out (35 s).
+    - With the message sent (det35, and det33 in round 10) that sample and the rest read
+      `0x333/0x444/0x222`.
+- **macOS still went to its idle sleep and powered down** in all three runs: asleep 89.6-90.2 s,
+  woke at the hypervisor's 90 s alarm, wake status `0 / 0x400000 / 0`. That is the same outcome as
+  det18 and det33. The power chip afterwards read det18's values.
+- **macOS was not broken by the drop:** it booted to the login window (camera) and reached idle,
+  sleep and wake as without it. Whether it waited for a reply to the message was not read (see
+  "Left out").
+
+### The change and the runs
+
+- **Hypervisor:** `~/m1n1-next` branch `m1power/hv-detached`, local commits on top of `5c696a89`,
+  not pushed:
+  - `be2bd182` (build `v2.0.0-147-gbe2bd182`, used by det35);
+  - `c2d99a4e` (build `v2.0.0-148-gc2d99a4e`, used by det36 and det37).
+
+  Off by default (`hv_hold_msg` = 0). With `hv_hold_msg` = V, a guest write of the 64-bit value V to
+  `hv_hold_reg` (`0x23bc08800`, the mailbox's send word 0) through a traced or plain mapping is not
+  done, and neither is the endpoint word at `+8` that sends it. `be2bd182` matched only two separate
+  64-bit writes. macOS writes both words with one 128-bit store (both trace records carry the same
+  PC), so det35 dropped nothing. `c2d99a4e` also drops a 128-bit store whose first word is V.
+  - The trace event is still emitted (before the write), so the touch map / detached log shows the
+    access.
+  - Each drop is counted (`hv_hold_count`) and timed (`hv_hold_t[]`, CNTPCT), and while detached
+    it is logged as kind 30 (`hold`, one record for each word).
+  - `hv_hold_where` = 1 drops only after a detached real-S2R wake has re-entered the guest.
+- **Host side** (lab, this commit):
+  - `harness/real_s2r.py`: `real_s2r_on(hold_msg=, hold_reg=, hold_where=, hold_max=)`, and
+    `hold_state()`, which prints the count and times;
+  - `harness/detached_fmt.py`: kind 30 decoded as `hold`, with a test in
+    `tests/core/test_hv_detached.py`.
+- **Recipe:** round 10's det33 recipe, unchanged except for the hold:
+  - `WD1=150 ALARM=90 FULL=0 S2R_TOUCH_TICK=250 S2R_TOUCH_SAMPLE=<the nine words>
+    S2R_TOUCH_FULL=<pmp's two pages, both clusters' pages> S2R_ARGS='core_state=1, c4_probe=1,
+    tick_ms=250, tick_words=[<the nine words>], hold_msg=0x0020e00000550000[, hold_where=1]'
+    harness/macos-up.sh detNN`. The option is set at the arm, about 30 s into the guest.
+    - In det33-det37 macOS sent the boot message at t 68.7-69.4. No boot message was sent before
+      the arm (the boot logs from t 0).
+  - Once `macos-up.sh` printed READY and the camera showed the login window: `full <det8's four
+    pages>` into the control file. `pmp`'s mailbox page stays logged.
+  - `PRE='hold_state("pre-detach")' + <awake_snap of commit-snap-list-r7.json>
+    ARGS='commit_snap=<that list>' harness/detach135.sh detNN`.
+  - `harness/detached-wake-readout.sh detNN 35`, then `harness/hv-reboot.sh` and
+    `tools/tb/m1-pmu-dump`.
+  - macOS went to its idle sleep by itself. Nobody clicked anything.
+
+  The M1 was claimed as `observation` throughout and released at the end.
+- **The no-hands way out, named before each run:**
+  - the hypervisor's alarm at commit + 90 s;
+  - watchdog 1 at commit + 150 s;
+  - for a hang before the commit: the hypervisor's proxy over USB (`detach_readout.py --reboot`);
+  - for a boot hang: the attached host and `hv-reboot.sh`.
+
+  Every run ended without hands; the USB-C restart was not used.
+- **Files (private):**
+  - `tools/hv-trace-kit/runs/20261116-mac135/*-det35.*`, `*-det36.*`, `*-det37.*`;
+  - `var/commit-state/r11-det3{5,6,7}-boot.txt`, `-pmp-boot.txt`, `-detached.txt`,
+    `-pmp-detached.txt` (round 10's `r10_c3_series.py` and `r10_pmp_msgs.py`);
+  - `r11-det36-window-447.txt`, `r11-det36-window-454.txt`, `r11-det36-wake-window.txt`,
+    `r11-det37-wake-window.txt` (`r10_window.py`);
+  - `r11-commit-diff-det35-det36.txt`;
+  - `var/m1-state/pmu-20261119-013442-after-det35.txt`, `pmu-20261119-014908-after-det36.txt`,
+    `pmu-20261119-020421-after-det37.txt`;
+  - camera frames `var/m1-look/20261119-012013-*`, `-012310-*`, `-013828-*`, `-015346-*`,
+    `-020439-*`.
+
+| Run | Build, hold | Messages dropped (`hv_hold_count` / `hold` records) | Boot: words after the 0x55 send | Sleep | Wake: words after the 0x55 send |
+|---|---|---|---|---|---|
+| det35 | `-147`, every send (matched none) | 0 at the detach; no `hold` record | sent t 68.7922; n 251 (t 69.006): `0x333/0x444/0x222` | T 456.550 s after the detach; **asleep 89.62 s, woke at the alarm**; wake status `0 / 0x400000 / 0`; USB left/back 01:33:22.442 / :23.067 | sent t 546.6274; n 1824 (546.670): `0x333/0x444/0x222` |
+| det36 | `-148`, every send | 1 at the detach (CNTPCT `0x8364241f`, 37.75 s after the arm); detached: t 454.2196 (entry) and 545.0880 (wake) | dropped t 69.3481; `0x444/0x444/0x444` to the end (t 192.3) | T 454.945; **asleep 89.66 s, woke at the alarm**; `0 / 0x400000 / 0`; USB 01:47:44.424 / :45.036 | dropped t 545.0880; n 1818 (545.110): `0x333/0x444/0x444`, to the end |
+| det37 | `-148`, after the wake only | 0 at the detach; detached: t 540.3114 (wake) | sent t 68.6922; n 250 (t 68.764): `0x333/0x444/0x222` | T 449.676; **asleep 90.17 s, woke at the alarm**; `0 / 0x400000 / 0`; USB 02:02:57.375 / :57.988 | dropped t 540.3114; n 1797 (540.343): `0x333/0x444/0x444`, to the end |
+
+All three read-outs were complete: 1,227,499 / 1,280,243 / 1,198,282 log entries were kept, 0
+dropped. Each commit snapshot has 1328 words and 0 errors.
+
+The power chip after each run (alarm wake, then `hv-reboot.sh`):
+- `0x0201` `00` (row `0x0200` `20 00 …`);
+- `0x9f04`-`0x9f0c` `48 00 01 3f ff ff 47 50 00`;
+- `0xa47b`-`d` `00 08 00`;
+- `0xd000` `01`.
+
+These are det18's and det33's values.
+
+### 1. Did the drop happen?
+
+- **det36, boot:** `hold_state` at the detach read count 1, at CNTPCT `0x8364241f`. The touch map
+  has macOS's 128-bit store of `0x0020e00000550000` / `0x20` at t 69.3481 (core 0, pc `…811258`).
+  - The mailbox's A2I control word `0x23bc08110` read `0x28801` before that send (t 49.715), and
+    the same `0x28801` just after it (t 69.348).
+  - After each message that was sent, the next read of that word differs from the one before it.
+    For example, in det37: `0x21101`, `0x22201`, `0x23301` around its sends at t 49.76-68.69.
+- **det36 and det37, wake:** the detached log has a `hold` pair at each drop. The A2I control word
+  read `0x24401` before and after the dropped send in both runs (det36 t 545.078 / 545.088; det37
+  t 540.310 / 540.311).
+- **det35:** count 0 at the detach and no `hold` record. The message went out at boot, at the entry
+  (t 455.806) and at the wake (t 546.627). det35 is therefore a run without the drop: a third
+  boot after det33 and det34b, and a second sleep and wake after det33.
+
+### 2. Boot
+
+| Step | det35 (sent) | det36 (dropped) | det37 (sent) |
+|---|---|---|---|
+| `pmp` started (`W 0x23bc00044` = `0x10`) | t 2.6683 | t 2.4570 | t 2.7039 |
+| first change | n 5, t 3.257: 05c000 `0x666`->`0x444`, 060000 `0x333`->`0x444` | n 7, t 3.754: 05c000 `0x666`->`0x555` (`0x444` from n 10, t 4.504), 060000 `0x333`->`0x444` | n 6, t 3.754: 05c000 `0x666`->`0x555` (`0x444` from n 11), 060000 `0x333`->`0x444` |
+| t 4-68 | `0x444/0x444/0x444` with one-sample rises of the first two words | the same | the same |
+| `0x0020e00000550000` | sent, t 68.7922 | **dropped**, t 69.3481 | sent, t 68.6922 |
+| next sample | n 251, t 69.006: **`0x333/0x444/0x222`**; `ps_PMP` and `ps_PMS_SRAM` `0x1000030f` | n 251-276 (t 69.3-75.8): **`0x444/0x444/0x444`**; `ps_PMP` `0x1f0f03ff`, `ps_PMS_SRAM` `0x1f0003ff` | n 250, t 68.764: **`0x333/0x444/0x222`**; `0x1000030f` |
+| samples t 70 to the full switch | 452 (to t 185.3): 058000 `0x333` in all; 060000 `0x222` in all; `ps_PMP` `0x1000030f` in 394, `0x1f0f03ff` in 58 | 481 (to t 192.3): 058000 `0x444` 480 (`0x555` 1); 05c000 `0x444` 476; **060000 `0x444` in all 481; `ps_PMP` `0x1f0f03ff` in all; `ps_PMS_SRAM` `0x1f0003ff` in all**; `pmp` +`0x44` `0x10` in all | 495 (to t 196.8): 058000 `0x333` 492; 060000 `0x222` in all; `ps_PMP` `0x1000030f` in 347 |
+
+`ps_PMS` read `0x1f0002ff` in every boot sample after t 70 in all three runs. `ps_DCS0` alternated
+in all three. In det36's whole boot (734 samples) 058000 read `0x444` (726) or `0x555` (8), 060000
+`0x333` (6, before the first change) or `0x444` (728).
+
+### 3. Idle and entry (detached clock, 250 ms)
+
+| | det35 (sent) | det36 (dropped) | det37 (sent until the wake) |
+|---|---|---|---|
+| samples, detach to the last core | 1821 | 1815 | 1794 |
+| 058000 | `0x333` 1812, `0x444` 8, `0x555` 1 | `0x444` until t 447.533; **`0x333` from t 447.783** (29 samples, to the commit) | `0x333` 1789, `0x444` 5 |
+| 060000 | `0x222` in all | `0x444` until t 454.303; **`0x222` from t 454.553** (2 samples, to the commit) | `0x222` in all |
+| `ps_PMP` / `ps_PMS_SRAM` | `0x1000030f` in 1336 / 1336 | `0x1f0f03ff` / `0x1f0003ff` in all 1815 | `0x1000030f` in 1238 / 1236 |
+| endpoint-`0x20` messages at the entry | `0x0020e00000540000` (t 449.21); `…540001`, `…550001`, `0x0020800000630000` (455.77); `…540000`, **`…550000` sent** (455.806) | `…540000` (447.654); `…540001`, `…550001`, `0x0020800000630000` (454.20-454.21); `…540000` (454.2189), **`…550000` dropped** (454.2196) | `…540000` (442.34); `…550001`, `…540001`, `0x0020800000630000` (448.90-448.91); **`…550000` sent** (448.917), `…540000` (448.925) |
+| `pmp` stopped (`W 0x23bc00044` = 0) | t 456.12 | t 454.512 | t 449.251 |
+| commit snapshot: words, `ps_PMP` | `0x333/0x444/0x222`, `0x1f0f03ff` | `0x333/0x444/0x222`, `0x1f0f03ff` | `0x333/0x444/0x222`, `0x1f0f03ff` |
+
+det36, the two changes:
+- **058000 `0x444` -> `0x333`** between n 1786 (t 447.533) and n 1787 (t 447.783). In that window,
+  `pmp`'s mailbox carried two endpoint-4 exchanges (`0x0040000000000000`, t 447.561 and 447.622)
+  and one endpoint-`0x20` message, **`0x0020e00000540000`** at t 447.6545. The other pages accessed
+  are listed in `r11-det36-window-447.txt`.
+  - *Documentation, not an observation:* `0x54` is DISP0_FE's id in the ADT's power-manager table
+    (round 10).
+- **060000 `0x444` -> `0x222`** between n 1813 (t 454.303) and n 1814 (t 454.553). In that
+  window, with no endpoint-`0x20` message (`0x55` had been dropped at 454.2196, before n 1813):
+  - endpoint-0 management `0x00b0000000000201`, `0x0060000000000201` / `RECV 0x0070000000000201`
+    (t 454.5115-454.5120);
+  - `W 0x23bc08114` = `0x2ff00`;
+  - `R 0x23bc00048` = `0x2e`, `R 0x23bc00044` = `0x10`, `W 0x23bc00044` = 0 (t 454.5120);
+  - other pages (`r11-det36-window-454.txt`).
+
+  In the same sample `pmp` +`0x44` read 0 and +`0x48` `0x2e`.
+
+The commit snapshots of det35 and det36 (1328 words each) differ in 23 words
+(`r11-commit-diff-det35-det36.txt`). None of them is one of the three words, `ps_PMP`, `ps_PMS_SRAM`
+or `pmp`'s. The ones that differ are:
+- DCS4-7's power-state words;
+- MCC `+0x680`/`+0x684` on all four planes;
+- six power-gate page words (`0x23b71c0f0`, `0x23b71c104`, `0x23b71c108`, `0x23b71c11c`,
+  `0x23b71c120`, `0x23b71c134`);
+- `0x23b700030`/`0x23b700038`;
+- the three watchdog counts.
+
+### 4. Sleep and wake
+
+- **Asleep:** last core to wake entry 89.62 s (det35), 89.66 s (det36), 90.17 s (det37). The wake
+  status was `0 / 0x400000 / 0` in all three.
+- **The wake snapshot and first sample, the same in all three:**
+  - the words `0x333/0x555/0x333`;
+  - `ps_PMP` `0xf0003ff`, `ps_PMS_SRAM` `0xf000300`, `ps_PMS` `0xf0002ff`;
+  - `pmp` +`0x44` 0, +`0x48` `0x2a`.
+
+  The wake snapshots of det35 and det36 (264 words) differ only in DCS0-2 and DCS4-7's power-state
+  words.
+- **Second sample:** `ps_PMP` / `ps_PMS_SRAM` / `ps_PMS` `0x1f0003ff` / `0x1f0003ff` / `0x1f0002ff`;
+  the words are unchanged.
+- **`pmp` restarted** (`W 0x23bc00044` = `0x10`) 0.35 s after the wake entry in all three: t 546.513
+  (det35), 544.9586 (det36), 540.1892 (det37). The endpoint-0 handshake follows.
+- **Endpoint `0x20`**, in the same order in all three: `…630001`, `…540001`, `…550001`,
+  `…540000`, `…550000`. The last two are 0.8 ms (det35), 10.3 ms (det36) and 1.8 ms (det37) apart:
+  - det35: `…550000` sent at 546.6274;
+  - det36: dropped at 545.0880;
+  - det37: dropped at 540.3114.
+- **The next sample** (22-42 ms after `…550000`):
+  - det35 (n 1824, 546.670): **`0x333/0x444/0x222`**;
+  - det36 (n 1818, 545.110) and det37 (n 1797, 540.343): **`0x333/0x444/0x444`**, with `pmp`
+    +`0x44` `0x10` and `ps_PMP` `0x1f0f03ff`.
+
+  In det36 and det37, 05c000 `0x555` -> `0x444` and 060000 `0x333` -> `0x444` came in that one
+  sample.
+- **To the read-out** (35 s, 143 samples after the wake entry):
+
+  | | det35 | det36 | det37 |
+  |---|---|---|---|
+  | 058000 | `0x333` (all 143) | the same | the same |
+  | 05c000 | `0x444` (141), `0x555` (2) | the same | the same |
+  | 060000 | `0x222` (141) | `0x444` (141) | `0x444` (141) |
+  | `ps_PMP` | `0x1000030f` (112) | `0x1f0f03ff` (141), never `0x1000030f` | as det36 |
+  | `ps_PMS_SRAM` | `0x1000030f` (112) | `0x1f0003ff` (142), never `0x1000030f` | as det36 |
+
+- The window from the sample before the change to the sample after it is listed in
+  `r11-det36-wake-window.txt` and `r11-det37-wake-window.txt`.
+
+### Left out, and why
+
+- **A delayed send:** not run. The message was dropped, not held and sent later, so whether the
+  words and `ps_PMP` move when it arrives late is not read.
+- **Whether `pmp` itself or something that `pmp` drives writes the words:** not read. These runs
+  show the order of events with the message present or absent, nothing more:
+  - **Message absent:**
+    - 060000 did not go to `0x222` while `pmp` ran (boot, idle, wake). In det36's entry it went
+      to `0x222` once `pmp` was stopped.
+    - 058000 went to `0x333` after `0x0020e00000540000` (det36 idle). After the wake it read
+      `0x333` from the first sample, before any message.
+    - `ps_PMP` and `ps_PMS_SRAM` never read `0x1000030f`.
+  - **Message present:** these readings came in the first 250 ms sample after it. Round 10 and
+    this round together have that for three boots and two wakes.
+- **The drop at the entry only:** not run. det36 dropped at boot, entry and wake together. det37
+  dropped at the wake only.
+- **A reply to the message:** `pmp`'s receive side (`R 0x23bc08830`/`838`) was logged in full. Its
+  traffic around the drops was not compared with det35's beyond the windows listed above.
+- **The macOS console (`vuart-det3*.log`):** not read for this round.
+- **det35's first build** dropped nothing (the 128-bit store). Its readings are used here as a
+  run with the message sent.
+- **The camera** was looked at at each boot (login window in det35-det37) and before and after
+  the round. It was not looked at during the sleeps; the sleeps are read from the log and USB.
+
+### M1 left
+
+In stock Omarchy (kernel `7.3.0-0test5-1-ARCH`, up since 2026-11-19 02:03:56), reached over
+Thunderbolt. The camera frame `var/m1-look/20261119-020439-state-after-round11.jpg` shows the
+desktop. The claim is released. On the M3, the three FIFO holders (`sleep 7200`) that this
+round's `macos-up.sh` runs had left were stopped by pid. One from 00:38 (pid 58327, round 10)
+was left running.
