@@ -2330,3 +2330,164 @@ Times are seconds from the detach marker (the M1's timer). Every access in the l
 In stock Omarchy (kernel 7.3.0-0test5-1-ARCH, up since 2026-11-19 01:04:29), reached over
 Thunderbolt. The camera frame `var/m1-look/20261119-010452-state-after-round10.jpg` shows the
 desktop. The claim is released.
+
+## Linux round: pmp and the endpoint-0x20 message (2026-11-19 01:10-01:15)
+
+Readings only, on bare metal: stock Omarchy, kernel `7.3.0-0test5-1-ARCH` (package `linux-aurora
+7.3.0.aurora0test5-1`, built 2026-11-14), up since 01:04:29, awake, nothing suspended. The camera
+frame `var/m1-look/20261119-011007-state-linuxobs-start.jpg` shows the Omarchy desktop. The M1 was
+claimed as `linux-obs` and driven over Thunderbolt. Registers were read over `/dev/mem`, 32-bit,
+read-only. `pmp`'s mailbox FIFOs were not read (a read of a receive FIFO takes a message); only
+its two control words were. No message was sent to `pmp` (see 4).
+
+**Short answer.** On this kernel nothing in Linux reaches `pmp`. The M1's device tree has no
+node for `pmp`, its mailbox or its DART. The `apple_pmp` module is loaded, but it has no `t8103`
+compatible and no device bound. `pmp`'s CPU control word reads `0x0`, both mailbox directions read
+empty, and the three words read `0x444/0x666/0x333`, unchanged over 60 s.
+
+### 1. Is pmp running under Linux?
+
+- **Device tree (live, `/sys/firmware/devicetree/base`):**
+  - Root compatible `apple,j313 apple,t8103 apple,arm-platform`.
+  - No node at `0x23bc00000` (`pmp`), `0x23bc08000` (its mailbox) or `0x23b300000` (its DART).
+    No node name and no `compatible` contains `pmp`, and no property is named `apple,pmp*`. The
+    `soc` node's only mailboxes are `mailbox@381100000` and `mailbox@501100000`.
+  - The power-manager children `power-controller@3d8` (label `pmp`) and `power-controller@3e0` are
+    present.
+- **Drivers:**
+  - `apple_pmp` (`/lib/modules/7.3.0-0test5-1-ARCH/kernel/drivers/soc/apple/apple-pmp.ko`,
+    BuildID `09e1db6a6b62…`; source paths in it `/src/linux-aurora/src/linux-test73/drivers/soc/
+    apple/pmp.rs`) is loaded, used by `appledrm` and `aurora`.
+  - Its aliases are only `apple,t8132-pmp-v2`, `t8140`, `t8142`, `t6041`, `t6050`, `t6000`. Its
+    strings also contain `apple,t6030-pmp-v2` and `/soc/pmp@380500000`.
+  - `/sys/bus/platform/drivers/apple_pmp/` has no device link. Neither does
+    `apple-pmp-report` nor `apple-pmp-report-entry` (built in as `pmp_report`). No platform device
+    is bound to any driver whose name contains `pmp` or `rtkit` (only the driver `rtkit-helper` is
+    listed).
+  - `dmesg` has no line containing `pmp`. `/sys/kernel/debug/apple-pmp-report/` is empty.
+- **Power domains** (`/sys/kernel/debug/pm_genpd/pm_genpd_summary`): `pmp` on, `pms` on, `pms_busif`
+  on, `pms_sram` `off-0`, `pms_fpwm0`-`4` `off-0`.
+- **Words (01:10:54):**
+
+  | Word | Value |
+  |---|---|
+  | `pmp` +`0x44` (`0x23bc00044`, CPU control) | `0x0` |
+  | `pmp` +`0x48` | `0x2a` |
+  | mailbox A2I control `0x23bc08110` | `0x20001` |
+  | mailbox I2A control `0x23bc08114` | `0x20001` |
+  | `ps_PMP` `0x23b7003d8` | `0x1f0000ff` |
+  | `ps_PMS_SRAM` `0x23b7003e0` | `0x0f000300` |
+  | `ps_PMS` `0x23b700140` | `0x1f0000ff` |
+  | `ps_DCS0` `0x23b700300` | `0x1f0002ff` |
+  | E-cluster cmd `0x210e20020` / P-cluster cmd `0x211e20020` | `0x105105` / `0x10f10f` |
+
+  *Documentation, not an observation* (aurora-silicon/linux `integration/aurora` `1f38ff8f4`,
+  `drivers/soc/apple/mailbox.c`): bit 17 of a control word is EMPTY, bit 16 FULL, bit 0
+  RECV_ENABLE; offset `0x44` of the coprocessor's page is its CPU control, and its "run" bit is
+  what `pmp.rs` sets to start it.
+  - `pmp` +`0x44`/+`0x48` read as in round 10's bare proxy (`0x0`/`0x2a`). They do not read as in
+    macOS after it starts `pmp` (+`0x44` `0x10`).
+- **Endpoints started:** no RTKit instance exists for `pmp` in this kernel, so there is nothing to
+  read them from. With +`0x44` at `0x0`, no endpoint list was read from `pmp` itself.
+
+### 2. The three words under Linux
+
+- **01:10:54:** `0x23b058000` = `0x444`, `0x23b05c000` = `0x666`, `0x23b060000` = `0x333`.
+- **01:13:24-01:14:24:** 60 samples at 1 s of the three words, `pmp` +`0x44`/+`0x48`, both mailbox
+  control words, `ps_PMP`, `ps_PMS_SRAM`, `ps_PMS` and `ps_DCS0`. **0 changes**: every sample is the
+  01:10:54 reading.
+- File (private): `var/commit-state/linux-pmp-series-20261119.txt`.
+
+### 3. Does Linux send endpoint-0x20 messages to pmp?
+
+**The running kernel.** These come from the M1's module and DT (above), not from source:
+- no `pmp` device and no mailbox device for `0x23bc08000` exist;
+- `apple_pmp` matches no `t8103` compatible.
+
+A kernel RTKit or mailbox client therefore has nothing to bind to. The hardware readings agree:
+`pmp`'s CPU control is `0x0`, and both mailbox directions read EMPTY. No endpoint-`0x20` traffic
+was observed, and none has a path in this kernel.
+
+**Reference source.** This is aurora-silicon/linux `integration/aurora` at `1f38ff8f4`, read as
+data. It is not the M1's exact tree: the M1's module was built from `linux-test73`. Its compatible
+list matches the M1 module's aliases.
+- `arch/arm64/boot/dts/apple/t8103-peripherals.dtsi`:
+  - `pmp: coprocessor@23bc00000` (`"apple,t8103-pmp", "apple,pmp"`; power domains `ps_pmp`,
+    `ps_pms_sram`; `iommus = <&pmp_dart 0>`);
+  - `pmp_mailbox@23bc08000` (`apple,t8103-asc-mailbox`, `apple,asc-mailbox-v4`);
+  - `pmp_dart` `iommu@23b300000`.
+
+  All three are `status = "disabled"`. No driver in that tree matches `apple,t8103-pmp` or
+  `apple,pmp`.
+- `drivers/soc/apple/pmp.rs`:
+  - `PMP_ENDPOINT = 0x20`. Messages sent on it:
+    - replies to the firmware's requests, `(opcode | 1) << 48` with opcodes `0x10` (IOVA table),
+      `0x12` (malloc), `0x14` (free), `0x30` (set buffer), `0x32`/`0x34`/`0x36` (ioreg);
+    - for `0x36`, the reply `0x37 << 48`;
+    - power commands (`apple_pmp_send_power_command`): `(1 << 53) | (command << 44) |
+      (device_id << 40) | (enabled << 32)`.
+  - The reply awaited for a power command is `(1 << 53) | ((command + 1) << 44)` (`pmp_power.rs`).
+- `drivers/soc/apple/pmp-export.c` `apple_pmp_set_device_power`: refuses any command other than
+  `0x0e`/`0x0f`, any `device_id > 15` and any `enabled > 1`.
+  - Its one caller in that tree is `drivers/gpu/drm/apple/iomfb_v26_6.c` `keep_display_power`,
+    for J613 only: `(0x0f, 8, 1)`.
+- macOS's message `0x0020e00000550000` has bit 53 set, `0xe` in bits 44-47, `0x55` in bits 16-23
+  and `0` in bits 0-15. In the reference format, `device_id` goes at bit 40 and `enabled` at bit
+  32, and `device_id` is limited to 0-15. The reference function therefore cannot produce this
+  word.
+
+### 4. The message itself: not sent
+
+**No safe path exists on this kernel.**
+- There is no existing interface: no `pmp` device, no RTKit instance, no mailbox device.
+- No kernel driver owns `0x23bc08000`, but with `pmp`'s CPU stopped (+`0x44` `0x0`) a word put
+  into its mailbox reaches no endpoint.
+- To reach endpoint `0x20`, `pmp`'s firmware would first have to be started, and that has not
+  been done under Linux on this machine.
+
+**What a test path would need**, from what is present on the M1 and from round 10's macOS
+captures:
+- **Kernel support, present:**
+  - `CONFIG_OF_OVERLAY=y`, `CONFIG_APPLE_MAILBOX=y`, `CONFIG_APPLE_RTKIT=y`, `CONFIG_APPLE_DART=y`;
+  - `of_overlay_fdt_apply`, `apple_mbox_get`, `apple_rtkit_init`, `apple_rtkit_wake`,
+    `apple_rtkit_start_ep` and `apple_rtkit_send_message` exported (`Module.symvers`);
+  - the headers at `/lib/modules/7.3.0-0test5-1-ARCH/build`;
+  - modules are signed, but `CONFIG_MODULE_SIG_FORCE` is not set.
+- **Device-tree nodes, by overlay:** nodes for the mailbox (`0x23bc08000`, AIC 511-514), the DART
+  (`0x23b300000`, AIC 515) and a test device holding `mboxes`, `iommus` and the `ps_pmp` and
+  `ps_pms_sram` power domains. `ps_pms_sram` reads `off-0` now; in macOS it reads `0x1000030f`
+  from the second change onward.
+- **A test module** that starts `pmp`'s CPU (+`0x44` run bit) and completes RTKit's boot with the
+  buffer requests macOS answered at boot (`r10-det33-pmp-boot.txt`, t 2.675-2.70):
+  - endpoint 0 handshake;
+  - endpoints 1, 2 and 3 with buffer replies (`0x0010400000018000`, `0x0010100000034000`, ep 3
+    `0x0001000000004000`/`0x0002000000010000`);
+  - start of endpoint `0x20`;
+  - then endpoint `0x20`'s own opening: `RECV 0x0`, macOS `SEND 0x000100000003c000`,
+    `RECV 0x000200000023b549`, `SEND 0x0020000000010003` / `RECV 0x0020100000010003`,
+    `SEND 0x0020200000010000` / `RECV 0x0020300000010000`.
+
+  Only then the messages wanted: `0x0020e00000550001`, then `0x0020e00000550000`, reading the words
+  before and after.
+  - The meaning of these opening words, and whether `pmp`'s SRAM needs anything written before the
+    start, are not read. The reference driver's opening (`(0x10|1) << 48` for the IOVA table)
+    differs from macOS's `0x0001…` above.
+- **Why it was not run:** the brief excludes crash-prone steps with the Thunderbolt cable in.
+  Starting a power-management coprocessor whose start-up has never run under Linux here, with an
+  untested DART and buffer setup, is such a step. Whether it would crash is unknown.
+
+### Left out
+
+- The test module and overlay (section 4): not written, not built, not loaded.
+- The M1's exact source tree (`linux-test73`): not on the M3. The running kernel was read from its
+  module, its DT, its config and `Module.symvers`. The protocol was read from the reference tree.
+- `pmp`'s SRAM, its other register pages, and what macOS writes to them before starting `pmp`: not
+  read.
+- The mailbox FIFOs: not read.
+
+### M1 left
+
+In stock Omarchy (kernel `7.3.0-0test5-1-ARCH`, up since 01:04:29, not rebooted in this round),
+reached over Thunderbolt. No module was loaded, and the two reader scripts copied to `/root` were
+removed. The camera frame `var/m1-look/20261119-011527-state-linuxobs-end.jpg` shows the desktop. The
+claim is released.
