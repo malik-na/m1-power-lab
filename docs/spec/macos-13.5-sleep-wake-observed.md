@@ -65,8 +65,12 @@ bite left after the disarm, what N must cover) (round 15d, 2026-11-19), and with
 build at boot (ds23p: its domains held on through the node, the same wait ran out; L34), `pmp`'s
 translator, SRAM header and mailbox read after that failure (L35), the three known openings of
 endpoint `0x20` set side by side word for word (section 12, after L35), and the reads and switches
-that make the client's next boot decisive (D13-D16) (round 15e, 2026-11-19, listed in "Changes in
-round 15e" at the end, with the earlier rounds' lists below it). It states what macOS
+that make the client's next boot decisive (D13-D16) (round 15e, 2026-11-19), and with what macOS's
+translator maps for `pmp` and what its opening region holds when the opening word is sent (hypervisor
+round 12, 1.7h, R76), three more boots of the client in which `pmp` took the opening and crashed
+within a quarter of a millisecond (L36), and the client's set-up before the opening made exact from
+those readings (D17), with D14 withdrawn and D16 replaced (round 15f, 2026-11-19, listed in "Changes
+in round 15f" at the end, with the earlier rounds' lists below it). It states what macOS
 did, not why, and not what is
 needed for sleep to work; the candidates of 8.2 are differences, not causes.
 Nothing here comes from any Linux sleep driver's code. Section 12 records what was **read on the
@@ -1127,7 +1131,7 @@ Endpoints started: 1, 2, 3, 4, `0x20` (the map lists 0-4 and `0x20` only). What 
 and the buffers' contents, are in DRAM, which is not logged.
 
 **Endpoint `0x20`** (det33, det34b; the same through the opening word for word):
-- **Opening:** RECV `0x0`; SEND **`0x000100000003c000`** *(guess: a buffer at IOVA `0x3c000`)*;
+- **Opening:** RECV `0x0`; SEND **`0x000100000003c000`** *(guess: a buffer at IOVA `0x3c000`; round 15f: read, a 64 KiB region, R76)*;
   0.27 s (det33) / 0.59 s (det34b) later RECV **`0x000200000023b549`**, and macOS reads byte
   `0x23b549400` 1.4 ms later (`0x42`; that page of `pmp`'s `__DATA` holds 16-byte name slots `BAT`,
   `DRAM`, `ECPU`, `PCPU`, `ECORE0`-`3`, ..., `GPU SRAM` at +`0x400`-`0x55f` and 64-bit words at
@@ -1241,6 +1245,133 @@ the entry alone were not read.
 the hardware writes the words is not read, nor what the word means (*guess*: DISPEXT_FE's state to
 `pmp`). 250 ms samples, so anything within one sample of the event goes with it. One run with the
 drop at boot, two with it at the wake; one session; the drops are the instrument's act.
+
+**Round 12: what macOS's translator maps for `pmp`, and what the opening region holds (det38, det39;
+hypervisor round 12; added round 15f).** Source: evidence section "Hypervisor round 12: what macOS
+maps for pmp, and its opening page" (lab `66060ff`); private dumps `var/commit-state/r12-det38/`,
+`r12-det39/` (`r12-<tag>.json`: the translator's words, the L1 entries, every PTE; `r12-<tag>-iova-
+<iova>.bin`: each DRAM page; `r12-adt-pmp.txt`, `r12-adt.bin`: the ADT m1n1 held), decoder outputs
+`r12-det38-analysis.txt`, `r12-det38-pio.txt`, `r12-det38-tables-reply.txt` (scripts `r12_pmp_dart.py`,
+`r12_analyze.py`, `r12_tables.py`, `r12_pio.py`). Two macOS boots, no sleep, round 11's hypervisor
+build. The translator's table was walked from DRAM with every guest CPU stopped, reads only, at:
+`start-pre` (det39 only: inside the trap of +`0x44` = `0x10`, before the write), `open-pre` (the
+store of `0x000100000003c000` to `0x23bc08800` trapped, before it is made), `open-post` (the next
+mailbox access), `reply` (the read of `0x000200000023b549`), `m55-pre`/`m55-post` (the same for
+`0x0020e00000550000`) and `late` (77.3 s). The mailbox traps slowed macOS's side of the exchange (the
+reply read 1.2 s and 1.58 s after the opening, against 0.27-0.59 s untrapped) **[HV-CHANGED]** for
+timing; the contents were the same in both boots. In this round every byte cited below was checked
+again against the dumps, and the IOVA rule of item 4 against all 100 MMIO entries of both boots.
+1. **The translator at the start and after.** At `start-pre` (det39): TCR of streams 0-14 (+`0x100`-
+   `0x138`) `0x80`, of stream 15 (+`0x13c`) `0x100` already; TTBR of stream 0 (+`0x200`) 0;
+   ENABLED_STREAMS (+`0xfc`) 0; no table. From `open-pre` to `late`, one table, unchanged: +`0x200`
+   = det38 `0x808229f8`, det39 `0x8082282c` (bit 31, and the L1 page's physical address shifted
+   right by 12), +`0xfc` = 1. ERROR (+`0x40`) `0x6000400` at every point, `start-pre` included. So
+   **the TTBR write and the enable come after +`0x44` = `0x10`** in both boots (det39 under the trap;
+   det38 by receipt time; they run on another CPU than the start). This settles what R71 (c) left
+   open (whether its last three accesses precede (d)-(e)): after, in these two boots.
+2. **The entries' form.** L1 (the TTBR's page): 5 valid entries, at indices 0, 96, 97, 98, 99
+   (IOVA bits 25-35), each = the physical address of one L2 page | `0x1`. L2: **113 valid entries,
+   each = the 16 KiB page's physical address | `0x3`**: bit 0 VALID and bit 1 SP_DIS by the
+   reference's names (aurora-silicon/linux `integration/aurora` `1f38ff8f4`,
+   `drivers/iommu/io-pgtable-dart.c`: `APPLE_DART_PTE_VALID`, `APPLE_DART1_PTE_PROT_SP_DIS`); bits 7
+   and 8 (NO_WRITE, NO_READ there) clear; bits 40-63 (the subpage fields there) 0. Stream 0 only.
+3. **13 DRAM pages**, physical addresses not contiguous and different in the two boots (the four
+   at `0x3c000`-`0x48000`: det38 `0x822a64000`, `0x822a60000`, `0x822a9c000`, `0x822a98000`):
+
+   | IOVA | named in macOS's words (R72) | at `open-pre` |
+   |---|---|---|
+   | `0x4000` | kdebug buffer (ep 3, `0x0001000000004000`) | zero |
+   | `0x8000` | none | zero |
+   | `0x10000` | kdebug buffer (ep 3, `0x0002000000010000`) | +`0x0`-+`0x1fff` all `0xff`, rest zero |
+   | `0x18000` | crash log (ep 1, `0x0010400000018000`) | all 16 KiB `0xef` |
+   | `0x20000`-`0x2c000` (4 pages) | ioreport (ep 4, `0x0011000000020000`) | `0x20000`: 371 non-zero bytes (records beginning `bROI`); the other three zero |
+   | `0x34000` | syslog (ep 2, `0x0010100000034000`) | 16 words `0xffffffff` at a stride of `0x70` from +`0x0` (64 bytes), rest zero |
+   | `0x3c000`-`0x48000` (4 pages) | the opening, `0x000100000003c000` | item 5 |
+
+   Not mapped: `0x0`, `0xc000`, `0x14000`, `0x1c000`, `0x30000`, `0x38000`, and nothing else below
+   `0xc0000000`. Who wrote the `0xff`, `0xef`, ioreport and syslog bytes is not read (no trap before
+   `open-pre`).
+4. **100 MMIO pages, `0x190000` bytes, IOVA `0xc0000000`-`0xc6003fff`, in 34 ranges, identical in
+   both boots.** Each range is one non-zero entry of ADT `/arm-io/pmp` `reg` from index 3 (the node's
+   `pio-reg-index`) to 43, at that entry's physical address (`reg` address + `0x200000000`, the
+   `/arm-io` ranges) and its size; entries 12-16, 34 and 36 have size 0 and are not mapped; entries
+   0-2 (control `0x23bc00000`, `0x23b850000`, the SRAM `0x23b500000`) and the SRAM segments
+   (`segment-ranges`, IOVA `0x100000000`, `0x10002c000`) are not mapped. The 41 entries with their
+   IOVAs are R76 (b)'s table. **Every IOVA follows one rule:** going through the entries in index
+   order, each 16 MiB block of physical address (address >> 24) gets the next 16 MiB IOVA slot
+   (`0xc0000000` + n x `0x1000000`, `/arm-io/dart-pmp` `pio-vm-base` and `pio-granularity`) when an
+   entry first falls in it (`0x200…` -> `0xc0`, `0x204…` -> `0xc1`, `0x210…` -> `0xc2`, `0x211…` ->
+   `0xc3`, `0x23d…` -> `0xc4`, `0x26b…` -> `0xc5`, `0x23c…` -> `0xc6`), and within a slot the entries
+   are placed one after another in index order, each at the end of the one before (sizes are whole
+   16 KiB pages). Entries 23 (`0x210e48000`) and 29 (`0x211e48000`) lie inside 22 and 28 (at
+   +`0x28000`) and are mapped twice: through 22 and 28 (IOVA `0xc2038000`, `0xc3038000`) and on their
+   own (`0xc2070000`, `0xc3070000`). ADT `/arm-io/dart-pmp/mapper-pmp` `pio-range` lists 34 pairs, 32
+   non-zero (entries 3-11, 17-22, 24-28, 30-33, 35, 37-43; not 23 or 29; `0x188000` bytes) and 2 zero,
+   in an order that is not the IOVA order (35 comes after 7); the two entries mapped twice bring the
+   total to `0x190000`. The MMIO behind the ranges was not read.
+5. **The opening region, IOVA `0x3c000`-`0x4bfff` (4 pages, 64 KiB), at `open-pre` = `open-post`,
+   both boots byte for byte.** Zero except:
+   (a) **+`0x2000`-+`0x207f`** (page `0x3c000`): **128 bytes equal to bytes `0x80`-`0xff` of
+   `/arm-io/pmp/iop-pmp-nub` `energy-model-dram-configs`** (77 of them non-zero). The property is
+   `0x200` bytes, four blocks of `0x80` whose first two 32-bit words are (8, 6), (8, `0xff`),
+   (`0x10`, 6), (`0x10`, `0xff`); this is the second; the node's `dram-capacity` is 8. How macOS
+   chose the block is not read.
+   (b) **+`0xe000`-+`0xe28f`** (page `0x48000` +`0x2000`): **41 records of 16 bytes, record k
+   (k = 0 ... 40) for `reg` entry k + 3: the 64-bit IOVA, then the 64-bit size, little-endian, where
+   the translator maps that entry; a record of zeros for an entry of size 0.** The bytes after the
+   41st record (from +`0xe290`, where a record for entry 44 would be; the node has 44 entries, 0-43)
+   are zero.
+   Who wrote (a) and (b) is not read: no trap was on these pages before `open-pre`, and at
+   `start-pre` they were not mapped.
+6. **What fills the region afterwards** (det39: guest CPU writes to pages `0x3c000`, `0x40000`,
+   `0x48000` trapped from `open-pre` to t 139: none; a write by `pmp` through its translator is not
+   seen by such a trap): **+`0x0`-+`0x19cf`** by `reply`: 32-bit words +`0x00` `0x42554845` (`EHUB`),
+   +`0x14` 2, +`0x18` 1, +`0x20` `PM`, +`0x38` `0x3f`, +`0x3c` 1, +`0x40` `FAST_DIE`, +`0x54` 1,
+   +`0x58` `0x1a`, +`0x5c` `0x40`, then 90 records of `0x48` bytes from +`0x80` (two 32-bit words and
+   a 64-byte name: 1 `ehub-node-mask`, 2 `pm-device-*`, 17 `pm-dcs-*`, 12 `pm-gpu-constraint-*`, 16
+   `pm-gpu-read/write-bw-threshold-*`, 8 `pm-ane-*`, 8 `pm-sep-*`, 26 `fast-die-*`; the full list in
+   `r12-det38-tables-reply.txt`); its first `0x40` bytes stayed zero up to the status read just
+   before the reply (t 4.1535; reply read 4.2135). **+`0x4000`-+`0x7fff`** (IOVA `0x40000`): 0
+   non-zero bytes at `open-pre`, 64 at `open-post`, 164 at `reply`, 224 from `m55-pre` on (names and
+   numbers: `SOC`, `VMIN` `0x28d`, `VNOM` `0x2bf`, `VMAX` `0x371`, `DCS`, `DISP`, `ECPU`, ...).
+   **+`0x8000`-+`0xbfff`** (IOVA `0x44000`): zero at every point. **+`0xc000`-+`0xc00b`** (IOVA
+   `0x48000` +`0x0`): 32-bit words 0, 0, 0 at `open-pre`, 2, `0x01000000`, `0x01000000` at `reply`.
+   (a) and (b) unchanged at every point. macOS's CPUs read IOVA `0x40000` +`0x0`-+`0x2c0` right after
+   the reply (288 reads, CPU 2, t 4.245-4.284) and no other byte of the three trapped pages.
+7. **The boot-argument block** (det39 at `start-pre`): the 54 records and values of `135map4`
+   (R71 (b), written back as read) but `STKG`; `IOBA` 0, `IOSZ` 0; no record holds `0x3c000`,
+   `0x40000` or `0x48000`.
+8. **At `late`** (77.3 s, 6.2 s after the 0x55 word): the TTBR, the five L1 entries and all 113 L2
+   entries as at `open-pre`; the region as at `m55-pre`.
+*Reference, not an observation* (aurora-silicon m1n1, `~/Work/aurora-ref/m1n1.git`, branch
+`aurora-wip` at `cd714cd2`: `proxyclient/m1n1/fw/pmp.py`, last changed `16314a62`; read as data, never
+run). It implements a first-generation `pmp` protocol whose words match macOS's: type in bits 44-56;
+`0x00` "Startup" (= RECV `0x0`), `0x10` "Configure" with a DVA in bits 0-47 (= `0x0001…`), `0x20`
+"Configure_Ack" (= `0x0002…`), `0x200`/`0x201` "Init1" (= `0x0020000000010003` /
+`0x0020100000010003`), `0x202`/`0x203` "Init2" (= `0x0020200000010000` / `0x0020300000010000`),
+`0x20e` "DevPwr" with DEV in bits 16-31 and STATE in bits 0-15 (= the code-`0xe` words), `0x208`/
+`0x209` "DevPwr_Sync"/"DevPwr_Ack" (codes 8, 9). On Startup it takes a `0x10000`-byte region, zeroes
+it, writes **the whole** `energy-model-dram-configs` at +`0x2000`, maps each `/arm-io/pmp` entry from
+index 3 on in stream 0 at DVAs **packed from `0xc0000000` in index order** (each the previous plus its
+size rounded up to 16 KiB; a size-0 entry: a zero pair, no mapping), writes the (DVA, size) pairs
+at +`0xe000`, then sends Configure with the region's DVA; after the acknowledgement it reads +`0x0`
+(`0x2000` bytes, "props"), +`0x4000` (`0x1000`, "devinfo") and +`0xc000` (`0x100`, "status"), then
+sends Init1, Init2 and a type-`0x100` word (`0x3bc`, 2) that macOS does not send. **Against the
+capture:** the region's size (64 KiB), the table's place (+`0xe000`), its record (16 bytes, IOVA
+then size), its order (index from 3) and zero records, and the three places `pmp` fills (+`0x0`,
++`0x4000`, +`0xc000`) agree with macOS; **two things differ**: macOS put 128 bytes (the property's
+second block) at +`0x2000`, the reference all `0x200`; and macOS's IOVAs take a 16 MiB slot per
+physical block (entry 17 at `0xc1000000`), the reference's are packed (entry 17 at `0xc0024000`, the
+last ending at `0xc0190000`). The earlier Linux module's logged span, `0xc0000000`-`0xc6004000`
+(L30), is the end of macOS's layout, not of the packed one. The reference's other `pmp` tools
+(`proxyclient/experiments/pmp_init.py`, last changed `11934771`; `proxyclient/hv/trace_pmp.py`;
+linux-integration `drivers/soc/apple/pmp.rs`) speak a later firmware's protocol (an opcode in bits
+48-55, a `GET_IOVA_TABLE` request, 24-byte (host address, I/O base, size) entries one 16 MiB step
+apart) and `pmp_init.py` stops on t8103 ("pmp v1"); they do not describe this M1.
+**Limits.** Two boots, no sleep (the wake's table, det33's TTBR `0x80822544`, not walked); what
+`pmp` reads and when is not observable by a stage-2 trap; a write by another bus master to these
+pages would not be trapped; when between `start-pre` and `open-pre` each entry and the region's
+bytes were written is not read.
 
 ### 1.8 Access widths (all six captures)
 
@@ -4617,7 +4748,9 @@ After the SoC comes up, before macOS is back at idle:
   **+`0xfc` = 0 is written twice** at boot, with reads between (R +`0x80`-`0x8c`, +`0x0`, +`0x4`,
   +`0x60`, +`0xf0`); a test that counts one write or two holds the client to det10's sequence of
   writes, both included. Whether the last three accesses come before or after (d)-(e) is not
-  established (1.7h item 3); the client makes them before (d). (b)'s "no other SRAM write below
+  established (1.7h item 3); the client makes them before (d). *(Round 15f; 1.7h round 12 item 1.)*
+  Established for two boots (det38, det39): macOS writes the TTBR and the enable **after** (e), the
+  TCRs before it. The client keeps its order, before (d), with its table complete first (D17 (e)). (b)'s "no other SRAM write below
   `0x23b540000`" is all that is logged; `0x23b540000`-`0x23b57ffff` is logged in full in no boot, so
   **the client writes no SRAM word at boot but the block's 180** (a decision on what is not read; open
   question 79 would show whether macOS writes there).
@@ -4633,7 +4766,7 @@ After the SoC comes up, before macOS is back at idle:
   SET_IOP_PWR_STATE at boot. Then, at boot, code-`0xe`/8/`0xa`/`0xc`/4 words and, once,
   **`0x0020e00000550000`** at 69 s, with no `…550001` before it; after it no mailbox word either way
   for the rest of the capture. IOVAs in the words: macOS's own (`0x4000`-`0x3c000`); what they map
-  to is not logged.
+  to is not logged. *(Round 15f.)* Read for two boots: R76.
 - **R73 [det33 detached; det18, det23 the same steps; det35-det37 the same messages]** *(new round
   15; 1.7h; R4, R5, R6 unchanged)* **Before R4's exchange for `pmp`, in the entry, on endpoint
   `0x20`:** `…550001` and `…540001` (either order), `0x0020800000630000` answered
@@ -4681,6 +4814,73 @@ After the SoC comes up, before macOS is back at idle:
   commit values by another way; no commit with other values was observed except the [HV-CHANGED]
   writes of 1.7g, which cannot tell the values from the act of writing). In test form: none for a
   driver of its own; the basis of C18.
+- **R76 [det38, det39: both boots byte for byte, where not said otherwise]** *(new round 15f; 1.7h
+  round 12)* **What `pmp`'s translator maps and what the opening region holds when macOS sends
+  `0x000100000003c000`.** (a) **Stream 0's table has exactly 113 valid L2 entries**, each the page's
+  physical address | `0x3` (bits 40-63 zero), under L1 entries each an L2 page's physical address |
+  `0x1`, the TTBR word bit 31 | (the L1 page's physical address >> 12): 13 DRAM pages (IOVA `0x4000`,
+  `0x8000`, `0x10000`, `0x18000`, `0x20000`, `0x24000`, `0x28000`, `0x2c000`, `0x34000`, `0x3c000`,
+  `0x40000`, `0x44000`, `0x48000`; physical addresses macOS's own, different in each boot) and 100
+  MMIO pages, the 34 ranges of (b). (b) **The `/arm-io/pmp` `reg` entries 3-43, where they are
+  mapped, and the region's record for each** (physical address = ADT `reg` address + `0x200000000`;
+  "rec" = the record's offset in the opening region, +`0xe000` + 16 x (entry - 3)):
+
+  | entry | physical address | size | IOVA | rec |
+  |---|---|---|---|---|
+  | 3 | `0x200024000` | `0x4000` | `0xc0000000` | +`0xe000` |
+  | 4 | `0x200064000` | `0x4000` | `0xc0004000` | +`0xe010` |
+  | 5 | `0x2000a4000` | `0x4000` | `0xc0008000` | +`0xe020` |
+  | 6 | `0x2000e4000` | `0x4000` | `0xc000c000` | +`0xe030` |
+  | 7 | `0x200158000` | `0x4000` | `0xc0010000` | +`0xe040` |
+  | 8 | `0x200204000` | `0x4000` | `0xc0014000` | +`0xe050` |
+  | 9 | `0x200244000` | `0x4000` | `0xc0018000` | +`0xe060` |
+  | 10 | `0x200284000` | `0x4000` | `0xc001c000` | +`0xe070` |
+  | 11 | `0x2002c4000` | `0x4000` | `0xc0020000` | +`0xe080` |
+  | 12-16 | (size 0) | 0 | not mapped | +`0xe090`-+`0xe0df`, zero |
+  | 17 | `0x204d10000` | `0x4000` | `0xc1000000` | +`0xe0e0` |
+  | 18 | `0x210058000` | `0x4000` | `0xc2000000` | +`0xe0f0` |
+  | 19 | `0x210158000` | `0x4000` | `0xc2004000` | +`0xe100` |
+  | 20 | `0x210258000` | `0x4000` | `0xc2008000` | +`0xe110` |
+  | 21 | `0x210358000` | `0x4000` | `0xc200c000` | +`0xe120` |
+  | 22 | `0x210e20000` | `0x60000` | `0xc2010000` | +`0xe130` |
+  | 23 | `0x210e48000` | `0x4000` | `0xc2070000` (also `0xc2038000` through 22) | +`0xe140` |
+  | 24 | `0x211058000` | `0x4000` | `0xc3000000` | +`0xe150` |
+  | 25 | `0x211158000` | `0x4000` | `0xc3004000` | +`0xe160` |
+  | 26 | `0x211258000` | `0x4000` | `0xc3008000` | +`0xe170` |
+  | 27 | `0x211358000` | `0x4000` | `0xc300c000` | +`0xe180` |
+  | 28 | `0x211e20000` | `0x60000` | `0xc3010000` | +`0xe190` |
+  | 29 | `0x211e48000` | `0x4000` | `0xc3070000` (also `0xc3038000` through 28) | +`0xe1a0` |
+  | 30 | `0x23d100000` | `0x14000` | `0xc4000000` | +`0xe1b0` |
+  | 31 | `0x23d128000` | `0x30000` | `0xc4014000` | +`0xe1c0` |
+  | 32 | `0x23d0d8000` | `0x4000` | `0xc4044000` | +`0xe1d0` |
+  | 33 | `0x26b90c000` | `0x4000` | `0xc5000000` | +`0xe1e0` |
+  | 34 | (size 0) | 0 | not mapped | +`0xe1f0`, zero |
+  | 35 | `0x200170000` | `0x4000` | `0xc0024000` | +`0xe200` |
+  | 36 | (size 0) | 0 | not mapped | +`0xe210`, zero |
+  | 37 | `0x23c100000` | `0x4000` | `0xc6000000` | +`0xe220` |
+  | 38 | `0x204e20000` | `0x4000` | `0xc1004000` | +`0xe230` |
+  | 39 | `0x211ee0000` | `0x8000` | `0xc3074000` | +`0xe240` |
+  | 40 | `0x211ee8000` | `0x8000` | `0xc307c000` | +`0xe250` |
+  | 41 | `0x211ef0000` | `0x8000` | `0xc3084000` | +`0xe260` |
+  | 42 | `0x210ee0000` | `0x8000` | `0xc2074000` | +`0xe270` |
+  | 43 | `0x204d80000` | `0x8000` | `0xc1008000` | +`0xe280` |
+
+  Each mapped range is mapped page by page (IOVA + k x `0x4000` -> address + k x `0x4000`), 100 pages
+  in all. The IOVA column is the rule of 1.7h round 12 item 4 applied to the ADT's entries; it equals
+  every entry of both boots. (c) **The opening region** is the 4 pages at IOVA `0x3c000`-`0x4bfff`
+  (the opening word's IOVA and the 64 KiB from it), and when the opening word is written it is zero
+  but for +`0x2000`-+`0x207f` (`energy-model-dram-configs` bytes `0x80`-`0xff`) and +`0xe000`-
+  +`0xe28f` ((b)'s 41 records: the IOVA column as a 64-bit word, then the size, little-endian; zero
+  for a size-0 entry; for 23 and 29 their own IOVA). (d) **Afterwards** `pmp` (no guest CPU wrote
+  these pages) fills +`0x0`-+`0x19cf`, +`0x4000`-+`0x444c` (224 non-zero bytes by the 0x55 word) and
+  +`0xc000`-+`0xc00b`; +`0x8000`-+`0xbfff` stays zero; (b)'s records and the 128 bytes are not
+  changed; macOS's CPUs read +`0x4000`-+`0x42c0` after the reply and write nothing. The translator's
+  table is unchanged to 77 s. (e) **Order:** the TCRs (+`0x100` `0x80`, +`0x13c` `0x100`) are set
+  before R71 (e), the TTBR and the enable after it; the 113 entries and (c)'s bytes are all present
+  when the opening word is written; when each was made, and by which CPU the region was written, is
+  not read. **Not established:** whether the region's place is fixed at `0x3c000` or follows the
+  word's IOVA (both boots used `0x3c000`; the Linux readings bear on it, L36, D17's reason (3)); what `pmp`
+  does with the 128 bytes or the records; the wake's table. In test form: for the client, D17.
 - **D1 — a decision about Linux, not an observation of macOS** (recorded here at the gap
   file's request; the orchestrator's decision, round 6, gap Q6): *the wake keeps macOS's
   sequence, and after it puts each power domain that the Linux entry changed back to the
@@ -5590,14 +5790,15 @@ After the SoC comes up, before macOS is back at idle:
 - **D11 — a decision about Linux, not an observation of macOS** (new round 15; C18): *which words
   the client sends.* (a) **Endpoint `0x20`: macOS's words exactly** (R72-R74), except the IOVA in
   the opening's `0x0001…` word, which is an address the client has mapped (macOS: `0x3c000`; an
-  earlier Linux start used `0xffff0000` and `pmp` went on to `0x000200000023b549`, L30); and the
+  earlier Linux start used `0xffff0000` and `pmp` went on to `0x000200000023b549`, L30) *(round 15f:
+  this exception withdrawn, D17 (a): the opening is `0x000100000003c000`)*; and the
   8-bit read of `0x23b549400` after `0x000200000023b549`, as macOS. Every request of code 0, 2, 8 is
   answered by code + 1 before the next word is sent (bounded wait, (d)); code-`0xe` words are not
   answered (none ever was). (b) **At boot, after the opening, only `0x0020e00000550000`** of the
   words macOS sends there: it is the one the round-11 drop ties to the change (R75); the others (1.7h)
   are not observed to matter, and what states they would carry under Linux is not read. (c) **Management and
   system endpoints at boot:** macOS's words where the client can make them; buffer sizes as macOS's
-  replies (4, `0x10`, 1), IOVAs the client's; **kdebug (endpoint 3) is started but given no START
+  replies (4, `0x10`, 1), IOVAs the client's *(round 15f: macOS's, D17 (a))*; **kdebug (endpoint 3) is started but given no START
   and no buffers** (its sizes are not read; the earlier Linux start reached the opening without it,
   L30). The kernel's RTKit library may be used where its words are those of L30's start, which `pmp`
   answered (SET_IOP_POWER `0x220` before HELLO_REPLY included). **At the wake, macOS's short
@@ -5621,7 +5822,12 @@ After the SoC comes up, before macOS is back at idle:
   overlap. The opening's word `0x0001…` carries the IOVA in bits 0-31 (both words seen, `0x3c000` and
   `0xffff0000`, have bits 32-47 zero; bits 48-55 = 1) and no size; the size `pmp` uses there is not
   read, and the client maps **one 16 KiB page** for it (decision; open question 83). The client sends
-  each buffer's start. **"At once"** (D10 (a)): the 0x55 word is the client's next word after it has
+  each buffer's start. *(Round 15f: the one 16 KiB page and the client's own IOVAs are **replaced by
+  D17**: the opening region is macOS's four pages at `0x3c000`-`0x4bfff` with R76 (c)'s content, and
+  the three buffers are at macOS's IOVAs, so the opening word and the buffer replies are macOS's
+  words exactly. Reference names for the fields (aurora-silicon m1n1 `aurora-wip` `cd714cd2`,
+  `proxyclient/m1n1/fw/pmp.py`): the opening is "Configure", type `0x10` in bits 44-56 and the
+  region's DVA in bits 0-47; its reply "Configure_Ack", type `0x20`.)* **"At once"** (D10 (a)): the 0x55 word is the client's next word after it has
   received `0x0020300000010000`, with no wait for any word and no delay of its own between (answers
   to words arriving meanwhile, D10 (f), allowed). **"Not answered"**: the client makes no wait for a
   reply to a code-`0xe` word or to the wake's five; it goes on to its next step; a delay of its own is
@@ -5775,7 +5981,7 @@ After the SoC comes up, before macOS is back at idle:
   device access; after the client's sync for the CPU where its mapping needs one): per buffer, its
   endpoint or "opening" and the number of its non-zero 32-bit words; for endpoint 1's (crash log),
   endpoint 2's (syslog) and the opening's page, their first 4 KiB as hex, 32 bytes a line, all-zero
-  lines left out and counted.
+  lines left out and counted. *(Round 15f, D17 (g): the opening region's dump covers its 64 KiB.)*
   (d) D12 (c)'s first line also gives `cand` and names which of bits 18-22 the client acts on.
   **Test form:** with bit 19 clear, no sample and no dump (D10-D12's accesses exactly); with it set,
   (a)'s reads in order at each of (b)'s points and no other added access, no added write.
@@ -5802,7 +6008,11 @@ After the SoC comes up, before macOS is back at idle:
 - **D14 — a decision about Linux's diagnostics, not an observation of macOS** (new round 15e; the
   three openings compared after L35; **switches: bit 20, `0x100000`, and bit 21, `0x200000`, of
   `cand`**): *the earlier module's words, which `pmp` answered under Linux, as variants of the boot
-  part.* With both clear: D11 as decided (macOS's form, the client's IOVAs).
+  part.* *(Round 15f: **withdrawn**, both bits; L36, D17. Bit 21's start-up words were to test
+  whether the client's words reach the opening: in L36 every word through the opening was answered
+  in macOS's order. Bit 20's opening at `0xffff0000` with one 16 KiB page rested on the one-page
+  decision D17 replaces, and would put the region where macOS's table has no DRAM page. Bits 20 and
+  21 are no longer acted on; the text below is kept as the record.)* With both clear: D11 as decided (macOS's form, the client's IOVAs).
   (a) **Bit 20 (the opening):** the opening's word is **`0x00010000ffff0000`**, and the client's
   opening page (D11 (a)'s one 16 KiB page) is mapped at IOVA `0xffff0000` instead of one of its own;
   nothing else changes.
@@ -5873,6 +6083,127 @@ After the SoC comes up, before macOS is back at idle:
   so a different outcome names that thing; B4 only when the single changes do not; four boots of about
   two minutes each; the outcomes (1)-(9) cover every result D12 and D13 can log, and each names a next
   step or says the question is not answerable this way (Naeem's stop rule for this build).
+  *(Round 15f; L36, R76, D17: **replaced.**)* B2 and B4 are withdrawn with D14; B3 (D15) is not part
+  of the next run; outcomes (1)-(9) were written for a wait that runs out with nothing else logged,
+  and L36 has given outcome (1) (a crash log) in three boots. The next run is D17's (h).
+- **D17 — a decision about Linux, from macOS's readings, not an observation of macOS** (new round
+  15f; R76, L36; **replaces** D11 (a)'s "the client maps one 16 KiB page" for the opening and its
+  exception "except the IOVA in the opening's `0x0001…` word, which is an address the client has
+  mapped", D11 (c)'s "IOVAs the client's" for the three buffers, and the requirements' "windows:
+  none" (D9 (e) and D11 (a) mapped the client's buffers only); **withdraws** D14): *before the opening
+  word, the client sets up `pmp`'s translator and the opening region as macOS had them when it sent
+  its opening (R76).* With `cand` bit 18 set, at boot, as part of D10 (a)'s "buffers before any
+  access":
+  (a) **DRAM: macOS's 13 pages at macOS's IOVAs.** The client maps, in stream 0, exactly 13 pages of
+  16 KiB at IOVA `0x4000`, `0x8000`, `0x10000`, `0x18000`, `0x20000`, `0x24000`, `0x28000`, `0x2c000`,
+  `0x34000`, `0x3c000`, `0x40000`, `0x44000`, `0x48000`, each zero when mapped, at physical addresses
+  of its own (macOS's differ between boots and are not contiguous). Its buffers there: endpoint 1
+  (crash log, size field 4) the page at `0x18000`; endpoint 4 (ioreport, size `0x10`) the four pages
+  `0x20000`-`0x2ffff`; endpoint 2 (syslog, size 1) the page at `0x34000`; the opening region the four
+  pages `0x3c000`-`0x4bfff`. So **every word the client sends at boot is macOS's word exactly**
+  (R72): the replies `0x0010400000018000`, `0x0011000000020000`, `0x0010100000034000` and the opening
+  `0x000100000003c000`. The pages at `0x4000`, `0x8000`, `0x10000` (macOS's kdebug buffers and the
+  page between them; kdebug stays unstarted, D11 (c)) are mapped, zero, and named in no word. Nothing
+  else below `0xc0000000` is mapped at the opening. D11 (a)'s rule for a later buffer request stands;
+  a new buffer then goes at an IOVA of the client's from `0x4c000` up, below `0xc0000000`.
+  (b) **MMIO: R76 (b)'s 34 ranges**, 100 pages: for each mapped entry, IOVA + k x `0x4000` -> its
+  physical address + k x `0x4000` over its size, entries 23 and 29 at their own IOVA as well as
+  inside 22 and 28. Nothing else in `0xc0000000`-`0xffffffff`.
+  (c) **The entries' form (R76 (a)):** each L2 entry = the page's physical address | `0x3` and no
+  other bit (bits 2-13 and 36-63 zero); each L1 entry = its L2 page's physical address | `0x1`; the
+  TTBR word bit 31 | (the L1 page's physical address >> 12), written where R71 (c) writes it; L1 index
+  = IOVA bits 25-35, L2 index = IOVA bits 14-24 (16 KiB pages, 2048 entries per L2 page). The five L1
+  entries are then 0, 96, 97, 98, 99. *Reference, not an observation:* the kernel's page-table code
+  (aurora-silicon/linux `1f38ff8f4`, `drivers/iommu/io-pgtable-dart.c`) also sets the subpage end
+  field (bits 40-51) to `0xfff`, which macOS's entries do not have; whether that matters to `pmp` is
+  not read, so the requirement is macOS's form, and a client whose entries are made by that code does
+  not meet it.
+  (d) **The region's content when the opening word is written:** its 64 KiB zero except
+  +`0x2000`-+`0x207f`, these 128 bytes (memory order, 32 bytes a line; as 32-bit little-endian words
+  they begin 8, `0xff`):
+
+  ```
+  +0x2000: 08000000 ff000000 cc4c0f00 cc4c0000 66e60500 00000100 33330700 66666a00
+  +0x2020: 66e64700 33b30900 00800000 66661700 99991600 00800000 cc4c0c00 cccc0100
+  +0x2040: 00800e00 9919bd00 33b39b00 33331000 00800000 cccc2e00 99191a00 00800000
+  +0x2060: cc4c0f00 cccc0100 00001200 33b30e01 3333cc00 66661300 00800000 33334400
+  ```
+
+  (bytes `0x80`-`0xff` of this M1's ADT `/arm-io/pmp/iop-pmp-nub` `energy-model-dram-configs`, R76
+  (c)), and +`0xe000`-+`0xe28f`, the 41 records of R76 (b): record k (k = 0 ... 40) at +`0xe000` +
+  16k is the 64-bit IOVA of entry k + 3 (its own IOVA for 23 and 29), then its 64-bit size, both
+  little-endian; all 16 bytes zero for entries 12-16, 34, 36; no terminator other than the zero bytes
+  that follow (+`0xe290` on). Written before (e)'s TTBR write and visible to the device before it
+  (the client's cache maintenance, as its mapping needs). **The client writes nothing in the region
+  after the opening word while it is bound** (macOS's CPUs wrote nothing there from the opening to
+  139 s); it may read it (D13 (c)). +`0x0`-+`0x1fff`, +`0x4000`-+`0x7fff` and +`0xc000`-+`0xc00b` are
+  where `pmp` writes after the opening (R76 (d)); +`0x8000`-+`0xbfff` stays zero.
+  (e) **Order.** The client makes all 113 entries and writes (d)'s bytes before R71 (c)'s TTBR write,
+  which it makes before R71 (d)-(e) (R71 (c)'s round-15c decision, unchanged), so the table is
+  complete before `pmp`'s CPU is released. macOS's order differs and is recorded, not copied: TCRs
+  before the start, TTBR and enable after it, the entries and the region's bytes present by the
+  opening word (R76 (e)). Reasons: the client's order (TTBR before the start) carried every word of
+  the handshake through to the opening in three builds (L36), so the start does not need an empty
+  translator; a table complete before the TTBR cannot be incomplete when `pmp` first reads it, which
+  macOS's order guarantees only by its timing; R71 (c)'s place is the one the client's tests hold.
+  (f) **Where the values come from.** Linux on the M1 has no ADT, and none of these values is in the
+  device tree Linux boots with by any reading here (the client adds its own nodes at probe, L33).
+  **The client carries them as t8103 constants for this M1**: R76 (b)'s table (entry, physical
+  address, size, IOVA) and (d)'s 128 bytes. They are fixed by the capture: the same in both boots,
+  and taken from this M1's ADT, which the boot loader passes unchanged from boot to boot (`dram-
+  capacity` 8). The ADT properties they come from, for the record: `/arm-io/pmp` `reg` (entries 3-43)
+  and `pio-reg-index` (3); `/arm-io/dart-pmp` `pio-vm-base` (`0xc0000000`) and `pio-granularity`
+  (`0x1000000`); `/arm-io/pmp/iop-pmp-nub` `energy-model-dram-configs` (bytes `0x80`-`0xff`) and
+  `dram-capacity`. *Reference, not an observation* (aurora-silicon m1n1 `aurora-wip` `cd714cd2`,
+  `src/kboot.c` `dt_set_pmp`; linux-integration `1f38ff8f4`,
+  `Documentation/devicetree/bindings/soc/apple/apple,pmp.yaml`): Aurora's m1n1 copies each
+  `iop-pmp-nub` property (some excluded) to `apple,tunable-<name>` and `dram-capacity` to
+  `apple,dram-capacity` on the boot device tree's node at path `pmp`, only when that node exists; the
+  binding names `apple,pio-ranges` (host address, size pairs). Which m1n1 the M1 boots Linux with,
+  and whether its device tree has such a node, is not read; the client does not depend on either.
+  On another machine (another ADT) the constants are not known to hold; not observed.
+  (g) **Unchanged:** D9-D13 otherwise (D11 (a)'s fields, (b), (c)'s order and no kdebug, (d)'s
+  bounds; D10's ways out; D12's lines, which now name each mapped range and the region's two
+  non-zero spans in the buffer lines); **D13 (c) revised:** the opening region's dump covers all
+  64 KiB, 32 bytes a line, all-zero lines left out and counted (the first 4 KiB alone would miss
+  +`0x4000` and +`0xc000`). D15 stays a switch, not used in (h). **Not decided against, stated:**
+  the 34 ranges are registers of blocks Linux's own drivers also use (`mcc`, `pmgr`, `gpio`,
+  `nub-spmi`, `dockchannel-uart`, `ane`, `sgx` by the ADT, 1.7h round 12); what `pmp` does in them
+  is not read under macOS or Linux.
+  **Test form** (the client; bit 18 set): before the TTBR write, stream 0's table holds exactly the
+  113 valid L2 entries of (a) and (b), each of (c)'s value, with no other valid entry; the region's
+  64 KiB equal (d)'s image byte for byte; the three buffer replies and the opening word are (a)'s
+  words; after the opening word, no write by the client to the 13 pages but the buffers' own uses (none
+  in the boot part); with bit 18 clear, none of this (D9 (e)).
+  (h) **The next run** (replaces D16): bare metal, boot only, no sleep and no `pm_test`; a build whose
+  first line (D12 (c)) does not name spec round 15f or later is not run; **one boot, `cand`
+  `0xc0000`** (bits 18 and 19: D17 and D13's samples). Read from the client's lines: (1) **the reply
+  `0x000200000023b549` comes**: the opening is answered; the rest of the boot part runs (the 8-bit
+  read, the two pairs, the 0x55 word) and D13's samples after the 0x55 word say whether the C3 words
+  and PMP/PMS_SRAM reach macOS's values (R75); the region's dump against R76 (d) (`EHUB` at +`0x0`,
+  names at +`0x4000`, +`0xc000`'s three words); next step C18's entry. (2) **A crash-log word
+  again**: the crash log's pc, far and esr against L36's; a far inside the region or inside
+  `0xc0000000`-`0xc6003fff` names the part of R76 still not met, a far elsewhere names nothing by
+  itself (open question 84). (3) **Neither within the 6 s bound**: D13's samples (translator error
+  word and address, A2I/I2A) and the region's dump; the question is then not answerable from the
+  client's runs, and the next step is a reading of `pmp`'s own accesses, which a stage-2 trap cannot
+  make (open question 85).
+  **Reasons.** (1) R76 is macOS's set-up, the same in two boots, byte for byte. (2) L36: with one
+  zero 16 KiB page (ds24p, ds25p) or 4 MiB of zeros (ds26p) at `0x28000` and no MMIO window, `pmp`
+  took the opening and crashed 0.15-0.24 ms later at the same pc in each boot read; in ds25p the
+  crash log's far, `0x36140`, is the opening's IOVA + `0xe140`, which in R76's layout is entry 23's
+  record (an unmapped address then); with that address mapped and zero (ds26p) the far was
+  `0x210e70000`, inside entry 22's range (+`0x50000`; IOVA `0xc2060000` in macOS's table), which the
+  client had not mapped. These are matches of numbers, not reads of what `pmp` did (open question
+  84), and they point at exactly the two things the client lacked: the records and the windows. (3)
+  **Absolute IOVAs or offsets from the opening's:** macOS's two boots used the same IOVA, so they
+  cannot tell. ds25p's far and the reference (fw/pmp.py writes and reads the region at offsets from
+  the DVA it sends) point to offsets from the word's IOVA; the requirement puts the region at
+  macOS's absolute `0x3c000` and its contents at macOS's offsets, which meets either reading, and
+  the window IOVAs are absolute in the records either way. (4) All 13 pages and all buffers at macOS's
+  IOVAs leave no IOVA difference between the client and macOS to rule out later, at the cost of
+  three unnamed zero pages. (5) One boot: the stop rule asks for the next build to settle the
+  question; (1)-(3) cover what it can log.
 
 ### 8.1 The requirements since round 6, as statements a test can check (round 11)
 
@@ -6104,16 +6435,18 @@ D4, the seven first-port domain words read request 0 at the commit.
 | R73 | *(new round 15)* entry: `…550001`/`…540001`, `0x208` `0x63` answered, `…550000`/`…540000` before R4 for `pmp`; translator +`0xfc` after R5 | det33; det18, det23; det35-det37 |
 | R74 | *(new round 15)* wake: PMP, PMS_SRAM, PMS on; twelve words; R6w; R55; R5w; short handshake (EPMAP echoed, no STARTEP, no buffers, no opening); `…630001`, both `…0001`, both `…0000` | det33; det18, det23; det35-det37 |
 | R75 | *(new round 15)* none (basis of C18): the words change after `pmp`'s start and after the 0x55 word, not while it is dropped | [HV-CHANGED] 1 boot, 2 wakes dropped; 4 boots, 2 wakes sent |
+| R76 | *(new round 15f)* at the opening: stream 0's 113 entries (13 DRAM pages, 100 MMIO pages in 34 ranges = `/arm-io/pmp` `reg` 3-43 by the slot rule), entry form address \| `0x3`; the region `0x3c000`-`0x4bfff` zero but `energy-model-dram-configs[0x80:0x100]` at +`0x2000` and the 41 records at +`0xe000`; TTBR and enable after the start | det38, det39 (two boots, byte for byte) |
 | D3 (b) | *(new round 15c)* `sio`/`pmp` found stopped (domain on, +`0x44` bit 4 clear): no message, no write to its blocks or translator, no R6; at the wake no R6w, R55, R5w; *(round 15d)* for `sio` no access to `dart-sio` (R10's part, W1-8's 30 writes) | Decision (changes the logic at `HEAD`, G26) |
 | D3 (c) | *(new round 15d)* `sio`/`pmp` found silent: R5's register stop and the steps after it (R73's +`0xfc` writes and R6; R10's `dart-sio` part); at the wake R6w and R55 (`pmp`), W1-8 (`sio`), **no R5w**, no boot exchange | Decision (R10E-2; the suite's choice confirmed) |
 | D9 | *(new round 15; (b) restated, (e) new, round 15c)* C18 is the kernel side's (`pmp` client); the logic has no C18 behaviour: with `pmp` found stopped no access to its mailbox, SRAM (but the twelve words) or translator, in entry or wake, also with PMS_SRAM `0x1000030f`; found running, section 8's R4-R6, R6w, R55, R5w; the translator the client's alone *(Round 15d.)* `cand` reaches the logic with every bit as set; the logic's accesses do not depend on bits 18-31. | Decision |
 | D10 | *(new round 15; completed round 15c)* client: boot at probe, the word right after the opening; entry part before `enter`; wake part after `enter` returns, also on failure; no domain write at boot, buffers before any access, domain off or no buffer: no access, error; boot timeout: R5's register stop alone; entry timeout: register stop, translator, R6, sleep goes on; after a wake timeout: next entry stops without words; switch read per part, a part acts only after the part before it; LOG, type-8, type-4 words echoed while running, also in the wake's handshake *(Round 15d.)* An entry part the switch skipped ends the client's view of `pmp` running: nothing sent or answered until the next boot. | Decision |
-| D11 | *(new round 15; completed round 15c)* endpoint `0x20` macOS's words (own IOVA, bits 0-31; one 16 KiB page); at boot only `…550000` after the opening, at once; no kdebug; every word sent by the client in macOS's start-up order, no RTKit library, no SET_IOP_PWR_STATE at boot; buffers: size x 4 KiB in 16 KiB pages, distinct, kept mapped; short handshake at the wake; bounds 1 s (6 s for `0x000200000023b549`); control page only R71 (e), R5, R5w *(Round 15d.)* Each bound runs from the wait's start on a clock, is not restarted or lengthened by other words, and every wait ends within twice its bound. | Decision |
+| D11 | *(new round 15; completed round 15c)* endpoint `0x20` macOS's words (own IOVA, bits 0-31; one 16 KiB page); at boot only `…550000` after the opening, at once; no kdebug; every word sent by the client in macOS's start-up order, no RTKit library, no SET_IOP_PWR_STATE at boot; buffers: size x 4 KiB in 16 KiB pages, distinct, kept mapped; short handshake at the wake; bounds 1 s (6 s for `0x000200000023b549`); control page only R71 (e), R5, R5w *(Round 15d.)* Each bound runs from the wait's start on a clock, is not restarted or lengthened by other words, and every wait ends within twice its bound. *(Round 15f.)* The one 16 KiB page and the client's own IOVAs replaced by D17: macOS's words exactly. | Decision |
 | D12 | *(new round 15d)* the `pmp` client logs a line per step (buffers, domain values, SRAM, translator, start, every word sent and received with endpoint and time, each wait's end, R5's stop values, R6/R6w, R55, R5w, the part's end), as they happen; on a wait that runs out, before R5's stop, reads and logs A2I `0x23bc08110`, PMP, PMS_SRAM, PMS and the translator's +`0x40` (its only added accesses); a first line naming the spec round and build | Decision (L33) |
-| D13 | *(new round 15e; bit 19, `0x80000`)* client, boot part only: a sample of 13 reads (+`0x44`, +`0x48`, A2I, I2A, PMP, PMS_SRAM, PMS, translator +`0x40`/`0x50`/`0x54`, the three C3 words), no write, logged when taken: before and after R71 (e), at each wait's start, every 250 ms of it and at its end, after R5's stop, and every 250 ms for 2 s after the 0x55 word; never delaying an answer; at the part's end the buffers' non-zero counts and the crash-log, syslog and opening pages' first 4 KiB; with the bit clear nothing of this | Decision (L33-L35) |
-| D14 | *(new round 15e; bits 20 `0x100000`, 21 `0x200000`)* client: bit 20 the opening `0x00010000ffff0000` with its page at IOVA `0xffff0000`; bit 21 the earlier module's start-up words (set IOP power `0x220` before HELLO_REPLY, EPMAP replies at once then STARTEP 1-4, buffers `0x00101000fffec000`, `0x00110000fffd0000`, `0x00101000fffcc000`, `0x00c0` echoed); all else unchanged | Decision (L30, the openings compared) |
+| D13 | *(new round 15e; bit 19, `0x80000`)* client, boot part only: a sample of 13 reads (+`0x44`, +`0x48`, A2I, I2A, PMP, PMS_SRAM, PMS, translator +`0x40`/`0x50`/`0x54`, the three C3 words), no write, logged when taken: before and after R71 (e), at each wait's start, every 250 ms of it and at its end, after R5's stop, and every 250 ms for 2 s after the 0x55 word; never delaying an answer; at the part's end the buffers' non-zero counts and the crash-log, syslog and opening pages' first 4 KiB *(round 15f: the opening region's 64 KiB)*; with the bit clear nothing of this | Decision (L33-L35) |
+| D14 | *(new round 15e; **withdrawn round 15f**, L36, D17)* client: bit 20 the opening `0x00010000ffff0000` with its page at IOVA `0xffff0000`; bit 21 the earlier module's start-up words (set IOP power `0x220` before HELLO_REPLY, EPMAP replies at once then STARTEP 1-4, buffers `0x00101000fffec000`, `0x00110000fffd0000`, `0x00101000fffcc000`, `0x00c0` echoed); all else unchanged | Decision (L30, the openings compared) |
 | D15 | *(new round 15e; bit 22, `0x400000`)* client: the boot part starts 70 s after the probe, no access or buffer before; a failed boot part gives `pmp` up, the device stays bound | Decision (L30, L33, L34) |
-| D16 | *(new round 15e)* the next run: boot only, D12's first line required; B1 `0xc0000`, B2 `0x3c0000`, B3 `0x4c0000`, B4 `0x7c0000` if B1-B3 run out; outcomes (1)-(9) each name a next step or say the question is not answerable this way | Decision (D12-D15) |
+| D16 | *(new round 15e; **replaced round 15f** by D17 (h))* the next run: boot only, D12's first line required; B1 `0xc0000`, B2 `0x3c0000`, B3 `0x4c0000`, B4 `0x7c0000` if B1-B3 run out; outcomes (1)-(9) each name a next step or say the question is not answerable this way | Decision (D12-D15) |
+| D17 | *(new round 15f)* client, bit 18, before the TTBR write: stream 0's table exactly macOS's 113 entries (13 zero DRAM pages at macOS's IOVAs, the buffers and the opening region among them; R76 (b)'s 34 MMIO ranges), each L2 entry address \| `0x3`, L1 \| `0x1`; the region `0x3c000`-`0x4bfff` zero but the 128 energy-model bytes at +`0x2000` and the 41 (IOVA, size) records at +`0xe000`; no client write there after the opening; values carried as t8103 constants; next run one boot `cand` `0xc0000` | Decision (R76, L36) |
 
 ### 8.2 Candidate requirements C1-C17 (round 12) and C18 (round 15)
 
@@ -6800,6 +7133,14 @@ Switch `cand_c6`.
   three known openings of endpoint `0x20` are compared after L35; the next run's samples, variants
   and boots are D13 (bit 19), D14 (bits 20, 21), D15 (bit 22) and D16, all the kernel side's, none read
   by the logic (D9 (b)).
+- *(Round 15f.)* **[LINUX] Three more boots (L36):** every word of the start-up and handshake through
+  the opening was sent and answered in D11 (c)'s order, word for word the same in all three; `pmp`
+  took the opening (`0x0001000000028000`, a zero region of one 16 KiB page, or 4 MiB in ds26p, and no
+  window) and sent a crash-log word 0.15-0.24 ms later, its crash log naming the same pc in both boots
+  read. **macOS's set-up for the opening is now read (R76)** and is required of the client before its
+  opening by **D17**, which adds to (b): the translator's table (13 DRAM pages and 34 MMIO ranges at
+  macOS's IOVAs) and the opening region's content, and replaces D11's one page and own IOVAs; D14 is
+  withdrawn and D16 replaced by D17 (h).
 
 **Summary** (ranked; each behind its switch `cand_cN`, D5):
 
@@ -6822,7 +7163,7 @@ Switch `cand_c6`.
 | C15 | `0x23b718000`/`004` at `0xf` before R22 (only if not); *(round 14b)* never put back on D6's failure path | the trigger word's state under this driver is unread | `0xf` at boot and every entry / `0xf` once, an earlier driver's dry run (round 14b) |
 | C16 | GPIO domain on | on under macOS, off under Linux | G-I / 4.2a |
 | C17 | 28 SoC clock words' bits 24-27 = 7 | largest group of differing words | G-I / L2 |
-| C18 | *(new round 15; the kernel side's, D9-D11)* `pmp` started at boot as macOS (R71, R72) with `…550000` after the opening; at the entry before `enter` macOS's endpoint-`0x20` words, R4, R5, R6; at the wake and on failure R6w, R55, R5w, short handshake, macOS's words | C3's words reach macOS's values only through `pmp`'s events, never by an application processor's write (R75, R70); PMP/PMS_SRAM gate themselves only after the 0x55 word | 1.7h, R75 [HV-CHANGED] / not started (L29); an earlier start: macOS's C3 values at the commit, no power-down (L30); the client at boot (ds22p): the opening's reply not received in 6 s, the words unchanged (L33); ds23p, its domains held on: the same (L34, L35) |
+| C18 | *(new round 15; the kernel side's, D9-D11)* `pmp` started at boot as macOS (R71, R72) with `…550000` after the opening; at the entry before `enter` macOS's endpoint-`0x20` words, R4, R5, R6; at the wake and on failure R6w, R55, R5w, short handshake, macOS's words | C3's words reach macOS's values only through `pmp`'s events, never by an application processor's write (R75, R70); PMP/PMS_SRAM gate themselves only after the 0x55 word | 1.7h, R75 [HV-CHANGED] / not started (L29); an earlier start: macOS's C3 values at the commit, no power-down (L30); the client at boot (ds22p): the opening's reply not received in 6 s, the words unchanged (L33); ds23p, its domains held on: the same (L34, L35); ds24p-ds26p: the opening taken, `pmp` crashed 0.15-0.24 ms after it, the client having mapped no window or record (L36); macOS's set-up for the opening R76, required by D17 |
 
 *(Round 13.)* **What the runs have shown so far, per candidate** (1.7g for macOS with Linux's
 state put in, [HV-CHANGED]; L25, L26 for Linux with the switch on). "Down" = powered down and
@@ -7448,6 +7789,10 @@ readings of Linux, 66-67 of macOS under the hypervisor.
     `0xffff0000`. *Settles it (macOS, under the hypervisor):* one boot with the translator's table at
     its TTBR (det10: `0x8217dc000`) read from DRAM after the opening, giving the mapping macOS made at
     `0x3c000` and its length. Until then D11 (a)'s one 16 KiB page.
+    *(Round 15f: **answered** for macOS's boot, R76.)* The region is four 16 KiB pages, IOVA
+    `0x3c000`-`0x4bfff` (64 KiB), mapped before the opening word with its content (R76 (c)); the
+    reference's first-generation protocol takes a `0x10000`-byte region too (1.7h round 12). The
+    client's region: D17. Whether a smaller or larger region would serve is not read and not needed.
 84. **Why the client's wait for `0x000200000023b549` ran out at boot** (round 15d, Linux; L33, C18,
     D12). L33 leaves these apart, each with the read that tells it:
     (a) *PMS_SRAM or PMP not on while `pmp` started.* The node had no `power-domains` property,
@@ -7507,6 +7852,27 @@ readings of Linux, 66-67 of macOS under the hypervisor.
     starts `pmp` at 0.069 s after kernel start, the earlier module at 69-71 s; *settles it:* D15's
     boot. **Still open:** at which word `pmp` stopped, whether it took the opening, and why; D12 is
     still unbuilt (ds23p has none of its lines, L34). The next run's reads and boots: D13-D16.
+    *(Round 15f; L36, R76.)* **What the three boots ds24p-ds26p settle** (their builds name spec
+    round 15d and `cand` `0x40000`, so D12's lines but not D13's samples): (b) **settled:** `pmp`'s CPU
+    ran; it answered every word through the opening and wrote a crash log. (c) **settled:** the
+    exchange did not stop before the opening; every word of D11 (c)'s start-up and endpoint `0x20`'s
+    `0x0` came and was answered, the same 46 words in each boot (L36). (d) **settled under the guess's
+    count:** Linux sent 24 words and `pmp` 22 (8 and 6 modulo 16, as A2I `0x107801` and I2A `0x26600`
+    read again after the wait); the word not taken is the client's endpoint-1 reply sent after the
+    crash word, and `pmp`'s 22nd word is the crash word. **Both fits of the comparison after L35 were
+    wrong**: (i) had the opening untaken, (ii) a log word after it. (f) **settled:** the order sent
+    is D11 (c)'s. (a) **not the cause by itself:** the domains read on at the wait's end
+    (`0x1f0f00ff`, `0x1f0000ff`, `0x1f0000ff`) in all three. (e) and (g) **are the remaining lead:**
+    `pmp` crashed 0.15-0.24 ms after the opening, with the client's region zero and no window mapped;
+    the crash log's far is the opening's IOVA + `0xe140` in ds25p (R76's record of entry 23, then
+    unmapped) and `0x210e70000` in ds26p (entry 22's range, +`0x50000`, with the record's address now
+    mapped and zero); in ds26p the translator's error word read `0x80000800` after the wait (flag
+    set, stream 0, code bit 11, which the reference's list does not name; its address not read),
+    `0x6000400` in the other two. (h) **not tested**, and nothing in L36 points at it. **Still open:**
+    whether D17's set-up brings the reply (D17 (h)); and what the crash log's far is: esr
+    `0xbe000000` has EC `0x2f` (SError interrupt, by the Arm architecture's ESR encoding), for which
+    the architecture does not define FAR, so that the far fits R76's layout is a match of numbers, not
+    a reading of the access that failed; what `0x210e70000` is to `pmp` is not read.
 85. **What `pmp`'s translator maps under macOS, and what the opening's page holds** (round 15e,
     macOS; open questions 83, 84 (g); L30's windows, the ADT's `pio-*` properties). Whether macOS maps
     any page of `0xc0000000`-`0xffffffff` (the ADT's pio range) for stream 0 before `pmp`'s start, at
@@ -7518,6 +7884,19 @@ readings of Linux, 66-67 of macOS under the hypervisor.
     `0x000200000023b549`, and the 16 KiB that IOVA `0x3c000` maps to at both times. It answers 83 too.
     Needed for the client only if D13's samples put the stop at the opening or before it with no
     other cause named.
+    *(Round 15f: **answered** for macOS's boot, R76; it also answers 83 and 84 (g) for macOS.)* Before
+    the start macOS's translator has no table (TCRs only); by the opening word stream 0 maps 13 DRAM
+    pages and 100 pages of the pio range, the 34 non-zero `/arm-io/pmp` entries from `pio-reg-index`
+    at their own physical addresses, by the slot rule (1.7h round 12 item 4); the page at `0x3c000` is
+    the first of a four-page region holding 128 bytes of the energy model at +`0x2000` and a table of
+    the 41 entries' (IOVA, size) at +`0xe000`, which the guess above (a table of the windows) had
+    right in kind, at a place it did not name. **What remains open:** (a) who wrote the region before
+    the opening (no trap before it; macOS's CPUs did not write it afterwards); (b) what `pmp` reads in
+    the region and the windows, and when (a stage-2 trap does not see `pmp`'s accesses); (c) the
+    meaning of the 128 bytes' choice (the property's second of four blocks), of the records `pmp`
+    writes at +`0x0` and +`0x4000`, and of +`0xc000`'s three words; (d) the table at the wake (det33's
+    TTBR `0x80822544`, not walked; R74 has no opening at the wake, so `pmp` keeps the boot's region).
+    None of these is needed to write D17.
 
 ## 10. With and without the cable
 
@@ -8406,6 +8785,61 @@ bit 5 "idle" in `aura`, "mailboxes to the main processor empty" on that page), s
 the state macOS's stop reads (`0x2e`) before R5's write; *guess*. None of this separates (i) from
 (ii), or says why; D12's word list and D13's samples do.
 
+- **L36 (the `pmp` client at boot, three builds: kernels `7.2.11-ds24p`, `-ds25p`, `-ds26p`, `cand`
+  `0x40000`, bare metal, 2026-11-19; `var/commit-state/linux-pmp-client-ds24p-dmesg-20261119.txt`,
+  `-ds24p-crashlog-20261119.txt`, `-ds25p-dmesg-20261119.txt`, `-ds26p-dmesg-20261119.txt`,
+  `-ds26p-words-20261119.txt`; the evidence README's section on them was being written when this was
+  read, so the files are cited; added round 15f).** Readings of the client's own log lines (D12) and
+  one reading after the boot; the client's source not read. Each build's first line names "spec lab
+  `14e4c78`" (round 15d), its build (ds24p `0000000`, ds25p `9670006`, ds26p `a7b0d20`) and `cand`
+  `0x40000`, so D12's lines and not D13's samples.
+  - **Set-up, all three:** buffers in this order: 16 KiB at IOVA `0x4000` (endpoint 1, size field 4),
+    64 KiB at `0xc000` (endpoint 4, `0x10`), 16 KiB at `0x20000` (endpoint 2, 1), the opening at
+    `0x28000`: 16 KiB in ds24p and ds25p, **4 MiB in ds26p** ("mapped 0x400000 for the opening ...
+    IOVA 0x28000-0x427fff"); no window of the pio range. Domains read `0x1f0000ff` x 3 before the
+    start; SRAM 0xe4 words read, 0xb4 written back, each as read; the translator's writes as R71 (c)
+    (+`0x200` = `0x8080ea90` in ds24p), the TTBR before the start; +`0x8114` R/W `0x20001`, +`0x44` R 0
+    W `0x10`.
+  - **Every word, the same 46 in the same order in all three** (24 sent, 22 received): HELLO
+    `0x00100000000c000c` / `0x00200000000c000c`; EPMAP base 0, STARTEP 1-4, `0x0080000000000001`; EPMAP
+    base 1, `0x0088000100000000`; endpoint 1 `0x0010100000000000` / `0x0010400000004000`; endpoint 4
+    `0x0011000000000000` / `0x001100000000c000`, `0x00c0000000000000` not answered, ten type-8 pairs
+    echoed; `0x0070000000000020` / `0x00b0000000000020`; endpoint 2 `0x0080000050000010`,
+    `0x0010100000000000` / `0x0010100000020000`; the AP echo; STARTEP `0x0050002000000002`; **endpoint
+    `0x20` RECV `0x0`, SEND `0x0001000000028000`**; then **RECV on endpoint 1 `0x0010100000004000`**
+    (its buffer's IOVA: the crash log's notice by the reference's names, rtkit.c) 148 µs (ds24p),
+    149 µs (ds25p), 239 µs (ds26p) after the opening; SEND `0x0010400000004000`. Nothing more from
+    `pmp`: the wait for `0x000200000023b549` ran out after 6 s in all three; after it A2I `0x107801`,
+    PMP `0x1f0f00ff`, PMS_SRAM and PMS `0x1f0000ff`, the translator's +`0x40` **`0x6000400`** (ds24p,
+    ds25p) and **`0x80000800`** (ds26p: by the reference's names flag set, stream 0, code bit 11, not
+    one of the five named; its address not logged); R5's stop read +`0x48` `0x8`, +`0x44` `0x10`; the
+    probe failed (-110). After the boot (ds26p): `0x444/0x666/0x333`, +`0x44` 0, +`0x48` `0x8`.
+  - **The buffers, dumped by the client at the crash word and at the end (ds25p, ds26p):** the opening
+    region all zero (16 KiB; ds26p all 4 MiB); the syslog page 16 words `0xffffffff` at a `0x70` stride
+    from +`0x0` (64 bytes; macOS's syslog page at its opening has the same, 1.7h round 12 item 3);
+    ioreport `0x171` non-zero bytes; the crash-log page a crash log (header `CLHE`, sections `Cver`
+    "RTKit: RTKit-2062.141.1.release - Client: not set", `Ctim`, `Crg8`, `Ccst`, `CasC`, `Cmbx`, `Crtk`
+    (task names `rtk_ep_work`, `power`, `main`), `Ccdp`, `Csta`; no `Cstr` message), then `0xef` to the
+    page's end (macOS's crash-log page at its opening: all `0xef`). ds24p's crash-log file holds no
+    `CLHE` header (its first words have the form of Linux kernel addresses) and is not decoded.
+  - **The crash log's registers** (section `Crg8`, fields by upstream Linux's
+    `drivers/soc/apple/rtkit-crashlog.c` `struct apple_rtkit_crashlog_regs`, as in aurora-silicon/linux
+    `1f38ff8f4`; ds25p = ds26p unless said): **pc `0x1027a10`**, lr (x30) `0x10166d0`, sp `0x1039fc0`,
+    psr `0x600002c5`, **esr `0xbe000000`** (EC `0x2f`, SError interrupt, by the Arm architecture's
+    encoding), **far `0x36140` (ds25p), `0x210e70000` (ds26p)**; x0-x11 and x15-x29 the same in both
+    (x0 `0x80010001`, x24 `0x9fff0000`, x27 `0x28`); x12-x14 differ (ds25p `0x40`, 0, `0x11b`; ds26p
+    `0x104f4ec`, `0xffffffffc0710000`, `0x3f889`). Section `CasC` holds the far again as
+    `0x0600000000036140` / `0x0600000210e70000`.
+  **What it establishes:** with D11's set-up (no window, a zero opening page at an IOVA of its own),
+  `pmp` takes every word through the opening and crashes within 0.15-0.24 ms of it, at the same pc
+  with or without 4 MiB mapped at the opening. The comparison's fits (i) and (ii) above are both
+  wrong: the opening was taken, and `pmp`'s last word is the crash notice. Set against R76: ds25p's far
+  is the opening's IOVA + `0xe140`, the place of entry 23's record in macOS's region (unmapped in
+  ds25p); ds26p's far `0x210e70000` lies in entry 22's range at +`0x50000` (IOVA `0xc2060000` in
+  macOS's table; unmapped in ds26p). **What it does not establish:** that the far is the address of
+  the access that failed (an SError's FAR is not defined by the architecture); what `pmp` read before
+  the crash; whether macOS's set-up (D17) is enough.
+
 ## Appendix: scripts and extracts (all in `var/spec/`)
 
 Run with `tools/hv-trace-kit/venv/bin/python`, from `var/spec/`, after `build_db.py 3` and
@@ -8520,6 +8954,74 @@ written but hold their awake value. The 137 domain words are in 4.2a.
 - `0x23d0e0000`..: `0x23d0e2100` `0x1000100`.
 - `0x23d240000`..: `0x23d240000` `0x80100010`; `0x23d240004`-`0x23d24001c` `0x81100100`; `0x23d240020` `0x81100000`; `0x23d240024`-`0x23d240034` `0x81100100`; `0x23d240038` `0x81100000`; `0x23d24003c` `0x81100100`; `0x23d240040` `0x1101100`; `0x23d240044`-`0x23d24004c` `0x82100100`; `0x23d240050` `0x80100100`; `0x23d240054` `0x81100000`; `0x23d240304` `0x10000000`; `0x23d240308` `0x1000000`; `0x23d240314` `0x1000000`; `0x23d240320` `0x0`; `0x23d240330`-`0x23d240370` `0x0`.
 - `0x23d2c0000`..: `0x23d2c0000`-`0x23d2c000c` `0x0`; `0x23d2c0010` `0x880ff04`; `0x23d2c0014` `0x7`; `0x23d2c0018` `0x1`; `0x23d2c001c` `0xff0`; `0x23d2c0020`-`0x23d2c003c` `0x0`.
+
+## Changes in round 15f (2026-11-19: what macOS maps for `pmp` and what its opening region holds (hypervisor round 12, R76); the client's three boots in which `pmp` took the opening and crashed (L36); the client's set-up before the opening (D17); D14 withdrawn, D16 replaced; open questions 83 and 85 answered for macOS's boot, 84 updated)
+
+Inputs: the spec at lab `7a6e366` (round 15e); evidence `docs/evidence/2026-11-17-deepsleep-clean-runs/README.md`
+section "Hypervisor round 12: what macOS maps for pmp, and its opening page" (lab `66060ff`) with
+its private dumps and decoders (`var/commit-state/r12-det38/`, `r12-det39/`, `r12-det38-analysis.txt`,
+`r12-det38-pio.txt`, `r12-det38-tables-reply.txt`, `r12_pmp_dart.py`, `r12_analyze.py`, `r12_tables.py`,
+`r12_pio.py`); the client's raw logs `var/commit-state/linux-pmp-client-ds24p-dmesg-20261119.txt`,
+`-ds24p-crashlog-`, `-ds25p-dmesg-`, `-ds26p-dmesg-`, `-ds26p-words-20261119.txt` (the README's section
+on them was not yet written, so the files are cited); *reference, read as data, never run*:
+aurora-silicon m1n1 `aurora-wip` `cd714cd2` (`proxyclient/m1n1/fw/pmp.py` `16314a62`,
+`proxyclient/experiments/pmp_init.py` `11934771`, `proxyclient/hv/trace_pmp.py`,
+`proxyclient/tools/pmp_assist.py`, `src/kboot.c`), aurora-silicon/linux `integration/aurora`
+`1f38ff8f4` (`drivers/iommu/apple-dart.c`, `drivers/iommu/io-pgtable-dart.c`,
+`drivers/soc/apple/rtkit.c`, `drivers/soc/apple/rtkit-crashlog.c` for the crash log's field names,
+`drivers/soc/apple/pmp.rs`, `Documentation/devicetree/bindings/soc/apple/apple,pmp.yaml`), and the
+lab's `docs/reference/asahi-aurora-sleep-deep-dive.md` section 3.4. No test, glue, client, driver
+`src/` or old driver branch was read. No new capture or run. Every byte of the region, the 41
+records and the IOVA rule were checked again against both boots' dumps (all 100 MMIO entries, the
+`0x48000` and `0x3c000` pages at `open-pre`), and the crash logs decoded from the ds25p and ds26p
+logs. Inline marks "round 15f" are this round's.
+
+**New readings:**
+- **1.7h, "Round 12" (macOS, det38 and det39):** before the start the translator has its TCRs and no
+  table; the TTBR and the enable come after +`0x44` = `0x10`; by the opening word stream 0 maps 13 DRAM
+  pages and 100 MMIO pages (34 ranges: the non-zero `/arm-io/pmp` entries 3-43, at IOVAs by one rule,
+  a 16 MiB slot per physical 16 MiB block in index order, entries packed within a slot; 23 and 29
+  mapped twice), every entry address | `0x3`; the opening region is four pages, `0x3c000`-`0x4bfff`,
+  zero but 128 bytes of `energy-model-dram-configs` (its bytes `0x80`-`0xff`) at +`0x2000` and 41
+  (IOVA, size) records at +`0xe000`; `pmp` then fills +`0x0`, +`0x4000`, +`0xc000`; nothing changes
+  to 77 s. Against the reference's first-generation protocol (fw/pmp.py): region size, table place,
+  record form and order, and the places `pmp` fills agree; the energy-model bytes (128 against 512)
+  and the IOVA layout (slots against packed) differ, and the capture is what is required.
+- **R76 (new):** the same as an observed requirement, with the 41-row table of entries, physical
+  addresses, sizes, IOVAs and record offsets.
+- **L36 (new; Linux, ds24p-ds26p):** the same 46 words in all three boots; `pmp` took the opening
+  and sent its crash notice 148-239 µs later; crash log pc `0x1027a10`, esr `0xbe000000`, far
+  `0x36140` (ds25p; = opening + `0xe140`, entry 23's record in R76's layout) and `0x210e70000` (ds26p,
+  4 MiB mapped at the opening; inside entry 22's range); translator error `0x80000800` in ds26p.
+- R71 (c)'s open order settled for macOS (TTBR after the start); R72's "what they map to is not
+  logged" now read (R76); the 1.7h opening guess marked as read.
+
+**Decisions:**
+- **D17 (new), the client's set-up before the opening.** Replaces: D11 (a)'s **one 16 KiB page** for
+  the opening and its **exception for the opening word's IOVA**; D11 (c)'s **"IOVAs the client's"**
+  for the three buffers; and the requirements' **no window** (D9 (e), D11 (a): only the client's
+  buffers mapped). Now: macOS's 13 DRAM pages at macOS's IOVAs (crash log `0x18000`, ioreport
+  `0x20000`, syslog `0x34000`, opening region `0x3c000`-`0x4bfff`, three unnamed zero pages), so every
+  word the client sends at boot is macOS's; R76 (b)'s 34 MMIO ranges; entries of macOS's form
+  (address | `0x3`, no subpage bits); the region's 64 KiB exactly as R76 (c), the 128 bytes and the
+  41 records given in full, never written by the client after the opening; the table and region
+  complete before the TTBR write (the client's order, kept; macOS's recorded); the values carried as
+  t8103 constants (the ADT properties they come from named; Aurora's m1n1 passes `iop-pmp-nub`'s
+  properties as `apple,tunable-*` only to a boot node at path `pmp`, not read on the M1, not relied
+  on). Absolute or relative: macOS's captures cannot tell; ds25p's far and the reference point to
+  offsets from the opening's IOVA; the requirement uses macOS's absolute `0x3c000` with macOS's
+  offsets, which meets both. (h) the next run: one boot, `cand` `0xc0000`, three outcomes.
+- **D14 withdrawn** (bits 20, 21): its start-up words are moot (L36: every word through the opening
+  answered) and its opening at `0xffff0000` rested on the one-page decision.
+- **D16 replaced** by D17 (h); B2-B4 not run.
+- **D13 (c) revised:** the opening region's dump covers 64 KiB.
+
+**Open questions:** 83 answered for macOS's boot (64 KiB, R76); 84 updated part by part ((b), (c),
+(d), (f) settled; (a) not the cause by itself; (e)/(g) the remaining lead; (h) untested; the far of an
+SError not architecturally defined, so the matches with R76 are numbers, not reads); 85 answered for
+macOS's boot, with four parts still open (who wrote the region, what `pmp` reads, the meanings, the
+wake's table), none needed for D17. C18's note and summary row, the 8.1 table (R76, D11, D13, D14,
+D16, D17) and the introduction carry the round.
 
 ## Changes in round 15e (2026-11-19: the client's second build (L34) and `pmp`'s translator and SRAM after it (L35); the three openings of endpoint `0x20` compared; open question 84 updated, 85 new; decisions D13-D16 for a decisive next run)
 
