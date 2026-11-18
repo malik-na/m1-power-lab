@@ -2876,3 +2876,248 @@ instead of ×4, and no `0x0020e00000e3…`/`0x0020e000015c…`):
 - The det10, `135map4`, det18 and det23 readings were made with the same script, over the same
   windows, from `tools/hv-trace-kit/runs/20261116-mac135/touch-det10.jsonl`,
   `touch-135map4.jsonl`, `detached-det18.jsonl` and `detached-det23.jsonl`.
+
+## Earlier Linux runs with pmp started (readings collected 2026-11-19)
+
+Readings only. They come from the lab's evidence READMEs and the private run files those cite. No
+M1 run was made and the M1 was not claimed. No driver source was read.
+
+In every run of sections 1-5 `pmp` was started by an out-of-tree module, `apple-pmp-v1`. It was loaded with
+`modprobe` after boot, on a kernel booted with `apple_pmp_v1_hold=1`. The module is named only to
+identify the runs, in the run logs' and command lines' own words.
+
+Trace times `t` are seconds from the tracer's start.
+
+Firmware:
+- 13.5 from 2026-11-14 on. The bring-up log of that day reads `system firmware 13.5 ; iBoot
+  iBoot-8422.141.2`.
+- The runs of 2026-11-05 and 2026-11-08 ran on the earlier, macOS-27-era firmware. Evidence
+  `2026-11-16-run36-38-restart` calls it "the earlier system firmware (runs 1-11)".
+
+**Correction.** Section 4 of "Linux round: pmp and the endpoint-0x20 message" says starting
+`pmp`'s firmware "has not been done under Linux on this machine". It also calls its start-up one
+that "has never run under Linux here". That holds for the stock kernel `7.3.0-0test5` read in
+that round, but not for the machine.
+
+`pmp` was started under Linux, with its RTKit handshake and its endpoint-`0x20` opening answered:
+- on bare metal on 2026-11-05 and 2026-11-14, in runs 37 and 39, and by command line in runs
+  40-43 (2026-11-16/17); started, by the README, on 2026-11-08;
+- as the hypervisor's guest in lx3, lx4, lx9, lx11-lx14 and lx16-lx24 (2026-11-16/17).
+
+In eleven of the traced hypervisor runs Linux sent `0x0020e00000550000` (section 5).
+
+### 1. How it was started (the same in every logged start)
+
+Sources:
+- the bare-metal bring-up of 2026-11-14 17:49 (`pmp-bringup-20261114-174901.txt`): the module's
+  kernel-log lines and the script's own register reads;
+- the hypervisor trace of lx12 (`s2r-trace-lx12.jsonl`, events `pmp-tx`/`pmp-rx`).
+
+The run-37 and run-39 kernel logs show the same endpoint-`0x20` words. The lx3-lx21 traces show
+the same management, buffer and endpoint-`0x20` words.
+
+- **Before the load:**
+  - The loader's tree has no `pmp` node (`nodes compatible apple,t8103-pmp-v1: []`).
+  - With `apple_pmp_v1_hold=1` the log reads `ps_pmp and ps_pms_sram marked always-on`.
+  - `ps_PMP` `0x1f0000ff`, `ps_PMS_SRAM` `0x1f0000ff`. The stock kernel reads PMS_SRAM
+    `0x0f000300` (Linux round above).
+  - `pmp` +`0x44` `0x0`, +`0x48` `0x2a`; both mailbox control words `0x20001`.
+- **Device tree, by overlay at the load:**
+  - The log line reads `added /soc/pmp@23b850000, /soc/iommu@23b300000 and /soc/mbox@23bc08000`.
+  - Afterwards `/proc/device-tree/soc/pmp@23b850000` exists in memory only. In the log's words,
+    "the next boot's tree comes from the loader again".
+- **Before the CPU's release** the log has three lines:
+  - an SRAM line (`SRAM head 14000095 00000000 …, 898/1024 words set`);
+  - a DRAM energy-model line (512 bytes from the device tree);
+  - a DART line (34 windows).
+
+  Nothing more about them is in the log.
+- **RTKit management endpoint** (lx12, t 132.209-132.226):
+  - RECV HELLO `0x00100000000c000c`;
+  - SEND SET_IOP_POWER `0x220`;
+  - SEND HELLO_ACK `0x00200000000c000c`;
+  - endpoint map: RECV `0x008000000000001f` and `0x0088000100000001`; SEND `0x0080000000000001`
+    and `0x0088000100000000`;
+  - SEND START_EP for endpoints 1, 2, 3 and 4;
+  - RECV IOP_POWER_ACK `0x20`; AP power `0x20` sent and echoed;
+  - SEND START_EP `0x20` (`0x0050002000000002`).
+- **Buffer requests answered:**
+
+  | Endpoint | RECV | SEND |
+  |---|---|---|
+  | 1 | `0x0010100000000000` | `0x00101000fffec000` |
+  | 4 | `0x0011000000000000` | `0x00110000fffd0000` |
+  | 2 | `0x0010100000000000` | `0x00101000fffcc000` |
+
+  Endpoint 4 then exchanges `0x00c0000000000000` once each way. It exchanges
+  `0x0080000000000000` 125 times each way, t 132.2175-132.2891.
+- **Endpoint `0x20` opening:**
+  - RECV `0x0`;
+  - SEND `0x00010000ffff0000`;
+  - RECV `0x000200000023b549`, 63-65 ms later;
+  - SEND `0x0020000000010003` / RECV `0x0020100000010003`;
+  - SEND `0x0020200000010000` / RECV `0x0020300000010000`.
+
+  The firmware's syslog reads `main.cpp:4480: PMP started`. Against macOS's opening (round 10,
+  above) only the second word differs: macOS sends `0x000100000003c000`.
+- **Device reports at the start.** Seen in runs 37 and 39 and in every hypervisor run with `pmp`
+  started. Runs 40-43 load the module the same way (their run scripts), but no log of their start
+  was kept.
+  - 13 SEND words: `0x0020e00000540001`, **`…550001`**, `…5c0000`, `…5d0000`, `…630001`,
+    `…640000`, `…650000`, `…660000`, `…680000`, `…de0001`, `…e30001`, `…15b0001`, `…15c0001`.
+  - The module's log names id `0x55` DISPEXT_FE, state 1, power word `0x23ff`.
+  - No word answers them in the traces.
+  - With `reports=0` (both runs of 2026-11-14) none were sent.
+- **After the start, running:** `ps_PMP` `0x1f0f03ff`, `ps_PMS_SRAM` `0x1f0003ff` (run 37's log,
+  just after the load). The same two values after the stop (2026-11-14, S1-S3).
+  - macOS reads PMS_SRAM `0x1000030f` from its second change on (round 10).
+  - No Linux reading in these files shows `0x1000030f`.
+- **Stopped as macOS stops it, with no sleep** (2026-11-14, +5 s):
+  - The log reads `stopped as macOS does (AP 0x201, IOP 0x201, CPU halted)`.
+  - Then +`0x44` `0x0`, +`0x48` `0x2e`; mailbox control words `0x25501` (A2I), `0x24401` (I2A).
+  - The power chips' words and the engine port were unchanged at S1, S2 (+5 s) and S3 (+30 s).
+
+### 2. At the entry (hypervisor traces)
+
+- **Run 39's kernel (lx3, lx4):**
+  - No `0x0020e…` and no `0x208` message at the entry.
+  - AP `0x201` and IOP `0x201` were sent 0.001-0.002 s after `slpw`, and both were answered: lx4
+    79.9367-79.9383, lx3 76.1775-76.1786.
+- **Run 40's and 41's kernels** (command line `apple_pmp_v1.mac_notes=1`; traced in lx9,
+  lx11-lx14, lx16-lx21):
+  - The messages come after `slpa`, after the power chip's `0x9f01` = `0x50` and after SIO's AP
+    and IOP `0x201`.
+  - Within 3 ms: SEND `0x0020e00000550001`, `…540001`, **`…550000`**, `…540000` and
+    `0x0020800000630000`; RECV `0x0020900000630000`.
+  - Then AP `0x201` and IOP `0x201`, both answered.
+  - `…550000` comes 0.117-0.189 s after `slpw`. lx12: `slpw` 139.6623, `slpa` 139.7800,
+    `…550000` 139.7837, IOP answer 139.7858.
+  - Apart from the endpoint-4 traffic, the word sequence is identical in lx11-lx21.
+- **Answers:** no word answers any `0x0020e…` word in any trace.
+- **macOS's entry, for comparison** (det33, with det18 and det23 the same; section 4 of "macOS's
+  pmp start-up and endpoint-0x20 exchange" above):
+  - `…550001`, `…540001`, then `0x0020800000630000` / `0x0020900000630000`, then `…550000`,
+    `…540000`.
+  - AP and IOP `0x201` follow 0.37 s later.
+  - Linux puts the `0x208` pair after `…540000`, and its idle follows in under 1 ms.
+  - In 135r6 (evidence `2026-11-16-hv-linux-entry`), `0x20e` comes at `slpw` +0.20 s and
+    `0x208` dev `0x63` at +0.23 s. The idle comes last, at +0.72 s.
+- **After an entry that did not reach its commit:**
+  - The entry stopped in lx3 after the SEP's RECV `0x100` at 76.1789, and in lx9 by the driver's
+    own stop.
+  - Linux then sent SET_IOP_POWER `0x220`: lx3 at 76.5975, lx9 at 141.7568.
+  - `pmp` did not answer in either trace (to t 386.5 and 144.06).
+  - The 2026-11-08 self-test also reports a failed wake after the idle: "the following wake →
+    -62".
+
+### 3. The three C3 words and the power-state words
+
+- **Read in four runs only:** at the hypervisor's snapshot when the last core reached Linux's
+  commit (L28), in lx12, lx13, lx14 and lx17.
+  - `0x23b058000` = `0x333`, `0x23b05c000` = `0x444`, `0x23b060000` = `0x222`.
+  - `ps_PMP` `0x1f0f03ff`, `ps_PMS_SRAM` `0x1f0003ff`, `ps_PMS` `0x1f0002ff`, `ps_DCS0`
+    `0x1f0002ff` (lx17: `0x1f0003ff`).
+  - Each snapshot came after `…550000`: 0.25 s after in lx12 and lx13, 0.37 s in lx14, 0.32 s
+    in lx17.
+- **Not read in any run with `pmp` started:**
+  - before the start;
+  - between the start and the entry;
+  - between `…550000` and the commit.
+- **No control run:** one pmp-started run without `…550000` had its commit snapshotted (lx4).
+  That snapshot had 30 words, and these three were not among them. So these runs do not separate
+  the start, the message and the entry as the cause of the change.
+- **Without `pmp`,** Linux awake reads `0x444/0x666/0x333` (L27). Source:
+  `var/commit-state/linux-live-wide.json`, 2026-11-17 00:24; `ps_PMS_SRAM` reads `0x0f000300`
+  in the same file.
+- **`pmp` +`0x44`/+`0x48` while `pmp` runs under Linux:** not read in these files. The traces log
+  the mailbox only. The bare-metal reads come before the load or after the stop.
+
+### 4. The runs
+
+**Bare metal.**
+- "Record" is the power chip's `0x9f10`-`0x9f17`.
+- Byte 6 is read as in the evidence of runs 37, 39 and 40: `01` means the `pmp` idle was
+  answered; `0x47` means the late steps ran in macOS's order, `pmp` idled after the SMC's AP
+  `0x201`.
+- The C3 words were read in no bare-metal run.
+
+| Run (date, firmware) | Kernel | Started | Idle, answer | `…550001` / `…550000` | PMP / PMS_SRAM | End | Source |
+|---|---|---|---|---|---|---|---|
+| `j1105-151447-7dbc`, `-154719-3e5d`, `-155048-25e6` (11-05, macOS-27-era) | `7.2.11-labf1f05ca2-9b06` | overlay; handshake complete; "PMP started"; 13 `0x20e` reports "accepted" | no sleep (idle power windows) | words not in the lab's files | not in the lab's files | no sleep | `docs/STATUS.md` (PMP v1 entries); evidence `2026-11-06-status-report.html` |
+| test 2: row 9 of "The last three Linux runs" (11-08, macOS-27-era) | not stated (the README's kernel line: `m1power/s2r-mem`) | started (README: `pmp_v1`) | AP + IOP `0x201` between `slpw` and `slpa`; answer not stated | not stated | not read | 180.9 s, no wake (the runs' watchdog-1 net: 170 s after the commit); no results byte kept yet | evidence `2026-11-07-linux-s2r` |
+| idle self-test (11-08, macOS-27-era) | same | started | idle answered; the following wake → -62 | not stated | not read | no sleep | same |
+| bring-up 17:49 (11-14, 13.5), `j1114-121806-cbe0` | `7.2.11-labsep14` #78 | section 1; reports off | stopped at +5 s (AP and IOP `0x201`, CPU halted) | none sent | `0x1f0000ff`/`0x1f0000ff` -> `0x1f0f03ff`/`0x1f0003ff` (after the stop) | no sleep; CPU halted from +5 s (+`0x44` `0x0`) | `var/m1-state/20261116-131425-run38/m1power-s2r/pmp-bringup/pmp-bringup-20261114-174901.txt` |
+| acceptance cycle 18:25 (11-14, 13.5), `j1114-125406-8dbc` | `labsep14` #82 | handshake ready; "S2R hook registered"; reports off | not recorded | none sent | not read | next boot 25 s after the entry, "wake-restart"; `0x0201` `04`->`04`; `0xa47b` `000c` unchanged; watchdog 1 net 170 s | same dir: `run25-20261114-182459.txt`, `acceptance/20261114-182516-single.result` |
+| run 37 (11-16, 13.5), `j1116-073205-9163` | `7.2.11-run37` | section 1; reports on | between `slpw` and `slpa`; byte 6 `01` | `…550001` at the start; entry not logged | `0x1f0f03ff`/`0x1f0003ff` after the start | type-C partner gone 4.3-5.3 s after the release; watchdog 2 moved to 100 s; `0x9f02` unchanged; next boot 28 s after the entry; `0x0201` `01`->`01`; record `d2 01 04 05 64 01 01 01` | same dir: `run22-20261116-130310.txt`, `acceptance/20261116-130326-single.result`; `var/m1-state/pmu-20261116-130412-after-run37.txt`; evidence `2026-11-16-run36-38-restart` |
+| run 39 (11-16, 13.5), `j1116-143547-0578` | `7.2.11-run39` | section 1; reports on | byte 6 `01` | `…550001` at the start; entry not logged | `0x1f0000ff`/`0x1f0000ff` before; after not kept | restart 5.0 s after the release; record `d2 01 04 05 64 01 01 31` | `var/lab-logs/j1116-143547-0578/prevboot/kernel.txt`; `var/m1-state/pmu-20261116-200855-after-run39.txt`; evidence `2026-11-16-run39-aop-sensors` |
+| run 40 (11-16, 13.5) | `7.2.11-run40`, `mac_notes=1` | by command line and run script; no kept log of the start | byte 6 `0x47` | not read: the log after `rmmod apple-sep` was not kept | not read | restart 5.0 s after the release; record `d2 01 04 05 64 01 47 31` | `var/run22-src/run40.cmdline`; `var/m1-state/pmu-20261116-210051-after-run40.txt`; evidence `2026-11-16-run40-mac-order` |
+| run 41 (11-16, 13.5) | `run41` (+ `mac_state`) | as run 40 | `0x47` | not read | not read | release to Omarchy 30.0 s; record as run 40 | `var/run22-src/run41.cmdline`; `var/m1-state/pmu-20261116-232145-after-run41.txt`; evidence `2026-11-16-run41-mac-state` |
+| run 42 (11-17, 13.5) | `run42` (+ `dram_gate`) | as run 40 | `0x47` | not read | not read | release to Omarchy 29.8 s; record `d2 80 04 05 64 01 47 31` | `var/run22-src/run42.cmdline`; `var/m1-state/pmu-20261117-002415-after-run42.txt`; evidence `2026-11-16-dram-controller-state` |
+| run 43 (11-17 02:53, 13.5) | `run43` (+ `mem_quiet`) | as run 40 | not in the lab's files | not read | not read | release to Omarchy 29.8 s; "wake-restart"; `0x0201` `00`->`01`; record not in the lab's files | `var/run22-src/run43.cmdline`; evidence `2026-11-16-dram-controller-state` |
+
+The 11-14 17:43 attempt (`j1114-121211-baef`) did not load: "an apple_pmp module is already
+loaded".
+
+**Under the hypervisor** (13.5, m1n1 hypervisor; "non-real" means the CPUs exit to m1n1 at the
+commit). The traces log the `pmp` mailbox in full. Times are the HELLO, the SEND of `…550000`,
+and the answer to IOP `0x201`.
+
+| Run (date) | Kernel, mode | HELLO | `…550000` | IOP `0x201` answered | C3 at the commit | PMP / PMS_SRAM at the commit | End |
+|---|---|---|---|---|---|---|---|
+| lx3 (11-16) | run39 | 73.39 | not sent (`…550001` at the start only) | 76.1786 | no commit | no commit | entry stopped after the SEP's `0x100` (README: in prepare); SET_IOP_POWER `0x220` at 76.5975 not answered |
+| lx4 (11-16) | run39, non-real | 72.47 | not sent | 79.9383 | not in the 30-word snapshot | not read | snapshot 80.2737; CPUs exited |
+| lx9 (11-16) | run40, freeze probe | 132.87 | 140.2657 | 140.2689 | not read | not read | entry stopped by the driver (cores parked `0x0 0x7e`); the M1 stopped answering about 4 s later |
+| lx11 (11-16) | run40, real | 132.94 | 140.5034 | 140.5055 | not read | not read | commit 23:02:33.89; Omarchy on Thunderbolt 23:03:04.00 (30.1 s); restart about 5 s after the commit (README, inferred); `0x0201` `01` |
+| lx12 (11-16) | run40, non-real, 279 words | 132.21 | 139.7837 | 139.7858 | `0x333/0x444/0x222` (140.0354) | `0x1f0f03ff`/`0x1f0003ff` | CPUs exited |
+| lx13 (11-16) | run41, non-real, 279 words | 72.84 | 80.4013 | 80.4033 | the same (80.6556) | the same | CPUs exited |
+| lx14 (11-16) | run41, non-real, 823 words | 73.22 | 80.5976 | 80.5996 | the same (80.9720) | the same | CPUs exited |
+| lx16 (11-17) | run41, DRAM gating switched before the guest, real | 72.90 | 80.4645 | 80.4680 | not read | not read | commit 00:35:41.44; Omarchy 00:36:11.39 (29.95 s); no wake |
+| lx17 (11-17) | as lx16, non-real, 823 words | 72.10 | 79.4731 | 79.4751 | the same (79.7947) | the same | CPUs exited |
+| lx18 (11-17) | run41, probe after the commit | 72.87 | 80.2888 | 80.2908 | not read | not read | restart 8 s after the commit (the probe's last step: the SMC stop) |
+| lx19 (11-17) | as lx18 | 72.70 | 80.2284 | 80.2317 | not read | not read | off the bus 99.9 s after the commit (watchdog 2 at 100 s; cause not separated); the probe wrote `pmp`'s run control 0 after the commit, not read back |
+| lx20 (11-17) | as lx18 | 72.99 | 80.3256 | 80.3271 | not read | not read | as lx19 |
+| lx21 (11-17) | run41, DCS series | 73.90 | 81.5332 | 81.5365 | not read | not read | CPUs exited |
+| lx22, lx23 (11-17) | run41, touch map | console: started, 13 reports | not logged (first touch per page only) | not logged | not read | first touches at t 72.6-72.8, before the start: `ps_PMP` `0x1f0000ff`, +`0x44` `0x0` | CPUs exited |
+| lx24 (11-17) | run43, touch map | as lx22 | not logged | not logged | not read | as lx22 | CPUs exited |
+
+Sources:
+- traces `tools/hv-trace-kit/runs/20261116-linux/s2r-trace-<run>.jsonl` (events `pmp-tx`,
+  `pmp-rx`, `snap`), `console-lx16.out` to `console-lx24.out`, `touch-lx22.jsonl` to
+  `touch-lx24.jsonl`, `hv-<run>.log`;
+- snapshots `var/commit-state/linux-run40-lx12.json`, `linux-run41-lx13.json`,
+  `linux-run41-lx14-wide.json`, `linux-run41-dramgate-lx17-wide.json`;
+- guest command lines `var/hvlinux/bootargs-run39hv.txt`, `-run40hv`, `-run41hv`, `-run43hv`;
+- kernels and endings: evidence `2026-11-16-hv-linux-entry`, `2026-11-16-run40-mac-order`,
+  `2026-11-16-hv-linux-real-s2r`, `2026-11-16-run41-mac-state` and
+  `2026-11-16-dram-controller-state`.
+
+### 5. Was `0x0020e00000550000` sent?
+
+- **Yes, by Linux, in 11 traced hypervisor runs,** once each at the entry: lx9, lx11, lx12, lx13,
+  lx14, lx16, lx17, lx18, lx19, lx20 and lx21. They ran from 2026-11-16 22:38 to 2026-11-17
+  01:04, on kernels run40 and run41. It is the third of the six words in section 2. No word
+  answered it.
+- **Bare-metal runs 40-43** had the same switch on their command lines. Whether they sent it:
+  not read. The kernel log after `rmmod apple-sep` was not kept (run 40's evidence), and no
+  mailbox trace exists.
+- **lx22-lx24** had the same switch. The touch map does not log the mailbox words.
+- **`…550001`:**
+  - sent at every logged start with reports on (runs 37 and 39; lx3, lx4, lx9-lx24);
+  - sent again at the entry, just before `…550000`, in the runs that sent `…550000`.
+- **No earlier evidence README says Linux sent either word:**
+  - `2026-11-16-hv-linux-entry` (lx4) says Linux sent no `0x20e`;
+  - run 40's README lists `apple_pmp_v1.mac_notes=1` but not the words.
+
+### Not started (for completeness)
+
+- **Bare metal:**
+  - every other run log in the M1's state copies (`var/m1-state/*/m1power-s2r/run2[25]-*.txt`,
+    2026-11-14 to 11-16), including run 38 (`pmp=not-started`). Each reads "PMP state:
+    not-started" and has no load;
+  - the clean-room runs ds2-ds20 (ds15: `ps_PMS_SRAM` `0x0f000300`);
+  - `j1105-144905-7bbc` (2026-11-05): "the PMP never started" (`docs/STATUS.md`).
+- **Hypervisor:**
+  - lx1, lx2, lx5-lx8, lx10 and lx15 have no `pmp` mailbox traffic (lx5-lx8 and lx10 froze
+    early; lx15's console has no `PMPv1` line);
+  - dsh1 and dsh2 have no `pmp` traffic and no touch of `0x23bc…` either. dsh2's pre-detach
+    words read `0x444/0x666/0x333`, PMS_SRAM `0xf000300`.
