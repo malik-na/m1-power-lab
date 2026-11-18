@@ -61,8 +61,12 @@ the first Linux reading of the kernel-side `pmp` client, at boot only (ds22p: it
 must leave so that its next run can be read (D12), the open gap lists GL14-GL15, R10E-1 to R10E-3 and
 G28-G29 answered, D7 (c)'s wording on the cores made exact, the bit-28 write after a turn-on wait
 that ran out, and three points of the glue's review on watchdog 1 (a `wdt` that cannot be armed, the
-bite left after the disarm, what N must cover) (round 15d, 2026-11-19, listed in "Changes in round
-15d" at the end, with the earlier rounds' lists below it). It states what macOS
+bite left after the disarm, what N must cover) (round 15d, 2026-11-19), and with the client's second
+build at boot (ds23p: its domains held on through the node, the same wait ran out; L34), `pmp`'s
+translator, SRAM header and mailbox read after that failure (L35), the three known openings of
+endpoint `0x20` set side by side word for word (section 12, after L35), and the reads and switches
+that make the client's next boot decisive (D13-D16) (round 15e, 2026-11-19, listed in "Changes in
+round 15e" at the end, with the earlier rounds' lists below it). It states what macOS
 did, not why, and not what is
 needed for sleep to work; the candidates of 8.2 are differences, not causes.
 Nothing here comes from any Linux sleep driver's code. Section 12 records what was **read on the
@@ -5665,7 +5669,7 @@ After the SoC comes up, before macOS is back at idle:
   | buffer request, endpoint 2 | AP power `0x20` | 0.4 ms |
   | AP power echo `0x00b0000000000020` | AP power `0x20` | 1.0 ms (det33); wake 0.1 ms |
   | `0x0` on endpoint `0x20` | STARTEP `0x20` | 0.5 ms |
-  | `0x000200000023b549` | the opening | 589 ms (det34b); L30 63-65 ms |
+  | `0x000200000023b549` | the opening | 589 ms (det34b); L30 60.7-105.1 ms (round 15e) |
   | `0x0020100000010003` | `0x0020000000010003` | 0.3 ms |
   | `0x0020300000010000` | `0x0020200000010000` | 0.6 ms |
   | `0x0020900000630000` | `0x0020800000630000` | 0.3 ms (boot); entry < 0.1 ms |
@@ -5687,6 +5691,8 @@ After the SoC comes up, before macOS is back at idle:
   record of the parts before it (D10 (e)), not by a read. On the mailbox page: R71 (d), R5's and
   R5w's +`0x8114` accesses and the words; the kernel mailbox driver's own status and FIFO accesses
   are the driver's. *(Round 15d.)* D12 (b) adds the one exception: its reads on a wait that ran out.
+  *(Round 15e.)* D13 adds its samples, only with `cand` bit 19 set; D14 and D15 change words and the
+  start's time only under bits 20-22.
   *(Round 15d, gap G29; (d) made exact.)* **Where a bound starts.** Each wait's bound runs **from the
   wait's start**: the client's send or access that the awaited word follows (the table's "From"
   column), and **neither restarts nor lengthens** when other words arrive and are answered inside it
@@ -5747,6 +5753,126 @@ After the SoC comes up, before macOS is back at idle:
   L33's client followed round 15, not 15c, which was known only from the orchestrator's brief.
   Cost: log time inside S1 at the entry (measured by D7 (d)); the waits' bounds are clocked from
   their start (D11 (d)) and are not lengthened by it.
+- **D13 — a decision about Linux's diagnostics, not an observation of macOS** (new round 15e; L33-L35,
+  open question 84; **switch: bit 19, `0x80000`, of `cand`**): *the client's boot part samples `pmp`'s
+  state through its waits and leaves what `pmp` wrote into its buffers.* With bit 19 clear: none of
+  this, so exactly the accesses of D10-D12. With bits 18 and 19 set, in the boot part only (the entry
+  and wake parts are unchanged; the logic does not read bit 19, D9 (b)):
+  (a) **A sample** is 13 reads, 32 bits each, in this order, no write: `pmp` +`0x44` (`0x23bc00044`),
+  +`0x48` (`0x23bc00048`); A2I `0x23bc08110`, I2A `0x23bc08114`; PMP `0x23b7003d8`, PMS_SRAM
+  `0x23b7003e0`, PMS `0x23b700140`; the translator's +`0x40`, +`0x50`, +`0x54` (`0x23b300040`, `…050`,
+  `…054`); the three C3 words `0x23b058000`, `0x23b05c000`, `0x23b060000` (reads only, R70). Never
+  the mailbox's message words. Each sample is one log line, written when taken (D12 (d)), naming its
+  point and the time since the part's start in microseconds (D12 (a)'s clock).
+  (b) **Where samples are taken:** (1) after R71 (d), before (e)'s write; (2) right after (e)'s write;
+  (3) in every wait of D11 (c): at its start (right after the send or access it follows), every 250 ms
+  of it, and at its end (its word came; or it ran out: then after D12 (b)'s five reads and before R5's
+  stop); (4) after R5's stop of a boot wait that ran out; (5) after the 0x55 word, every 250 ms for
+  2 s, and then the part ends (words arriving meanwhile handled as D10 (f)). A sample never delays an
+  answer the client owes or its own next word: one that falls due while an answer is pending is taken
+  after the answer. Its time counts inside the wait's bound; no bound of D11 (d) changes.
+  (c) **The buffers, at the part's end** (whatever the end), read from the client's own memory (no
+  device access; after the client's sync for the CPU where its mapping needs one): per buffer, its
+  endpoint or "opening" and the number of its non-zero 32-bit words; for endpoint 1's (crash log),
+  endpoint 2's (syslog) and the opening's page, their first 4 KiB as hex, 32 bytes a line, all-zero
+  lines left out and counted.
+  (d) D12 (c)'s first line also gives `cand` and names which of bits 18-22 the client acts on.
+  **Test form:** with bit 19 clear, no sample and no dump (D10-D12's accesses exactly); with it set,
+  (a)'s reads in order at each of (b)'s points and no other added access, no added write.
+  **Reasons.** (1) The client's window has never been read: its first boot ran at 0.07-6.1 s and the
+  first readings came at 39 s and 23.4 s (L33, L34); D12 (b) reads once, at the end of a wait already
+  lost. (2) Each word bears on a part of open question 84: +`0x44`/+`0x48` the CPU's run and status
+  bits (macOS in the same wait: `0x10`, `0xc`/`0x2c`, 1.7h); A2I/I2A whether each word sent was taken
+  and how many `pmp` wrote (the guess of the comparison after L35, which the samples check against the
+  words D12 logs: a send after which A2I stays in the `0x10XY01` form across samples is a word not
+  taken); PMP, PMS_SRAM, PMS at every step (84 (a)); the translator's error word and address when it
+  happens (84 (e)); and the C3 words: under macOS they moved to `0x444/0x444/0x444` in the sample
+  after the start and opening, before the 0x55 word (1.7h), so a change with no `0x000200000023b549`
+  received would say `pmp` worked past the opening and its reply was lost on the way. (3) The 250 ms
+  cadence is the instrument's under macOS, so the samples set against 1.7h's; under macOS the
+  instrument read +`0x44`, +`0x48`, PMP, PMS_SRAM, PMS and the C3 words every 250 ms through `pmp`'s
+  start, which went as in det10 and `135map4` without them (by their first touches, 1.7h); macOS
+  itself polls A2I and I2A between words and reads +`0x40` at its stop (R73); +`0x50`/+`0x54` were read
+  under Linux once without a fault (L35). (4) The buffers are where `pmp` writes without a word: a
+  crash log (endpoint 1) or a syslog line (endpoint 2; under the earlier module "main.cpp:4480: PMP
+  started", L30) written before `pmp` stopped answering would give its reason in the firmware's own
+  words, and a non-zero endpoint-4 buffer or opening page says the translator carried `pmp`'s writes.
+  Cost: two sample lines for a short wait, 25 for the opening's, eight after the 0x55 word, and at
+  most 3 x 128 dump lines once.
+- **D14 — a decision about Linux's diagnostics, not an observation of macOS** (new round 15e; the
+  three openings compared after L35; **switches: bit 20, `0x100000`, and bit 21, `0x200000`, of
+  `cand`**): *the earlier module's words, which `pmp` answered under Linux, as variants of the boot
+  part.* With both clear: D11 as decided (macOS's form, the client's IOVAs).
+  (a) **Bit 20 (the opening):** the opening's word is **`0x00010000ffff0000`**, and the client's
+  opening page (D11 (a)'s one 16 KiB page) is mapped at IOVA `0xffff0000` instead of one of its own;
+  nothing else changes.
+  (b) **Bit 21 (the start-up):** the module's words of the comparison's rows 2-10, in its order: after
+  HELLO, **`0x0060000000000220`**, then HELLO_REPLY; the EPMAP reply `0x0080000000000001` right after
+  EPMAP base 0 and `0x0088000100000000` right after base 1, **then** STARTEP 1, 2, 3, 4; buffer replies
+  with the size `pmp` asked and the module's IOVAs, the client's buffers mapped there:
+  **`0x00101000fffec000`** (endpoint 1; one 16 KiB page), **`0x00110000fffd0000`** (endpoint 4; 64 KiB),
+  **`0x00101000fffcc000`** (endpoint 2; one 16 KiB page); endpoint 4's `0x00c0000000000000`
+  **echoed**; from AP power on, as D11 (c). The wait for `0x0070000000000020` then runs from the
+  set-IOP-power word (in lx12 14.7 ms later), bound 1 s as before. D11 (c)'s "no SET_IOP_PWR_STATE at
+  boot" and D10 (f)'s "`0x00c0` not answered" give way only under bit 21.
+  (c) With both bits set the client sends the module's words in full (rows 2-12); the windows and the
+  time in boot stay as without them.
+  **Test form:** with bit 20 set, the opening's word and its page's IOVA as (a), every other word and
+  access as with it clear; with bit 21 set, (b)'s words in (b)'s order, the IOVAs mapped, every other
+  word as with it clear; the five IOVA ranges (four with bit 20 clear) do not overlap.
+  **Reasons.** (1) The module's start was answered in all 13 traced starts (60.7-105.1 ms, L30) and
+  the client's in none of three boots (L33-L35), and their words differ in 2, 3, 5-8 of the
+  comparison; one boot with the module's words and one without, all else equal and D13 reading both,
+  tells whether the words matter. (2) Bit 20 apart tests the opening's own word, which also moves the
+  opening's page into the ADT's pio range, where all the module's IOVAs lay. (3) Every one of these
+  words was sent to and answered by this firmware (13.5) on this machine under Linux; none is new to
+  `pmp`. **Not chosen:** a variant that maps the module's 34 windows: their layout inside
+  `0xc0000000`-`0xc6004000` and the 41-entry table it named are not logged (L30, round 15e), so no
+  variant can be written from readings; open question 85 reads macOS's.
+- **D15 — a decision about Linux's diagnostics, not an observation of macOS** (new round 15e; L30,
+  L33, L34; **switch: bit 22, `0x400000`, of `cand`**): *the boot part started late.* With bit 22
+  set, the probe makes no access to `pmp`'s blocks and takes no buffer; it schedules the boot part to
+  start **70 s after the probe** (Linux's monotonic clock), and the boot part then runs as D10 (a),
+  D11, D12 and D13 have it (buffers first, the domain reads, the start ...). A boot part that ends
+  without the 0x55 word gives `pmp` up (D10 (e)) and the device stays bound (there is no probe left to
+  fail); an entry or unbind before the boot part has run makes nothing for `pmp` (D10 (e): no 0x55
+  word sent) and an unbind cancels the scheduled start. With bit 22 clear: D10 (a) as decided.
+  **Test form:** with bit 22 set, no device access and no buffer before the scheduled start, then the
+  same accesses in the same order as with it clear.
+  **Reasons.** (1) The module's answered starts came 69-71 s after kernel start (lx16-lx24, L30) and
+  the client's at 0.069 s, before genpd's switch-off of unused domains (0.16 s) and most drivers'
+  probes; what `pmp` might need that Linux has not set up by 0.069 s is not read (among `pmp`'s
+  windows is the SPMI controller's page, L30, round 15e). (2) One boot late, all else as the early
+  one, separates the time from the words (D14) and the windows (open question 85). (3) At 70 s the M1
+  already answers over Thunderbolt (23.4 s in L34), so an outside reader can sample the control words
+  (never the message words) and the domains through the whole window, beside D13's samples. 70 s:
+  the module's times.
+- **D16 — a decision about Linux's next run, not an observation of macOS** (new round 15e; D12-D15):
+  *the boots of the client's next run and how each outcome is read.* Bare metal, boot only, no sleep
+  and no `pm_test` (no `wdt` needed); L33's reader after each boot. **A build whose log has no D12 (c)
+  first line is not run** (ds23p had none and logged no step, L34). The boots, in this order:
+  B1 `cand` = **`0xc0000`** (C18, D13): macOS's form, early; B2 **`0x3c0000`** (with D14 (a) and (b)):
+  the module's words, early; B3 **`0x4c0000`** (with D15): macOS's form, late; B4 **`0x7c0000`**
+  (D14 and D15 together), only if B1-B3 all run out. **How they are read** (from the client's lines
+  alone, D12 and D13): the step is the first wait that ran out and the last word received before it;
+  whether each word sent was taken is the A2I samples after it (the `0x2YY01` form, checked against
+  the sends logged); `pmp`'s CPU state is +`0x48` through the wait against macOS's `0xc`/`0x2c`. Then:
+  (1) **any crash-log or syslog text in a dump** names the firmware's own reason, ahead of everything
+  below; (2) **B1 answered**: what ds22p and ds23p did differently is in their unlogged steps, and B1's
+  samples after the 0x55 word say whether the C3 words and PMP/PMS_SRAM reach macOS's values (open
+  question 77): the next step is C18's entry; (3) **B2 answered, B1 not**: the words; next, bits 20
+  and 21 apart; (4) **B3 answered, B1 not**: the time in boot; next, the delay narrowed; (5) **only
+  B4 answered**: both; (6) **all ran out, the opening taken** (A2I in the empty form after it) **and
+  `pmp`'s endpoint-4 words going on**: `pmp` works on the opening and does not finish: the opening's
+  page, open question 85; (7) **all ran out, `pmp` silent from its `0x0` on endpoint `0x20`** (I2A
+  unchanged, the opening untaken): `pmp` stopped before reading the opening: the translator's windows,
+  open question 85; (8) **a stop at an earlier word** in every boot: that word's step, with the
+  samples at it; (9) **none of these** (no text, the samples unchanged through the wait, no error
+  word): the question is not answerable by the client's runs, and open question 85's reading of macOS
+  is the next step. **Reasons.** Each of B2 and B3 changes one thing against B1 and keeps D13's reads,
+  so a different outcome names that thing; B4 only when the single changes do not; four boots of about
+  two minutes each; the outcomes (1)-(9) cover every result D12 and D13 can log, and each names a next
+  step or says the question is not answerable this way (Naeem's stop rule for this build).
 
 ### 8.1 The requirements since round 6, as statements a test can check (round 11)
 
@@ -5984,6 +6110,10 @@ D4, the seven first-port domain words read request 0 at the commit.
 | D10 | *(new round 15; completed round 15c)* client: boot at probe, the word right after the opening; entry part before `enter`; wake part after `enter` returns, also on failure; no domain write at boot, buffers before any access, domain off or no buffer: no access, error; boot timeout: R5's register stop alone; entry timeout: register stop, translator, R6, sleep goes on; after a wake timeout: next entry stops without words; switch read per part, a part acts only after the part before it; LOG, type-8, type-4 words echoed while running, also in the wake's handshake *(Round 15d.)* An entry part the switch skipped ends the client's view of `pmp` running: nothing sent or answered until the next boot. | Decision |
 | D11 | *(new round 15; completed round 15c)* endpoint `0x20` macOS's words (own IOVA, bits 0-31; one 16 KiB page); at boot only `…550000` after the opening, at once; no kdebug; every word sent by the client in macOS's start-up order, no RTKit library, no SET_IOP_PWR_STATE at boot; buffers: size x 4 KiB in 16 KiB pages, distinct, kept mapped; short handshake at the wake; bounds 1 s (6 s for `0x000200000023b549`); control page only R71 (e), R5, R5w *(Round 15d.)* Each bound runs from the wait's start on a clock, is not restarted or lengthened by other words, and every wait ends within twice its bound. | Decision |
 | D12 | *(new round 15d)* the `pmp` client logs a line per step (buffers, domain values, SRAM, translator, start, every word sent and received with endpoint and time, each wait's end, R5's stop values, R6/R6w, R55, R5w, the part's end), as they happen; on a wait that runs out, before R5's stop, reads and logs A2I `0x23bc08110`, PMP, PMS_SRAM, PMS and the translator's +`0x40` (its only added accesses); a first line naming the spec round and build | Decision (L33) |
+| D13 | *(new round 15e; bit 19, `0x80000`)* client, boot part only: a sample of 13 reads (+`0x44`, +`0x48`, A2I, I2A, PMP, PMS_SRAM, PMS, translator +`0x40`/`0x50`/`0x54`, the three C3 words), no write, logged when taken: before and after R71 (e), at each wait's start, every 250 ms of it and at its end, after R5's stop, and every 250 ms for 2 s after the 0x55 word; never delaying an answer; at the part's end the buffers' non-zero counts and the crash-log, syslog and opening pages' first 4 KiB; with the bit clear nothing of this | Decision (L33-L35) |
+| D14 | *(new round 15e; bits 20 `0x100000`, 21 `0x200000`)* client: bit 20 the opening `0x00010000ffff0000` with its page at IOVA `0xffff0000`; bit 21 the earlier module's start-up words (set IOP power `0x220` before HELLO_REPLY, EPMAP replies at once then STARTEP 1-4, buffers `0x00101000fffec000`, `0x00110000fffd0000`, `0x00101000fffcc000`, `0x00c0` echoed); all else unchanged | Decision (L30, the openings compared) |
+| D15 | *(new round 15e; bit 22, `0x400000`)* client: the boot part starts 70 s after the probe, no access or buffer before; a failed boot part gives `pmp` up, the device stays bound | Decision (L30, L33, L34) |
+| D16 | *(new round 15e)* the next run: boot only, D12's first line required; B1 `0xc0000`, B2 `0x3c0000`, B3 `0x4c0000`, B4 `0x7c0000` if B1-B3 run out; outcomes (1)-(9) each name a next step or say the question is not answerable this way | Decision (D12-D15) |
 
 ### 8.2 Candidate requirements C1-C17 (round 12) and C18 (round 15)
 
@@ -6664,6 +6794,12 @@ Switch `cand_c6`.
   stopped `pmp`, and the words stayed `0x444/0x666/0x333` with PMS_SRAM off; its node had no
   `power-domains` property, against (a). What it left unread is open question 84; what a client must
   log is D12.
+- *(Round 15e.)* **[LINUX] The second build (L34, L35):** with the node's `power-domains`, PMP,
+  PMS_SRAM and PMS read on afterwards and the wait still ran out at the same word; after it the
+  translator's set-up and error words and the SRAM header read as macOS's, A2I and I2A as in L33. The
+  three known openings of endpoint `0x20` are compared after L35; the next run's samples, variants
+  and boots are D13 (bit 19), D14 (bits 20, 21), D15 (bit 22) and D16, all the kernel side's, none read
+  by the logic (D9 (b)).
 
 **Summary** (ranked; each behind its switch `cand_cN`, D5):
 
@@ -6686,7 +6822,7 @@ Switch `cand_c6`.
 | C15 | `0x23b718000`/`004` at `0xf` before R22 (only if not); *(round 14b)* never put back on D6's failure path | the trigger word's state under this driver is unread | `0xf` at boot and every entry / `0xf` once, an earlier driver's dry run (round 14b) |
 | C16 | GPIO domain on | on under macOS, off under Linux | G-I / 4.2a |
 | C17 | 28 SoC clock words' bits 24-27 = 7 | largest group of differing words | G-I / L2 |
-| C18 | *(new round 15; the kernel side's, D9-D11)* `pmp` started at boot as macOS (R71, R72) with `…550000` after the opening; at the entry before `enter` macOS's endpoint-`0x20` words, R4, R5, R6; at the wake and on failure R6w, R55, R5w, short handshake, macOS's words | C3's words reach macOS's values only through `pmp`'s events, never by an application processor's write (R75, R70); PMP/PMS_SRAM gate themselves only after the 0x55 word | 1.7h, R75 [HV-CHANGED] / not started (L29); an earlier start: macOS's C3 values at the commit, no power-down (L30); the client at boot (ds22p): the opening's reply not received in 6 s, the words unchanged (L33) |
+| C18 | *(new round 15; the kernel side's, D9-D11)* `pmp` started at boot as macOS (R71, R72) with `…550000` after the opening; at the entry before `enter` macOS's endpoint-`0x20` words, R4, R5, R6; at the wake and on failure R6w, R55, R5w, short handshake, macOS's words | C3's words reach macOS's values only through `pmp`'s events, never by an application processor's write (R75, R70); PMP/PMS_SRAM gate themselves only after the 0x55 word | 1.7h, R75 [HV-CHANGED] / not started (L29); an earlier start: macOS's C3 values at the commit, no power-down (L30); the client at boot (ds22p): the opening's reply not received in 6 s, the words unchanged (L33); ds23p, its domains held on: the same (L34, L35) |
 
 *(Round 13.)* **What the runs have shown so far, per candidate** (1.7g for macOS with Linux's
 state put in, [HV-CHANGED]; L25, L26 for Linux with the switch on). "Down" = powered down and
@@ -7348,6 +7484,40 @@ readings of Linux, 66-67 of macOS under the hypervisor.
     earlier module. *Settles it:* a client that follows round 15c
     and logs by D12; if it times out at the same word with (a)-(e) read, those readings say which.
     No sleep is needed for any of these; the boot part's waits bound the run (D11 (d)).
+    *(Round 15e; L34, L35, the three openings compared after L35.)* **What the new readings bear on.**
+    (a) **Not the whole cause:** in ds23p the node had `power-domains`, PMP, PMS_SRAM and PMS read on
+    (macOS's sample-n-4 values) from 23.4 s with genpd's `sync_state` held by the node, and the wait
+    ran out at the same word (L34). Whether they were on inside 0.07-6.15 s is still not read (ds23p
+    logged no domain line). (b) **Partly, by a guess:** +`0x44` 0 and +`0x48` `0x8` again (L34, L35);
+    if I2A's digits count words (section 0's forms, the comparison's guess), `0x26600` says `pmp`
+    wrote words that boot, so its CPU ran; not read directly. (c) **Partly, by a guess:** under the
+    same reading `pmp`'s writes stop at a count that fits its `0x0` on endpoint `0x20` (fit (i)) or one
+    log word after the opening (fit (ii)); neither is read. (d) **The same in three boots:** A2I
+    `0x107801` at 23.4-155 s and at 26.3 s (L34, L35); under the guess one word of Linux's, its last,
+    not taken. (e) **Narrowed, not settled:** after the failure the translator's set-up words are
+    macOS's, TTBR is valid, the error word reads as macOS's at its entry (flag clear by the reference's
+    layout), the error address `0x63253bb9` is unread under macOS (L35); the table's content and the
+    window's values are not read. (f) **Not read** (ds23p logged no word); under the guess the end
+    state fits D11 (c)'s order and not the earlier module's. **New, (g): the translator's windows.**
+    The earlier start that was answered mapped 34 windows (0x190000 bytes) at `0xc0000000`-`0xc6004000`
+    before the CPU's release, matching in number and size the ADT's `pmp` register views from
+    `pio-reg-index` on (L30, round 15e); the client's requirements map no window, and macOS's mappings
+    are in DRAM, not read. *Settles it:* open question 85 (macOS) and D13's samples (whether `pmp`
+    goes silent right after `0x0` or after the opening). **New, (h): the time in boot.** The client
+    starts `pmp` at 0.069 s after kernel start, the earlier module at 69-71 s; *settles it:* D15's
+    boot. **Still open:** at which word `pmp` stopped, whether it took the opening, and why; D12 is
+    still unbuilt (ds23p has none of its lines, L34). The next run's reads and boots: D13-D16.
+85. **What `pmp`'s translator maps under macOS, and what the opening's page holds** (round 15e,
+    macOS; open questions 83, 84 (g); L30's windows, the ADT's `pio-*` properties). Whether macOS maps
+    any page of `0xc0000000`-`0xffffffff` (the ADT's pio range) for stream 0 before `pmp`'s start, at
+    which physical addresses (the 34 windows of `/arm-io/pmp` from `pio-reg-index` on?), and what the
+    page at IOVA `0x3c000` holds when the opening is sent and when `0x000200000023b549` comes back
+    (a table of those windows, as the later firmware's `GET_IOVA_TABLE` reply points at, is a *guess*).
+    *Settles it (under the hypervisor):* one boot that reads, from DRAM, the translator's table at its
+    TTBR and every table and leaf it points to, once right after +`0x44` = `0x10` and once after
+    `0x000200000023b549`, and the 16 KiB that IOVA `0x3c000` maps to at both times. It answers 83 too.
+    Needed for the client only if D13's samples put the stop at the opening or before it with no
+    other cause named.
 
 ## 10. With and without the cable
 
@@ -7947,6 +8117,34 @@ captured on. The numbers L1-L15 are for reference from tests and from section 4.
   and woke** (bare metal: a restart 5-30 s after the entry or its end, or no wake; hypervisor: the
   CPUs exited to the instrument, a restart, or no wake). Not started: every other bare-metal run of
   11-14 to 11-16, the clean-room runs ds2-ds20, lx1, lx2, lx5-lx8, lx10, lx15, dsh1, dsh2.
+  *(Round 15e; read from the run files of `tools/hv-trace-kit/runs/20261116-linux/`: the traces
+  `s2r-trace-lx*.jsonl`, events `pmp-tx`/`pmp-rx`, and the consoles `console-lx16.out` to
+  `-lx24.out`; readings of those runs, not code.)* **The opening's gap**, from the send of
+  `0x00010000ffff0000` to `0x000200000023b549`, in every traced start: lx3 78.8 ms, lx4 103.2, lx9
+  105.1, lx11 64.2, lx12 62.5, lx13 64.5, lx14 61.4, lx16 73.1, lx17 67.9, lx18 62.9, lx19 60.7, lx20
+  71.5, lx21 71.8: **60.7-105.1 ms over 13 starts** (the "63-65 ms" above was a subset). From HELLO to
+  the opening's send 17.9 ms (lx12). **The module's own console lines before the CPU's release**
+  (lx16-lx24, nine consoles, the same text, kernel time 69-71 s): "DRAM energy model: 512 bytes from
+  the device tree" and **"mapped 34 MMIO windows (0x190000 bytes) at DVA 0xc0000000-0xc6004000, 41
+  table entries"**; then "CPU released", RTKit's start and the words above. These are that module's
+  reports of what it did, not register readings; the layout of the windows inside that span and where
+  the 41-entry table went are not logged. *The ADT* (`var/map-20261117/adt/adt.bin`, a reading of the
+  M1's device tree): `/arm-io/pmp` has 44 `reg` entries and `pio-reg-index` 3; entries 3-43 are **41
+  entries, 34 of non-zero size, 0x190000 bytes in all** (a match of numbers with that line: 0x200024000,
+  0x200064000, 0x2000a4000, 0x2000e4000, 0x200158000, 0x200204000-0x2002c4000, 0x204d10000,
+  0x210058000-0x210358000, 0x210e20000 (0x60000), 0x210e48000, 0x211058000-0x211358000, 0x211e20000
+  (0x60000), 0x211e48000, 0x23d100000 (0x14000), 0x23d128000 (0x30000), 0x23d0d8000 (the page of the SPMI controller `0x23d0d9000`),
+  0x26b90c000, 0x200170000, 0x23c100000, 0x204e20000, 0x211ee0000-0x211ef0000, 0x210ee0000, 0x204d80000
+  (the last five 0x8000), 16 KiB otherwise); `pio-vm-base` `0xc0000000`, `pio-vm-size` `0x40000000`;
+  `/arm-io/dart-pmp` `pio-vm-base` `0xc0000000`, `pio-vm-size` `0x40000000`, `pio-granularity`
+  `0x1000000`, `vm-size` `0xbff00000`, `page-size` `0x4000`; its child `mapper-pmp` has a `pio-range`
+  of 34 (address, size) pairs, the same windows in another order with two empty. So **every IOVA the
+  module gave `pmp` (`0xfffec000`, `0xfffd0000`, `0xfffcc000`, `0xffff0000`) lies in the ADT's pio range
+  `0xc0000000`-`0xffffffff`**, and every one macOS gave (`0x4000`-`0x3c000`) below it. Each of the nine
+  consoles also has m1n1's line "dapf: Error getting DAPF /arm-io/dart-pmp base address." before Linux,
+  and `pmp` answered in each. In lx12 the module **echoed endpoint 4's `0x00c0000000000000`**
+  (RECV t 132.217154, SEND 132.217825), which macOS does not answer (1.7h); ten endpoint-4 type-8
+  pairs came before IOP power `0x20`, as at macOS's boot.
 - **L31 (Linux awake, stock kernel 7.3.0-0test5, 2026-11-19; read-only; from the orchestrator's
   brief of round 15b, not yet in the evidence file; added round 15b).** **systemd (pid 1) holds
   `/dev/watchdog0`**, which is `23d2b0000.watchdog`, Linux's `apple_wdt` on watchdog 1 (the
@@ -8043,6 +8241,170 @@ captured on. The numbers L1-L15 are for reference from tests and from section 4.
   PMS_SRAM and PMS on (its writes of them at boot not logged), and the words changed in the sample
   after the start and opening. *Reference, not an observation:* section 0 for the mailbox forms and
   +`0x48`'s bit names.
+- **L34 (the `pmp` client at boot, second build, kernel `7.2.11-ds23p`, `cand` `0x40000`, bare metal,
+  2026-11-19 04:10-04:15; evidence "Linux round: the pmp client at boot, second build (ds23p)", lab
+  `f0946a2`; `var/commit-state/linux-pmp-client-ds23p-20261119.txt`, `-ds23p-dmesg-20261119.txt`;
+  added round 15e).** Readings only, as L33: command line byte for byte ds22p's, the parameters read
+  back the same, no sleep, no `pm_test`; L33's eleven words with the same 32-bit read-only `/dev/mem`
+  reader, each sample now with `/proc/uptime`; the client's source not read. **The client's log,
+  complete** (every line of `apple-deepsleep` and `apple-deepsleep-pmp`, and every line of the device
+  core or genpd naming the node, its domains or its probe): 0.0679 the cores and the loader mailbox
+  lines; **0.068888 "pmp: /soc/power-management@23b700000/power-controller@3e0 given phandle 0xff for
+  pmp's power-domains"**, and the node then has `power-domains = <0x7a 0xff>` (PMP `@3d8`, PMS_SRAM
+  `@3e0`), `power-domain-names` `pmp`, `pms_sram`; 0.069093 the nodes added (L33's text); four buffer
+  lines, IOVA `0x4000` 16 KiB, `0xc000` 64 KiB, `0x20000` 16 KiB, `0x28000` **16 KiB** (ds22p: 64 KiB);
+  0.161897 genpd's "Disabling unused power domains"; **6.150185 "boot: a wait ran out, for
+  0x000200000023b549; 0 received messages dropped, 0 sends failed, 0 accesses refused (first 0x0)"**;
+  6.150221 "error -ETIMEDOUT: not started"; **6.150247 the probe failed with -110**; 27.616
+  `sync_state()` pending on `power-controller@3e0` and `@3d8` "due to 23bc00000.coprocessor". No line
+  for the domains' values, the SRAM, the translator, the start, the handshake or any word sent or
+  received, and **no first line naming the spec round or the build** (D12 (c)): this build does not
+  carry D12, and which round it follows is not read. **Devices:** no driver bound to the node; device
+  links to suppliers `@3d8` and `@3e0`, none to the mailbox (ds22p had one); the mailbox bound to
+  `apple-mailbox`; the translator's node compatible `apple,t8103-pmp-dart-deepsleep-c18`, disabled,
+  unbound; genpd **`pms_sram` on**, `pmp` on, `pms` on, neither listing a device. **The words, 125
+  samples at 23.43-155.14 s after kernel start, no change:** ds22p's values (L33) in every word but
+  one: `0x444/0x666/0x333`, +`0x44` `0x0`, +`0x48` `0x8`, A2I `0x107801`, I2A `0x26600`, PMP
+  `0x1f0f00ff`, PMS `0x1f0000ff`, DCS0 `0x1f0002ff`, and **PMS_SRAM `0x1f0000ff`** (ds22p `0x0f000300`).
+  The stock kernel before and after read L33's stock values, word for word. **What it establishes:**
+  with the node's `power-domains`, PMP, PMS_SRAM and PMS read on from 23.4 s at the values macOS's
+  sample n 4 read (1.7h), and **the client's wait still ran out at the same word after its 6 s bound**;
+  every other word ends as in ds22p. **What it does not establish:** the domains during the client's
+  window (0.07-6.15 s: no line, no reading before 23.4 s); everything L33 left unread (open question
+  84).
+- **L35 (`pmp`'s translator, SRAM header and mailbox after the client's failed start, ds23p, bare
+  metal, 2026-11-19 04:17-04:19; evidence "Linux round: pmp's translator and SRAM after the client's
+  failed start (ds23p)", lab `f0946a2`; `var/commit-state/linux-pmp-dart-sram-ds23p-20261119.txt`;
+  added round 15e).** A third boot of ds23p (same package and command line); the client's log as
+  L34's line for line but for times and bus addresses (buffers at the same IOVAs, the first at bus
+  `0x80ea94000`; the wait ran out at 6.154191, the probe -110 at 6.154255). Read once at 26.31-26.32 s
+  after kernel start, 32 bits, read-only, each address logged before its read; the translator read only
+  because PMP read on, the SRAM only because PMS_SRAM read on; **all 32 reads returned, no kernel line
+  followed**.
+
+  | Word | ds23p, 26.3 s | macOS (1.7h, R71 (c), R73) |
+  |---|---|---|
+  | PMP / PMS_SRAM / PMS | `0x1f0f00ff` / `0x1f0000ff` / `0x1f0000ff` | the same at sample n 4 |
+  | translator +`0x0` / +`0x4` | `0x0ed01020` / `0x11037` | the same (boot, wake) |
+  | +`0x60` / +`0x68` / +`0x6c` | `0x80016100` / `0xf0f0f` / `0x80808` | read so at boot |
+  | +`0x80`-`0x8c` | `0x03020100 0x07060504 0x0b0a0908 0x0f0e0d0c` | the same (boot) |
+  | +`0xf0` / +`0x2f0` / +`0x100c` | 0 / 0 / 0 | the same (+`0x2f0` written 0) |
+  | +`0xfc` | **1** | written 1 last at boot; read 1 at the entry |
+  | +`0x100` / +`0x13c` | `0x80` / `0x100` | written so at boot and wake |
+  | +`0x20` | `0x100000` | written, read back `0x100000` at boot |
+  | +`0x200` | **`0x8080ea90`** (bit 31; a table at `0x80ea90000`) | `0x808217dc` (det10), `0x80822544` (wake): other tables |
+  | +`0x40` | **`0x6000400`** | read `0x6000400` at the entry |
+  | +`0x50` / +`0x54` | **`0x63253bb9`** / 0 | never read |
+  | `pmp` +`0x44` / +`0x48` | 0 / `0x8` | `0x10` / `0xc` or `0x2c` at n 4; 0 / `0x2e` after the stop |
+  | A2I / I2A | `0x107801` / `0x26600` | I2A written `0x20001` at boot, `0x22200` at the stop |
+  | SRAM +`0x204` / +`0x22c` / +`0x230` | `0x64697575` / `0x3a800` / `0x2d0` | the same (`135map4`) |
+
+  `0x80ea90000` lies 16 KiB below the client's first buffer: two readings side by side, nothing more.
+  *Reference, not an observation* (aurora-silicon/linux `integration/aurora` `1f38ff8f4`,
+  `drivers/iommu/apple-dart.c`, `DART_T8020_*`): +`0x40` is the error word, bit 31 its flag, bits
+  24-27 the stream, bits 0-11 the code (bit 4 read fault, 3 write fault, 2 no PTE, 1 no PMD, 0 no
+  TTBR); +`0x50`/+`0x54` the error address; so `0x6000400` has the flag clear, stream 6 and code bit
+  10, none of the five named; what bit 10 means is not read. **What it establishes:** after the failed
+  start the translator is set up as macOS sets it at boot (streams on, stream 0 translated through a
+  valid table, stream 15 bypassed), its error word reads as macOS's read at its entry, and `pmp`'s SRAM
+  answers with macOS's header. **What it does not establish:** any of these values during the client's
+  window; the table's content (which IOVAs map where; whether the opening's page or any window of the
+  pio range is mapped); what wrote +`0x200` (by D9 (e) only the client programs the translator; not
+  read); what +`0x50`'s value refers to; whether macOS's boot leaves +`0x40` at `0x6000400` before its
+  start (not logged).
+
+**The three known openings of endpoint `0x20`, word for word** *(round 15e; from the recorded
+captures only: macOS's `var/commit-state/r10-pmpstart-det33-boot.txt` and `-det34b-boot.txt` (1.7h),
+the earlier module's trace `tools/hv-trace-kit/runs/20261116-linux/s2r-trace-lx12.jsonl` and consoles
+(L30), the client's log and readings (L33-L35); nothing from any driver's code)*. Times: macOS t on the
+M3's clock at receipt (det33 / det34b), the earlier module t of the lx12 trace, the client kernel
+time. For the client every word is **not read** (it logged none); its column gives what its
+requirements (D11 (c), round 15c) say it sends, and its buffer lines.
+
+| # | macOS (det33 = det34b word for word) | earlier module (L30; lx12) | client (L33-L35) |
+|---|---|---|---|
+| 0 | start: +`0x44` = `0x10` at 2.6748 / 2.6018; translator R71 (c), its table in DRAM, not logged; domains on at n 4; 2.2-2.7 s after the instrument's start | before the CPU's release: PMP, PMS_SRAM held on `0x1f0000ff`; "mapped 34 MMIO windows (0x190000 bytes) at DVA 0xc0000000-0xc6004000, 41 table entries"; "DRAM energy model: 512 bytes"; 69-71 s after kernel start (lx16-lx24), a module load | 0.069 s after kernel start, inside the probe, before genpd's unused-domain switch-off (0.16 s); four buffers (IOVA `0x4000`, `0xc000`, `0x20000`, `0x28000`); ds22p no domains given, ds23p `power-domains`; the table at `0x80ea90000`, content not read; windows: none by its requirements |
+| 1 | RECV HELLO `0x00100000000c000c` 2.6750 / 2.6029 | the same, 132.209030 | not read |
+| 2 | — | **SEND `0x0060000000000220`** (set IOP power `0x220`) 132.209667 | none (D11 (c)) |
+| 3 | SEND HELLO_REPLY `0x00200000000c000c` 2.6765 | the same 132.211176 | the same |
+| 4 | RECV EPMAP base 0 `0x008000000000001f` 2.6771 | the same 132.211856 | the same |
+| 5 | **SEND STARTEP 1, 2, 3; ep 3 `0x0008000000000000`; RECV ep 3 `0x00010000000003e9`; SEND STARTEP 4, EPMAP reply `0x0080000000000001`** 2.6774-2.6827 | **SEND EPMAP reply `0x0080000000000001`** 132.212707 | STARTEP 1-4, then EPMAP reply `0x0080000000000001` |
+| 6 | RECV EPMAP base 1 `0x0088000100000001` 2.6832; **SEND ep 3 `0x0001000000004000`, `0x0002000000010000`**; SEND `0x0088000100000000` 2.6846 | RECV the same 132.213279; SEND `0x0088000100000000` 132.213900; **then STARTEP 1-4** 132.2146-132.2155 | RECV the same; SEND `0x0088000100000000` |
+| 7 | ep 1: RECV `0x0010100000000000`; SEND **`0x0010400000018000`** 2.6851 | RECV the same; SEND **`0x00101000fffec000`** | size 4 at an IOVA of its own (by its first 16 KiB buffer line, `0x4000`: *guess*) |
+| 8 | ep 4: RECV `0x0011000000000000`; SEND **`0x0011000000020000`**; RECV `0x00c0000000000000`, **not answered**; ten type-8 pairs; 2.6854-2.6926 | RECV the same; SEND **`0x00110000fffd0000`**; RECV `0x00c0…`, **SEND `0x00c0000000000000`**; ten type-8 pairs; 132.2165-132.2240 | size `0x10` at its own IOVA (`0xc000` by its 64 KiB line, *guess*); `0x00c0…` not answered (D10 (f)); pairs not read |
+| 9 | RECV `0x0070000000000020`, **requested by nothing** 2.6928; SEND `0x00b0000000000020` 2.6929 | RECV the same 132.224339, **after row 2's word**; SEND the same | the same as macOS |
+| 10 | ep 2: RECV `0x0080000050000010`, `0x0010100000000000`; SEND **`0x0010100000034000`** 2.6934; RECV `0x00b0000000000020` 2.6939 | the same RECVs; SEND **`0x00101000fffcc000`**; RECV the echo 132.225961 | size 1 at its own IOVA (`0x20000`, *guess*) |
+| 11 | SEND STARTEP `0x0050002000000002` 2.6980 / 2.6210; RECV `0x0` on `0x20` 2.6985 / 2.6214 | the same, 132.226284 / 132.226619 | the same by D11 (c); not read |
+| 12 | **SEND `0x000100000003c000`** 2.7004 / 2.6228 (25.4 / 19.9 ms after HELLO) | **SEND `0x00010000ffff0000`** 132.226943 (17.9 ms after HELLO) | `0x0001` with the IOVA of its one page (`0x28000` by its fourth buffer line, *guess*) |
+| 13 | in the wait: endpoint 4's type-8 pairs go on (det33 115, det34b 114-116); the A2I polls after the send read the empty form (`0x2aa01`; `0x2ff01`); n 4 (2.7646 / 2.7568): +`0x44` `0x10`, +`0x48` `0xc` / `0x2c`, PMP `0x1f0f00ff`, PMS_SRAM and PMS `0x1f0000ff`, `0x444/0x666/0x333` | endpoint 4's type-8 pairs go on (from 132.2273) | not read (first reading 23.4 s) |
+| 14 | RECV `0x000200000023b549` 2.9750 / 3.2118: **274.6 / 589.0 ms** | the same 132.289422: **62.5 ms** (60.7-105.1 ms over 13 starts) | **none in 6 s** (6.105, 6.150, 6.154 s; three boots) |
+
+**The differences, in order** (meaning: *documentation* = the reference's names, aurora-silicon/linux
+`1f38ff8f4` `drivers/soc/apple/rtkit.c`, section 0; *guess* = from values only):
+1. *Before the first word* (row 0). **(a) The translator's mappings.** The earlier module mapped 34
+   windows, 0x190000 bytes, in `0xc0000000`-`0xc6004000`, and named a 41-entry table, before the CPU's
+   release (its own log); the ADT's `/arm-io/pmp` entries from `pio-reg-index` on are 41, 34 of them
+   non-empty, 0x190000 bytes (L30, round 15e) *(guess: the same windows, a match of numbers)*. macOS's
+   table is in DRAM and not logged (open questions 83, 85). The client's requirements map its buffers
+   only (D9 (e), D11 (a)); its table is not read. **(b) The time in Linux's boot:** 0.069 s (the client)
+   against 69-71 s (the module); macOS's start comes 2.2-2.7 s after the instrument's start, its own
+   boot's progress at that moment not read. **(c) The domains:** held on before the start by the module;
+   ds23p's through the node, read on only from 23.4 s. **(d) The SRAM:** macOS writes the block back as
+   read (R71 (b)); the module logged a read of the SRAM's head and 512 bytes of a DRAM energy model "from
+   the device tree" (where it put them is not logged); the client: not logged.
+2. Row 2: **set IOP power `0x220`** (type 6 "set IOP power state", `0x220` "init": *documentation*),
+   sent by the module only, before HELLO_REPLY. Row 9's `0x0070000000000020` (type 7, its
+   acknowledgement, state `0x20` "on": *documentation*) comes in all, unrequested under macOS.
+3. Rows 5-6: **the order of the EPMAP replies and the STARTEPs.** macOS: three STARTEPs and kdebug's
+   start before the first reply, STARTEP 4 after it; the module: both replies first, then STARTEP 1-4;
+   the client: STARTEP 1-4, then both replies.
+4. Rows 5-6: **kdebug on endpoint 3** (`0x0008…` start; `0x0001…`, `0x0002…` its two buffers at IOVA
+   `0x4000`, `0x10000`; `pmp`'s `0x0001…03e9` a buffer request): macOS only.
+5. Row 7: **endpoint 1's buffer**: size 4 (16 KiB) at `0x18000` (macOS) against 1 (4 KiB) at
+   `0xfffec000` (the module; `pmp` asked size 1 in both). Size in bits 44-51 in 4 KiB units, IOVA in
+   bits 0-43 (*documentation*).
+6. Row 8: **endpoint 4's buffer** at `0x20000` against `0xfffd0000` (size `0x10` in both); **the
+   `0x00c0000000000000` word echoed by the module only**.
+7. Row 10: **endpoint 2's buffer** at `0x34000` against `0xfffcc000` (size 1 in both).
+8. Row 12: **the opening's word**: `0x000100000003c000` against `0x00010000ffff0000`. Bits 48-55 = 1 in
+   both, bits 32-47 zero; bits 0-31 an IOVA (*guess*, D11 (a)): macOS's below the ADT's pio range,
+   the module's (as all its IOVAs) inside it. *Reference, not an observation, and for later chips'
+   firmware, not t8103's* (aurora-silicon/linux `1f38ff8f4`, `drivers/soc/apple/pmp.rs`): there the
+   endpoint-`0x20` words carry an opcode in bits 48-55 and an IOVA in bits 0-47, each reply's opcode is
+   the request's with bit 0 set, and the firmware's first request (`GET_IOVA_TABLE`, `0x10`) is
+   answered with the address of a table of (host physical address, I/O base, size) entries for the
+   node's `apple,pio-ranges`, each mapped from `0xc0000000` in steps of `0x1000000` (the address 0 when
+   the node has none); the binding (`apple,pmp.yaml`) gives `apple,t8103-pmp` at least 37 `reg` views
+   ("peripheral register views"). By analogy only (*guess*): t8103's RECV `0x0`, SEND `0x0001…`, RECV
+   `0x0002…` follow that request/acknowledgement form, and the opening's IOVA could point at such a
+   table; nothing read on the M1 shows what `pmp` does with it.
+9. Row 14: **the gap**: 274.6-589.0 ms (macOS), 60.7-105.1 ms (the module), none within 6 s (the
+   client).
+So the client's words follow macOS's in differences 2 (no set IOP power), 3 (its STARTEPs before the
+first reply), 5 (size 4), 6 (`0x00c0` not answered) and in their low IOVAs (5-8), and the module's in
+4 (no kdebug); it differs from both in 1 (a) as far as its requirements go
+(no window mapped; macOS's not read) and in 1 (b), its time in boot. The readings do not say which
+difference matters: the module's start was answered with 1 (a), 2, 3, 5-8 all its own way.
+
+**What the mailbox's control words left say, under a guess** (section 0's forms; *guess*, as
+section 0 says the meaning of bits 20-23 is not established). In macOS's polls the word reads
+`0x10XY01` right after a word is written and `0x2YY01` once it is taken, X and Y stepping by one per
+word taken and written, modulo 16: in det33 and det34b the word `0x0` on endpoint `0x20` came with I2A
+`0x105601` and the receive word's upper bits `0x56`, which is `pmp`'s 22nd word of that boot counted
+from HELLO (22 mod 16 = 6), and the A2I polls after the opening read `0x2aa01`, macOS's 26th word
+(mod 16 = `0xa`). Read so, the client's end state (A2I `0x107801`, I2A `0x26600`, the same in four
+readings over three boots, L33-L35) says: **Linux wrote 8 words modulo 16 and `pmp` took all but the
+last one; `pmp` wrote 6 modulo 16 and Linux took them all.** Two orders fit, among others: (i) D11
+(c)'s words with eleven endpoint-4 type-8 pairs (macOS and the module had ten): `pmp`'s last word is
+`0x0` on endpoint `0x20` (its 22nd, the index macOS's carried) and the untaken word is the opening;
+(ii) the same with ten pairs and one endpoint-2 LOG from `pmp` after the opening, echoed: `pmp` took
+the opening, wrote one log line and did not take the echo. The module's order (rows 2, 5, 6, 8) fits
+no single count of pairs. +`0x48` `0x8`, against `0xc`/`0x2c` while macOS's `pmp` ran: bit 2 clear
+(by the Asahi page's names "IRQ not pending", so an interrupt pending to `pmp`'s CPU, as a word
+waiting in A2I would raise) and bits 1 and 5 clear (bit 1 "CPU stopped" on that page and in `aura`;
+bit 5 "idle" in `aura`, "mailboxes to the main processor empty" on that page), so `pmp`'s CPU did not reach
+the state macOS's stop reads (`0x2e`) before R5's write; *guess*. None of this separates (i) from
+(ii), or says why; D12's word list and D13's samples do.
 
 ## Appendix: scripts and extracts (all in `var/spec/`)
 
@@ -8158,6 +8520,79 @@ written but hold their awake value. The 137 domain words are in 4.2a.
 - `0x23d0e0000`..: `0x23d0e2100` `0x1000100`.
 - `0x23d240000`..: `0x23d240000` `0x80100010`; `0x23d240004`-`0x23d24001c` `0x81100100`; `0x23d240020` `0x81100000`; `0x23d240024`-`0x23d240034` `0x81100100`; `0x23d240038` `0x81100000`; `0x23d24003c` `0x81100100`; `0x23d240040` `0x1101100`; `0x23d240044`-`0x23d24004c` `0x82100100`; `0x23d240050` `0x80100100`; `0x23d240054` `0x81100000`; `0x23d240304` `0x10000000`; `0x23d240308` `0x1000000`; `0x23d240314` `0x1000000`; `0x23d240320` `0x0`; `0x23d240330`-`0x23d240370` `0x0`.
 - `0x23d2c0000`..: `0x23d2c0000`-`0x23d2c000c` `0x0`; `0x23d2c0010` `0x880ff04`; `0x23d2c0014` `0x7`; `0x23d2c0018` `0x1`; `0x23d2c001c` `0xff0`; `0x23d2c0020`-`0x23d2c003c` `0x0`.
+
+## Changes in round 15e (2026-11-19: the client's second build (L34) and `pmp`'s translator and SRAM after it (L35); the three openings of endpoint `0x20` compared; open question 84 updated, 85 new; decisions D13-D16 for a decisive next run)
+
+Inputs: the spec at lab `14e4c78` (round 15d); evidence `docs/evidence/2026-11-17-deepsleep-clean-runs/README.md`
+sections "Linux round: the pmp client at boot, second build (ds23p)" and "Linux round: pmp's
+translator and SRAM after the client's failed start (ds23p)" (lab `f0946a2`); macOS's private
+extracts `var/commit-state/r10-pmpstart-det33-boot.txt`, `-det34b-boot.txt`; the earlier Linux runs'
+traces `tools/hv-trace-kit/runs/20261116-linux/s2r-trace-lx*.jsonl` and consoles
+`console-lx16.out`-`-lx24.out` (readings of those runs, not code); the ADT dump
+`var/map-20261117/adt/adt.bin` (`/arm-io/pmp`, `/arm-io/dart-pmp`, `mapper-pmp`); *reference, read as
+data, never run*: aurora-silicon/linux `integration/aurora` `1f38ff8f4` (`drivers/soc/apple/pmp.rs`,
+`Documentation/devicetree/bindings/soc/apple/apple,pmp.yaml`, `arch/arm64/boot/dts/apple/
+t8103-peripherals.dtsi`, `drivers/iommu/apple-dart.c`). No test, glue, client, driver `src/` or old
+driver branch was read. No new capture or run. The evidence file is not changed. Inline marks "round
+15e" are this round's. L34 and L35 and the additions to L30 are readings; D13-D16 are decisions about
+Linux.
+
+**The new readings:**
+- **L34 (ds23p at boot):** the node had `power-domains` (PMP, PMS_SRAM); the wait for
+  `0x000200000023b549` again ran out after 6 s and the probe failed (-110); from 23.4 s PMP, PMS_SRAM and
+  PMS read macOS's sample-n-4 values and every other word ds22p's (+`0x48` `0x8`, A2I `0x107801`, I2A
+  `0x26600`, the C3 words unchanged). Its log has no D12 line. So 84 (a), the domains off, is not the
+  whole cause.
+- **L35 (the same build, read at 26.3 s):** the translator's set-up words as macOS's, streams on,
+  TTBR valid (`0x8080ea90`), the error word `0x6000400` as macOS read it at its entry (flag clear by the
+  reference's layout), the error address `0x63253bb9` (never read under macOS); the SRAM header as
+  macOS's. Nothing of the client's window is read.
+- **L30, completed from its run files:** the opening's gap is 60.7-105.1 ms over 13 traced starts (the
+  D11 (d) table's cell corrected from "63-65 ms"); before the CPU's release the module reported
+  mapping "34 MMIO windows (0x190000 bytes) at DVA 0xc0000000-0xc6004000, 41 table entries", which
+  matches in count and size the ADT's `/arm-io/pmp` register views from its `pio-reg-index`; every IOVA
+  it gave lies in the ADT's pio range (`0xc0000000`-`0xffffffff`), every one of macOS's below it; it
+  echoed endpoint 4's `0x00c0` word, which macOS does not answer.
+
+**The three openings compared** (section 12, after L35): a table, row by row, of macOS's start
+(det33/det34b), the earlier module's (lx12) and the client's (its requirements; nothing of its words is
+read), and nine numbered differences with what each field is known (reference names) or guessed to
+mean. The client follows macOS in no set IOP power, its STARTEPs before the first EPMAP reply, endpoint
+1's size 4, `0x00c0` not answered and low IOVAs; the module in no kdebug; it differs from both in its
+time in boot (0.069 s against 69-71 s) and, by its requirements, in mapping no window. **Under a guess**
+(section 0's forms, checked against macOS's own polls: its `0x0` on endpoint `0x20` was `pmp`'s 22nd
+word and carried index 6, its opening macOS's 26th, index `0xa`), the client's end state says one word
+of Linux's, the last, was not taken and every word of `pmp`'s was; two orders fit, (i) `pmp` silent from
+its `0x0`, the opening untaken, and (ii) the opening taken, one log word, its echo untaken; the module's
+order fits neither.
+
+**Open questions:** 84 updated part by part ((a) not the whole cause; (b), (c) partly by the guess; (d)
+the same in three boots; (e) narrowed; (f) not read) with two new parts, (g) the translator's windows
+and (h) the time in boot, and what is still open. **85 new:** what macOS's translator maps for `pmp`
+before its start (any page of the pio range, at which physical addresses) and what the page at IOVA
+`0x3c000` holds, read from DRAM under the hypervisor; it also answers 83.
+
+**Decisions:**
+- **D13 (bit 19, `0x80000`):** samples of 13 words (+`0x44`, +`0x48`, A2I, I2A, PMP, PMS_SRAM, PMS, the
+  translator's error word and address, the three C3 words), read-only, at fixed points of the boot part
+  (before and after the start, each wait's start, every 250 ms and end, after a stop, 2 s after the 0x55
+  word), never delaying an answer; at the part's end the buffers' contents (non-zero counts; crash log,
+  syslog and opening page as hex). Reason: the 0-6 s window has never been read, and each word answers a
+  part of 84; every read was made under macOS (by the instrument or macOS) or once under Linux without
+  fault.
+- **D14 (bits 20, `0x100000`, and 21, `0x200000`):** the earlier module's words: bit 20 the opening
+  `0x00010000ffff0000` with its page at `0xffff0000`; bit 21 its start-up words (set IOP power `0x220`,
+  its EPMAP/STARTEP order, its buffer sizes and IOVAs, `0x00c0` echoed). Reason: the only Linux start
+  answered used them, 13 times out of 13. A window-mapping variant is not decided: the layout is not
+  logged (open question 85).
+- **D15 (bit 22, `0x400000`):** the boot part 70 s after the probe. Reason: the module's answered starts
+  were at 69-71 s, the client's at 0.069 s.
+- **D16:** the next run: boot only; a build without D12's first line is not run; B1 `0xc0000`, B2
+  `0x3c0000`, B3 `0x4c0000`, and B4 `0x7c0000` if those three run out; nine outcomes, each naming the
+  next step or saying the question cannot be answered this way.
+Every addition is off unless its bit is set; bits 19-22 are the kernel side's, and the logic's accesses
+do not depend on them (D9 (b), round 15d). C18's note and summary row carry L34 and L35. The
+introduction lists the round.
 
 ## Changes in round 15d (2026-11-19: the `pmp` client's first Linux run (L33) and the marks it must leave (D12); gaps GL14, GL15, R10E-1 to R10E-3, G28, G29; D7 (c)'s cores; the bit-28 write after a turn-on wait; three points of the glue's review on watchdog 1)
 
