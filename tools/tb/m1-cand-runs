@@ -6,9 +6,12 @@
 #   WOKE   the M1 answers again on the test kernel with the same boot id (it slept and woke);
 #   RESET  it answers on the stock kernel (watchdog or other reset; the power chip is read);
 #   DARK   nothing answers within the bound: the series stops (it may be asleep; Naeem's hands).
+# A camera frame (tools/hv-trace-kit/harness/m1-state.sh) is taken after every run that did not
+# wake and its path written with the outcome: the screen is read from the frame, not asked of
+# Naeem (2026-11-18: "keep using camera to see what's on the screen instead of asking me").
 # The run needs apple_deepsleep.wdt on the command line; real.sh refuses a sleep without it.
 set -u
-here=$(cd "$(dirname "$0")" && pwd)
+here=$(cd "$(dirname "$0")" && pwd); repo=$(cd "$here/../.." && pwd)
 pkg=${1:?pkg}; tag=${2:?tag}; cl=${3:?cmdline}; out=${4:?out.tsv}; shift 4
 "$here/m1-claim" check || exit 1
 krel=$(zstd -dc "$pkg" | tar -t | sed -n 's|^usr/lib/modules/\([^/]*\)/vmlinuz$|\1|p' | head -1)
@@ -31,7 +34,8 @@ for mask in "$@"; do
 	dt=$(( $(date +%s) - t0 ))
 	rec=; [ $res = RESET ] && rec=$(m1 "$REC")
 	[ $res = WOKE ] && rec=$(m1 "sed -n 2,3p /var/lib/m1power-ds/real.out | tr '\n' ' '")
-	printf '%s\t%s\t%s\t%ss\t%s\n' "$mask" "$(date +%T)" "$res" "$dt" "$rec" | tee -a "$out"
+	cam=; [ $res != WOKE ] && cam=$("$repo/tools/hv-trace-kit/harness/m1-state.sh" 2>/dev/null | sed -n 's/.*frame: //p' | tail -1)
+	printf '%s\t%s\t%s\t%ss\t%s\t%s\n' "$mask" "$(date +%T)" "$res" "$dt" "$rec" "${cam:+camera $cam}" | tee -a "$out"
 	[ $res = DARK ] && { log "DARK after mask=$mask: stopping; the M1 may be asleep"; exit 2; }
 	[ $res = WOKE ] && { m1 'systemctl reboot' >/dev/null; sleep 20; }
 done
