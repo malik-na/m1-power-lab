@@ -2491,3 +2491,388 @@ In stock Omarchy (kernel `7.3.0-0test5-1-ARCH`, up since 01:04:29, not rebooted 
 reached over Thunderbolt. No module was loaded, and the two reader scripts copied to `/root` were
 removed. The camera frame `var/m1-look/20261119-011527-state-linuxobs-end.jpg` shows the desktop. The
 claim is released.
+
+## macOS's pmp start-up and endpoint-0x20 exchange (from round-10 captures)
+
+Readings only, from captures already on the M3. No M1 run was made and the M1 was not claimed.
+Sources:
+- round 10's det33 and det34b boots (`touch-det33.jsonl`, `touch-det34b.jsonl`);
+- det33's detached log (idle, entry, wake);
+- for what those do not log in full, two earlier macOS boots:
+  - det10 (2026-11-17 18:27): `pmp`'s DART page logged in full from boot;
+  - `135map4` (2026-11-17 02:30, `docs/evidence/2026-11-16-dram-controller-state`): `0x23b500000`+`0x40000`
+    logged in full from boot;
+- det18 and det23's detached logs, to compare the entry and the wake.
+
+Boot times "t" are seconds from the touch map's start, on the M3's clock at receipt. Detached
+times are the M1's timer from the detach. Field names come from aurora-silicon/linux
+`integration/aurora` `1f38ff8f4` (`drivers/soc/apple/rtkit.c`, `mailbox.c`, `pmp.rs`,
+`pmp_bootargs.rs`, `drivers/iommu/apple-dart.c`, `drivers/pmdomain/apple/pmgr-pwrstate.c`) and
+Asahi's `hw/soc/asc.md`. They are names for fields, not readings of what the firmware does with
+them. Where a field's meaning is only inferred from the values, it is marked *(guess)*.
+
+**Short answer.**
+- **The same in every boot read (det33, det34b, det10, `135map4`):**
+  1. macOS reads `pmp`'s SRAM header and its boot-argument block. In `135map4` it writes the block
+     back with the values it read.
+  2. It sets up `pmp`'s DART (det10).
+  3. It writes `0x20001` to the I2A control word, then `0x10` to `+0x44`.
+  4. RTKit's handshake follows: version 12, endpoints `0x00`-`0x04` and `0x20`, and buffers for
+     endpoints 1-4 at IOVAs `0x18000`, `0x34000`, `0x4000`/`0x10000` and `0x20000`.
+  5. Endpoint `0x20` opens with `RECV 0x0` and `SEND 0x000100000003c000`.
+  6. `pmp` then sends `0x000200000023b549` (0.27 s and 0.59 s later). macOS at once reads byte
+     `0x23b549400` of `pmp`'s SRAM; that page holds the names `BAT`, `DRAM`, `ECPU`, `PCPU`,
+     `ECORE0`…
+  7. Two request/reply pairs follow (`0x0020000000010003`/`…1…0003`,
+     `0x0020200000010000`/`…3…0000`).
+  8. Then the endpoint-`0x20` traffic: the `0x0020e…` messages, request/reply pairs with codes
+     8/9, a/b, c/d and 4/5, and the `0x0020e00000550000` at 69 s.
+
+  Through the end of endpoint `0x20`'s opening, det33 and det34b have the same messages, word for
+  word and in the same order. After that they have the same kinds of message, with small
+  differences in count and order (section 3).
+- **What macOS writes to `pmp`'s memory before starting it:** only the 0x2d0-byte boot-argument
+  block at SRAM `+0x3a800` (54 tagged records, decoded below). In `135map4` it was written back
+  unchanged. Nothing else in `0x23b500000`-`0x23b53ffff` is written before the start. The rest of
+  the SRAM (`0x23b540000` on) was not logged in full in any boot.
+- **At the entry (det33; det18 and det23 the same):**
+  1. Endpoint-`0x20` messages for ids `0x55`/`0x54`, both `…0001` and `…0000`, and `0x63`
+     (8/9).
+  2. `SET_AP_PWR_STATE` and `SET_IOP_PWR_STATE` `0x201`.
+  3. I2A control `0x22200`; `+0x44` = 0.
+  4. The DART's streams are disabled.
+  5. macOS reads the whole `__DATA` segment of `pmp`'s SRAM (`0x23b52c000`-`0x23b55bfff`,
+     49,152 words) and 12 64-bit words at `0x23b549000`-`0x2a0`.
+- **At the wake (det33; det18 and det23 the same):**
+  1. macOS writes the power-state words of `PMP`, `PMS_SRAM` and `PMS`.
+  2. It writes the same 12 64-bit words, then all of `__DATA` back. In det33 every byte equals what
+     it read at the entry.
+  3. It sets up the DART again (new TTBR), writes I2A control `0x20001` and `+0x44` = `0x10`.
+  4. The handshake is short: no endpoint is started, no buffer is requested, and endpoint `0x20`'s
+     opening is not repeated.
+  5. Endpoint-`0x20` messages follow 91 ms later: `…630001`, `…550001`, `…540001`, **`…550000`**,
+     `…540000`.
+
+### Coverage
+
+| Block | det33/det34b boot | det33 detached (idle, entry, wake) | det10 boot | `135map4` boot |
+|---|---|---|---|---|
+| `pmp` control page `0x23bc00000` (`+0x44`, `+0x48`) | full | full | first touch per 5 s | first touch per 5 s |
+| `pmp` mailbox page `0x23bc08000` | full | full | first touch per 5 s | first touch per 5 s |
+| `pmp` SRAM `0x23b500000`+`0x80000` (ADT `/arm-io/pmp` reg 2) | first touch per 5 s | full | first touch per 5 s | **full for `+0`-`+0x3ffff`** |
+| DART `0x23b300000` (ADT `/arm-io/dart-pmp`) | first touch per 5 s | full | **full** | first touch per 5 s |
+| power-state words `0x23b7003d8` (PMP), `0x3e0` (PMS_SRAM), `0x140` (PMS) | first touch of their page per 5 s; tick samples every 250 ms | full; tick samples every 250 ms | first touch | first touch |
+| `pmp` reg 1 `0x23b850000`+`0x200000`, other `pmp` pages in `0x23bc00000`+`0x60000` | first touch per 5 s | full | first touch | first touch |
+
+- "First touch per 5 s" shows only the first access to each 16 KiB page in each 5 s epoch. A page
+  is re-armed only after it is touched, so a page with no touch after its first epoch had no
+  access at all.
+- In the boot captures, full-logged pages arrive through the hypervisor's asynchronous log;
+  first touches are synchronous traps. Their relative order is by receipt time only.
+- In the detached log every record has the M1's timer, and the order is exact.
+- `0x23bc34000` lies in `pmp`'s ADT range and in the power manager's (`/arm-io/pmgr` reg 22,
+  `0x23bc2c000`+`0x40000`). It is written `0x1`/`0x2` from 1.3 s on, from the same pc as the
+  power-state words (det33 `0xfffffe0015fba2d0`), and is one of det8's four pages left out of
+  full logging. It is not counted as `pmp`'s here.
+- `pmp` reg 1 and the other `0x23bc…` pages: no access in any of these captures.
+
+*ADT (`var/map-20261117/adt/adt.bin`), not an observation of traffic:*
+- `/arm-io/pmp`: `iop,ascwrap-v4`, role `PMP`, interrupts 512, 511, 514, 513.
+- `iop-pmp-nub`: firmware `t8103pmp`, `pre-loaded` 1, `region-base` `0x23b500000`, `region-size`
+  `0x80000`, `sram-index` 1.
+- `segment-ranges`: `__TEXT` phys `0x23b500000` (IOVA `0x100000000`, `0x2c000` bytes) and
+  `__DATA` phys `0x23b52c000` (IOVA `0x10002c000`, `0x30000` bytes).
+- `/arm-io/dart-pmp`: `dart,t8020`; `sids` `0x8001`, `bypass` `0x8000`; tunables (offset,
+  value) `+0x60` `0x80006100`, `+0x68` `0x0f0f0f`, `+0x6c` `0x080808`.
+
+### 1. Boot: every logged access to pmp, its SRAM, its DART and its power-state words, to the start
+
+| Step | det33 t | det34b t | Access (value) |
+|---|---|---|---|
+| sample n 3 | 0.755 | 0.755 | `+0x44` 0, `+0x48` `0x2a`; ps_PMP, ps_PMS_SRAM, ps_PMS `0x0f0000ff` (as the bare proxy). No sample until n 4 |
+| SRAM header | 2.6593 | 2.5893 | first touch `R 0x23b500020` = 0 |
+| boot-argument page | 2.6620 | 2.5916 | first touch `R 0x23b53a800` = `0x53544b47` (`STKG`) |
+| `__TEXT` string | 2.6652 | 2.5942 | first touch `R 0x23b52a384` = `0x694b5452` (`RTKi`) |
+| `__DATA` string | 2.6682 | 2.5967 | first touch `R 0x23b52f3a8` = `0x20746f6e` (`not `) |
+| DART | 2.6714 | 2.5997 | first touch `R 0x23b300000` (PARAMS1) = `0x0ed01020` |
+| I2A control | 2.6736-2.6744 | 2.6015 | `R 0x23bc08114` = `0x20001`, `W` = `0x20001` |
+| **CPU start** | 2.6747-2.6748 | 2.6017-2.6018 | `R 0x23bc00044` = 0, **`W 0x23bc00044` = `0x10`** |
+| RTKit handshake | 2.6750-2.7004 | 2.6029-2.6228 | section 2 |
+| sample n 4 | 2.7646 | 2.7568 | `+0x44` `0x10`, `+0x48` `0x0c` / `0x2c`; ps_PMP `0x1f0f00ff`, ps_PMS_SRAM `0x1f0000ff`, ps_PMS `0x1f0000ff`; the three C3 words unchanged |
+| `pmp`'s table | 2.9764 | 3.2131 | first touch `R` byte `0x23b549400` = `0x42`, 1.4 ms after `RECV 0x000200000023b549` |
+| sample n 5 | 3.0035 | 3.2560 | ps_PMP `0x1f0f03ff`, ps_PMS_SRAM `0x1f0003ff`, ps_PMS `0x1f0002ff`; C3 words `0x444/0x444/0x444` |
+
+- **Same pc:** in det33 the SRAM first touches come from pc `0xfffffe00175ceac4`. That is the pc
+  of the entry's 49,152-word `__DATA` read in the same boot's detached log.
+- **What the boot captures leave out:**
+  - between the four SRAM first touches and the CPU start, later accesses to those four pages are
+    not logged;
+  - no other SRAM page is touched before 5 s. In det33 and det34b no SRAM page and not the DART
+    page is touched again after the first epoch (to 207.9 s and 395.3 s);
+  - the power manager's page `0x23b700000` is first-touched at 0.43 s, so macOS's writes to ps_PMP,
+    ps_PMS_SRAM and ps_PMS during the boot are not logged. Only the samples show them: unchanged at
+    0.755, changed by 2.76.
+- **Boot argument block, `135map4`** (`0x23b500000`-`0x23b53ffff` in full). macOS's SRAM
+  accesses before the start, in order (t 2.6286-2.6679), all 32-bit from one pc (`…2ac4` reads,
+  `…2a64` writes):
+  1. `R +0x20`-`+0x5c`, `+0xc0`-`+0xfc` (all 0), `+0x204`-`+0x240`:
+     - `+0x204` `0x64697575` (`uuid`);
+     - `+0x208` 5;
+     - `+0x20c` `0x2a384`, `+0x210` `0x2f3a8` (offsets of the two strings below);
+     - four words `0x4c1b7143 0xef30a65c 0x42e17fa0 0xc3523543`;
+     - 0, 0;
+     - **`+0x22c` `0x3a800`**, **`+0x230` `0x2d0`**;
+     - `+0x234` `0x2c000`, 0, `+0x23c` `0x3b52c000`, `+0x240` 2.
+  2. `R +0x3a800`-`+0x3aacc` (180 words = `0x2d0` bytes).
+  3. The header again, then `R +0x2a384`-`+0x2a3c0` (`RTKit-2062.141.1.release`, `stk_fail`,
+     `management`, …) and `R +0x2f3a8`-`+0x2f3e4` (`not set`, …).
+  4. The header a third time.
+  5. **`W +0x3a800`-`+0x3aacc`, 180 words, every one equal to what was read.**
+
+  The first touch of the DART follows at 2.6687 and the `+0x44` read at 2.6732. *Documentation,
+  not an observation:* the reference `pmp.rs` reads the boot arguments from the same places
+  (`BOOTARGS_UUID` `0x204` = `uuid`, version 5, offset at `0x22c`, size at `0x230`) and patches
+  them in place.
+  - The block parses as 54 records: 4-byte tag, 4-byte size, then the value.
+  - Values in `135map4`, read and written the same:
+
+    `STKG`(8) `0x1eb718d1d8305600`, `DBUG` 0, `DART` 1, `DOCK` 0, `PWRG` 1, `CLKG` 1, `NRGD` 1,
+    `NRGS` 1, `PMON` 1, `PMUT` 0, `SMPL` 0, `TCAP` `0x3e8`, `TGPH` 0, `BDID` `0x26`, `PBAT` 1,
+    `FSTD` 1, `SCHT` 1, `ANRG` 0, `PNRB` 0, `SMSK` `0xffffffff`, `CMSK` `0xffffffff`, `DENP` 0,
+    `MSGQ` 0, `SLID`(8) 0, `CSSS`(8) 0, `v8Fq` 0, `DSRL`(1) 0, `DSVS`(8) 0, `DSCL`(8) 0,
+    `RTSZ` `0x5c000`, `PTPB`(8) 0, `IGNT`(1) 0, `SNeo`(1) 0, `PTVB`(8) 0, `T1Ps`(8) 0, `GptB`(8) 0,
+    `GptS`(8) `0x4000`, `PplB`(8) 0, `PTPS`(8) 0, `GxPB`(8) 0, `GxPS`(8) 0, `DSZS`(8) 0, `DSZL`(8) 0,
+    `TUNS`(8) `0x103aad0`, `TUNZ` `0x1e8`, `RTTO`(8) 0, `McRA` `0x4000`, `SOC_` `0x8103`, `SOCR`
+    `0x11`, `CpAd`(8) `0x23b800000`, `WrAd`(8) `0x23bc00000`, `DEVf`(1) 0, `IOBA`(8) 0, `IOSZ` 0.
+  - Whether the values were the same in det33 and det34b is not read: their first word matches
+    (`STKG`), and the rest of that page is not logged.
+  - In `135map4`, nothing else in `0x23b500000`-`0x23b53ffff` is accessed from then until the
+    entry's read of `0x23b52c000`-`0x23b53fffc` at 653.8 s.
+- **DART set-up at boot, det10** (DART page in full; t 2.2051-2.2338, in this order):
+  1. `R +0x0` `0x0ed01020`, `R +0x4` (PARAMS2) `0x11037` (twice), `R +0x60` (CONFIG)
+     `0x80016100`, `W +0xfc` (STREAMS_ENABLE) = 0, `R +0x80`-`+0x8c` (REMAP) `0x03020100`,
+     `0x07060504`, `0x0b0a0908`, `0x0f0e0d0c`.
+  2. `R +0x0`, `+0x4`, `+0x60`, `R +0xf0` 0, `W +0xfc` = 0, `W +0x200` (TTBR sid 0) = 0, `W +0x2f0`
+     = 0, `W +0x34` (STREAM_SELECT) = `0xffffffff`, `W +0x20` (STREAM_COMMAND) = `0x100000`
+     (INVALIDATE).
+  3. `R +0x60` `0x80016100`, `R +0x68` `0xf0f0f`, `R +0x6c` `0x80808` (already the ADT tunables),
+     `R +0x20` `0x100000`, `W +0x100` (TCR sid 0) = `0x80` (TRANSLATE_ENABLE), `W +0x13c` (TCR sid
+     15) = `0x100` (BYPASS_DART).
+  4. Then, received after det10's first touches of I2A control (2.2164) and `+0x44` (2.2210): `W
+     +0x200` = **`0x808217dc`** (valid, table at `0x8217dc000`), `R +0xfc` 0, `W +0xfc` = 1.
+
+  No DART access after that in det10's boot. Whether the TTBR write came before or after the CPU
+  start is not established: the two arrive by different paths, and `+0x44`'s write was not logged
+  in det10.
+
+### 2. RTKit start-up (boot): every mailbox message, in order
+
+det33 times; det34b has the same messages and values in the same order (2.6029-2.6228).
+Messages are written as the 64-bit word, then the endpoint. `+0x110`/`+0x114` status polls
+(302/229 reads in det33's boot) are left out.
+
+| t | Dir | Ep | Message | Decoded (reference field names) |
+|---|---|---|---|---|
+| 2.6750 | RECV | 0 | `0x00100000000c000c` | HELLO, versions 12..12 |
+| 2.6765 | SEND | 0 | `0x00200000000c000c` | HELLO_REPLY 12..12 |
+| 2.6771 | RECV | 0 | `0x008000000000001f` | EPMAP base 0, bitmap `0x1f` (endpoints 0-4), not last |
+| 2.6774-2.6783 | SEND | 0 | `0x0050000100000002`, `…02…`, `…03…` | STARTEP 1, 2, 3 (flag bit 1) |
+| 2.6787 | SEND | 3 | `0x0008000000000000` | kdebug type 8 (START) |
+| 2.6795 | RECV | 3 | `0x00010000000003e9` | kdebug type 1 (GET_BUFFER), count `0x3e9` |
+| 2.6823 | SEND | 0 | `0x0050000400000002` | STARTEP 4 |
+| 2.6827 | SEND | 0 | `0x0080000000000001` | EPMAP reply, base 0, bit 0 set ("more") |
+| 2.6832 | RECV | 0 | `0x0088000100000001` | EPMAP base 1, bitmap 1 (endpoint `0x20`), last |
+| 2.6841 | SEND | 3 | `0x0001000000004000` | kdebug SET_BUFFER0, IOVA `0x4000` |
+| 2.6844 | SEND | 3 | `0x0002000000010000` | kdebug SET_BUFFER1, IOVA `0x10000` |
+| 2.6846 | SEND | 0 | `0x0088000100000000` | EPMAP reply, base 1, last |
+| 2.6849 | RECV | 1 | `0x0010100000000000` | crashlog BUFFER_REQUEST, 1 page, IOVA 0 |
+| 2.6851 | SEND | 1 | `0x0010400000018000` | reply: 4 pages at IOVA `0x18000` |
+| 2.6854-2.6926 | both | 4 | `RECV 0x0011000000000000` / `SEND 0x0011000000020000`; `RECV 0x00c0000000000000`; 10 × `0x0080000000000000` each way | ioreport BUFFER_REQUEST `0x10` pages, reply IOVA `0x20000`; type `0xc`; type 8 echoed |
+| 2.6928 | RECV | 0 | `0x0070000000000020` | IOP_PWR_STATE_ACK `0x20` (ON). No SET_IOP_PWR_STATE was sent before it |
+| 2.6929 | SEND | 0 | `0x00b0000000000020` | SET_AP_PWR_STATE `0x20` |
+| 2.6932 | RECV | 2 | `0x0080000050000010` | syslog INIT: 16 entries, message size `0x50` |
+| 2.6933 | RECV | 2 | `0x0010100000000000` | syslog BUFFER_REQUEST, 1 page |
+| 2.6934 | SEND | 2 | `0x0010100000034000` | reply: 1 page at IOVA `0x34000` |
+| 2.6939 | RECV | 0 | `0x00b0000000000020` | AP power state `0x20` acknowledged |
+| 2.6980 | SEND | 0 | `0x0050002000000002` | **STARTEP `0x20`** |
+| 2.6985 | RECV | `0x20` | `0x0000000000000000` | *(guess: `pmp`'s hello on endpoint `0x20`)* |
+| 2.7004 | SEND | `0x20` | `0x000100000003c000` | *(guess: a buffer at IOVA `0x3c000`, like the replies above)* |
+| 2.7020-2.9714 | both | 4 | 115 × `0x0080000000000000` each way | ioreport type 8, echoed |
+| 2.9750 | RECV | `0x20` | `0x000200000023b549` | `0x23b549` × `0x1000` = `0x23b549000`, a page of `pmp`'s `__DATA`. macOS reads `0x23b549400` 1.4 ms later *(guess: "here is my table")* |
+| 2.9752 | RECV | 2 | `0x0050000000000000` | syslog LOG, index 0 (macOS echoes it at 2.9807) |
+| 2.9784 / 2.9787 | SEND / RECV | `0x20` | `0x0020000000010003` / `0x0020100000010003` | code 0 / 1, number 1, argument 3 |
+| 2.9799 / 2.9805 | SEND / RECV | `0x20` | `0x0020200000010000` / `0x0020300000010000` | code 2 / 3, number 1, argument 0 |
+
+- **Endpoints and buffers.** Endpoints started: 1, 2, 3, 4, `0x20`. The endpoint map lists only
+  0-4 and `0x20`; there is no OSLog (8) and no endpoint 7.
+- **IOVAs answered by macOS:** `0x4000`, `0x10000`, `0x18000`, `0x20000`, `0x34000`, `0x3c000`.
+  These are DART addresses. Where they map in DRAM is not read: the page tables at the TTBR are in
+  DRAM, which is not logged.
+- **No crashlog or syslog content** was read: the buffers are in DRAM. Endpoint 2 sent one LOG
+  message (index 0) at 2.9752.
+- **Endpoint 4 at boot, to the 0x55 message (det33 = det34b):**
+  - 132 × type 8 each way;
+  - 2 × `0x0040000000000000` each way (32.0 s, 49.4 s);
+  - the one buffer exchange and the one `0x00c…`.
+- **Same in det10 and `135map4`:** the first touches give the same pattern: `R 0x23b549400` =
+  `0x42` at 2.7130 and 3.1748. macOS's `0x0020e00000550000` appears, as a first touch of the
+  mailbox page, at 68.15 s in both.
+- **Page `0x23b549000`** (from det33's entry read, not from the boot):
+  - 16-byte name slots at `+0x400`-`+0x55f`: `BAT`, `DRAM`, `ECPU`, `PCPU`, `ECORE0`-`3`, `PCORE0`-`3`,
+    `ECPM`, `PCPM`, …, `VDEC`, `GPU SRAM`;
+  - 64-bit words at `+0x0`-`+0xa0` and `+0x200`-`+0x2a0` *(guess: per-name counters)*.
+
+### 3. Endpoint 0x20 at boot: the message format, and every message up to 0x550000
+
+*Format, as far as the values show:*
+- Every message after the opening has bit 53 set (`0x0020…`).
+- Bits 44-47 are a code:
+  - macOS sends even codes 0, 2, 4, 8, `0xa`, `0xc`, `0xe`;
+  - `pmp` answers 0, 2, 4, 8, `0xa` and `0xc` with code + 1;
+  - **code `0xe` is never answered in any capture.**
+- Bits 16-31 are a number:
+  - for codes 8, `0xa`, `0xc` and `0xe` it is always an ADT power-manager device id flagged
+    `notify_pmp`: `0x54` DISP0_FE, `0x55` DISPEXT_FE, `0x5c` JPG, `0x63` GFX, `0x64` ISP_SYS, `0x65`
+    VENC_SYS, `0x66` AVD_SYS, `0x68` ANE_SYS, `0xe3` ATC1_PCIE, `0x15c` ATC1_PCIE-V;
+  - this is a match of numbers *(guess: the device id)*.
+- Bits 0-15 are an argument:
+  - code `0xe`: 0 or 1 *(guess: device off/on)*;
+  - codes `0xa`/`0xc`: `0x20`-`0x23`, echoed in the reply.
+- Codes 0-3 carry number 1, and code 4 carries 0 or 2. Their replies (code 5) carry 0. These
+  numbers are not shown to be device ids.
+
+*Documentation, not an observation:* the reference `pmp_power.rs` uses the same marker bit 53, a
+command at bit 44 and the reply `(command + 1) << 44`. It puts `device_id` at bit 40 and
+`enabled` at bit 32, so its layout does not match these words.
+
+Every endpoint-`0x20` message in det33's boot, from the opening to the 0x55 message (det34b: the
+same set and counts, except `0x0020e000005c0001`, `0x0020e00000640001` and `0x0020e00000660001` ×3
+instead of ×4, and no `0x0020e00000e3…`/`0x0020e000015c…`):
+
+| Message | Count (det33) | First t (det33) | Answered by |
+|---|---|---|---|
+| `0x0020000000010003` | 1 | 2.9784 | `0x0020100000010003` |
+| `0x0020200000010000` | 1 | 2.9799 | `0x0020300000010000` |
+| `0x0020e00000630001` (GFX, 1) | 2 | 3.0628 | none |
+| `0x0020800000630000` (GFX) | 1 | 3.0730 | `0x0020900000630000` |
+| `0x0020e00000680001` (ANE_SYS, 1) | 3 | 3.1134 | none |
+| `0x0020e00000660001` / `…0000` (AVD_SYS) | 4 / 4 | 3.1501 | none |
+| `0x0020e000005c0001` / `…0000` (JPG) | 4 / 4 | 3.2080 | none |
+| `0x0020800000680000` (ANE_SYS) | 3 | 3.2225 | `0x0020900000680000` |
+| `0x0020e00000640001` / `…0000` (ISP_SYS) | 4 / 4 | 3.2410 | none |
+| `0x0020a00000540022` (DISP0_FE, `0x22`) | 1 | 3.3876 | `0x0020b00000540022` |
+| `0x0020c00000640021` (ISP_SYS, `0x21`) | 1 | 3.4111 | `0x0020d00000640021` (0.11 s later) |
+| **`0x0020a00000550023` (DISPEXT_FE, `0x23`)** | 1 | **3.5477** | `0x0020b00000550023` |
+| `0x0020a00000640020` (ISP_SYS, `0x20`) | 1 | 3.5761 | `0x0020b00000640020` |
+| `0x0020e00000e30001` / `…0000` (ATC1_PCIE) | 1 / 1 | 3.6150 | none |
+| `0x0020e000015c0001` / `…0000` (ATC1_PCIE-V) | 1 / 1 | 3.6152 | none |
+| `0x0020e00000650001` / `…0000` (VENC_SYS) | 1 / 1 | 3.8551 | none |
+| `0x0020400000020000` / `0x0020400000000000` | 36 / 36, alternating | 24.7131-24.8235 | each `0x0020500000000000` |
+| **`0x0020e00000550000` (DISPEXT_FE, 0)** | 1 | **69.3808** (det34b 69.2321) | none |
+
+- **Before the 0x55 message:** no `0x0020e…0055…0001` precedes it in either boot. The only earlier
+  message with number `0x55` is the code-`0xa` pair at 3.55 (det34b 3.64).
+- **After it, for the rest of the boot captures** (det33 to 207.9 s, det34b to 395.3 s): no
+  mailbox traffic on `pmp` at all. Both pages are logged in full.
+- **det33 detached, idle 0-447 s:** one endpoint-4 pair (164.4 s) and `0x0020e00000540000`
+  (440.9 s).
+- **The first C3 change refined:** by receipt time, everything in section 2 up to
+  `SEND 0x000100000003c000` comes **before** sample n 4, and that sample still reads
+  `0x444/0x666/0x333`.
+  - Between n 4 and n 5 (the first `0x444/0x444/0x444`):
+    - in both boots: `RECV 0x000200000023b549`, the syslog LOG pair, the code 0/1 and 2/3 pairs;
+    - det34b adds three `…5c…` code-`0xe` messages and the c/d (`0x64`) and a (`0x64`) messages.
+  - The earliest `pmp` event common to both windows is `RECV 0x000200000023b549`.
+  - Records can arrive late, so an access received after a sample may have happened before it.
+
+### 4. Entry (det33 detached; det18 and det23 the same sequence)
+
+| t | Access |
+|---|---|
+| 447.4617 | `SEND 0x0020e00000550001`, then `0x0020e00000540001` (447.4645) |
+| 447.4677 | `SEND 0x0020800000630000` / `RECV 0x0020900000630000` |
+| 447.4783 | **`SEND 0x0020e00000550000`**, then `0x0020e00000540000` (447.4791). Section 3 of round 10 lists only the `…0001` pair; the log has both. The C3 words were already `0x333/0x444/0x222` and stayed so |
+| 447.8455-447.8460 | `SEND 0x00b0000000000201` (SET_AP_PWR_STATE `0x201`, IDLE in the reference) / echoed; `SEND 0x0060000000000201` (SET_IOP_PWR_STATE `0x201`) / `RECV 0x0070000000000201` |
+| 447.8461 | `W 0x23bc08114` = `0x22200` (RECV_ENABLE clear); `R +0x48` = `0x2e` (CPU_STOPPED already set); `R +0x44` = `0x10`; **`W +0x44` = 0** |
+| 447.8461 | DART: `R +0x40` (ERROR) `0x6000400`, `R +0xfc` 1, `R +0x100` `0x80`, `R +0xfc` 1, **`W +0xfc` = 0**, `R +0x13c` `0x100`, `R +0xfc` 0, `W +0xfc` = 0, `R +0x40`, `R +0x100c` 0 |
+| 447.8461-448.1519 | **`R` 49,152 words `0x23b52c000`-`0x23b55bffc` in order**, one pc (`…ceac4`, the boot's SRAM-read pc) |
+| 448.2605 | `R` 12 64-bit words: `0x23b549000`/`200`, `008`/`208`, `010`/`210`, `018`/`218`, `090`/`290`, `0a0`/`2a0` |
+| 448.2775 | T (last core) |
+
+- No access to the ps_PMP, ps_PMS_SRAM or ps_PMS words anywhere in idle or entry: the detached log
+  is full.
+- The samples read ps_PMP `0x1f0f03ff`, `+0x44` 0, `+0x48` `0x2e` after the stop.
+- det18 (444.58-445.31) and det23 (424.47-425.19) have the same steps:
+  - the same management words, I2A word and `+0x44`;
+  - 49,164 SRAM reads over the same range (det18 from two CPUs).
+
+### 5. Wake (det33 detached; det18 and det23 the same sequence)
+
+| t | Access |
+|---|---|
+| 538.1498 / 538.1501 | wake entry / guest re-entered |
+| 538.1512 (n 1789) | `+0x44` 0, `+0x48` `0x2a`; ps_PMP `0x0f0003ff`, ps_PMS_SRAM `0x0f000300` (target and actual 0), ps_PMS `0x0f0002ff` |
+| 538.1623-538.1624 | ps_PMP: `R 0x0f0003ff`, `W 0x0f0000ff`, `R`, `W 0x0f0000ff`, `R`, **`W 0x1f0000ff`** (AUTO_ENABLE) |
+| 538.1624 | ps_PMS_SRAM: `R 0x0f000300`, `W 0x0f000000`, `R` ×3, **`W 0x0f00000f`** (target `0xf`), `R 0x0f00030f`, `R 0x0f0003ff` (actual `0xf`), **`W 0x1f00000f`** |
+| 538.1636 | ps_PMS: `R 0x0f0002ff`, `W 0x0f0000ff` ×2 (with reads), **`W 0x1f0000ff`** |
+| 538.1680 | `W` the 12 64-bit words at `0x23b549000`-`2a0`, the values read at the entry |
+| 538.2963-538.5046 | **`W` 49,152 words `0x23b52c000`-`0x23b55bffc` in order** (pc `…cea64`). **Every byte written equals the byte read at the entry** (196,608 of 196,608). This replaces round 10's "24,576 writes over `0x23b544000`-`0x23b55bfff`", which counted only the part after the sample at 538.4016 |
+| 538.5046 | DART: `R +0x0` `0x0ed01020`, `R +0x4` `0x11037`, `R +0x60` `0x10000`, `R +0xf0` 0; **`W +0xfc` = 1**; **`W +0x200` = `0x80822544`** (table at `0x822544000`); `W +0x2f0` = 0; `W +0x34` = `0xffffffff`; `W +0x20` = `0x100000` |
+| 538.5046-538.5047 | DART: `W +0x60` = `0x80016100` (read `0x10000`); `W +0x68` = `0xf0f0f` (read `0x20202`); `W +0x6c` = `0x80808` (read 0); `W +0x100` = `0x80`; `W +0x13c` = `0x100` |
+| 538.5047 | `W 0x23bc08114` = `0x20001`; `R +0x44` 0; **`W +0x44` = `0x10`** (same pc as the boot's start, `0xfffffe00153e6174`) |
+| 538.5048-538.5054 | `RECV 0x00100000000c000c` / `SEND 0x00200000000c000c`; `RECV 0x008000000000001f` / **`SEND 0x008000000000001f`**; `RECV 0x0088000100000001` / **`SEND 0x0088000100000001`** (the replies echo the bitmap, unlike the boot's); `RECV 0x0070000000000020` (unsolicited, as at boot); `SEND`/`RECV 0x00b0000000000020` |
+| — | No STARTEP, no buffer request on any endpoint, no endpoint-`0x20` opening (`0x0`, `0x3c000`, `0x23b549`, codes 0-3) |
+| 538.5957 | `SEND 0x0020e00000630001` |
+| 538.6087 / 538.6107 | `SEND 0x0020e00000550001` / `0x0020e00000540001` |
+| 538.6187 / 538.6198 | **`SEND 0x0020e00000550000`** / `0x0020e00000540000` |
+| 538.6517 (n 1791) | C3 words `0x333/0x444/0x222`; `+0x44` `0x10`, `+0x48` `0x2c`, ps_PMP `0x1f0f03ff` |
+| 538.7486 | endpoint 4 `0x0040000000000000` each way |
+
+- **det18 and det23:** the same steps.
+  - The SRAM writes start about 4 ms after the ps writes: det18 534.9203-535.2472, det23
+    515.2270-515.5622. Their writes equal their entries' reads in count and non-zero count.
+  - The handshake words are the same.
+  - The endpoint-`0x20` messages: det18 `…630001`, `…540001`, `…550001`, `…550000`, `…540000`;
+    det23 `…630001`, `…550001`, `…540001`, `…540000`, `…550000`.
+- *Documentation, not an observation:* `+0x48` bits per Asahi `asc.md`: 5 MBOXES_TO_AP_EMPTY,
+  3 FIQ_NOT_PENDING, 2 IRQ_NOT_PENDING, 1 CPU_STOPPED, 0 CPU_IDLE.
+  - `0x2a`: stopped (bare proxy, before each start).
+  - `0x2c`: running.
+  - `0x0c`: running with a message waiting for macOS.
+  - `0x28`: an IRQ pending.
+  - `0x2e`: stopped (at the entry, before macOS cleared `+0x44`).
+- Power-state bits per the reference `pmgr-pwrstate.c`: 28 AUTO_ENABLE, 24-27 PS_AUTO, 16-19
+  PS_MIN, 9/8 WAS_CLKGATED/WAS_PWRGATED, 7-4 actual, 3-0 target.
+
+### Not covered by these captures
+
+- **Boot accesses to the SRAM and the DART in det33 and det34b:** first touch per 5 s only.
+  - The boot-argument read and write-back is read only in `135map4`; the DART set-up at boot only
+    in det10. Each is one boot, not round 10's.
+  - No boot logged SRAM `0x23b540000`-`0x23b57ffff` (the end of `__DATA`, incl. `0x23b549000`) in
+    full. Whether macOS writes there before the start is not read. In det33 and det34b the first
+    touch of page `0x23b548000` is a read at 2.98 s, after the start.
+- **The power-state words during the boot:** only the 250 ms samples (one gap 0.76-2.76 s); the
+  writes are not logged. The wake's sequence (section 5) may differ from the boot's.
+- **DRAM:** the IOVA buffers (`0x4000`-`0x3c000`), the DART page tables (`0x8217dc000` in det10,
+  `0x822544000` in det33), and the crashlog, syslog and ioreport contents are not logged.
+- **Timing within the boot:** receipt times. Sync and async records are not ordered against each
+  other, nor against the samples, to better than the USB buffering.
+- **What each endpoint-`0x20` field means:** inferred from values only (marked *guess*). No message
+  was sent or withheld, so which message lowers the C3 words is still not established.
+- **The four pages left out of the detached full log** (`0x23b738000`, `0x23bc34000`,
+  `0x210e20000`, `0x211e20000`) are not seen at the entry or the wake.
+
+### Files (private)
+
+- `var/commit-state/r10_pmp_startup.py`: the decoder. It covers every access to `pmp`'s blocks,
+  its SRAM, its DART and the three power-state words; mailbox messages are decoded by RTKit field,
+  status polls and endpoint 4 are folded, and SRAM runs are summarized.
+- Its outputs:
+  - `var/commit-state/r10-pmpstart-det33-boot.txt`, `r10-pmpstart-det34b-boot.txt` (0 to just after
+    the 0x55 message);
+  - `r10-pmpstart-det33-entry.txt` (440-448.3);
+  - `r10-pmpstart-det33-wake.txt` (538.0-539.5).
+- The det10, `135map4`, det18 and det23 readings were made with the same script, over the same
+  windows, from `tools/hv-trace-kit/runs/20261116-mac135/touch-det10.jsonl`,
+  `touch-135map4.jsonl`, `detached-det18.jsonl` and `detached-det23.jsonl`.
