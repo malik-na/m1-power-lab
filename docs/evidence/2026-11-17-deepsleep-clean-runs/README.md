@@ -3918,7 +3918,7 @@ entry at t 447.85; the wake at t 538.50):
   - the three power-state words, at macOS's sample-n-4 values;
   - the SRAM header words: SRAM answers, and holds the boot-argument offset and size macOS read.
 - **What differs from macOS:**
-  - TTBR sid 0 points at another table (`0x80ea90000`; it differs in every boot under macOS too);
+  - TTBR sid 0 points at another table (`0x80ea90000`; macOS's two logged values also differ from each other);
   - `pmp` +`0x44` reads `0x0`, not macOS's `0x10` while `pmp` runs;
   - +`0x48` reads `0x8`, a value not read under macOS;
   - I2A control reads `0x26600`, not macOS's written `0x20001` (boot) or `0x22200` (stop).
