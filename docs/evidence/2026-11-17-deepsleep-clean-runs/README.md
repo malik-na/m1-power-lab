@@ -2049,3 +2049,20 @@ the `performance` governor at their maximum (E-cluster 2064 MHz, P-cluster 3204 
 
 The C3 words do not follow the CPU clusters' state (the clusters went to state 1 and back; the
 words stayed). Settings restored afterwards.
+
+## Runs ds20, candidate switches one at a time (2026-11-18 21:17-22:48)
+
+Kernel ds20 (`7cec0b40b`: logic `713a453`, 308/308 from tests `2808844`; glue with
+`apple_deepsleep.cand`, 132/132 glue tests at `ecd2ef8`), command line
+`var/deepsleep/ds20.cmdline` (`wdt=30`, alarm +60 s, no diagnostics), cable and charger in.
+Each run: `tools/tb/m1-cand-runs` (booted once, `cand` set, a real sleep). Results in
+`var/commit-walk/ds20-cand.tsv`.
+
+| Switch | Outcome | Record (`0x9f04`) |
+|---|---|---|
+| C3 (`0x8`) | DARK: no answer, Thunderbolt link still up, screen dark; power button | `44 61 00 ...` ('a': armed only; the commit not reached; no failure recorded) |
+| C5 (`0x20`) | DARK: same; power button | `44 54 c0 01 70 3b 02 10 80 00` ('T': a wait timed out, a 32-bit read of `0x23b7001c0` (SIO_BUSIF) by core 0; the M1 then hung instead of returning to Linux) |
+| C17 (`0x20000`), C1 (`0x2`), C4 (`0x10`), C8 (`0x100`), C9 (`0x200`), C10 (`0x400`), C13 (`0x2000`), C15 (`0x8000`) | RESET ~62 s after the start: commit reached, watchdog reset | `44 57 00 40 2c 3d 02 30 xx 00` ('W') each |
+
+After every RESET: `0x0201` = `04`, fault shadow `0x000c00`. Not run alone yet: C2, C6, C7, C11,
+C12, C14, C16. No switch alone let the SoC power down.
