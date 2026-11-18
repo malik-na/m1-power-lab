@@ -51,3 +51,13 @@ Two more rules (Naeem, 2026-11-17):
   half) gets one independent reviewer against the spec. Fixes go to a glue implementer who reads
   the locked tests and the review and cannot change either. The glue's earlier host tests were
   written by its own author and do not count as the verdict.
+
+- **Faster cycles** (Naeem, 2026-11-18: "All three", to the proposal of that day).
+  (1) A round may carry several candidate behaviours at once: the spec names each candidate
+  requirement as such, the tests hold the driver to each behind its own switch (a module
+  parameter, off by default), recorded as decision D5. (2) The M1 then tests the switches one by
+  one or in combination, unattended, each run ended by the watchdog (`apple_deepsleep.wdt`); a
+  run that stays dark stops the series and pings Naeem. (3) The stages overlap: while agents
+  write spec, tests and driver for the next round, the M1 may run the current round's switch
+  tests or observation runs. This replaces the rule of 2026-11-18 04:35 ("no more runs until the
+  spec, tests, driver and kernel test are done").
