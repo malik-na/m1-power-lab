@@ -35,8 +35,11 @@ C5 revised, and decisions D6 and D7 on the driver's failure path and its watchdo
 2026-11-19), and with the round-10 test author's gaps Z1-Z10 answered: D6's waits, put-back
 and cores made exact, D7's first arming moved before `enter` and its second into the glue's
 commit-point step, the logic's interface to the glue as decision D8, C3's places and C5's four reads made exact (round 14,
-2026-11-19, listed in "Changes in this round" at the end, with the earlier rounds' lists below
-it). It states what macOS did, not why, and not what is
+2026-11-19), and with the same test author's gaps Z11-Z13 answered: C15's two words never put
+back on D6's failure path, C5's gate on the request and the state together, C3's nine values
+handed to the commit-point step as its argument (round 14b, 2026-11-19, listed in "Changes in
+round 14b" at the end, with the earlier rounds' lists below it). It states what macOS did, not
+why, and not what is
 needed for sleep to work; the candidates of 8.2 are differences, not causes.
 Nothing here comes from any Linux sleep driver's code. Section 12 records what was **read on the
 machine under Linux** (the state a driver starts from); every such statement is marked
@@ -4426,6 +4429,10 @@ After the SoC comes up, before macOS is back at idle:
   power-chip commands (R38, R60), no core's final writes (R43, R64), and no access of a candidate
   placed after that wait. *(Round 14.)* Both D6 waits come before R22, so R23's SIO writes, R36's
   interrupt-controller writes and R38's commands are never made before a D6 return.
+  *(Round 14b, gap Z12.)* "No write of `0x23b718004`" holds for the put-back too, with no
+  exception: after a D6 wait the driver writes neither `0x23b718004` nor `0x23b718000`, whatever
+  C15 read and wrote before the wait ((c) rule 1). The suite's allowance of one put-back write of
+  `0x23b718004` to the value C15 read is withdrawn.
   (c) the put-back. *(Round 14, gaps Z2, Z3, Z5, Z7; replaces "every word the entry wrote ... to
   the value the driver read before its first write of it".)* **D6 adds no read to the entry**:
   up to the wait, the entry's accesses are section 8's and the switched-on candidates', as
@@ -4441,6 +4448,26 @@ After the SoC comes up, before macOS is back at idle:
      watchdog 1 (D7), and writing an earlier value back would move watchdog 1's count back while
      it is armed. R15's writes there stay as made (of them only `0x23d2b800c` is read first, 0,
      and written 0); the failure path's only write to that block is the glue's disarm, (f).
+     *(Round 14b, gap Z12.)* And **the pair `0x23b718000`, `0x23b718004`** (R22's two words, which
+     C15 writes immediately before R22a's wait): left as C15 left them (written `0xf`, the
+     second polled for `0x2f`); neither is written on the failure path, whatever C15 read. So the
+     case the suite reached (C15 reads 0, writes `0xf`, R22a's wait runs out, rule 3 would write
+     0 back) makes no write. Reasons: (i) a write of 0 to `0x23b718004` is R22's trigger, the
+     write the always-on side's first step follows (R62: watchdog 2's count starts 1.3-7.5
+     microseconds after it in five captures, 4.1c), which (b) forbids after a D6 wait; (ii) under
+     Linux, after an earlier driver's entries, the always-on program took that first step with
+     one core still running (watchdog 2 armed, bite 5 s, progress word `0x01`), and without a core
+     kept up the machine reset about 5 s later (L18): once that step is taken, no clean return to
+     Linux has been seen; (iii) `0xf`, the value left, is what macOS's pair reads with the
+     machine running (`0x23b718000` at boot, both before R22 in every entry: R19, V11, C15) and
+     what macOS's wake writes into it (R30), so the pair is left as macOS has it awake; (iv)
+     macOS writes the two only together
+     (R22: `000` then `004` = 0; R30: both `0xf`), and what a write of 0 to `0x23b718000` alone
+     does is not observed (the nearest hardware write before watchdog 2's start is `004`'s,
+     4.1c), so the pair is kept as one. **[LINUX]** The only reading of the pair under Linux
+     before a trigger is `0xf` and `0xf` (an earlier driver's dry run, C15's round-14b note), in
+     which C15 makes reads only and this case does not arise. What the pair at `0xf` does to a
+     Linux that read another value there and runs on after a D6 return is not observed.
   2. *A power-domain word:* back to the request the entry read before its first write of it
      (every domain write of the entry follows a read of the word: R56's forms, D5 (d)), by D1's
      forms. **A word read at request 4** (C5's twelve; gap Z7) is put back by **form (4r)**: one
@@ -4525,9 +4552,20 @@ After the SoC comes up, before macOS is back at idle:
   `None` from the start of each `enter`; a slot holds `Some(v)` from the moment the logic has made
   that read until the next `enter` starts, whatever `enter` returns (success, D6's failure). With
   `cand_c3` off all nine stay `None`; after a D6 return the places the entry did not reach stay
-  `None`. The accessor is valid inside the glue's commit-point step ((b)), where on an entry with
-  the switch on all nine are filled, so the glue can record them before the cores go down.
-  Reason: in ds20's C3 run the record could not say where the entry stopped ('a' only, L25); a
+  `None`. *(Round 14b, gap Z13; replaces "The accessor is valid inside the glue's commit-point
+  step".)* **Inside the commit-point step the glue gets the nine as the
+  step's argument**, not through the accessor: the logic passes `&[Option<u32>; 9]` holding the
+  same values in the same slots as `c3_readings` would return at that moment (the suite's
+  `Hw::commit_point(&mut self, c3: &[Option<u32>; 9])`; the name is the test author's). On an
+  entry with the switch on all nine are `Some` there, so the glue can record them before the
+  cores go down; with it off all nine are `None`. The accessor serves after `enter` has returned
+  (a success that comes back from the wake, or D6's failure, where it says which places were
+  reached). Reason: `enter` holds the driver mutably for the whole call, so the glue's step,
+  called from inside it, cannot call `c3_readings(&self)` on the same driver (Rust's borrow
+  rules; the same for a `no_std` driver kept in a static, short of `unsafe`); passing the values
+  gives the glue what (b) asks of it with no second path into the driver.
+  Reason for `None`: in ds20's C3 run the record could not say where the entry stopped ('a'
+  only, L25); a
   `None` says a place was not reached, and 0 cannot stand for "not read" because 0 is a value
   these words can hold (the always-on program's wake sequence 4 writes all three 0; decode, 8.2
   C3). What the glue does with them (its record's format, the power chip's bytes, a log) is the
@@ -4537,6 +4575,7 @@ After the SoC comes up, before macOS is back at idle:
   write of `0x23d2c4000` (R38) and C3's place (iii) reads, and before any core's final write
   (R43, R44): between R38's third write and that call the logic makes no access but C3 (iii)'s
   reads. The glue makes its record there and, with `wdt`, D7 (b); the logic does not see what.
+  *(Round 14b, gap Z13.)* The call carries C3's nine values as its argument ((a)).
   After the step returns, the cores' final writes follow with no device write between (R39,
   R61). This is the place where the glue already writes its 'W' record and arms watchdog 1 (L17:
   "the last access before it a 32-bit write to `0x23d2c4000` by core 0"; L25, L26).
@@ -4765,9 +4804,9 @@ D4, the seven first-port domain words read request 0 at the commit.
 | R68, R69 | none (bases of R59 and R67) | [HV-CHANGED] |
 | D1-D4 | as stated | Decision |
 | D5 | each candidate of 8.2 behind its own switch, off by default; (a)-(f) of D5 | Decision |
-| D6 | *(revised round 14)* R16's or R22a's wait runs out (no other wait): no further entry step; no read added; each written word put back once, in reverse order of first writes (1.9's order for domains): domains by D1 (request 4 by form (4r)), other words read first to the value read, words never read first left as written; nothing put back in coprocessor blocks, SPMI, the CPU start/stop block or the watchdog block; bounded put-back waits; failure returned, record names the wait | Decision (round 13; ds20 C5 hung, L25); form (4r) from the always-on program's decode |
+| D6 | *(revised round 14; round 14b)* R16's or R22a's wait runs out (no other wait): no further entry step; no read added; each written word put back once, in reverse order of first writes (1.9's order for domains): domains by D1 (request 4 by form (4r)), other words read first to the value read, words never read first left as written; nothing put back in coprocessor blocks, SPMI, the CPU start/stop block, the watchdog block or the pair `0x23b718000`/`004` (no write of either after the wait, whatever C15 read); bounded put-back waits; failure returned, record names the wait | Decision (round 13; ds20 C5 hung, L25); form (4r) from the always-on program's decode |
 | D7 | *(revised round 14)* glue, `wdt` = N: R61's four writes just before `enter` and again in the commit-point step; disarmed after D6's return; none without `wdt` | Decision (round 13); macOS [HV-CHANGED] 5/5 power-downs with the early arm (1.7g) |
-| D8 | *(new round 14)* logic and glue: `c3_readings() -> [Option<u32>; 9]`, `None` until read in this `enter`; the commit-point step called after R38's third write and C3 (iii), before the final writes; on D6's return the glue gives the cores back, then disarms watchdog 1 | Decision (round 14) |
+| D8 | *(new round 14; round 14b)* logic and glue: `c3_readings() -> [Option<u32>; 9]`, `None` until read in this `enter`, for after `enter` returns; the commit-point step called after R38's third write and C3 (iii), before the final writes, with the same nine as its argument; on D6's return the glue gives the cores back, then disarms watchdog 1 | Decision (round 14) |
 | R70 | no write to `0x23b058000`, `0x23b05c000`, `0x23b060000`; only 32-bit reads of the first word of the last two pages | all captures, 48 boots (touch maps) |
 
 ### 8.2 Candidate requirements C1-C17 (round 12)
@@ -4990,7 +5029,8 @@ Switch `cand_c3`.
   (ii) stands; that of (iii) ("after the entry's last write of `0x23d2c4000` and before the first
   core's final write") stands and is narrowed to before the commit-point step. "Hands to the
   glue" is D8 (a): `c3_readings`, slots in the order (i), (ii), (iii), `None` for a read not made
-  in this `enter`.
+  in this `enter`; *(round 14b, gap Z13)* inside the commit-point step the same nine come as the
+  step's argument.
 - *Not observed.* Whether bits 0-3 are the only field a write sets; what a write by an
   application processor does to the hardware (the three runs that made one did not reach a
   commit, and none was read afterwards); what the program does when its wait runs out; who sets
@@ -5055,8 +5095,9 @@ Switch `cand_c3`.
   change is the one macOS makes at every wake.
 - *Requirement (revised round 13; replaces the round-12 one).* Place: immediately after C12's
   turn-ons when `cand_c12` is on; otherwise at entry start. First R PMS, SIO_BUSIF, SIO,
-  SIO_CPU; **if any of them does not read bits 4-7 = `0xf`, the candidate makes reads only** (each
-  of the twelve read once, no write) and the entry goes on. Otherwise, for each of the twelve in
+  SIO_CPU; **if any of them is not *on* by the round-14b gate below, the candidate makes reads
+  only** (each of the twelve read once, no write) and the entry goes on. *(Round 14b, gap Z11;
+  replaces "does not read bits 4-7 = `0xf`".)* Otherwise, for each of the twelve in
   macOS's wake order (FPWM2 `0x23b7001e8`, FPWM0 `0x23b7001d8`, DEVC0_IVDMC `0x23b7001b0`, AFT0
   `0x23b7001a8`, PMS_FPWM4-0 `0x23b700168` down to `0x23b700148`, SOC_SPMI2-0 `0x23b700128` down
   to `0x23b700118`): R; if bits 0-3 = 4: W (v & ~`0x3ff`) | `0x340`; R until bits 0-7 read 0,
@@ -5079,9 +5120,56 @@ Switch `cand_c3`.
   a test may hold one of them at a non-zero state through C5's wait and the rest of the entry:
   its request at the commit is 0 (the write) and its state is a *reading*. Under D6 a word C5
   wrote is put back by form (4r) (D6 (c) 2).
+  *(Round 14b, gap Z11.)* **C5's gate is on the request and the state together.** Each of the
+  four is *on* when it reads bits 0-3 = `0xf` **and** either bits 4-7 = `0xf`, or bits 4-7 = 4
+  with bit 28 set (`0x1400024f` is on, as are `0x0f0003ff`, `0x0f0002ff`, `0x1f0002ff`,
+  `0x1f0000ff`). Anything else is not on: a request other than `0xf` (Linux's `0x0f000200`),
+  state 0, or state 4 with bit 28 clear (seen only part-way through a turn-on, PCIE_REF
+  `0x0f00024f` in 4.3 form 5). What the readings say:
+  - *macOS, the four at its lowering:* at every wake in D-I PMS, SIO_BUSIF, SIO and SIO_CPU are
+    each turned on by 4.3 form 6 (R `0x0f0003ff`, PMS `0x0f0002ff`; W `0x0f0000ff` twice; W
+    `0x1f0000ff`) just before the twelve are lowered (`ps-forms.tsv`, G: W+0.0130 to +0.0132,
+    the twelve from +0.0133); in the 18 detached captures PMS and SIO_CPU the same way at
+    W+0.0135 and +0.0137. **No read of any of the four follows its bit-28 write** (each run in D-I
+    ends with that write; for PMS and SIO_CPU none anywhere in the 18 detached logs,
+    `r13-c5-domains.txt`, although in `det10` the power manager's pages are logged to W+20.7 s).
+    So the state they had when macOS lowered the twelve is **not observed**; their last reads
+    before it were state `0xf` with bit 28 clear.
+  - *At rest with bit 28 set:* SIO_BUSIF, SIO, SIO_CPU read `0x1400024f` (state 4) with macOS
+    awake (4.2a, idle), while the twelve request 0; at the commit SIO_BUSIF `0x1400024f`, SIO and
+    PMS `0x1f0002ff` (SIO from 4 to `0xf` with no write of macOS's reaching it, 4.1, A3): with
+    bit 28 set the state moves between 4 and `0xf` by itself. **[LINUX]** SIO_CPU `0x1400024f`
+    awake (L14); after ds14's failed entry and its way back all three `0x1400024f` (evidence "Run
+    ds14", `linux-ds14-bare-ps-words.json`; what wrote them is not in the record); PMS
+    `0x1f0000ff` and the family `0x0f000200` before the entry (L15).
+  - *Right after a turn-on with bit 28, on the M1 under Linux (C12's):* **not read** (C12 never
+    ran alone; with the others, L26, the record has no domain word). Other words show both
+    outcomes under macOS (`ps-forms.tsv`, D-I, every read between a write with bit 28 and the
+    next write): the first read after the write already reports **state 4** on NUB_SPMI0 and
+    NUB_SPMI1 (W `0x1400004f`, R `0x1400024f`, six wakes each) and on DCS words (W `0x1f0000ff`,
+    R `0x1400034f`), and state 0 on DEBUG_AUTH, DEBUG_USB, NUB_SRAM, SEP, once NUB_FABRIC and
+    some DCS reads (`0x1000030f`, `0x1000230f`, `0x1f00030f`); the I2C, SPI and UART words read state `0xf` in every read
+    after their bit-28 write up to their turn-off. So with bit 28 a word can report 4 within
+    microseconds of the write; which the SIO family does is not read for either system. The read
+    that settles it: open question 74.
+  Every reading of the four with request `0xf`, under either system, has state `0xf` or state 4
+  with bit 28; the only reading with the family off has request 0 and state 0. Reasons for the
+  gate (a decision): it keeps the round-13 purpose (no lowering with the parents off, ds20's C5,
+  L25); macOS's own lowering followed a bit-28 write whose result it did not read, so "state
+  `0xf` at the lowering" is not what the captures show; state 4 with bit 28 is the state the
+  family rests in under macOS while the twelve are at request 0, which is the state C5 aims at;
+  and C5 then acts with C12 on whether the hardware stays at `0xf` or drops to 4 after C12's
+  bit-28 write (the suite's two machines both act; a family at `0x0f000200` reads only), so the
+  unread value no longer decides whether C5 is tried. *Reference, not an observation* (section
+  0): Aurora's driver counts a domain active when its state is `0xf` or its target is `0xf` with
+  bit 28 set; the gate here is narrower (state 0 is not on) because no reading of these four with
+  request `0xf` has state 0 (other words with bit 28 do, above: should the family read so after
+  C12, C5 reads only, and its four reads in the record show it).
 - *Not observed.* Request 4 lowered with the SIO family off (the one run that did, on Linux,
   timed out on SIO_BUSIF); request 4 lowered during an entry (only at the wake, R56 (c)); which
-  of the twelve, if any, needs the SIO family or PMS on.
+  of the twelve, if any, needs the SIO family or PMS on; *(round 14b)* the four's state right
+  after a bit-28 write, and whether a lowering with the parents at state 4 differs from one at
+  `0xf` (open question 74).
 
 **C6. The power-gate header word `0x23b71c000` set before the always-on side's first step.**
 Switch `cand_c6`.
@@ -5205,7 +5293,8 @@ Switch `cand_c6`.
   commit they request `0xf` with bit 28 clear, the children request `0xf`, and `sio`'s +`0x44`
   bit 4 is clear. Wake: D5 (f), by D1.
 - *Not observed.* What Linux's `sio` does when its domains come on (L6: it did not answer once
-  started by Linux's own driver).
+  started by Linux's own driver). *(Round 14b, gap Z11.)* What the three read right after this
+  turn-on, state `0xf` or 4 (C5's round-14b note; open question 74); C5's gate takes either.
 
 **C13. Each core's timers disabled at its final write.** Switch `cand_c13`.
 - *Observed.* In every captured power-down (fifteen) each core went down with the instrument's
@@ -5252,7 +5341,15 @@ Switch `cand_c6`.
   write in every entry; `0x23b718004` reads `0xf` before R22's write (all eight; R19, V11); at
   every wake macOS writes both `0xf` and polls `0x23b718004` (`0x1f` ... `0x2f`; R30). **[LINUX]**
   not read before the entry; after an entry that did not power down the wake's poll of
-  `0x23b718004` timed out (L8, ds12).
+  `0x23b718004` timed out (L8, ds12). *(Round 14b, gap Z12.)* **[LINUX]** One reading, by an
+  earlier driver (readings only, as L18 and L28, not a description of that driver): its dry run
+  of 2026-11-16 06:51 on bare metal (kernel `7.2.11-run26`, `apple_s2r_rs.dry=1`; its trace
+  states that from the cores' parking on no write was made, so each read there shows what the
+  word held) read **`0x23b718000` = `0xf` and `0x23b718004` = `0xf`** at the place of its R22
+  writes, after the cores were parked (private file
+  `var/m1-state/20261116-122032-run35b/m1power-s2r/run22-20261116-065142.txt`, trace records
+  924309-924310). One boot, another kernel; under the clean-room driver the pair is still unread
+  (open question 69). With these values C15 makes reads only.
 - *Why a candidate.* R22's write `0x23b718004` = 0 is the write the always-on side's first step
   follows (R62); what the word holds under Linux before it is not known. A difference only if it
   does not read `0xf`.
@@ -5260,7 +5357,13 @@ Switch `cand_c6`.
   `0xf`: W `0x23b718000` = `0xf`, W `0x23b718004` = `0xf`, R `0x23b718004` until it reads `0x2f`,
   bounded (R30's form). At R22's writes both read `0xf` (*reading* if the hardware does not take
   the writes). Wake: macOS's own (R30).
-- *Not observed.* The words under Linux (open question 69).
+  *(Round 14b, gap Z12.)* **On D6's failure path the pair is not put back** (D6 (c) rule 1): when
+  R22a's wait runs out after C15 has written, neither word is written again, whatever C15 read;
+  the pair stays as C15 left it. A test: after a D6 wait no write of `0x23b718000` or
+  `0x23b718004`, also when C15 read 0 (the case where D6 (c) rule 3 would have written R22's
+  trigger value back).
+- *Not observed.* The words under the clean-room driver (open question 69); what the pair at
+  `0xf` does to a Linux that had another value there and runs on after a D6 return.
 
 **C16. The GPIO domain on.** Switch `cand_c16`.
 - *Observed.* GPIO `0x23b700130` reads `0xff` awake and at every commit (G-I); at every wake read
@@ -5295,7 +5398,7 @@ Switch `cand_c6`.
 | C2 | four power-manager sub-blocks on at entry start, so R22a stops running blocks | R22a is the step before the write that the always-on side's first step follows; macOS turns them on at boot and every wake | 1 awake, 0 at boot (A, B), wake writes 1 (all eight) / 0 (L3), ds8 timed out in R22a |
 | C3 | *(revised round 13; places exact and the values' interface, round 14)* no write (R70); `0x23b058000`/`05c000`/`060000` read at entry start, as core 0's first three accesses after R22's trigger, after R38's third write before the commit-point step; nine values through D8 (a) | macOS never writes them; the always-on program's sleep sequence starts by moving them to 3 and 4 (decode); every application-processor write so far was followed by no commit | awake and commit `0x333`/`0x444`/`0x222`, wake `0x333`/`0x555`/`0x333`, no access; earlier Linux driver's commit macOS's values (L28) / `0x444`/`0x666`/`0x333`; ds20 C3 dark (L25) |
 | C4 | DCSn+`0x7b0` = 0 | only differing DRAM-controller word; DCS domains gate under macOS only; Reference T6040: DCS dynamic gate | 0 always, never accessed / 3 on all eight, 3 at Linux's commit (DCS0-3) |
-| C5 | *(revised round 13; its four reads exact, round 14)* twelve request-4 domains to request 0 (form 3, macOS's wake order), only with PMS, SIO_BUSIF, SIO, SIO_CPU on (else reads only), decided on C5's own four reads in that order right before the twelve | macOS lowers exactly these at every wake, after PMS and the SIO family are on | R57, all eight; 18 wakes / request 4 (L15), SIO family off; ds20 C5 timed out on SIO_BUSIF and hung (L25); macOS with request 4 powered down (`det30`) |
+| C5 | *(revised round 13; its four reads exact, round 14; its gate, round 14b)* twelve request-4 domains to request 0 (form 3, macOS's wake order), only with PMS, SIO_BUSIF, SIO, SIO_CPU on (request `0xf` with state `0xf`, or state 4 with bit 28; else reads only), decided on C5's own four reads in that order right before the twelve | macOS lowers exactly these at every wake, after PMS and the SIO family are on | R57, all eight; 18 wakes / request 4 (L15), SIO family off; ds20 C5 timed out on SIO_BUSIF and hung (L25); macOS with request 4 powered down (`det30`) |
 | C6 | `0x23b71c000` (and `040`) set at entry start | set by macOS at boot and every wake, never by Linux; R69 cleared it only after the first step; Reference: boot-cluster power-gate enable | 0 at boot then `0x80000000` / 0 (L19, L20) |
 | C7 | `0x23d24003c`, `0x23d240048` with bit 31 | always-on clocks enabled under macOS, disabled under Linux | G-I, K / bit 31 clear (L2) |
 | C8 | `pmp` stopped whatever PMS_SRAM reads | a running `pmp` may be skipped under D3; Reference T8140: running PMP resets | R4, R5 / PMP on, PMS_SRAM off, +`0x44` unread |
@@ -5305,7 +5408,7 @@ Switch `cand_c6`.
 | C12 | SIO family on at entry start, R23 then clears bit 28 | macOS's last domain writes before R24 act on on-domains | R23, R23a / all off |
 | C13 | timers disabled at each final write | enabled (masked, met) under Linux where every power-down had them off | fifteen power-downs / L23 |
 | C14 | audio-switch clock words 0, NCO words `0x80000000` | audio clocks left enabled with their domains off | boot write, W1-6 / L2 |
-| C15 | `0x23b718000`/`004` at `0xf` before R22 (only if not) | the trigger word's state under Linux is unread | `0xf` at boot and every entry / not read |
+| C15 | `0x23b718000`/`004` at `0xf` before R22 (only if not); *(round 14b)* never put back on D6's failure path | the trigger word's state under this driver is unread | `0xf` at boot and every entry / `0xf` once, an earlier driver's dry run (round 14b) |
 | C16 | GPIO domain on | on under macOS, off under Linux | G-I / 4.2a |
 | C17 | 28 SoC clock words' bits 24-27 = 7 | largest group of differing words | G-I / L2 |
 
@@ -5792,7 +5895,8 @@ readings of Linux, 66-67 of macOS under the hypervisor.
 69. **The candidates' words under Linux, before the entry and at the commit** (round 12). The
     commit walk (L24) covers C3, C4, C5's, C9's, C11's, C12's, C16's domain words, SEP, the clock
     words of C7, C14 (`0x23b048000` only) and C17. Not covered: the sub-blocks' control and status
-    words (C2), APCIE_GP (C10), `0x23b71c000`/`040` (C6), `0x23b718000`/`004` (C15), the four
+    words (C2), APCIE_GP (C10), `0x23b71c000`/`040` (C6), `0x23b718000`/`004` (C15; *round 14b:*
+    read once before an earlier driver's trigger, `0xf`/`0xf`, 8.2 C15), the four
     other NCO words (C14), `pmp`'s +`0x44`/+`0x48` (C8), cores 2-6's timer controls and
     `VM_TMR_FIQ_ENA_EL2` (C13), and `0x23d240040`, `0x23d240314` (which macOS's own machine
     changes between awake and the commit). *Settles it:* the glue's probe reading each of these
@@ -5837,6 +5941,19 @@ readings of Linux, 66-67 of macOS under the hypervisor.
     `0x23b754004` and that core's domain word read before, after the write and after the wake-up,
     with the core's progress counted (a per-core heartbeat). Way out without hands: watchdog 1
     armed before the write (D7's four writes, N = 30).
+
+74. **The SIO family right after C12's turn-on** (round 14b, Linux; 8.2 C5, C12; gap Z11).
+    Whether SIO_BUSIF, SIO and SIO_CPU report state `0xf`, 4 or 0 just after C12 has turned them
+    on with bit 28. Under macOS no read follows the family's bit-28 write in any capture, and
+    other words report 4 (NUB_SPMI0/1, DCS) or 0 at the first read after such a write (8.2 C5,
+    round-14b note). With C5's round-14b gate C5 acts at `0xf` and at 4 alike, so the reading says
+    in which state of its parents C5's lowering is tried (macOS's last reads before its own
+    lowering were `0xf`), and whether C5 acts at all (it does not at state 0). *Settles it
+    (Linux, bare
+    metal):* one entry with `cand_c12` and `cand_c5` on, its record carrying C5's own four reads
+    (8.2 C5, round 14: PMS, then the three, 32 bits by core 0, immediately after C12's last
+    turn-on write and before C5's first access to the twelve). Way out without hands: watchdog
+    1 armed just before `enter` (D7 (a), N = 30).
 
 ## 10. With and without the cable
 
@@ -6499,7 +6616,58 @@ written but hold their awake value. The 137 domain words are in 4.2a.
 - `0x23d240000`..: `0x23d240000` `0x80100010`; `0x23d240004`-`0x23d24001c` `0x81100100`; `0x23d240020` `0x81100000`; `0x23d240024`-`0x23d240034` `0x81100100`; `0x23d240038` `0x81100000`; `0x23d24003c` `0x81100100`; `0x23d240040` `0x1101100`; `0x23d240044`-`0x23d24004c` `0x82100100`; `0x23d240050` `0x80100100`; `0x23d240054` `0x81100000`; `0x23d240304` `0x10000000`; `0x23d240308` `0x1000000`; `0x23d240314` `0x1000000`; `0x23d240320` `0x0`; `0x23d240330`-`0x23d240370` `0x0`.
 - `0x23d2c0000`..: `0x23d2c0000`-`0x23d2c000c` `0x0`; `0x23d2c0010` `0x880ff04`; `0x23d2c0014` `0x7`; `0x23d2c0018` `0x1`; `0x23d2c001c` `0xff0`; `0x23d2c0020`-`0x23d2c003c` `0x0`.
 
-## Changes in this round (round 14, 2026-11-19: the round-10 test author's gaps Z1-Z10; D6 and D7 revised, D8 new, C3's places and C5's four reads exact)
+## Changes in round 14b (2026-11-19: the round-10 test author's gaps Z11-Z13; C15's words never put back, C5's gate, C3's values as the commit-point step's argument)
+
+Inputs: the spec at `377cbd2`; the gap list `docs/spec/gaps-reported-by-tests-r10.md` (lab
+`f316d05`: Z11-Z13 and the reviewer's note on Z12) and, for Z13's full text only, the test
+author's `TESTS.md` section 16 (its gap text, not the tests); `var/spec/ps-forms.tsv` (every
+read after a write with bit 28, D-I), `var/spec/r13-c5-domains.txt` and `det10`'s detached log
+(no access to PMS or SIO_CPU after their bit-28 writes at the wake; the power manager's pages
+logged to W+20.7 s); an earlier driver's dry-run trace
+`var/m1-state/20261116-122032-run35b/m1power-s2r/run22-20261116-065142.txt` (private); the
+readings already cited by R22, R30, R62, 4.1, 4.1c, 4.2a, L14, L15, L18, L25, L26 and the
+evidence's "Run ds14". No new capture or run. The evidence file is not changed. Inline marks
+"round 14b" are this round's.
+
+**Decisions changed:** D6 (b) no write of `0x23b718004` or `0x23b718000` after a D6 wait, the
+put-back included; D6 (c) rule 1 adds the pair; D8 (a) and (b) the nine C3 values reach the
+commit-point step as its argument, the accessor serves after `enter` returns. **Candidates
+changed:** C5 (its gate: request `0xf` with state `0xf`, or state 4 with bit 28); C15 (a Linux
+reading added; the pair never put back on D6's failure path). C12: one line under "Not observed".
+**Open question added:** 74 (the SIO family right after C12's turn-on).
+
+**Sections changed:** status; 8 (D6 (b), (c) 1; D8 (a), (b)); 8.1 (rows D6, D8); 8.2 (C3's
+round-14 note, C5, C12, C15, summary rows C5 and C15); 9 (69 note, 74 new).
+
+**The test author's gaps, how each was answered**
+- **Z11** (what the SIO family reads after C12's turn-on with bit 28): **not recorded** for
+  either system. Under macOS PMS, SIO_BUSIF, SIO and SIO_CPU are each turned on with bit 28 just
+  before the twelve are lowered at every wake, and no read of any of them follows that write;
+  other words with bit 28 read state 4 (NUB_SPMI0/1, DCS) or 0 at the first read after it;
+  under Linux C12 has not been read. Answered by a decision in 8.2 C5's round-14b note: the gate
+  is **on the request and the state together**, *on* = request `0xf` with state `0xf`, or state 4
+  with bit 28 set; anything else reads only. So C5 acts after C12's turn-on whether the family
+  stays at `0xf` or drops to 4 (both of the suite's machines act), and not with Linux's
+  `0x0f000200`. The read that would settle the state itself: open question 74 (one entry with
+  `cand_c12` and `cand_c5` on, its record carrying C5's own four reads).
+- **Z12** (D6 (b) against C15's put-back of `0x23b718004`): D6 (b) holds with no exception and
+  D6 (c) rule 1 adds **the pair `0x23b718000`/`004`: never put back**, whatever C15 read; after a
+  D6 wait neither is written, and the pair stays at C15's `0xf`. Reasons in D6 (c) rule 1: a
+  write of 0 to `0x23b718004` is R22's trigger, the write the always-on side's first step follows
+  (R62), and under an earlier Linux driver that step was taken with a core still running, or the
+  machine reset about 5 s after the entry (L18); `0xf` is the pair's value with macOS running
+  and the value its wake writes (R30);
+  macOS writes the two only together. The suite's allowance of one put-back write is withdrawn.
+  The suite's machine value 0 for the pair under Linux is not a reading: the only Linux reading
+  is `0xf`/`0xf`, an earlier driver's dry run at its R22 place (8.2 C15), in which C15 makes
+  reads only and the case does not arise.
+- **Z13** (D8 (a)'s accessor inside the commit-point step): D8 (a), (b). Inside the step the
+  glue receives the nine as the step's argument, the same values in the same slots as
+  `c3_readings` (the suite's `Hw::commit_point(&mut self, c3: &[Option<u32>; 9])` stands, name
+  and signature the test author's); `c3_readings` is for after `enter` returns. Reason: `enter`
+  holds the driver mutably for the whole call, so the step cannot call back into it.
+
+## Changes in round 14 (2026-11-19: the round-10 test author's gaps Z1-Z10; D6 and D7 revised, D8 new, C3's places and C5's four reads exact)
 
 Inputs: the spec at `c8b735c`; the gap list `docs/spec/gaps-reported-by-tests-r10.md` (lab
 `d47c906`; the test author's `TESTS.md` section 16 at tests commit `eb9f9a0`, not read here: the
