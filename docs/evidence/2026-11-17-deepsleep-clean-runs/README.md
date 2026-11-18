@@ -3824,7 +3824,7 @@ the node. The `asahi` GPU driver again logs `MMU: IO map: 0x23bc00000:0x4000` (`
 
 ### 5. Stock kernel, after (04:14:41)
 
-`systemctl reboot` from ds23p at about 04:13:55. Stock `7.3.0-0test5-1-ARCH`, up since
+`systemctl reboot` from ds23p after 04:13:50 (the exact time was not recorded). Stock `7.3.0-0test5-1-ARCH`, up since
 04:14:17, answered at 04:14:35.
 - The eleven words read exactly as in step 1 (`ps_PMS_SRAM` `0x0f000300` again).
 - genpd `pms_sram` `off-0`, `pmp` on, `pms` on. No `coprocessor@23bc0…` node. `apple_pmp`
