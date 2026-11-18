@@ -2066,3 +2066,22 @@ Each run: `tools/tb/m1-cand-runs` (booted once, `cand` set, a real sleep). Resul
 
 After every RESET: `0x0201` = `04`, fault shadow `0x000c00`. Not run alone yet: C2, C6, C7, C11,
 C12, C14, C16. No switch alone let the SoC power down.
+
+## Safe M1 restart over USB-C: installed and tested (2026-11-18 23:50-23:58)
+
+The proposal `docs/proposals/m1-safe-restart.md` (option (a)): the M3's stock USB-C port-controller
+driver (tipd `tps6598x-core`, `sn201202x`), rebuilt from the running kernel's exact source with
+only `CONFIG_TYPEC_TPS6598X_DEBUG_COMMANDS=y`, loaded from the M3's boot (`updates/`, UKI rebuilt;
+stock image saved in `/boot/efi/safe-restart/`). `tools/m1-reboot/m1-reboot.sh` (3b4f1df) no
+longer swaps modules; `tuxvdmtool` runs with `--no-recover` (no unbind or rebind).
+
+- After the M3 reboot: the `command` file on all four ports, the modules from `updates/`, taint
+  4100, no oops, the M1's Thunderbolt link back, mains on.
+- `nop` (enter and leave the controller's debug mode, no VDM): exit 0; no M3 kernel line; the
+  Thunderbolt link stayed up; the M1 answered.
+- `reboot` with the M1 healthy (up since 22:47:58): the M1 acknowledged (reply `0x05ac8052`);
+  the M3 logged `host disconnected` 23:57:52, two Thunderbolt controller bring-ups, `new host
+  found` 23:58:18; the M1 answered at 23:58:23, up since 23:58:05. No oops, no
+  `duplicate filename` on the M3.
+
+Not yet tested: a restart of a frozen M1 (the real case).
