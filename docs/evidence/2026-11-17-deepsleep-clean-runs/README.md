@@ -2034,3 +2034,18 @@ What these readings show:
 In stock Omarchy (kernel 7.3.0-0test5-1-ARCH, up since 21:10:51 after det32r's restart), reached
 over Thunderbolt. The camera frame `var/m1-look/20261118-211256-state-now.jpg` shows the desktop.
 The claim is released.
+
+## Linux awake (2026-11-18 21:15): the C3 words against the CPU clusters' state
+
+Stock Omarchy (7.3.0-0test5), read over `/dev/mem`. Found: `cpufreq/boost` = 1; both policies on
+the `performance` governor at their maximum (E-cluster 2064 MHz, P-cluster 3204 MHz) while idle.
+
+| Setting | `0x23b058000` | `0x23b05c000` | `0x23b060000` | E-cluster cmd `0x210e20020` | P-cluster cmd `0x211e20020` |
+|---|---|---|---|---|---|
+| (a) as found, idle | `0x444` | `0x666` | `0x333` | `0x105105` | `0x10f10f` |
+| (b) max freq = min, boost 0, idle | `0x444` | `0x666` | `0x333` | `0x101101` | `0x101101` |
+| (c) max freq, boost 1, cpu0 and cpu4 busy | `0x444` | `0x666` | `0x333` | `0x105105` | `0x10f10f` |
+| (d) restored, idle | `0x444` | `0x666` | `0x333` | `0x105105` | `0x10f10f` |
+
+The C3 words do not follow the CPU clusters' state (the clusters went to state 1 and back; the
+words stayed). Settings restored afterwards.
