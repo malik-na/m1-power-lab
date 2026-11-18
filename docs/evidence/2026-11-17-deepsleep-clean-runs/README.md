@@ -3375,3 +3375,160 @@ Thunderbolt. The camera frame `var/m1-look/20261119-020439-state-after-round11.j
 desktop. The claim is released. On the M3, the three FIFO holders (`sleep 7200`) that this
 round's `macos-up.sh` runs had left were stopped by pid. One from 00:38 (pid 58327, round 10)
 was left running.
+
+## ds21: every candidate together reaches the commit; the C3 record; the watchdog under the test command line (2026-11-19 02:54-03:05)
+
+Readings only. Spec at lab `f411b43` (D8 (a), (b), (f); open questions 74, 81).
+
+### The two runs
+
+Kernel ds21 (kernel tree `a1688faaf`: logic `ae983f3` plus glue round 3; package
+`var/kernels/ds21/kernel.tar.zst`, sha256 `8d4a5849...4c583402`, re-checked before Part 2),
+command line `var/deepsleep/ds21.cmdline` (`panic=10 systemd.watchdog_sec=0
+apple_deepsleep.enable=1 apple_deepsleep.alarm_secs=60 no_console_suspend
+apple_deepsleep.wdt=30`), cable and charger in. Each run `tools/tb/m1-cand-runs`: stock kernel,
+ds21 booted once, `cand` set to the mask, `real.sh` started; the outcome is the first answer
+(polled from 15 s after the start). Rows in `var/commit-walk/ds21-cand.tsv` (private). `cand` bit
+n is Cn (`0x3fffe` = C1-C17; C18 is bit 18 and was off; `0x1020` = C5 and C12). On the ds21 boot
+of Part 2 below, the module's parameters read `snap=0`, `probe=N`, `trace=N`, `wdt=30` (the walk
+is not on this command line), so by D8 (b) the commit-point step's record is the C3 record when
+`cand_c3` is on and 'W' otherwise.
+
+| Mask | Ended | Outcome | Record `0x9f04`-`0x9f0d` | `0x0201` | fault shadow `0xa47b`-`d` |
+|---|---|---|---|---|---|
+| `0x3fffe` (C1-C17) | 02:55:52 | RESET, first answer on the stock kernel 63 s after the start | `44 56 64 43 36 64 f3 00 00 00` | `00` | `00 08 00` |
+| `0x1020` (C5, C12) | 02:57:46 | RESET, 62 s | `44 57 00 40 2c 3d 02 30 58 00` | `00` | `00 08 00` |
+
+**Record 1, `0x3fffe` (`cand_c3` on): the C3 record, decoded by D8 (f).**
+- Byte 0 `0x44` = 'D' (the glue's layout). Byte 1 `0x56` = 'V': the record's letter, the glue's
+  (D8 (f) does not name it; no lab document names 'V'). It is read as the C3 record because
+  `cand_c3` was on and none of `snap=2`, the walk or `probe=1` was set (D8 (b)).
+- Bytes 2-6 hold the nine 4-bit codes, slot s in byte 2 + s/2, the **low nibble for an even s,
+  the high nibble for an odd s**:
+
+  | Byte | Value | Low nibble -> slot | High nibble -> slot |
+  |---|---|---|---|
+  | 2 | `0x64` | 4 -> slot 0 | 6 -> slot 1 |
+  | 3 | `0x43` | 3 -> slot 2 | 4 -> slot 3 |
+  | 4 | `0x36` | 6 -> slot 4 | 3 -> slot 5 |
+  | 5 | `0x64` | 4 -> slot 6 | 6 -> slot 7 |
+  | 6 | `0xf3` | 3 -> slot 8 | `0xf` = no slot coded `0xe` |
+
+- Code d (0..`0xd`) = the value read was exactly d x `0x111`. Bytes 7-9 `00 00 00`, as D8 (f)
+  gives when no slot is coded `0xe`.
+- The nine values (slots in D8 (a)'s order; `0x23b058000`, `0x23b05c000`, `0x23b060000` at each
+  place):
+
+  | Place | `0x23b058000` | `0x23b05c000` | `0x23b060000` |
+  |---|---|---|---|
+  | (i) entry start, slots 0-2 | `0x444` | `0x666` | `0x333` |
+  | (ii) after R22's trigger, slots 3-5 | `0x444` | `0x666` | `0x333` |
+  | (iii) after R38's third write, slots 6-8 | `0x444` | `0x666` | `0x333` |
+
+  **All nine were read** (no code `0xf`) and every one has the
+  d x `0x111` form; none was "not read". The bytes are exactly D8 (f)'s own example for
+  "Linux's values at all three places" (`64 43 36 64 f3 00 00 00`), the values Linux reads awake
+  (L27). macOS at the commit reads `0x333`/`0x444`/`0x222` (8.2 C3), which would have given
+  `43 32 24 43 f2 00 00 00`.
+- Since the C3 record is made only at the commit-point step (D8 (b), (f)), finding it says the
+  commit point was reached.
+
+**Record 2, `0x1020` (`cand_c3` off): 'W', in the layout the earlier records of this file use.**
+That layout, as decoded above (ds3 `44 c5 00 40 02 00 02 10 63 00`, ds10 'P', ds17 'W', ds20
+'T'): byte 0 'D'; byte 1 the reason letter (bit 7 = SError pending); bytes 2-6 the last
+access's address, little-endian (40 bits); byte 7 the access's kind and core (`0x10` decoded as
+"32-bit read by core 0" (kind 1), `0x30` as "32-bit write by core 0"); bytes 8-9 the access
+count's low 16 bits, little-endian. The split of byte 7 into kind and core fields is not written
+out in this file; every decoded example has core 0.
+- Byte 0 `0x44` 'D'; byte 1 `0x57` = 'W', bit 7 clear (no SError pending).
+- Bytes 2-6 `00 40 2c 3d 02` -> `0x0023d2c4000`: the last access is to `0x23d2c4000`.
+- Byte 7 `0x30`: a 32-bit write by core 0.
+- Bytes 8-9 `58 00` -> count low 16 bits `0x0058` (88).
+- So: the commit point was reached, the last access before the record a 32-bit write of
+  `0x23d2c4000` by core 0, the same as every 'W' since ds17 (L17, L25, L26). Bytes 2-7 are equal
+  to ds20's 'W' records; byte 8 differs (ds20: `0x8c`-`0xde` alone, `0xa0` with `0x3ffd6`;
+  ds17: `0x7e`-`0x81`). What the count's value means across kernels is not read here.
+
+**Against ds20** (`var/commit-walk/ds20-cand.tsv`; "Runs ds20, candidate switches one at a
+time", L25, L26):
+
+| | ds20 | ds21 |
+|---|---|---|
+| C3 | alone (`0x8`): DARK 246 s, record 'a' only (commit not reached), power button | with C1-C17 (`0x3fffe`): commit reached (C3 record), RESET 63 s |
+| C5 | alone (`0x20`): DARK 247 s, 'T' on a 32-bit read of `0x23b7001c0` (SIO_BUSIF), power button | with C12 (`0x1020`): commit reached ('W'), RESET 62 s |
+| Others | C1, C4, C8, C9, C10, C13, C15, C17 alone and `0x3ffd6` together: RESET 62-63 s, 'W' | (not run) |
+| `0x0201` after a RESET | `04` | `00` |
+| fault shadow after a RESET | `0x000c00`; `0x001c00` after `0x3ffd6` | `0x000800` (bit 11 `wdog,reset_in_1` only) |
+
+The two kernels differ in both logic (`713a453` against `ae983f3`) and glue, and the ds21 runs
+set C3 and C5 together with other candidates, not alone; these rows do not say which of those
+differences let the entry reach the commit. `0x0201` read `00` after hypervisor round 11 (its
+last reading before these runs, at about 02:04) and `00` after both runs; by the lab's decode of
+macOS's always-on sleep program a sleep entry writes `01`. Not read between 02:04 and the first
+run.
+
+**Camera frames.** `var/m1-look/20261119-025550-state-now.jpg` and
+`var/m1-look/20261119-025745-state-now.jpg`, taken by `m1-cand-runs` after the M1 had answered
+on the stock kernel: both show the M1's screen lit with the Omarchy desktop (the wallpaper, the
+top bar; the bar's clock reads about 02:55 and 02:57). They show the state after the reset, not
+during the sleep. A frame at 02:59:25 (`var/m1-look/20261119-025925-state-now.jpg`, before Part
+2) shows the same desktop.
+
+**What these runs do not show.**
+- Whether the SoC began its power-down after the commit: no trace, no snapshot, no time of the
+  M1's port dropping, no M3-side log in the rows. That the M1 answered on the stock kernel about
+  62-63 s after the start, with the fault shadow's bit 11 alone, is what ds20's RESET rows also
+  read; it does not say whether the chip powered down before the reset.
+- Whether the reset was watchdog 1's bite at `wdt=30` or another reset: the fault shadow names
+  bit 11 `wdog,reset_in_1`; the time of the reset itself (as against the first answer) is not
+  read.
+- C5's four reads (PMS, SIO_BUSIF, SIO, SIO_CPU right after C12's last turn-on; open question
+  74): the 'W' record does not carry them, so in `0x1020` it is not read in which state C5 found
+  its parents, nor whether it lowered the twelve domains or skipped them by its gate. The same in
+  `0x3fffe`.
+- Which candidates acted in `0x3fffe` beyond C3's reads: no record carries them.
+- Whether the C3 words moved between the reads, or after place (iii): the record holds three
+  readings per word; all equal.
+
+### Watchdog reads (open question 81, read-only, no sleep started, no `/dev/mem`)
+
+Claim `obs-ds21` taken 02:59, released 03:05. Raw outputs kept in the session only.
+
+| Read | Stock (`7.3.0-0test5-1-ARCH`, up 02:57:25, Omarchy's own command line) | ds21 (`7.2.11-ds21`, up 03:00:22, ds21's command line) |
+|---|---|---|
+| `/sys/class/watchdog/` | `watchdog0` -> `/sys/devices/platform/soc/23d2b0000.watchdog/watchdog/watchdog0` | `watchdog0` -> `/sys/devices/virtual/watchdog/watchdog0` (no `device` link) |
+| Files in `watchdog0/` | `dev`, `device`, `power`, `subsystem`, `uevent` | `dev`, `power`, `subsystem`, `uevent` |
+| `state`, `timeout`, `bootstatus`, `identity`, `hw_running`, `timeleft`, `nowayout` | **do not exist** (`CONFIG_WATCHDOG_SYSFS` is not set) | **do not exist** (same) |
+| Driver bound to `/soc/watchdog@23d2b0000` (`apple,t8103-wdt`) | `apple-watchdog`, module `apple_wdt` (built in) | `apple-watchdog`, module `apple_wdt` (built in) |
+| `/dev/watchdog`, `/dev/watchdog0` | `10,130`, `248,0` | `10,130`, `248,0` |
+| Kernel config | `WATCHDOG_CORE=y`, `APPLE_WATCHDOG=y`, `WATCHDOG_HANDLE_BOOT_ENABLED=y`, `WATCHDOG_OPEN_TIMEOUT=0`, `WATCHDOG_NOWAYOUT` not set, `WATCHDOG_SYSFS` not set | the same (and `SOFT_WATCHDOG=m`, not loaded) |
+| `watchdog` module parameters | `handle_boot_enabled=Y`, `open_timeout=0`, `stop_on_reboot=-1` | the same |
+| `systemctl show` | `WatchdogDevice=/dev/watchdog0`, `RuntimeWatchdogUSec=30s`, `RebootWatchdogUSec=2min`, `RuntimeWatchdogPreUSec=0`, `KExecWatchdogUSec=0` | `WatchdogDevice=` (empty), `RuntimeWatchdogUSec=0`, `RebootWatchdogUSec=0`, `RuntimeWatchdogPreUSec=0`, `KExecWatchdogUSec=0` |
+| Where the 30 s / 2 min come from | `/etc/systemd/system.conf.d/90-maclab-watchdog.conf` (`RuntimeWatchdogSec=30s`, `RebootWatchdogSec=2min`; no package owns it) | the same file is present; `systemd.watchdog_sec=0` on the command line; the values read 0 |
+| Journal "Watchdog"/"watchdog" lines, this boot | kernel `watchdog: NMI not fully supported`, `watchdog: Hard watchdog permanently disabled` (the lockup detector); systemd `Using hardware watchdog /dev/watchdog0: 'Apple SoC Watchdog', version 0.` and `Watchdog running with a hardware timeout of 30s.` (02:57:31); boltd `watchdog: enabled [pulse: ...]` (boltd's own systemd service watchdog) | kernel the same two lockup-detector lines; boltd the same; **no systemd hardware-watchdog line** |
+| Holders of `/dev/watchdog*` (every `/proc/*/fd`) | pid 1 `systemd`, fd 15 -> `/dev/watchdog0` (again after the return at 03:04) | **none** |
+
+- Identity: on stock, systemd's line names it "Apple SoC Watchdog", version 0; on ds21 not read
+  (no sysfs file, and the device was not opened, since opening it starts it).
+- Whether the hardware watchdog was running on ds21 (`hw_running`) is not read: no sysfs file
+  and no `/dev/mem` read in this part. On ds21 no process holds the device and systemd reports no
+  runtime or reboot watchdog.
+- The device node is `23d2b0000.watchdog`: the same block as the spec's watchdog-1 words
+  `0x23d2b0014`, `0x23d2b001c`. Which of those words `apple_wdt` programs is not read here.
+- On ds21 the journal's kernel lines are stamped Nov 10 20:09 (the clock before it was set at
+  boot).
+
+### Left out
+
+- Open question 81's `0x23d2b0014`, `0x23d2b001c` over `/dev/mem` (excluded from this part),
+  `hw_running` (no such file), and its second part (a `wdt` run taking the exception on
+  purpose).
+- Open question 74 (C5's four reads): needs a record that carries them; not in ds21's 'W'.
+
+### M1 left
+
+`systemctl reboot` from ds21 at 03:04:02; stock Omarchy (`7.3.0-0test5-1-ARCH`, up since
+03:04:18) answered on Thunderbolt at 03:04:40, with systemd holding `/dev/watchdog0` and
+`RuntimeWatchdogUSec=30s` again. The frame `var/m1-look/20261119-030454-state-now.jpg` shows the
+desktop. ds21's kernel stays on the ESP under `s2r/ds21` (as `m1-bootonce` leaves it); the
+default boot entry is untouched. The claim is released.
