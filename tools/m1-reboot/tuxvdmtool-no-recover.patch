@@ -1,0 +1,71 @@
+diff --git i/src/main.rs w/src/main.rs
+index 954a789..56a9e7c 100644
+--- i/src/main.rs
++++ w/src/main.rs
+@@ -92,8 +92,17 @@ impl Target {
+     }
+ }
+ 
++/// `allow` is false with --no-recover: never unbind or rebind a controller's driver.
+ #[cfg(target_os = "linux")]
+-fn recover(target: &Target, recovery: fn(&std::path::Path) -> Result<()>) -> Result<()> {
++fn recover(
++    target: &Target,
++    recovery: fn(&std::path::Path) -> Result<()>,
++    allow: bool,
++) -> Result<()> {
++    if !allow {
++        warn!("--no-recover: not unbinding or rebinding the USB-C controller");
++        return Ok(());
++    }
+     match target.sysfs_device() {
+         Some(device) if target.may_reprobe() => recovery(&device),
+         _ => Ok(()),
+@@ -240,6 +249,11 @@ fn vdmtool() -> Result<()> {
+                 .default_value("0x38"),
+         )
+         .arg(clap::arg!(-c --connector [CONNECTOR] "(Partial) connector label of the USB-C controller device."))
++        .arg(
++            clap::Arg::new("no-recover")
++                .long("no-recover")
++                .help("Never unbind/rebind the USB-C controller's driver. A missing Type-C partner is only reported; a VDM timeout fails with no retry."),
++        )
+         .subcommand(
+             clap::Command::new("reboot")
+                 .about("reboot the target")
+@@ -327,16 +341,19 @@ fn vdmtool() -> Result<()> {
+     let nop = matches.subcommand_name() == Some("nop");
+     let debugusb = is_debugusb_command(&matches);
+     let reboot_debugusb = is_reboot_debugusb_command(&matches);
++    let allow_recover = !matches.is_present("no-recover");
+     #[cfg(target_os = "linux")]
+     if !reset_controller && !nop {
+-        recover(&target, recover_missing_partner)?;
++        recover(&target, recover_missing_partner, allow_recover)?;
+     }
+ 
+     let mut result = execute_command(&matches, &target, &code, reset_controller);
+-    if matches!(&result, Err(Error::VdmReplyTimeout)) && !reset_controller && !nop {
++    if matches!(&result, Err(Error::VdmReplyTimeout)) && !reset_controller && !nop && !allow_recover {
++        error!("VDM received no reply; --no-recover: no controller recovery and no retry");
++    } else if matches!(&result, Err(Error::VdmReplyTimeout)) && !reset_controller && !nop {
+         #[cfg(target_os = "linux")]
+         {
+-            recover(&target, recover_vdm_timeout)?;
++            recover(&target, recover_vdm_timeout, allow_recover)?;
+             result = if reboot_debugusb {
+                 warn!("The target reboot was already attempted; retrying only the DebugUSB arm");
+                 execute_debugusb(&target, &code)
+@@ -357,7 +374,11 @@ fn vdmtool() -> Result<()> {
+         }
+ 
+         warn!("DebugUSB VDM was acknowledged, but no USB device enumerated");
+-        recover(&target, recover_debugusb_enumeration)?;
++        if !allow_recover {
++            error!("--no-recover: no controller recovery and no DebugUSB retry");
++            return Err(Error::DebugUsbEnumerationTimeout);
++        }
++        recover(&target, recover_debugusb_enumeration, allow_recover)?;
+         warn!("Retrying only the DebugUSB arm after exact-port recovery");
+         execute_debugusb(&target, &code)?;
+ 
