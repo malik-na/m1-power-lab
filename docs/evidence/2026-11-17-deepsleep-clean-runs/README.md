@@ -4253,3 +4253,359 @@ covers it:
 
 In stock Omarchy (`7.3.0-0test5-1-ARCH`, up since 04:57:02; camera 04:57:25 shows the desktop),
 default boot entry untouched. The claim is released.
+
+## Linux round: the pmp client's log and pmp's crash log (ds24p, ds25p, ds26p)
+
+Three boot-only runs of the kernel-side `pmp` client, run by the orchestrator on 2026-11-19
+between about 04:43 and 05:02 IST (raw files written 04:43, 04:53, 05:00). No sleep was started.
+After each run the M1 was rebooted to the stock kernel. This section is written from the raw files
+only. The observation agent did not use the M1 and did not read the client's source.
+
+| Run | Kernel (client commit) | Command line | Raw (private, `var/commit-state/`) |
+|---|---|---|---|
+| ds24p | `7.2.11-ds24p` #28 (`eac8f107d`), probe line "build 0000000" | `var/deepsleep/ds24p.cmdline` | `linux-pmp-client-ds24p-dmesg-20261119.txt` |
+| ds25p | `7.2.11-ds25p` #29 (`96700062d`), "build 9670006" | the same | `linux-pmp-client-ds25p-dmesg-20261119.txt` |
+| ds26p | `7.2.11-ds26p` #30 (`a7b0d2022`), "build a7b0d20" | `var/deepsleep/ds26p.cmdline` = ds24p's + `apple_deepsleep.pmp_opening_bytes=0x400000` | `linux-pmp-client-ds26p-dmesg-20261119.txt`, `-words-` |
+
+- ds24p's command line: `panic=10 systemd.watchdog_sec=0 apple_deepsleep.enable=1
+  apple_deepsleep.alarm_secs=60 no_console_suspend apple_deepsleep.cand=0x40000 log_buf_len=4M`
+  after the stock root arguments.
+- ds24p is the first build that logs the client's steps (`#1`-`#74`). ds25p adds hex dumps of
+  the client's four buffers, taken twice: once when a crashlog word naming its buffer arrives
+  (before `#70`), and once at the failed boot.
+- ds26p maps 4 MiB for the opening's buffer: `buffer: 4194304 bytes at IOVA 0x28000 (bus
+  0x0000000806400000), mapped 0x400000 for the opening by pmp_opening_bytes (0x4000 asked), IOVA
+  0x28000-0x427fff`.
+- `linux-pmp-client-ds24p-crashlog-20261119.txt` is a failed attempt to read ds24p's freed
+  crash-log buffer afterwards. The 16 KiB read had 5068 non-zero bytes that do not begin with
+  `EHLC`. They hold `0xffff80…`-shaped words, so the memory had been reused. It is not used below.
+
+**Short answer.**
+- **The same exchange in all three boots, word for word: 46 words**, from `pmp`'s first
+  management word to the client's opening word `0x0001000000028000` on endpoint `0x20`. Then
+  comes a crashlog word `0x0010100000004000` (`#69`), which the client answers. Then the 6 s wait
+  for `0x000200000023b549` runs out. Only the times, and the bus addresses of the buffers, differ.
+- **`pmp` wrote a crash log** into the client's crashlog buffer (IOVA `0x4000`). It was decoded
+  from ds25p's and ds26p's dumps. The two dumps of a boot are byte for byte the same (at about
+  0.07 s and at about 6.1 s).
+  - In both boots: pc `0x1027a10`, lr (x30) `0x10166d0`, sp `0x1039fc0`, psr `0x600002c5`, esr
+    `0xbe000000`.
+  - far differs: **`0x36140` (ds25p)** and **`0x210e70000` (ds26p)**.
+  - The orchestrator's quick decode is confirmed.
+- **pmp's mailbox history** in the crash log is the last 16 words of the client's log, `#50` to
+  `#68`, in order and in both directions. It ends with the opening word.
+- **pmp's own table of mappings** (section `Ccdp`) lists the client's four buffers at the IOVAs
+  and sizes the client gave. The opening's entry reads **IOVA `0x28000`, size `0xf000`**, where
+  the client mapped `0x4000` (ds24p, ds25p).
+  - ds25p's far `0x36140` = `0x28000` + `0xe140`. That is inside that `0xf000` range and outside
+    the client's `0x4000` mapping.
+  - Laid on macOS's layout (opening at `0x3c000`), `+0xe140` is `0x4a140`. That is slot 20 of
+    the (IOVA, size) table at `0x48000`+`0x2000`, the slot for `pmp` reg 23. This is arithmetic
+    on two sets of numbers, not a reading of what `pmp` read.
+- **The translator's ERROR word after the wait:** `0x6000400` in ds24p and ds25p (macOS's value
+  in every round-12 dump) and **`0x80000800`** in ds26p.
+
+### 1. The exchange, word by word
+
+Taken from the `#N boot: received|sent` lines. Times are the client's `boot+…us` (hex µs). Steps
+`#20`, `#23`, `#30`, `#58`, `#64`, `#67` are "wait ended: <the word above> came" lines. Words
+and order are identical in the three boots (checked by script, all 46).
+
+| # | Dir | Endpoint | Word | ds24p | ds25p | ds26p |
+|---|---|---|---|---|---|---|
+| 19 | received | 0x0 mgmt | `0x00100000000c000c` | 0x389 | 0x39a | 0x46b |
+| 21 | sent | 0x0 mgmt | `0x00200000000c000c` | 0x38f | 0x3a7 | 0x478 |
+| 22 | received | 0x0 mgmt | `0x008000000000001f` | 0x3ab | 0x3d0 | 0x4a4 |
+| 24 | sent | 0x0 mgmt | `0x0050000100000002` | 0x3b0 | 0x3da | 0x4ad |
+| 25 | sent | 0x0 mgmt | `0x0050000200000002` | 0x3b3 | 0x3df | 0x4b2 |
+| 26 | sent | 0x0 mgmt | `0x0050000300000002` | 0x3b6 | 0x3e4 | 0x4b6 |
+| 27 | sent | 0x0 mgmt | `0x0050000400000002` | 0x3b9 | 0x3ea | 0x4ba |
+| 28 | sent | 0x0 mgmt | `0x0080000000000001` | 0x3bc | 0x3ee | 0x4bf |
+| 29 | received | 0x0 mgmt | `0x0088000100000001` | 0x3d1 | 0x407 | 0x4e5 |
+| 31 | sent | 0x0 mgmt | `0x0088000100000000` | 0x3d7 | 0x410 | 0x4ee |
+| 32 | received | 0x1 crashlog | `0x0010100000000000` | 0x406 | 0x44b | 0x526 |
+| 33 | sent | 0x1 crashlog | `0x0010400000004000` | 0x40a | 0x452 | 0x52d |
+| 34 | received | 0x4 ioreport | `0x0011000000000000` | 0x459 | 0x49a | 0x570 |
+| 35 | sent | 0x4 ioreport | `0x001100000000c000` | 0x45d | 0x4a0 | 0x576 |
+| 36 | received | 0x4 ioreport | `0x00c0000000000000` | 0x4a3 | 0x4e3 | 0x5ae |
+| 37 | received | 0x4 ioreport | `0x0080000000000000` | 0x4a6 | 0x4e8 | 0x5b5 |
+| 38 | sent | 0x4 ioreport | `0x0080000000000000` | 0x4a9 | 0x4ed | 0x5ba |
+| 39-56 | received / sent, alternating | 0x4 ioreport | `0x0080000000000000` (9 more pairs) | 0x4cf-0x5fe | 0x514-0x68b | 0x5d2-0x6fc |
+| 57 | received | 0x0 mgmt | `0x0070000000000020` | 0x61e | 0x6a9 | 0x71c |
+| 59 | sent | 0x0 mgmt | `0x00b0000000000020` | 0x624 | 0x6b1 | 0x723 |
+| 60 | received | 0x2 syslog | `0x0080000050000010` | 0x639 | 0x6c6 | 0x739 |
+| 61 | received | 0x2 syslog | `0x0010100000000000` | 0x63b | 0x6ca | 0x73f |
+| 62 | sent | 0x2 syslog | `0x0010100000020000` | 0x63f | 0x6d0 | 0x744 |
+| 63 | received | 0x0 mgmt | `0x00b0000000000020` | 0x680 | 0x710 | 0x785 |
+| 65 | sent | 0x0 mgmt | `0x0050002000000002` | 0x686 | 0x719 | 0x78f |
+| 66 | received | 0x20 pmp | `0x0000000000000000` | 0x6a7 | 0x736 | 0x7ac |
+| 68 | sent | 0x20 pmp | `0x0001000000028000` | 0x6ac | 0x73e | 0x7b5 |
+| 69 | received | 0x1 crashlog | `0x0010100000004000` | 0x740 | 0x7d3 | 0x8a4 |
+| 70 | sent | 0x1 crashlog | `0x0010400000004000` | 0x744 | 0x1462 | 0x84371 |
+
+- **`#69` came 0x94 / 0x95 / 0xef µs after `#68`.** ds25p's and ds26p's `#70` is late because
+  the first dump runs between `#69` and `#70`. ds26p's dump covers the 4 MiB opening.
+- **`#71`, the same in all three:** `wait RAN OUT after 0x5b91ee / 0x5b8db6 / 0x5b94f1 us for
+  0x000200000023b549; last word received: 0x0010100000004000`. No word came after `#69`.
+- **`#72`, after the wait:** `A2I +0x8110 0x107801, PMP 0x1f0f00ff, PMS_SRAM 0x1f0000ff, PMS
+  0x1f0000ff, translator +0x40 0x6000400` (ds24p, ds25p). ds26p reads the same except
+  **`translator +0x40 0x80000800`**.
+- **`#73`, the stop (all three):** `+0x8114 read 0x26601 wrote 0x26600, +0x48 read 0x8, +0x44 read
+  0x10 wrote 0x0`.
+- **`#74`:** `0x2 words received not answered`. Then `0 received messages dropped, 0 sends
+  failed, 0 accesses refused`, `error -ETIMEDOUT: not started`, and probe failed with -110.
+- **Later, the same in all three:** `asahi 206400000.gpu: MMU: IO map: 0x23bc00000:0x4000`, and
+  `sync_state() pending due to 23bc00000.coprocessor` for `@3e0` and `@3d8` (27.6 / 28.1 /
+  30.7 s).
+- **Before the start, the same in all three:**
+  - `#6`: domains `0x1f0000ff` ×3;
+  - `#7`: SRAM `0xe4 words read, 0xb4 written back, first not as read: none`;
+  - `#8`-`#17`: translator writes `+0xfc`=0, `+0xfc`=0, `+0x200`=0, `+0x2f0`=0,
+    `+0x34`=`0xffffffff`, `+0x20`=`0x100000`, `+0x100`=`0x80`, `+0x13c`=`0x100`, `+0x200`=TTBR,
+    `+0xfc`=1;
+  - `#18`: `+0x8114 read 0x20001 wrote 0x20001, +0x44 read 0x0 wrote 0x10`.
+  - The TTBRs were `0x8080ea90` (ds24p, the same as ds23p's), `0x80810ac4` (ds25p) and
+    `0x8080eac0` (ds26p).
+- **ds26p's words file**, read at about 25 s: `c3_058 0x444`, `c3_05c 0x666`, `c3_060 0x333`,
+  `pmp+44 0x0`, `pmp+48 0x8`. These are the stock values of the three C3 words, `+0x44` as the
+  client's stop wrote it, and `+0x48` as `#73` read it.
+
+### 2. pmp's crash log (ds25p, ds26p)
+
+The 16 KiB buffer was rebuilt from the `dump at the failed boot: crashlog +XXXX:` rows. A row
+"the line above N more times" repeats the row before it, and the left-out rows are zero.
+- The rebuilt buffers have `0x39bb` (ds25p) and `0x39f2` (ds26p) non-zero bytes, and
+  `0xec6`/`0xed6` non-zero 32-bit words. These are the counts the client's own dump line prints.
+- The "at a crashlog word" dump rebuilds to the same bytes in each boot.
+- The two boots differ in 176 bytes, all inside `Ctim`, `Crg8`, `Ccst`, `CasC`, `Cmbx`
+  (timestamps) and `Crtk`.
+- Field names for `Crg8` are from upstream Linux `drivers/soc/apple/rtkit-crashlog.c`, `struct
+  apple_rtkit_crashlog_regs`. That is documentation applied to these bytes. Its 0x350-byte size
+  equals this section's content size.
+
+**Container.**
+- `+0x0`: `EHLC` (`CLHE`), then the words `0x301`, `0x850`, `0xa`; `+0x10`-`+0x1f` zero.
+- Sections from `+0x20`. Each one has a 16-byte header: the reversed fourcc, `0xefefefef`, a
+  word (below), and the section's size including the header.
+- At `+0x830` the 16-byte container header is repeated (`CLHE 0x301 0x850 0xa`).
+  - `0x850` = `0x830` + `0x20`.
+  - There are 9 sections; with the trailer that makes 10 = `0xa`. This is arithmetic, and the
+    meaning of these words is not read.
+- From `+0x850` to the end (`+0x3fff`): `0xef` bytes. That is the fill macOS's crashlog page held
+  at round 12's `late` dump.
+
+| Offset | Section | 3rd word | Size | ds25p = ds26p? |
+|---|---|---|---|---|
+| `0x020` | `Cver` | `0x200` | `0x60` | same |
+| `0x080` | `Ctim` | `0x100` | `0x20` | differs |
+| `0x0a0` | `Crg8` | `0x400` | `0x360` | differs |
+| `0x400` | `Ccst` | `0x400` | `0x40` | differs (one word) |
+| `0x440` | `CasC` | `0x101` | `0x50` | differs |
+| `0x490` | `Cmbx` | `0x300` | `0x1b0` | differs (timestamps only) |
+| `0x640` | `Crtk` | `0x300` | `0x130` | differs |
+| `0x770` | `Ccdp` | `0x200` | `0x90` | same |
+| `0x800` | `Csta` | `0x100` | `0x30` | same |
+
+**`Crg8`, registers** (content at `+0xb0`; offsets below are from the content start):
+
+| Field | Offset | ds25p | ds26p |
+|---|---|---|---|
+| unk_0 / unk_4 | +0x0 / +0x4 | `0xa` / `0x33c` | `0xa` / `0x33c` |
+| x0 | +0x8 | `0x80010001` | `0x80010001` |
+| x1 | +0x10 | `0x4` | `0x4` |
+| x2, x3 | | 0, 0 | 0, 0 |
+| x4 | +0x28 | `0x104d488` | `0x104d488` |
+| x5 | | 0 | 0 |
+| x6 | +0x38 | `0x300000` | `0x300000` |
+| x7 | +0x40 | `0x10171d8` | `0x10171d8` |
+| x8, x9 | | 1, 1 | 1, 1 |
+| x10 | +0x58 | `0xb0bed0ff` | `0xb0bed0ff` |
+| x11 | +0x60 | `0x1c` | `0x1c` |
+| **x12** | +0x68 | `0x40` | `0x104f4ec` |
+| **x13** | +0x70 | `0x0` | `0xffffffffc0710000` |
+| **x14** | +0x78 | `0x11b` | `0x3f889` |
+| x15 | | 1 | 1 |
+| x16, x17, x18 | | 0, 0, 0 | 0, 0, 0 |
+| x19 | +0xa0 | `0x104d160` | `0x104d160` |
+| x20, x21 | | 4, 4 | 4, 4 |
+| x22 | | 0 | 0 |
+| x23 | +0xc0 | `0x105b000` | `0x105b000` |
+| x24 | +0xc8 | `0x9fff0000` | `0x9fff0000` |
+| x25 | +0xd0 | `0x105b3d8` | `0x105b3d8` |
+| x26, x27, x28 | | 1, `0x28`, 1 | 1, `0x28`, 1 |
+| x29 | +0xf0 | `0x1039ff0` | `0x1039ff0` |
+| x30 (lr) | +0xf8 | `0x10166d0` | `0x10166d0` |
+| sp | +0x100 | `0x1039fc0` | `0x1039fc0` |
+| pc | +0x108 | `0x1027a10` | `0x1027a10` |
+| psr | +0x110 | `0x600002c5` | `0x600002c5` |
+| cpacr | +0x118 | `0x300000` | `0x300000` |
+| fpsr, fpcr | | 0, 0 | 0, 0 |
+| unk[0..63] | +0x130 | non-zero only at [16] `0x3e800000000`, [18] `0x3d09000000000`, [20] `0xff`, [22] `0xff00000000`, [24] `0x100000001` | the same five, and also [0] `0x2d5e666b`, [2] `0x4bb71b00`, [4] `0x3f6999999999999a`, [6] `0xc020bb2b3461309c`, [8] `0x3fc999999999999a`, [10] `0x40800000`, [12] `0x4166e36000000000`, [14] `0x3ec00000`, [32] `0x3ff0000000000000` |
+| **far** | +0x330 | **`0x36140`** | **`0x210e70000`** |
+| unk_X | +0x338 | `0xffffffffffffffff` | `0xffffffffffffffff` |
+| **esr** | +0x340 | **`0xbe000000`** | **`0xbe000000`** |
+| unk_Z | +0x348 | 0 | 0 |
+
+- **esr `0xbe000000`**, by the Arm architecture's ESR_ELx layout: EC `0x2f` (SError interrupt), IL
+  1, ISS 0. psr `0x600002c5`: Z and C set, D, I and F masked, A not masked, mode EL1h. This is
+  architecture documentation applied to the values.
+- **far for an SError:** the architecture does not define FAR_ELx to hold a fault address for an
+  SError exception. Whether RTKit's `far` field was written at this exception, and in which
+  address space it lies, is not read.
+- **The 64 unknown words** are 0x200 bytes, the size of 32 128-bit registers. Whether they are
+  those registers is not read.
+  - Read as IEEE-754, some of ds26p's extra words are 0.003125, -8.3656, 0.2, 12000000.0 and 1.0
+    (doubles). `0x4bb71b00` and `0x40800000` read as 24000000.0 and 4.0 (floats).
+  - That is a reading of bit patterns, not a decode.
+- **Where the addresses fall in `Ccdp`'s first two entries** (below):
+  - pc, lr and x7 lie in `0x1000000`-`0x102beff`, the entry for physical `0x23b500000`, `pmp`'s
+    SRAM;
+  - sp, x29, x4, x19, x23 and x25 lie in `0x102c000`-`0x105b71f` (physical `0x23b52c000`).
+
+**`Ccst`** (content `+0x410`, u64):
+- ds25p: `0xc000000000000000`, `0x1027a10`, `0x1001c70`, `0x10040c0`, `0x1025b2c`,
+  `0x10193c8`;
+- ds26p: the same except `0x1004124` for `0x10040c0`.
+- The second value is pc. Whether this is a call stack is not read.
+
+**`CasC`** (content `+0x450`):
+- ds25p: words `0x82`, `0x5000fbfc`; u64 **`0x0600000000036140`**; word `0x3`; the rest zero.
+- ds26p: `0x80`, `0x5000fbfc`, **`0x0600000210e70000`**, `0x3`.
+- In each boot, the low 40 bits of the u64 equal that boot's far. The top byte is `0x06` in both.
+  The meaning of the other words is not read.
+
+**`Cmbx`, the mailbox history** (content `+0x4a0`):
+- Content `+0x0`-`+0x1b` holds the words `0x27701`, `0x11111101`, `0x25501`, 0, 0, 0, 0. Their
+  meaning is not read.
+- From content `+0x1c` there are 16 entries of `0x18` bytes. Each is u64 endpoint, u64 word, u32
+  time, u32 zero. The last 4 bytes of the section are zero.
+- This layout is read from the bytes. Upstream's mailbox-entry struct is also `0x18` bytes. The
+  field order was not compared with it.
+
+| k | Endpoint | Word | ds25p time | ds26p time | Client's log |
+|---|---|---|---|---|---|
+| 0-6 | 0x4 | `0x0080000000000000` | `0xfba0f95` … `0xfba1cf5` | `0xfb77a6d` … `0xfb7882d` | `#50`-`#56` |
+| 7 | 0x0 | `0x0070000000000020` | `0xfba1efc` | `0xfb78a34` | `#57` received |
+| 8 | 0x0 | `0x00b0000000000020` | `0xfba2075` | `0xfb78bc5` | `#59` sent |
+| 9 | 0x2 | `0x0080000050000010` | `0xfba21b0` | `0xfb78ce4` | `#60` received |
+| 10 | 0x2 | `0x0010100000000000` | `0xfba21d0` | `0xfb78d04` | `#61` received |
+| 11 | 0x2 | `0x0010100000020000` | `0xfba2361` | `0xfb78ee1` | `#62` sent |
+| 12 | 0x0 | `0x00b0000000000020` | `0xfba2888` | `0xfb79414` | `#63` received |
+| 13 | 0x0 | `0x0050002000000002` | `0xfba2a61` | `0xfb795f1` | `#65` sent |
+| 14 | 0x20 | `0x0000000000000000` | `0xfba2c2c` | `0xfb797bc` | `#66` received |
+| 15 | 0x20 | `0x0001000000028000` | `0xfba2db1` | `0xfb79961` | `#68` sent |
+
+- **The entries match the client's last 16 logged words before `#69`**, in order. They hold no
+  direction flag. The crashlog word `#69` is not in the history.
+- **Times:**
+  - From entry 0 to entry 15 is `0x1e1c` ticks (ds25p) and `0x1ef4` (ds26p). Over the same words
+    the client's log spans `0x142` and `0x14b` µs (`#50`-`#68`): 23.94 ticks per client µs in
+    both. That is arithmetic, consistent with a 24 MHz count; the clock is not read.
+  - **`Ctim`** (content u64): `0xfba32b7` (ds25p), `0xfb7a6ac` (ds26p). That is `0x506` / `0xd4b`
+    ticks after entry 15, about 54 / 142 µs at that ratio.
+  - The client logged `#69` 149 / 239 µs after `#68`.
+
+**`Crtk`** (content `+0x650`):
+- First words `0x80000000`, `0x39`, `0x39`, 0.
+- Then three records with names. Each has a value `0x800`, a second value, a count n, the name,
+  and n code addresses. The count comes just before the name, and the addresses after it.
+
+| Name | Second value ds25p / ds26p | Addresses, ds25p | Addresses, ds26p |
+|---|---|---|---|
+| `rtk_ep_work` | `0x3d0` / `0x410` | none (n 0) | none (n 0) |
+| `power` | `0x460` / `0x460` | `0x1017418`, `0x102437c`, `0x10193c8` | `0x1019234`, `0x1019008`, `0x1024240`, `0x10193c8` |
+| `main` | `0x3e0` / `0x3e0` | `0x10188a8`, `0x10191e8`, `0x102b7a4`, `0x100301c`, `0x1015a98` | the same |
+
+- Other words: `0x1` before `power`'s record, with `0x102f3b0` just before its `0x800`.
+  `0x2 0xf 0xf 0x2` and `0x10508c8` come before `main`'s.
+- Neither pc nor lr is among the listed addresses. `0x10193c8` is the last of `power`'s and the
+  last of `Ccst`'s.
+- Which task was running at the exception is not read.
+
+**`Ccdp`** (content `+0x780`): six records of `0x14` bytes, each u64 A, u64 B, u32 size. They
+are the same in both boots.
+
+| A | B | Size | Matches |
+|---|---|---|---|
+| `0x1000000` | `0x23b500000` | `0x2bf00` | `pmp` SRAM (ADT segment at IOVA `0x100000000`) |
+| `0x102c000` | `0x23b52c000` | `0x2f720` | SRAM `+0x2c000` (ADT segment `0x10002c000`) |
+| `0x10c0000` | `0x4000` | `0x4000` | the client's crashlog buffer |
+| `0x10c4000` | `0xc000` | `0x10000` | the client's ioreport buffer |
+| `0x10d4000` | `0x20000` | `0x1000` | the client's syslog buffer (`0x1000` asked) |
+| `0x10d5000` | `0x28000` | **`0xf000`** | the opening word's IOVA |
+
+- The A values are packed end to end from `0x10c0000` by the sizes in the B/size columns.
+- The client's opening word `0x0001000000028000` holds no `0xf000` that this reading can see.
+  Where `pmp` took `0xf000` from is not read.
+
+**`Csta`** (content `+0x810`): 0, 0, 0, 0, `0x64`, then zero. The meaning is not read.
+
+**`Cver`** (content `+0x30`):
+- 16 bytes `43 71 1b 4c 5c a6 30 ef a0 7f e1 42 43 35 52 c3`;
+- from `+0x40`: `RTKit: RTKit-2062.141.1.release - Client: not set`.
+
+### 3. The other buffers
+
+| Buffer | ds25p (both dumps) | ds26p (both dumps) |
+|---|---|---|
+| ioreport, IOVA `0xc000`, `0x10000` | `0x171` non-zero bytes, `0x91` words; **not dumped as hex** by this build | the same counts |
+| syslog, IOVA `0x20000`, `0x1000` asked, `0x4000` mapped | `0x40` non-zero bytes: 16 words `0xffffffff` at `+0x0`, `+0x70`, … `+0x690` (every `0x70`), the rest zero | byte for byte the same |
+| opening, IOVA `0x28000` | `0x4000` mapped, all zero | `0x400000` mapped, all zero (`0x20000` zero rows) |
+
+- The syslog buffer holds no text. The ioreport bytes are not in the logs.
+- **The translator's ERROR (`+0x40`) after the wait:**
+  - `0x6000400` (ds24p, ds25p) is the value macOS's DART read in every round-12 dump, `start-pre`
+    included, and ds23p's at 26 s.
+  - `0x80000800` (ds26p): by the reference layout quoted in the ds23p translator section, the
+    flag (bit 31) is set, stream 0, code `0x800` (bit 11). None of the five named fault bits 0-4
+    is set.
+  - ERROR_ADDR was not read in these runs.
+
+### 4. Set beside round 12 (what macOS maps for pmp)
+
+| Use | The client (buffer lines) | macOS (round 12) |
+|---|---|---|
+| crashlog | `0x4000`, `0x4000` | `0x18000` (one page; all `0xef` at `late`) |
+| ioreport | `0xc000`, `0x10000` | `0x20000`-`0x2ffff` (four pages) |
+| syslog | `0x20000`, `0x1000` asked / `0x4000` mapped | `0x34000` |
+| endpoint `0x20` opening | `0x28000`, `0x4000` (ds26p: `0x400000`, to `0x427fff`) | `0x3c000`, with `0x40000`, `0x44000`, `0x48000` also mapped |
+| kdebug | no line in the client's log | `0x4000`, `0x10000` |
+| unnamed DRAM | — | `0x8000` |
+| MMIO (34 ranges, `0xc0000000`-`0xc6003fff`) | no line in the client's log; whether it maps any is not in the log | `pmp` reg 3-43 |
+
+**Arithmetic of the two far values** (coincidences of numbers, not readings of `pmp`'s accesses):
+- **ds25p `0x36140`:**
+  - `0x36140` = `0x28000` + `0xe140`.
+  - The client's opening mapping ends at `0x2bfff`, so `0x36140` is `0xa140` bytes past its end.
+  - `pmp`'s `Ccdp` entry for the opening (`0x28000`, `0xf000`, so to `0x36fff`) contains it.
+- **The same offset on macOS's layout:**
+  - `0x3c000` + `0xe140` = `0x4a140` = `0x48000` + `0x2000` + `0x140`.
+  - That is byte 0 of slot 20 (`0x140` / `0x10`) of the (IOVA, size) table. Slot k is `pmp` reg
+    k+3, so slot 20 is **reg 23**: IOVA `0xc2070000`, size `0x4000`, physical `0x210e48000`.
+  - macOS's `0x3c000` + `0xf000` = `0x4b000` covers that table (`0x4a000`-`0x4a28f`).
+  - In ds25p the client's IOVA `0x36140` is not mapped (its log has no DART fault line).
+- **ds26p `0x210e70000`:**
+  - The client's 4 MiB mapping covers `0x36140`, with zeros there.
+  - `0x210e70000` lies inside `pmp` reg 22 (`0x210e20000`, size `0x60000`) at `+0x50000`, which
+    macOS maps at IOVA `0xc2060000`.
+  - Its low bits `0x70000` equal those of reg 23's IOVA `0xc2070000`.
+  - It is not a client IOVA.
+- `0x6000400` and the stream-6 reading apply equally to macOS's healthy boots, so ERROR in ds24p
+  and ds25p does not mark a fault by itself.
+
+### What these readings do not show
+
+- Why `pmp` raised the exception, or what it was doing. The register values and section names
+  are bytes, decoded by upstream's struct and the Arm ESR layout only.
+- Whether `far` is meaningful for this SError, and in which address space (IOVA, `pmp` virtual,
+  or physical) `0x36140` and `0x210e70000` lie. The `Ccdp` and round-12 arithmetic only shows where
+  the numbers fall.
+- What `pmp` expected in the opening region. The client's opening buffer was zero at both dumps
+  in both boots, where macOS's page set held the `+0x2000` block at `0x3c000`, the window table at
+  `0x48000`, and so on.
+- The ioreport buffer's bytes; ds24p's crash log (its buffer was reused before it was read).
+- The translator's page tables and ERROR_ADDR in these boots.
+
+### M1 left
+
+Not read by this agent. The orchestrator rebooted the M1 to the stock kernel after each run.
