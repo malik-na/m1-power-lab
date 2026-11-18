@@ -1838,3 +1838,199 @@ So no timer is on and unmasked at any of these cores' final write; several are o
 their condition met. Each value is from a separate run. For core 7, run ds19p-75 (07:11) showed
 all four ISTATUS bits set, while these runs read ISTATUS 0 for three of them: run-to-run
 variation or a misreading in one of the two modes; not settled. Cores 2-6 not read.
+
+## Hypervisor round 9: candidates injected into macOS (det26-det32r, 2026-11-18 19:09-21:11)
+
+Readings only, every run **[HV-CHANGED]**. Taken for the spec's open question 68 (section 8.2,
+candidates C1-C17, at lab commit 99aee86). In each run the hypervisor put one candidate's words
+into the state Linux reads before its entry, at the start of macOS's sleep entry. Times are the
+M3's clock unless "t" (s from the detach marker, the M1's timer) is given; T is the last core's
+sleep-path record. Where a reading was not taken, the text says "unknown".
+
+**Short answer.** Seven candidates were run, in the order asked:
+- **C2, C6, C5, C7: macOS powered down and woke at the 90 s alarm** with the words in Linux's
+  state at the commit.
+- **C4: woke, but the write was not taken.** The words read 0 straight after the hypervisor
+  wrote 3, and 0 at the commit, so this run does not test C4.
+- **C3 and C17: no power-down, no wake, a restart, twice each.** In all four the hypervisor's
+  commit note was never written.
+  - C3: the restart came about 144-153 s after the injection.
+  - C17: it came about 5-19 s after the injection, near the time the commit comes in the runs
+    that woke.
+- **Not run:** C9, C16 and C14, left for a later round (the coordinator's stop after det32r).
+
+### The change and the runs
+
+- **Hypervisor:** `~/m1n1-next` branch `m1power/hv-detached`, local commits `0eef8cb2` and
+  `52a272cf` on top of `9ec6b9c7`, not pushed. The build the runs used reports itself on USB as
+  `v2.0.0-145-gfea`: it was built from `52a272cf`'s source before that commit was amended from
+  `fea0c2c2`. The option is `hv_s2r_cand`, 0 (off) by default; `hv_s2r_cand = N` does the
+  following:
+  - **Where it acts:** once, at macOS's first write of I2C3's power-domain word `0x23b700208`
+    after the detach. The hypervisor traps that write (a traced page) and makes the candidate's
+    writes on the trapping core before passing macOS's write on.
+  - **Why there:** it is the first step of macOS's idle sleep entry (the audio path's I2C3 cycles,
+    phase E1). In det12, det21, det23 and det24 that word's first write came 7.52-7.55 s before
+    T, with no write of it in the 420-430 s of idle before. That makes it the latest point before
+    the entry at which the hypervisor runs without a new trap or timer. The writes are made by the
+    hypervisor with no other change to macOS's path.
+  - **Logging:** each word is read before and after (detached log kind 28, seq 200 + N), with a
+    time record at the start and end. At the end of the commit note the last core reads the words
+    again (phase 4) and writes power-chip scratch `0x9f0a` = `0x80 | N`, plus `0x40` if injected
+    and `0x20` if every word still read the injected value.
+  - **No restore:** the injection is never undone. The wake's own I2C3 writes do not inject
+    again.
+  - **Watchdog:** with `hv_s2r_wd1_secs` set, watchdog 1 is also armed at the injection, before
+    the writes, with the same 150 s bite. That is the way out if the entry hangs before the
+    commit. The commit re-arms it (count 0) as in every run since det11. This is part of the
+    change. C2, C6, C4, C5 and C7 had it and powered down and woke as det18 did without it.
+- **Linux's values written** (spec 8.2 and the Linux readings it cites):
+
+  | Cand. | Words | Written |
+  |---|---|---|
+  | C2 | `0x23b748400`, `800`, `c00`, `000` (R22a's order) | 0 each; then each status word (`0x23b7487e0`, `be0`, `fe0`, `3e0`) read until its low byte is 0, at most 10 ms |
+  | C6 | `0x23b71c000` | 0 |
+  | C4 | DCSn+`0x7b0` = `0x2002007b0` + n × `0x40000`, n = 0-7 | 3 |
+  | C3 | `0x23b058000`, `0x23b05c000`, `0x23b060000` | `0x444`, `0x666`, `0x333` |
+  | C5 | the twelve domains `0x23b700118`, `120`, `128`, `148`-`168`, `1a8`, `1b0`, `1d8`, `1e8` | (v & ~`0x3ff`) \| 4 (request 4), then read until bits 4-7 = 4, at most 10 ms |
+  | C7 | `0x23d24003c`, `0x23d240048` | `0x01101100`, `0x00101100` |
+  | C17 | the 28 SoC clock words of 8.2 C17 (`0x23b040000`-`0x23b040138`) | bits 24-27 = 6 (`0x23b0400b0`: 2), the other bits as read |
+
+  Also written in the code, never run: C9 (MSG, ATC1_COMMON, ATC1_USB_AON, ATC1_PCIE, ATC1_USB
+  on, request `0xf`, no bit 28), C14 (the six audio words and `0x23b048000` = 0), C16 (GPIO off,
+  R56 form 1).
+- **Host side:** `harness/real_s2r.py` `real_s2r_on(cand=N)`.
+- **Recipe:** det18's (round 7) with `cand=N`:
+  - `WD1=150 ALARM=90 FULL_SKIP=0x23b738000+0x4000,0x23bc34000+0x4000,0x210e20000+0x4000,0x211e20000+0x4000 S2R_ARGS='core_state=1, c4_probe=1, cand=N' harness/macos-up.sh detNN`;
+  - `PRE=<awake_snap of commit-snap-list-r7.json> ARGS='commit_snap=<that list>' harness/detach135.sh detNN`;
+  - `harness/detached-wake-readout.sh detNN`, then `harness/hv-reboot.sh` (the runs that woke),
+    then `tools/tb/m1-pmu-dump` once Linux answered.
+
+  The M1 was claimed as `observation` throughout. The runs were driven unattended, one after
+  another, by a session script. No boot panic happened in nine bring-ups.
+- **The no-hands ways out, named before the runs:**
+  - the hypervisor's alarm at commit + 90 s;
+  - watchdog 1 at commit + 150 s;
+  - watchdog 1 armed at the injection (150 s), for a hang before the commit;
+  - the 5-7 s reset of the earlier failed runs.
+
+  Every run ended without hands.
+- **The time of a restart** is the M3's "USB device gone" time. Linux's kernel started 12-13 s
+  later each time (M1 clock).
+  - In the runs that woke, the detach marker came 1.27-1.74 s before the read-out script's
+    "watching" stamp. The injection came at t = 427.94-434.99, and T 7.45-7.59 s after the
+    injection.
+  - For the runs that restarted, the RAM log is lost, so their injection time is not read. The
+    ranges below are worked out from those intervals.
+- **Files (private):**
+  - `tools/hv-trace-kit/runs/20261116-mac135/*-det26*` to `*-det32r*`;
+  - `var/commit-state/r9_cand.py` and its outputs `r9-det26.txt`, `r9-det27.txt`,
+    `r9-det28.txt`, `r9-det30.txt`, `r9-det31.txt`;
+  - `var/m1-state/pmu-20261118-*-after-det2[6-9]*.txt`, `*-after-det3[0-2]*.txt`;
+  - camera frames `var/m1-look/20261118-20*-det29r-d*.jpg` and `20261118-21*-det32r-d*.jpg`.
+
+| Run | Cand. | Injection (t, T−) | Words after the injection / at the commit | Outcome |
+|---|---|---|---|---|
+| det26 | C2 | 433.751, T−7.448 (core 3) | control words 1 -> 0; status `0x23b7487e0` `0x494002` -> `0x494900`, `be0` 0, `fe0` `0x494900`, `3e0` `0x515100` (unchanged); at the commit the same | **asleep 89.463 s, woke at the alarm**, wake status `0 / 0x400000 / 0` **[HV-CHANGED]** |
+| det27 | C6 | 432.943, T−7.494 (core 1) | `0x80000000` -> 0; 0 at the commit | **asleep 89.621 s, woke at the alarm**, `0 / 0x400000 / 0` **[HV-CHANGED]** |
+| det28 | C4 | 431.300, T−7.513 (core 3) | **0 before and 0 after the write of 3**, on all eight; 0 at the commit: the write was not taken | asleep 89.725 s, woke at the alarm, `0 / 0x400000 / 0`. Not a test of C4 **[HV-CHANGED setup; candidate not in Linux's state]** |
+| det29 | C3 | not read (log lost) | not read | **no wake; restart**: USB gone 19:55:19.2-19.7 + t 578.9-579.4 = 20:04:58.556; kernel 20:05:11. That is about injection + 144-151 s, or about 136-144 s after the time T came in the runs that woke **[HV-CHANGED]** |
+| det29r | C3 (det29 repeated) | not read | not read | **no wake; restart**: USB gone 20:19:12.975 (t 580.5-581.0, about injection + 146-153 s); kernel 20:19:25 **[HV-CHANGED]** |
+| det30 | C5 | 434.990, T−7.552 (core 1) | all twelve request 0 -> request 4 (`0x0f000200` -> `0x0f000244`, `0x200` -> `0x244`); the same at the commit | **asleep 89.664 s, woke at the alarm**, `0 / 0x400000 / 0` **[HV-CHANGED]** |
+| det31 | C7 | 427.940, T−7.590 (core 3) | `0x81100100` -> `0x01101100`, `0x82100100` -> `0x00101100`; the same at the commit | **asleep 89.477 s, woke at the alarm**, `0 / 0x400000 / 0` **[HV-CHANGED]** |
+| det32 | C17 | not read | not read | **no wake; restart**: USB gone 20:58:46.200 (t 446.4-446.9, about injection + 11-19 s, about 4-12 s after the time T came in the runs that woke); kernel 20:58:58 **[HV-CHANGED]** |
+| det32r | C17 (det32 repeated) | not read | not read | **no wake; restart**: USB gone 21:10:40.060 (t 439.7-440.1, about injection + 5-12 s, within −3 to +5 s of the time T came in the runs that woke); kernel 21:10:51 **[HV-CHANGED]** |
+
+### 1. The runs that woke (C2, C6, C4, C5, C7)
+
+- **Access by macOS between the injection and T:** none, to any injected word (the full access
+  log).
+  - C2 is the exception, as expected: macOS's own R22a at T−16.1 ms read each control word 0,
+    wrote it 0 and read its status. The status values were `0x494900`, 0, `0x494900` and
+    `0x515100`, as at det18's commit.
+- **macOS's wake:**
+  - wrote the four sub-blocks 1 (C2);
+  - read `0x23b71c000` = 0 and wrote it `0x80000000` (C6, T+89.629);
+  - lowered the twelve request-4 domains by its own form 3 ((v & ~`0x3ff`) | `0x340`, reads
+    `0x200`), as at every wake (C5).
+- **C7 at the wake entry:** the hypervisor's wake snapshot, read before macOS ran, had
+  `0x23d24003c` = `0x81100100` again, with no write by anyone in the log, while `0x23d240048`
+  still read `0x00101100`.
+- **C4:** DCSn+`0x7b0` read 0 just before the hypervisor's write, 0 just after it (1 µs later)
+  and 0 at the commit, on all eight. The commit list has also read 0 there in every earlier
+  capture. Whether some other way would take a write from EL2 is unknown.
+- **Wake entry:** as det18 in all five: `0x23d2b8028` `0x8000000`, `0x23d2b8040` `0x22`,
+  `0x23d2c001c` `0xff0`; watchdog 2 count 0.325 s, bite `0x7270e00`, control 0; watchdog 1
+  count 14.0-14.1 ms, bite `0xd693a400`, control 4. The scratch byte `0x9f0a` is rewritten
+  by the wake path, so it was not needed in these runs.
+- **Power chip after `hv-reboot.sh`, all five:**
+  - `0x0201` = `00`, `0x9f03` = `00`;
+  - `0x9f04`-`0x9f0c` = `48 00 01 3f ff ff 47 50 00`;
+  - `0xa47b`-`d` = `00 08 00`, `0xd000` = `01`, `0xd00c` = `00`.
+
+  These are the same as det18, det23 and det24.
+
+### 2. How the C3 and C17 runs ended
+
+Power chip after the restart (Linux up, `tools/tb/m1-pmu-dump`):
+
+| Run | `0x0201` | `0x9f03` | `0x9f04`-`0x9f0c` | `0xa47b`-`d` | `0xd000` | `0xd008`-`b` (alarm) | `0xd00c` |
+|---|---|---|---|---|---|---|---|
+| det29 (C3) | `00` | **`ff`** | all `00` | `00 08 00` | `01` | `c9 ab 0a 00` = det28's alarm, unchanged | `00` |
+| det29r (C3) | `00` | **`ff`** | all `00` | `00 08 00` | `01` | `c9 ab 0a 00`, unchanged | `00` |
+| det32 (C17) | `00` | `00` | all `00` | `00 08 00` | `01` | `ee b8 0a 00` = det31's alarm, unchanged | `00` |
+| det32r (C17) | `00` | `00` | all `00` | `00 08 00` | `01` | `ee b8 0a 00`, unchanged | `00` |
+
+What these readings show:
+- **The commit was not reached in any of the four.**
+  - At the commit the hypervisor writes the `'W'` note at `0x9f04`, then the alarm, then
+    `0x9f0a` (the round-9 byte). None of them is there. `0x9f04`-`0x9f0c` are as the arm left
+    them (cleared by `hv_s2r_register_wake`), and the alarm register still holds the
+    previous run's value.
+  - So in all four the last core never reached the hypervisor's commit path. Whether macOS's
+    own entry ran to its end (R22, the cores' final writes) is not read.
+- **Not like the earlier failed runs.** The runs that reset after a commit (det13, det17,
+  det20b, det22c) left `'W'` unconsumed, `0x9f03` = `50` and `0xd000` = `41`. Here `0xd000` is
+  `01` in all four, and `0x9f03` is `ff` after both C3 runs and `00` after both C17 runs. (After
+  det25's bring-up, rebooted with no sleep, `0x9f03` also read `ff`.) What `0x9f03` and
+  `0xd000` record is not established.
+- **The fault shadow** `0xa47b`-`d` = `00 08 00` reads the same after every run of this round,
+  the alarm wakes included, so it does not tell how these runs ended. What reset the SoC:
+  unknown.
+- **C3, the timing:** about injection + 144-153 s in both runs.
+  - Watchdog 1, armed at the injection with a 150 s bite, falls due then. macOS's own write of
+    the watchdog 1 count (at T−0.466 s in every capture, R15) would have restarted that count
+    7 s later, so the bite would then have come at about injection + 157 s. The two fall within
+    the error of the timing, so whether macOS reached that write is unknown.
+  - Camera frames in det29r: the login window at t ≈ 424; the M1's display dark (backlight off)
+    from t ≈ 454 to t ≈ 564; the restart at t ≈ 581. The entry turned the display off, and the
+    display stayed off until the restart.
+- **C17, the timing:** a restart about 5-19 s after the injection, at about the time the commit
+  comes in the runs that woke (T is injection + 7.5 s), and well before any armed watchdog
+  could bite.
+  - Camera frames in det32r: the login window at t ≈ 427, the display dark at t ≈ 437, the USB
+    device gone at t ≈ 440, the Omarchy boot screen at t ≈ 457. No other screen in between.
+  - Whether macOS panicked, the SoC reset by itself, or the SoC powered down and came up again
+    without the hypervisor's wake path is not read.
+
+### Left out, and why
+
+- **C9, C16, C14:** not run. The coordinator stopped the round after det32r ("C3 and C17 on
+  Linux are now worth more than the remaining macOS injections"). Their writes are in the
+  option and were never run.
+- **C4:** the injection did not take (above), so C4 is not tested by this round.
+- **C1, C8, C10, C11, C12, C13, C15:** not carried, as open question 68 says.
+- **Where C3 and C17 stop:** the RAM log, with the injection records and macOS's accesses after
+  them, is lost with each restart. The scratch registers that survive are kept zero by the
+  recipe until the commit (macOS reads `0x9f08` in its entry). A later run that injected C3 or
+  C17 at the first core's sleep write instead (after macOS's whole entry, like round 8's
+  `pg_clear`) would tell an effect through macOS's entry from one at the commit. Such a variant
+  was drafted, then not built or run.
+- **A same-session control with the option off:** not run. det18 is the control. C2, C6, C4,
+  C5 and C7 are controls for the trigger and the watchdog armed at the injection.
+
+### M1 left
+
+In stock Omarchy (kernel 7.3.0-0test5-1-ARCH, up since 21:10:51 after det32r's restart), reached
+over Thunderbolt. The camera frame `var/m1-look/20261118-211256-state-now.jpg` shows the desktop.
+The claim is released.
