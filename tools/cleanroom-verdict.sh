@@ -5,7 +5,7 @@
 #   tools/cleanroom-verdict.sh <repo> <tests-commit> [code-commit, default HEAD]
 set -euo pipefail
 repo=${1:?repo}; tests=${2:?tests commit}; code=${3:-HEAD}
-t=$(mktemp -d); trap 'rm -rf "$t"' EXIT
+t=$(mktemp -d); trap 'chmod -R u+w "$t" 2>/dev/null; rm -rf "$t"' EXIT
 git -C "$repo" archive "$tests" | tar -x -C "$t"
 rm -rf "$t/src"; git -C "$repo" archive "$code" src | tar -x -C "$t"
 echo "tests from $(git -C "$repo" rev-parse --short "$tests"), src from $(git -C "$repo" rev-parse --short "$code")"

@@ -6,7 +6,7 @@
 # test output is printed (each test's result and the failing tests' own messages).
 set -euo pipefail
 ws=${1:?tests workspace}; repo=${2:?driver repo}; code=${3:-HEAD}; shift $(( $# > 3 ? 3 : $# ))
-t=$(mktemp -d); trap 'rm -rf "$t"' EXIT
+t=$(mktemp -d); trap 'chmod -R u+w "$t" 2>/dev/null; rm -rf "$t"' EXIT
 rsync -a --exclude target --exclude .git --exclude src "$ws"/ "$t"/
 git -C "$repo" archive "$code" src | tar -x -C "$t"
 cd "$t" && { cargo test --offline --no-fail-fast "$@" 2>&1 || true; } | grep -v -E '^\s+(Compiling|Finished|Running|Doc-tests)|^\s*-->|^\s*\|' | grep -v "$t/src" | cut -c1-400

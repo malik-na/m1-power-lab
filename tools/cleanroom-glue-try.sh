@@ -8,7 +8,7 @@
 set -euo pipefail
 ws=${1:?tests workspace}; code=${2:-HEAD}; shift $(( $# > 2 ? 2 : $# ))
 K=$HOME/Work/deepsleep-kernel; G=drivers/soc/apple/deepsleep
-t=$(mktemp -d); trap 'rm -rf "$t"' EXIT
+t=$(mktemp -d); trap 'chmod -R u+w "$t" 2>/dev/null; rm -rf "$t"' EXIT
 rsync -a --exclude target --exclude .git --exclude interface --exclude spec "$ws"/ "$t"/ws/
 mkdir -p "$t/glue"; git -C "$K" archive "$code" "$G" | tar -x -C "$t" ; cp -r "$t/$G/." "$t/glue/"; rm -rf "$t/drivers" "$t/glue/hosttest"
 cd "$t/ws" && { cargo test --offline --no-fail-fast "$@" 2>&1 || true; } | grep -v -E '^\s+(Compiling|Finished|Running|Doc-tests)|^\s*-->|^\s*\|' | grep -v "$t/glue" | cut -c1-400
