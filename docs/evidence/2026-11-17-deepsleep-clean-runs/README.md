@@ -1780,3 +1780,25 @@ det23 and det24 are the same as det18, det19b and det21.
 In stock Omarchy (kernel 7.3.0-0test5-1-ARCH, up since 2026-11-18 04:32:05, after the reboot
 out of det25's bring-up), reached over Thunderbolt. The camera frame
 `var/m1-look/20261118-043227-state-after-round8.jpg` shows the desktop. The claim is released.
+
+## Run ds19 (2026-11-18 07:00): round 8's driver and glue; the same outcome as ds17
+
+Kernel ds19 (`07e52310e`, package `var/kernels/ds19/`, sha256 `d11bb2f5...2bf`): the logic at
+deepsleep-clean `46dfa94` (261/261 from tests `202e351`: each core's last job masks D/A/I/F,
+masks a fired timer, writes `PMCR0_EL1` = `0x7003400`, clears HCR_EL2 VI/VF, writes
+`IPI_SR_EL1` = 1, then R43's accesses), and the glue after the independent glue tests (126/126 at
+`3329bdf`) and review (pending SError taken before core 0's final write, no record after a final
+write, R61's arming order, AIC per-core setup redone after a wake, translator pages mapped, DAIF
+and HCR_EL2 served). Command line `var/deepsleep/ds19.cmdline` (`wdt=120`, `alarm_secs=60`, no
+snap, trace or probe). Cable and charger in (`ac=1`).
+
+- Sleep started 07:00:47; the M3 saw the host disconnect at 07:00:50.41. No wake at the alarm.
+- The M1 came back in stock Omarchy with kernel start 07:03:02 (about 135 s after the start:
+  the 120 s watchdog plus entry and boot, as ds17-1..3).
+- Record `44 57 00 40 2c 3d 02 30 9b 00` = 'W' (commit reached, watchdog armed), last access a
+  32-bit write to `0x23d2c4000` by core 0. Power chip after: `0x0201` = `00`, `0x9f03` = `50`,
+  fault shadow `0x000800` (watchdog reset only), `0xd000` = `01`, `0xd00c` = `00`.
+
+So with the cores' final state as R59/R65 now ask, the SoC still stays up after the commit until
+the watchdog. What each core actually had pending at its final write is not read in this run
+(probe off).
