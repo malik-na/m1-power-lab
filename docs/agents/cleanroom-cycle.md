@@ -42,3 +42,12 @@ Two more rules (Naeem, 2026-11-17):
   hypervisor stage reads macOS, the system whose sleep and wake work, by the recipe that has
   already run unattended (det8). Linux is read on bare metal. Before any hypervisor run the
   observation agent names the step that ends the run without hands if the wake does not come.
+
+- **The kernel glue is in the cycle too** (Naeem, 2026-11-18: "Include the kernel glue in the clean
+  room cycle."). The glue (`drivers/soc/apple/deepsleep/` outside `logic/`, and the arch hooks)
+  gets its own independent test author, who reads the spec and the glue's interface view (doc
+  comments and signatures, no bodies) and never the glue's code; the tests run against the
+  committed glue with `tools/cleanroom-glue-try.sh`. What cannot run on the host (the C and arm64
+  half) gets one independent reviewer against the spec. Fixes go to a glue implementer who reads
+  the locked tests and the review and cannot change either. The glue's earlier host tests were
+  written by its own author and do not count as the verdict.
