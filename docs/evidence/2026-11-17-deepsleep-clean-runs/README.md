@@ -1802,3 +1802,20 @@ snap, trace or probe). Cable and charger in (`ac=1`).
 So with the cores' final state as R59/R65 now ask, the SoC still stays up after the commit until
 the watchdog. What each core actually had pending at its final write is not read in this run
 (probe off).
+
+## Runs ds19p-74, ds19p-75 (2026-11-18 07:05-07:11): the cores at their final write, read by the probe
+
+Kernel ds19 with `apple_deepsleep.probe=1` (`var/deepsleep/ds19p.cmdline`: ds19's plus probe),
+`probe_k` set at run time; cable and charger in. Each run: no wake at the alarm, watchdog reset
+about 150 s after the start, `0x0201` = `00`. Decode per the glue's probe table (record byte 1
+`'q'` = probe record with the watchdog armed; `[2..3]` k with bit 15 = captured; `[4..7]` the
+value; `[8..9]` = 76 values captured).
+
+| k | Record | Value | Meaning (4 bits per core c at bits 4c..4c+3) |
+|---|---|---|---|
+| 74 | `44 71 4a 80 00 00 00 00 4c 00` | `0x00000000` | at each core's final write: `ISR_EL1` F, I, A and `IPI_SR_EL1` bit 0 all clear, cores 0-7 |
+| 75 | `44 71 4b 80 ef ee ee fe 4c 00` | `0xfeeeeeef` | ISTATUS of the four timer controls (bit 0 EL2 virtual, 1 EL2 physical, 2 `CNTV_CTL_EL02`, 3 `CNTP_CTL_EL02`): core 0 and core 7 `0xf` (all four set), cores 1-6 `0xe` (all but the EL2 virtual timer) |
+
+So at every core's final write nothing is pending at the core (`ISR_EL1`, fast IPI), while most
+timers' conditions are met (ISTATUS 1). Whether those timers are enabled and unmasked is not in
+these two values (the per-core controls are probe k = 18 + 7c + r, r 2-5; not read).
