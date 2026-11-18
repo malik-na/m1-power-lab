@@ -3845,3 +3845,110 @@ In stock Omarchy (`7.3.0-0test5-1-ARCH`, up since 04:14:17), with the default bo
 untouched. `m1-bootonce` removed ds22p's ESP copy; ds23p's kernel stays on the ESP under
 `s2r/ds23p`, with its modules under `/usr/lib/modules/7.2.11-ds23p`. No file was left in `/root`.
 The claim is released.
+
+## Linux round: pmp's translator and SRAM after the client's failed start (ds23p) (2026-11-19 04:17-04:19)
+
+One more boot-only run of ds23p: the same package, command line and rules as the round above. No
+sleep and no `pm_test` were started. The M1 was claimed as `linux-obs-pmp`.
+- Reads were taken once each, 32-bit, over `/dev/mem` (`O_RDONLY`, `PROT_READ`), and nothing was
+  written to any register.
+- Each address was logged (stdout and an fsync'd file) before it was read. The power-state words
+  were read first, and the rest only because `ps_PMP` read on (bits 4-7 `0xf`). The SRAM was read
+  only because `ps_PMS_SRAM` also read on.
+- Raw output (private): `var/commit-state/linux-pmp-dart-sram-ds23p-20261119.txt`.
+- DART register names are from Aurora Silicon's `drivers/iommu/apple-dart.c` (aurora-silicon/linux
+  `integration/aurora` `1f38ff8f4`, read as reference only): `DART_T8020_*`. These are
+  *documentation, not observations*:
+  - `STREAM_COMMAND` `0x20`, `STREAM_SELECT` `0x34`, `ERROR` `0x40`, `ERROR_ADDR_LO` `0x50`,
+    `ERROR_ADDR_HI` `0x54`, `CONFIG` `0x60`, `STREAMS_ENABLE` `0xfc`, `TCR` `0x100`, `TTBR`
+    `0x200`;
+  - `ERROR` bit 31 is the error flag, bits 24-27 the stream, bits 0-11 the code (bit 4 read
+    fault, 3 write fault, 2 no PTE, 1 no PMD, 0 no TTBR); TTBR bit 31 is valid.
+
+**The boot.** Reboot at 04:17:39; `7.2.11-ds23p` up since 04:17:53. The client's log matches the
+round above line for line, apart from its addresses and times:
+- buffers at IOVA `0x4000` (bus `0x80ea94000`), `0xc000`, `0x20000`, `0x28000`;
+- `6.154191` the wait for `0x000200000023b549` ran out;
+- `6.154255` probe failed with error -110;
+- `29.66` `sync_state()` pending on `@3e0` and `@3d8`.
+
+The reads ran at `/proc/uptime` 26.31-26.32 s, with **no fault**: all 32 reads returned, and no
+`dmesg` line followed them. The frame `var/m1-look/20261119-041832-state-linuxobs-dart-ds23p.jpg`
+shows the Omarchy desktop.
+
+**Readings at 26.31 s, beside macOS's** (macOS columns are from the section "macOS's pmp start-up
+and endpoint-0x20 exchange (from round-10 captures)": det10's boot set-up, t 2.205-2.234; the
+entry at t 447.85; the wake at t 538.50):
+
+| Address | ds23p, 26.3 s after boot | macOS |
+|---|---|---|
+| `ps_PMP` `0x23b7003d8` | `0x1f0f00ff` | `0x1f0f00ff` at sample n 4 |
+| `ps_PMS_SRAM` `0x23b7003e0` | `0x1f0000ff` | `0x1f0000ff` at n 4 |
+| `ps_PMS` `0x23b700140` | `0x1f0000ff` | `0x1f0000ff` at n 4 |
+| DART +`0x0` (PARAMS1) | `0x0ed01020` | `0x0ed01020` (boot, wake) |
+| DART +`0x4` (PARAMS2) | `0x11037` | `0x11037` |
+| DART +`0x60` (CONFIG) | `0x80016100` | boot: read `0x80016100`; wake: read `0x10000`, written `0x80016100` |
+| DART +`0x68` / +`0x6c` | `0xf0f0f` / `0x80808` | boot: read `0xf0f0f` / `0x80808`; wake: read `0x20202` / `0`, written `0xf0f0f` / `0x80808` |
+| DART +`0x80`-`0x8c` (REMAP) | `0x03020100 0x07060504 0x0b0a0908 0x0f0e0d0c` | the same (boot) |
+| DART +`0xf0` | `0x0` | `0` (boot, wake) |
+| DART +`0xfc` (STREAMS_ENABLE) | **`0x1`** | boot: written `0`, then `1` last; entry: read `1`, written `0`; wake: written `1` |
+| DART +`0x100` (TCR sid 0) | `0x80` (TRANSLATE_ENABLE) | written `0x80` (boot, wake); entry read `0x80` |
+| DART +`0x13c` (TCR sid 15) | `0x100` (BYPASS_DART) | written `0x100` (boot, wake); entry read `0x100` |
+| DART +`0x200` (TTBR sid 0) | **`0x8080ea90`** (valid, table at `0x80ea90000`) | `0x808217dc` (det10 boot), `0x80822544` (wake): valid, other tables |
+| DART +`0x2f0` | `0x0` | written `0` (boot, wake) |
+| DART +`0x20` (STREAM_COMMAND) | `0x100000` | boot: written `0x100000`, read back `0x100000` |
+| DART +`0x40` (ERROR) | `0x6000400` | entry: read `0x6000400` |
+| DART +`0x50` (ERROR_ADDR_LO) | `0x63253bb9` | not read by macOS in the logged captures |
+| DART +`0x54` (ERROR_ADDR_HI) | `0x0` | not read |
+| DART +`0x100c` | `0x0` | entry: read `0` |
+| `pmp` +`0x44` | `0x0` | `0x10` from n 4 (running); `0` after the entry's stop |
+| `pmp` +`0x48` | `0x8` | `0x2a` before the start; `0x0c`/`0x2c` at n 4; `0x2e` after the stop |
+| mailbox A2I `0x23bc08110` | `0x107801` | not in the logged set |
+| mailbox I2A `0x23bc08114` | `0x26600` | boot: written `0x20001`; entry's stop: written `0x22200` |
+| SRAM +`0x204` `0x23b500204` | `0x64697575` (`uuid`) | `0x64697575` (`135map4`) |
+| SRAM +`0x22c` | `0x3a800` | `0x3a800` |
+| SRAM +`0x230` | `0x2d0` | `0x2d0` |
+
+- **What is the same as macOS:**
+  - the DART's PARAMS, CONFIG, `+0x68`/`+0x6c` and REMAP words, as macOS read them at boot;
+  - TCR sid 0 `0x80`, TCR sid 15 `0x100` and `+0x2f0` `0`, as macOS wrote them;
+  - STREAMS_ENABLE `1`, as macOS left it at the end of its boot set-up;
+  - STREAM_COMMAND `0x100000`;
+  - ERROR `0x6000400`, the value macOS read at the entry;
+  - the three power-state words, at macOS's sample-n-4 values;
+  - the SRAM header words: SRAM answers, and holds the boot-argument offset and size macOS read.
+- **What differs from macOS:**
+  - TTBR sid 0 points at another table (`0x80ea90000`; it differs in every boot under macOS too);
+  - `pmp` +`0x44` reads `0x0`, not macOS's `0x10` while `pmp` runs;
+  - +`0x48` reads `0x8`, a value not read under macOS;
+  - I2A control reads `0x26600`, not macOS's written `0x20001` (boot) or `0x22200` (stop).
+- By the reference's bit layout, ERROR `0x6000400` has the flag (bit 31) clear, stream 6 in
+  bits 24-27, and code `0x400`: none of the five named fault bits 0-4 is set. This is
+  documentation applied to a reading; what code bit 10 means is not read.
+- `0x80ea90000` (the TTBR's table) lies 16 KB below the client's first buffer (bus
+  `0x80ea94000`): two readings set side by side, nothing more.
+
+**After.** `systemctl reboot` at 04:18:43. Stock `7.3.0-0test5-1-ARCH`, up since 04:19:00,
+answered at 04:19:22. Its eleven words read as in every stock reading tonight
+(`0x444/0x666/0x333`, +`0x44` `0x0`, +`0x48` `0x2a`, `0x20001`/`0x20001`, `0x1f0000ff`,
+`0x0f000300`, `0x1f0000ff`, `0x1f0002ff`). The frame
+`var/m1-look/20261119-041925-state-linuxobs-dart-end.jpg` shows the desktop.
+
+### Left out
+
+- The DART's page tables at `0x80ea90000`, and what IOVAs they map: not read.
+- The DART's other streams' TCR and TTBR words, beyond sid 0, sid 15's TCR and `+0x2f0`: not read.
+  STREAM_SELECT (`+0x34`, which macOS only wrote) was not read either.
+- The SRAM beyond the three header words: the boot-argument block at `+0x3a800`, `__DATA`, and
+  `0x23b549000`. Whether the block holds macOS's 54 records is not read.
+- The values of these registers during the client's 0.07-6.15 s window, and before the client
+  ran: not read. Whether macOS's own boot leaves ERROR at `0x6000400` before the start is not
+  logged.
+- What ERROR_ADDR_LO `0x63253bb9` refers to: not read.
+
+### M1 left
+
+In stock Omarchy (`7.3.0-0test5-1-ARCH`, up since 04:19:00), with the default boot entry
+untouched. ds23p's kernel stays on the ESP under `s2r/ds23p`. The read log
+`/var/lib/m1power-pmpdart.log` was removed before the reboot, and its absence was checked on stock.
+The claim is released.
