@@ -51,3 +51,25 @@ bear most on D6.
   at the commit point; both lie inside `enter`, which the glue calls as one step. As with gap X4,
   the glue needs a hook there, or the owner accepts the arming just before `enter` (which differs
   by D3's reads only) and R61's four as the logic's last writes or right after `enter` returns.
+
+## Gaps of the eleventh fill and the review (Z11-Z13), carried from deepsleep-tests-r10 TESTS.md section 16 at d628d4a
+
+- **Z11. What the SIO family reads after C12's turn-on with bit 28.** macOS's idle value of
+  SIO_BUSIF, SIO and SIO_CPU is `0x1400024f` (state 4; spec l. 2096-2115, 4.2a), the wake snapshot
+  has them `0x0f0003ff` right after their turn-on (l. 5036). If on the machine C12's turn-on (form
+  4, ending with bit 28) lets them drop to state 4 before C5's reads, C5 with C12 always reads only
+  (its gate asks bits 4-7 = `0xf`), and C5 never acts with C12 on. The suite's default machine
+  does that (the capture's value after a bit-28 write); C5's tests with C12 use a machine where the
+  family stays at 0xf. Settles it: one read of each of the three right after C12's turn-on on the
+  M1, and whether C5's gate is meant on the state or on the request.
+- **Z12. D6 (b) and C15's write of `0x23b718004`.** D6 (b) forbids any write of `0x23b718004` after
+  a D6 wait (R22). C15 (immediately before R22a) writes `0x23b718004` = `0xf` after reading it; on
+  R22a's failure rule 3 puts it back to the value read, which under Linux (L23's machine, `0`) is
+  R22's own value. The suite lets the put-back write through (once, to the value read) and forbids
+  any other write of that word after the wait.
+- **Z13. D8 (a) "valid inside the glue's commit-point step".** While `enter(&mut self, ..)` runs the
+  glue cannot call `c3_readings(&self)` on the same driver (Rust's borrow rules; a `no_std` driver
+  kept in a static is no different without `unsafe`). The suite hands the nine values to the step
+  as its argument (`Hw::commit_point(&mut self, c3: &[Option<u32>; 9])`), the same nine the
+
+Reviewer's note on Z12 (review of d628d4a): D6 (c) rule 3 would put `0x23b718004` back to the value C15 read. Under Linux that value is 0, which is R22's trigger value (the write the always-on side's sleep step follows, R62), which D6 (b) forbids. No current test reaches this case (capture D's pre-value is `0xf`, and C15 comes after R16). The spec should settle it before the driver implements rule 3 for that word.
