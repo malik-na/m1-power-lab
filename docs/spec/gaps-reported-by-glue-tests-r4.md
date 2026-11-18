@@ -79,8 +79,12 @@ spec stage answers. G4, G13, G18 and G19 bear most on what the client does.
   times the longest gap observed for that word in the captures"; the spec gives that gap only for
   `0x000200000023b549` (0.59 s, det34b). Not given: the gaps for HELLO, the EPMAP words, the IOP
   power `0x20`, the AP echoes, `0x0`, the two answers at boot, `0x0020900000630000`, AP `0x201`'s
-  echo and `0x0070000000000201`. Tests: 5.89 s for `0x000200000023b549`; 300 ms for the entry's
-  three answers in one test; 100 us elsewhere.
+  echo and `0x0070000000000201`. Tests: 5.89 s for `0x000200000023b549`; 1 ms for the entry's
+  three answers in one test; 100 us elsewhere. (Review, amended: the fill had 300 ms for those
+  three, which could fail a spec-correct client: 1.7h bounds their gaps by 17 ms
+  (`0x0020800000630000` to `…550000`, T-0.816 to T-0.799) and 2 ms (R4 to R6's start, T-0.432 to
+  T-0.43), so a bound of ten times that meets D11 (d) and need not wait 300 ms. Asked: the gaps
+  for these words, so that a test can hold the floor itself.)
 - **G20. SET_IOP_POWER `0x220`'s word.** L30 names it; its 64-bit word is not in the spec. Tests take
   the reference's layout (section 0: type 6 in bits 52-59): `0x0060000000000220`.
 - **G21. The kernel library's own waits.** D11 (d): "every wait of the client is bounded". If the
