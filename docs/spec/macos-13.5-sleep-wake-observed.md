@@ -45,8 +45,12 @@ the disarm, watchdog 1 disarmed on every return to Linux, the failure record's f
 hypervisor's round-10 captures, the round-11 runs in which the instrument dropped the word
 `0x0020e00000550000` (section 1.7h, R71-R75), `pmp` under Linux (not started by the stock kernel,
 started by an earlier module; L29, L30), and starting, messaging and stopping `pmp` under Linux as a
-candidate of the kernel side's, with decisions D9-D11 (8.2 C18) (round 15, 2026-11-19, listed in
-"Changes in round 15" at the end, with the earlier rounds' lists below it). It states what macOS did, not
+candidate of the kernel side's, with decisions D9-D11 (8.2 C18) (round 15, 2026-11-19), and with
+two points of the glue's C and arm64 review settled as decisions: the first arming of watchdog 1
+moved to the glue's first device access of its sleep step, and the "left armed" exception ending in
+a panic, with Linux's own driver of watchdog 1 not active as a precondition of a `wdt` run (D7 (a),
+(c), (e); L31) (round 15b, 2026-11-19, listed in "Changes in round 15b" at the end, with the earlier
+rounds' lists below it). It states what macOS did, not
 why, and not what is
 needed for sleep to work; the candidates of 8.2 are differences, not causes.
 Nothing here comes from any Linux sleep driver's code. Section 12 records what was **read on the
@@ -4810,12 +4814,28 @@ After the SoC comes up, before macOS is back at idle:
   hangs before the commit"; L16, L17, L25; *places revised round 14, gap Z10*): *with `wdt` = N
   set, the glue arms watchdog 1 before the entry starts, so that a hang before the commit ends by
   itself.* In test form (the glue):
-  (a) *(round 14; replaces "at entry start (8.2's definition ...)")* immediately before it calls
-  `enter`, with no access of its own in between, the glue makes R61's four writes:
-  `0x23d2b001c` = 0, `0x23d2b0010` = 0, `0x23d2b0014` = N x 24,000,000, `0x23d2b001c` = 4.
-  The round-13 place (entry start, inside `enter`) and this one differ only by D3's reads (each
-  coprocessor's domain word and +`0x44`, read before any write of the entry): arming first also
-  ends a hang in those reads, and needs no hook inside `enter`;
+  (a) *(round 15b, review point 2; replaces round 14's "immediately before it calls `enter`, with
+  no access of its own in between")* **R61's four writes are the glue's first device accesses of
+  its sleep step** (the step in Linux's suspend path in which the glue parks cores 1-7 and calls
+  `enter`): `0x23d2b001c` = 0, `0x23d2b0010` = 0, `0x23d2b0014` = N x 24,000,000, `0x23d2b001c` = 4.
+  In that step no device access of the glue's precedes them: no read of any word (the pre-entry
+  snapshot of `snap` 1, 2 or 4, the probe's reads with `probe=1`, any other diagnostic read), no
+  record or trace mark (each an SPMI command), and they come before the glue parks any core and
+  before it calls `enter`. Only (e)'s check, which makes no device access, comes before them.
+  Between them and `enter` the glue may make its diagnostics' accesses and park the cores; all of
+  these are then under the watchdog. The four writes themselves are the step's only accesses a
+  hang in which watchdog 1 does not end. Reasons: (i) round 14's place left the glue's own
+  pre-entry accesses uncovered, and they are many: with `snap=4` the glue read the 792 words of
+  macOS's commit list, and in ds15 six coprocessors' words besides, with cores 1-7 parked and
+  before the logic's first access (evidence "Run ds13", "Run ds15", L15), and a read that does
+  not answer hangs core 0 with nothing armed, as ds20's C3 and C5 runs stayed dark until the power
+  button (L25); (ii) the count restarts at R15's write of `0x23d2b0010` inside the entry and again
+  at (b), so moving the first arming earlier lengthens only the first stretch N must exceed (from
+  (a) to R15: the glue's pre-entry diagnostics, the parking and the entry's first steps), not the
+  entry's (d); (iii) the round-13 and round-14 places also covered D3's reads (each coprocessor's
+  domain word and +`0x44`, read before any write of the entry), and this one still does, with no
+  hook inside `enter`. What Linux's suspend path does before the glue's sleep step (device
+  suspend, the other platform steps) is outside the glue and not covered by watchdog 1;
   (b) at the commit point, in the glue's commit-point step (D8 (b)), it makes them again after
   every other write of its own, as R61 and L17 have it (the count restarts there);
   *(round 14c, gap GL1)* so R61's four are the last device writes before the **first** core's
@@ -4826,15 +4846,35 @@ After the SoC comes up, before macOS is back at idle:
   *(round 14c, gap GL7; (c) widened from D6's failure return to every return)* **on every way
   back to Linux's suspend path after (a)**, whatever brought it there: D6's failure, a `run_on`
   the glue made that was not answered (its -ETIMEDOUT), `snap=1`'s stop at the commit point,
+  *(round 15b)* `snap=4`'s return without calling `enter`, an error while parking the cores,
   any other error `enter` or the glue returns, and the return after a wake. On each of them the
   disarm `0x23d2b001c` = 0 is **the glue's last device write before it returns**, after its
   record (D8 (c)) and after every parked core is back with Linux. **One exception:** when a core
   the glue parked cannot be given back (its `run_on` not answered, or not answered when it is to
-  be released), the glue writes its record and returns the failure **without** the disarm, and
-  watchdog 1 resets the machine N s later; if that happens before (a) (a core not answering when
-  the glue parks it), the glue makes R61's four writes then, so that this case too ends by
-  itself. Reasons: (i) with (a) the watchdog counts from before `enter`, so any way back that
-  leaves it armed resets a Linux that has resumed, N s later; (ii) J read watchdog 1's bite and
+  be released), *(round 15b, review point 1; replaces "returns the failure without the disarm, and
+  watchdog 1 resets the machine N s later; if that happens before (a) ..., the glue makes R61's
+  four writes then")* the glue writes its record and then **panics** (Linux's `panic()`), with
+  watchdog 1 still armed: no disarm, no other device write after the record, and **no return to
+  the suspend path**. Since (a) is now the glue's first device access and precedes the parking,
+  watchdog 1 is armed whenever a core can fail to answer, so the round-14c clause for a core lost
+  before (a) is gone. Reasons for the panic: (1) a return to the suspend path does not end in a
+  reset when Linux's own driver of watchdog 1 is active: on the M1's stock kernel systemd holds
+  `/dev/watchdog0`, which is watchdog 1, with a 30 s runtime timeout (L31), and by the glue
+  reviewer's report of Linux's code (not read for this spec) `apple_wdt`'s resume step restarts the
+  watchdog when it is active and systemd then keeps pinging it, so the machine would run on with a
+  core missing; (2) a panic does not resume: no device's resume step runs and no user process runs
+  again, so nothing of Linux's pings or rearms watchdog 1, whatever (e) found, and the bite comes at
+  most N s after the last restart of the count ((a), R15, (b) or the wake), unless the panic's own
+  restart comes first; (3) a panic in the glue's sleep step has ended in a reset in both recorded
+  runs in which one was taken: ds10 and ds11 ('P' records, on `snap=1`'s way back; the reset about
+  2 s after the panic, not after `panic=10`'s 10 s, cause of the speed unknown) (evidence "Run
+  ds10", "Run ds11"); the lab's command lines carry `panic=10` (`var/deepsleep/ds20.cmdline`);
+  (4) the record is made before the panic, so the reset leaves it standing in the power chip. Not
+  read: a panic with a parked core that does not answer (Linux stops the other cores at a panic and
+  waits a bounded time for them; that a core which does not answer then delays the reset by more
+  than that is not observed), open question 81. Reasons for the rest of (c): (i) with (a) the watchdog counts from before
+  `enter`, so any way back that leaves it armed resets a Linux that has resumed, N s later (with
+  (e) met, nothing of Linux's touches it after the return); (ii) J read watchdog 1's bite and
   control at the wake entry **as written** (1.7c; K the same), so a return after a wake also
   finds it armed, with its count restarted from about 0 at the power-up, and needs the same
   disarm; (iii) the disarm last means every step of the glue's way back (its record, the cores'
@@ -4846,12 +4886,36 @@ After the SoC comes up, before macOS is back at idle:
   (d) with `wdt` unset it makes none of these writes. The logic writes nothing to watchdog 1's
   bite or control in any case; R15's write of watchdog 1's count (`0x23d2b0010` = 0) inside the
   entry restarts the count and does not disarm it. N must exceed the entry's duration (ds20 used
-  30). What the readings say next to it: in five macOS runs the
+  30) *(round 15b)* and each of the stretches (a) to R15, R15 to (b), (b) to the power-down; the
+  first now holds the glue's pre-entry diagnostics, whose duration is not read (open question
+  82). What the readings say next to it: in five macOS runs the
   instrument armed watchdog 1 (150 s) at the start of E1, 7.5 s before T, and again at the
   commit, and each powered down and woke at the alarm (`det26`, `det27`, `det28`, `det30`, `det31`;
   1.7g, [HV-CHANGED]); in the two C3 runs of the same recipe, which did not reach a commit, the
   machine restarted about 150 s after that first arming (1.7g); ds20's C3 and C5 runs, with
   watchdog 1 armed only at the commit, stayed dark until the power button (L25).
+  (e) **Linux's own driver of watchdog 1** *(new round 15b, review point 1)*. A `wdt` run has a
+  precondition: when the glue's sleep step starts, **Linux's watchdog core is not driving watchdog
+  1**: the device `23d2b0000.watchdog` (`apple_wdt`, `/dev/watchdog0`) is neither active (opened
+  and started by a user such as systemd) nor marked as running in hardware. The glue checks this
+  from Linux's own watchdog state, before (a), with no device access. If it does not hold, the glue
+  makes no device access at all in that sleep, logs the reason, and returns a failure (-EBUSY) to
+  the suspend path: nothing armed, nothing to disarm, and no entry. With `wdt` unset there is no
+  check. Reasons: (1) one watchdog with two owners: the glue's disarm on every way back ((c))
+  would stop a watchdog that Linux's driver and systemd hold as running, and by the reviewer's
+  report `apple_wdt`'s resume restarts the count and the reset with the bite the glue left, N x
+  24,000,000 (R61's `0x23d2b0014`), not the driver's own timeout, so after a wake the machine's
+  reset time would be the glue's N; (2) the panic of (c) ends in a reset without this
+  precondition, but the precondition makes every other way back plain: the glue's arming and
+  disarm are then the only writes to watchdog 1 between the sleep step and Linux's resume; (3) a
+  refusal ends the run at once with the M1 awake and answering, which is the safe failure (the
+  lab's runner already refuses a sleep without `wdt`, `AGENTS.md`). The lab's command lines carry
+  `systemd.watchdog_sec=0` (ds20's, `var/deepsleep/ds20.cmdline`, and ds2-ds3's, evidence "What
+  was run"); whether that leaves `apple_wdt` inactive on the test kernels, and whether
+  anything marks it running in hardware at boot, is **not read** (L31, open question 81). If
+  the reading finds it active with that command line, every `wdt` run is refused until the
+  command line or the system's watchdog setting is changed; that change is the lab's, not the
+  glue's.
 - **D8 — a decision about Linux, not an observation of macOS** (new round 14, gaps Z1, Z4, Z10):
   *the tested logic and the kernel glue meet at three points inside one call of `enter`; the
   logic exposes these, the glue does the rest.*
@@ -4927,7 +4991,8 @@ After the SoC comes up, before macOS is back at idle:
   `0x23d0d9378` = 1; **(2)** cores 1-7 returned to Linux; **(3)** watchdog 1 disarmed
   (`0x23d2b001c` = 0), the glue's last device write; **(4)** the failure returned to the
   suspend path. The same order on every other way back of D7 (c) (its record, the cores, the
-  disarm last), and on its exception (a core not given back) (1) and (4) only. Reasons: the
+  disarm last), and on its exception (a core not given back) *(round 15b; replaces "(1) and (4)
+  only")* (1) and then the panic of D7 (c): no (2), (3) or (4). Reasons: the
   record is raw polled SPMI commands, and a controller that does not answer would hang the glue
   there; before the disarm that hang is ended by watchdog 1, after it by nothing; and with the
   record first, a hang in (2) still leaves a record that names the wait that ran out (ds20's C5
@@ -5280,7 +5345,7 @@ D4, the seven first-port domain words read request 0 at the commit.
 | D1-D4 | as stated | Decision |
 | D5 | each candidate of 8.2 behind its own switch, off by default; (a)-(f) of D5 | Decision |
 | D6 | *(revised round 14; round 14b; round 14c)* R16's or R22a's wait runs out (no other wait): no further entry step; no read added; each written word put back once, in reverse order of first writes (1.9's order for domains): domains by D1 (request 4 by form (4r)), other words read first to the value read, words never read first left as written; nothing put back in coprocessor blocks, SPMI, the CPU start/stop block, the watchdog block or the pair `0x23b718000`/`004` (no write of either after the wait, whatever C15 read); bounded put-back waits; failure returned, record names the wait: its word, and the kind and core of the wait's last read (32-bit read, core 0), not a put-back access's | Decision (round 13; ds20 C5 hung, L25); form (4r) from the always-on program's decode |
-| D7 | *(revised round 14; round 14c)* glue, `wdt` = N: R61's four writes just before `enter` and again in the commit-point step, last before the first core's final write (the probe record after them with `probe=1`); disarmed as the glue's last device write on every way back to Linux (D6's failure, a `run_on` not answered, `snap=1`'s stop, any error, the wake), except when a parked core cannot be given back (left armed; armed then if not yet); none without `wdt` | Decision (round 13); macOS [HV-CHANGED] 5/5 power-downs with the early arm (1.7g) |
+| D7 | *(revised round 14; round 14c; round 15b)* glue, `wdt` = N: precondition, Linux's watchdog core not driving watchdog 1 (checked without device access; else -EBUSY, no device access); R61's four writes as the glue's first device accesses of its sleep step (before any diagnostic read, record, trace mark, parking or `enter`) and again in the commit-point step, last before the first core's final write (the probe record after them with `probe=1`); disarmed as the glue's last device write on every way back to Linux (D6's failure, a `run_on` not answered, `snap=1`'s stop, `snap=4`'s return, any error, the wake), except when a parked core cannot be given back (record, then panic, left armed, no return); none without `wdt` | Decision (round 13); macOS [HV-CHANGED] 5/5 power-downs with the early arm (1.7g); L31; panics in the sleep step reset (ds10, ds11) |
 | D8 | *(new round 14; round 14b; round 14c)* logic and glue: `c3_readings() -> [Option<u32>; 9]`, `None` until read in this `enter`, for after `enter` returns; the commit-point step called after R38's third write and C3 (iii), before the final writes, with the same nine as its argument; one record per step (`snap=2`/walk, else C3 with `cand_c3`, else 'W'), no glue access after the step but `probe=1`'s record after the first final write; C3 record: a 4-bit code per slot plus the latest odd value in part (f); on D6's return the glue writes the failure record, gives the cores back, then disarms watchdog 1 | Decision (round 14) |
 | R70 | no write to `0x23b058000`, `0x23b05c000`, `0x23b060000`; only 32-bit reads of the first word of the last two pages | all captures, 48 boots (touch maps) |
 | R71 | *(new round 15)* `pmp`'s start at boot: SRAM header, boot-argument block written back as read, translator, +`0x8114` = `0x20001`, +`0x44` = `0x10` | det33, det34b; the block `135map4`, the translator `det10` (one boot each) |
@@ -6522,7 +6587,7 @@ readings of Linux, 66-67 of macOS under the hypervisor.
     metal):* one entry with `cand_c12` and `cand_c5` on, its record carrying C5's own four reads
     (8.2 C5, round 14: PMS, then the three, 32 bits by core 0, immediately after C12's last
     turn-on write and before C5's first access to the twelve). Way out without hands: watchdog
-    1 armed just before `enter` (D7 (a), N = 30).
+    1 armed before `enter` (D7 (a), N = 30).
 
 75. **A delayed 0x55 word** (round 15; R75, 1.7h). Is the change (060000 to `0x222`, PMP and
     PMS_SRAM to `0x1000030f`) tied to the word whenever it arrives, or to something else in macOS's
@@ -6557,6 +6622,26 @@ readings of Linux, 66-67 of macOS under the hypervisor.
     reaches `0x333/0x444/0x222` (by the stop, as det36's first) and the chip powers down again is
     not read. *Settles it:* det37's recipe with a second idle sleep after the wake. Way out without
     hands: the alarm and watchdog 1 as det33.
+81. **Linux's own driver of watchdog 1 on the test kernels** (round 15b, Linux; D7 (c), (e), L31).
+    Whether `apple_wdt` is active, or marked running in hardware, on a test kernel booted with the
+    lab's command line (`systemd.watchdog_sec=0`, as `var/deepsleep/ds20.cmdline`), and so whether
+    D7 (e)'s check lets `wdt` runs through. *Settles it (Linux, bare metal, read-only, awake):* on
+    such a boot and, for comparison, on the stock kernel: `/sys/class/watchdog/watchdog0/` `state`,
+    `timeout`, `bootstatus`, `identity` (and `hw_running` if present); `systemctl show -p
+    RuntimeWatchdogUSec -p RebootWatchdogUSec`; the journal's "Watchdog" lines since boot; which
+    processes hold `/dev/watchdog` and `/dev/watchdog0` open; and `0x23d2b0014`, `0x23d2b001c` read
+    32-bit over `/dev/mem` (the bite and control as Linux left them; whether m1n1 or Linux armed it
+    at boot). Second, for D7 (c)'s panic: one `wdt` run in which the glue takes the exception path
+    on purpose (a parked core held from answering its release), with the time from the record to
+    the reset read on the M3 (the M1's port dropping) and the fault shadow and record read after;
+    it says whether the panic's restart or watchdog 1's bite ends it, and how long a core that does
+    not answer delays it. Way out without hands: watchdog 1, armed by D7 (a).
+82. **The duration of the glue's pre-entry work** (round 15b, Linux; D7 (a), (d)). From D7 (a)'s
+    arming to R15's restart of the count, with each diagnostic option (`snap` 1, 2, 4 and
+    `probe=1`) and with none: the glue's trace marks' times or the kernel log's timestamps around
+    the sleep step. It says whether N = 30 covers the first stretch with the 792-word snapshot (ds13
+    and ds15 suggest seconds at most: `echo mem` returned 4 s after the start in ds13, including
+    the suspend and resume, but the stretch itself was not timed).
 
 ## 10. With and without the cable
 
@@ -7156,6 +7241,17 @@ captured on. The numbers L1-L15 are for reference from tests and from section 4.
   and woke** (bare metal: a restart 5-30 s after the entry or its end, or no wake; hypervisor: the
   CPUs exited to the instrument, a restart, or no wake). Not started: every other bare-metal run of
   11-14 to 11-16, the clean-room runs ds2-ds20, lx1, lx2, lx5-lx8, lx10, lx15, dsh1, dsh2.
+- **L31 (Linux awake, stock kernel 7.3.0-0test5, 2026-11-19; read-only; from the orchestrator's
+  brief of round 15b, not yet in the evidence file; added round 15b).** **systemd (pid 1) holds
+  `/dev/watchdog0`**, which is `23d2b0000.watchdog`, Linux's `apple_wdt` on watchdog 1 (the
+  watchdog of R61 and D7), with `RuntimeWatchdogUSec=30s`; the journal has "Watchdog running with a
+  hardware timeout of 30s". This boot had the stock command line, not the lab's test command line
+  (which carries `systemd.watchdog_sec=0`); the state of `apple_wdt` under the test command line,
+  `/sys/class/watchdog/watchdog0/state`, and the bite and control words were not read (open
+  question 81). *Not an observation:* the glue's reviewer reports from Linux's code that
+  `apple_wdt`'s resume step restarts watchdog 1 (count 0, reset enabled) when it is active, after
+  the platform's wake step; this spec has not read that code and uses the report only as the
+  reason for D7 (c) and (e).
 
 ## Appendix: scripts and extracts (all in `var/spec/`)
 
@@ -7271,6 +7367,50 @@ written but hold their awake value. The 137 domain words are in 4.2a.
 - `0x23d0e0000`..: `0x23d0e2100` `0x1000100`.
 - `0x23d240000`..: `0x23d240000` `0x80100010`; `0x23d240004`-`0x23d24001c` `0x81100100`; `0x23d240020` `0x81100000`; `0x23d240024`-`0x23d240034` `0x81100100`; `0x23d240038` `0x81100000`; `0x23d24003c` `0x81100100`; `0x23d240040` `0x1101100`; `0x23d240044`-`0x23d24004c` `0x82100100`; `0x23d240050` `0x80100100`; `0x23d240054` `0x81100000`; `0x23d240304` `0x10000000`; `0x23d240308` `0x1000000`; `0x23d240314` `0x1000000`; `0x23d240320` `0x0`; `0x23d240330`-`0x23d240370` `0x0`.
 - `0x23d2c0000`..: `0x23d2c0000`-`0x23d2c000c` `0x0`; `0x23d2c0010` `0x880ff04`; `0x23d2c0014` `0x7`; `0x23d2c0018` `0x1`; `0x23d2c001c` `0xff0`; `0x23d2c0020`-`0x23d2c003c` `0x0`.
+
+## Changes in round 15b (2026-11-19: two points of the glue's C and arm64 review; watchdog 1's first arming and the "left armed" exception)
+
+Inputs: the spec at `715053b` (round 15, gap answers G1-G24 of the `pmp` client); the
+orchestrator's brief of round 15b with the two points of the independent C and arm64 review of the
+glue (the review itself, the glue, the driver's `src/` and the tests not read) and the reading on
+the M1 it carries (L31); evidence `docs/evidence/2026-11-17-deepsleep-clean-runs/README.md`
+sections "Run ds10", "Run ds11", "Run ds13", "Run ds15" and ds20's command line `var/deepsleep/ds20.cmdline`. No new capture or run. The evidence
+file is not changed. Both answers are decisions about Linux, not observations of macOS. Inline
+marks "round 15b" are this round's.
+
+**Review point 1 (D7 (c)'s "left armed" exception and Linux's own watchdog driver):** decided in
+D7 (c) and the new D7 (e). (c): when a parked core cannot be given back, the glue writes its record
+and **panics**, watchdog 1 still armed, with no disarm and no return to the suspend path (was:
+return the failure without the disarm). A panic does not resume, so `apple_wdt`'s resume step and
+systemd's pings never run, and both recorded panics in the glue's sleep step ended in a reset (ds10,
+ds11); if the panic's restart does not come, watchdog 1 bites. (e): a `wdt` run
+requires that Linux's watchdog core is not driving watchdog 1 (not active, not marked running in
+hardware), checked by the glue without a device access before (a); otherwise the glue refuses the
+entry (-EBUSY) with no device access. Reason: the glue's disarm and `apple_wdt`'s resume would
+otherwise fight over one watchdog, and the resume would carry the glue's bite N. To read on the M1:
+open question 81 (the watchdog's state under the lab's command line with `systemd.watchdog_sec=0`,
+the bite and control words, and one run that takes the exception on purpose). D8 (c)'s exception
+order follows ((1), then the panic).
+
+**Review point 2 (accesses before the first arming):** decided in D7 (a): the first arming moves.
+R61's four writes are now **the glue's first device accesses of its sleep step**, before any
+diagnostic read (`snap` 1, 2, 4's pre-entry snapshot, `probe=1`'s reads), record, trace mark,
+the parking of cores 1-7 and `enter` (was: immediately before `enter`, with no access between).
+Only D7 (e)'s check, which is not a device access, precedes them; the four writes themselves are
+the step's only accesses not covered. Reason: the pre-entry snapshot is hundreds of reads (792 in
+ds13, more in ds15) made before round 14's place, and a hang in a read is what left ds20's runs
+dark (L25); the count restarts at R15 and at (b), so N grows only by the pre-entry work (open
+question 82). With (a) before the parking, the round-14c clause "if that happens before (a), the
+glue makes R61's four writes then" is removed, and `snap=4`'s return without `enter` and an error
+while parking join (c)'s list of ways back that end in the disarm.
+
+**Observations added:** L31 (systemd holds watchdog 1 on the stock kernel, 30 s). **Decisions
+changed:** D7 (a), (c), (d) (N's stretches), (e) new; D8 (c) (the exception's order). **Open
+questions added:** 81, 82; 74's way out reworded ("before `enter`").
+
+**Sections changed:** status; 8 (D7, D8 (c)); 8.1 (row D7); 9 (74, 81, 82 new); 12 (L31 new).
+
+**Corrections:** none to this spec's own statements.
 
 ## Changes in round 15 (2026-11-19: `pmp`'s start and its endpoint-`0x20` words under macOS, the round-11 runs that dropped `0x0020e00000550000`, `pmp` under Linux; R71-R75, L29-L30, candidate C18, decisions D9-D11)
 
