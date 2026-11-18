@@ -24,9 +24,13 @@ powered down, and two runs in which it left only the pending virtual interrupts 
 did not (section 1.7e, E7) (round 10, 2026-11-18), and with two runs in which the instrument
 cleared the power-gate header word `0x23b71c000` before the cores' final writes and the chip
 still powered down and woke, a second Linux reading of that word, and the requirements since
-round 6 restated as statements a test can check (sections 1.7f, 8.1) (round 11, 2026-11-18,
-listed in "Changes in this round" at the end, with the earlier rounds' lists below it). It
-states what macOS did, not why, and not what is needed for sleep to work.
+round 6 restated as statements a test can check (sections 1.7f, 8.1) (round 11, 2026-11-18),
+and with the Linux readings of run ds19 and its probe runs (each core clean at its final write,
+the SoC still up) and every observed difference between macOS's state at and before its commit
+and Linux's written out as candidate requirements C1-C17, each to be tried behind its own switch
+(section 8.2, decision D5) (round 12, 2026-11-18, listed in "Changes in this round" at the end,
+with the earlier rounds' lists below it). It states what macOS did, not why, and not what is
+needed for sleep to work; the candidates of 8.2 are differences, not causes.
 Nothing here comes from any Linux sleep driver's code. Section 12 records what was **read on the
 machine under Linux** (the state a driver starts from); every such statement is marked
 **[LINUX]** and is an observation of Linux, not of macOS.
@@ -2773,6 +2777,17 @@ the whole entry does is not read on either. Row 4: two more power-downs with not
 the cores (the instrument's clearing), one of them with an IPI-borne virtual FIQ cleared on core
 3 (E7). Rows 13 and 16: the same values in five captures.
 
+*(Round 12.)* **The Linux side of rows 4, 6 and 12 with the round-8 driver** (L21-L24). Row 4: at
+each core's final write nothing is pending at any of the eight cores (`ISR_EL1` F, I, A and
+`IPI_SR_EL1` clear, L22), the state every macOS power-down had; the timers of cores 0, 1 and 7
+are not on and unmasked, but `CNTP_CTL_EL02` is enabled (masked, condition met) on all three and
+core 0's EL2 physical timer likewise (L23), where macOS's guest physical timer is disabled and
+the instrument's EL2 timers stopped at every power-down: **differs**, in enables only (8.2
+C13). Row 12: ds19 has L17's outcome (no wake, the watchdog-1 reset, `0x0201` `00`, `0x9f03`
+`50`). Row 6: the commit walk reads the 118 words of L1 at Linux's commit; at the time of writing
+12, among them `DCS0-3+0x7b0` = 3 (macOS 0): that difference reaches the commit (L24). The
+observed differences a driver could act on are written out as candidates in 8.2.
+
 ### 4.4a The conditions the reference names for the power-down, against the M1 readings (round 9)
 
 *Reference, not an observation.* The reference (`docs/reference/asahi-aurora-sleep-deep-dive.md`,
@@ -2841,6 +2856,20 @@ cores' final writes and the M1 still powered down and woke (2 of 2, [HV-CHANGED]
 reference's T8140 outcome for a clear word (a 5 s reset) did not occur. On the M1 the word's
 bit 31 at the commit is therefore not shown to matter; only the word clear through the whole
 entry, and `0x23b71c040`, remain untried. C4 and C17: two more captures with the same values.
+
+*(Round 12.)* **C4** is now read on the Linux side (L22, L23): nothing pending at any core's final
+write, so C4's condition as the M1 observations state it is met by Linux; what still differs is
+that some timers are enabled (masked) under Linux. **C3**: macOS's kernel sets `0x23b71c000` at
+boot as well as at every wake (A's and B's page-touch map reads it 0 at boot; 8.2 C6); under
+Linux nothing sets it. **C6**: SEP is power-gated by its automatic power at every macOS reading,
+awake included, and on under Linux (8.2 C1). **C10**: three words whose value pattern matches the
+reference's "SoC perf word" and DCS state (`0x23b058000`, `0x23b05c000`, `0x23b060000`: `0x333`,
+`0x444`, `0x222` under macOS, `0x444`, `0x666`, `0x333` under Linux) and the one DRAM-controller
+word that differs (`DCSn+0x7b0`, 0 / 3, still 3 at Linux's commit) are now named as candidates
+(8.2 C3, C4); the correspondence with the reference's words is by value only. **C12, C13**: the
+request-4 domains, the second port's domains, MSG and the two words latched busy are candidates
+C5, C9, C11. Every reference condition with an M1 word now has either a reading on both sides or
+a candidate in 8.2.
 
 ## 5. Asleep
 
@@ -4291,6 +4320,24 @@ After the SoC comes up, before macOS is back at idle:
   these words from Linux's values (`0x22ff`, `0x2ff`, `0x3ff`) are those of a bit-28-clear word
   (form 1, 4.3; seen for the first three at boot, through the hypervisor's guard, A3); the four
   never-written ones have no observed turn-off (R56).
+- **D5 — a decision about Linux, not an observation of macOS** (Naeem's decision of 2026-11-18,
+  "Faster cycles", `docs/agents/cleanroom-cycle.md`; recorded round 12): *each candidate
+  requirement of section 8.2 (C1-C17) is implemented behind its own module switch, off by
+  default, so that one kernel can try them on the machine one by one or in combination.* In test
+  form: (a) with a candidate's switch off the driver makes none of that candidate's accesses and
+  behaves as section 8 alone asks; (b) with it on, the driver makes the candidate's accesses at
+  the place 8.2 gives, in addition to everything section 8 asks, and section 8's requirements
+  still hold; (c) any combination of switches may be on; candidates whose places coincide run
+  in ascending number; (d) every write a candidate makes follows a 32-bit read of the same word
+  by the same core, and is not made when that read already shows the candidate's target; (e) a
+  candidate's wait is bounded and the entry goes on when it ends, whatever the word then reads
+  (no bound is observed; a test checks that the wait ends); (f) at the wake, a word or domain a
+  candidate changed is put back to the value (for a domain word, the request) the candidate's
+  read found, by D1's rule for domains and by a write of the value read for other words, after
+  R30's power-manager step (R31's memory-controller step for DRAM-controller words), **unless
+  macOS's own wake writes that word** (R30, W1-2, W1-6), in which case the wake's write as
+  section 8 has it governs and nothing is put back. Nothing in the captures supports or
+  contradicts D5; it is how the candidates are to be tried, not a statement about the machine.
 
 ### 8.1 The requirements since round 6, as statements a test can check (round 11)
 
@@ -4507,6 +4554,409 @@ D4, the seven first-port domain words read request 0 at the commit.
 | R67 | entry: `080`, `088` only; wake: `000`, `040` set; commit: no test | fifteen; five |
 | R68, R69 | none (bases of R59 and R67) | [HV-CHANGED] |
 | D1-D4 | as stated | Decision |
+| D5 | each candidate of 8.2 behind its own switch, off by default; (a)-(f) of D5 | Decision |
+
+### 8.2 Candidate requirements C1-C17 (round 12)
+
+**What these are.** The Linux driver now reaches its commit with every core clean at its final
+write (L22, L23: no interrupt pending, no timer on and unmasked; R59 met as far as read) and the
+SoC still stays up until an armed watchdog resets it (L21). Each entry below is an **observed
+difference** between what macOS does or leaves at and before its commit and what the Linux
+readings (section 12) show, which a driver could act on, written so that a test can hold a
+driver to it behind its own switch (D5). **A candidate is not a requirement of section 8 and is
+not claimed to be needed for the power-down**: none has been tried on the machine. The order is
+the spec stage's judgment of how likely each is to keep the SoC up after Linux's commit; the
+reasons cite the reference (*Reference*, `docs/reference/asahi-aurora-sleep-deep-dive.md`, other
+chips) only to explain that judgment. Every requirement text rests on M1 observations of macOS,
+and where a candidate's act is one macOS was never seen to make on that word, the entry says so.
+
+**How the list was made.** Every word of L1's 118 (Linux ds13 before its entry against H's
+commit), 4.2a's domain table, L15, L19, L20 and the new readings L21-L24, set against the
+captures; for each candidate word, every logged access in A-I, including the page-touch map of
+A's and B's boot (section 1.1), by this round's `r12_candidates.py` (`r12-candidates.txt`). Left
+out, with the reason:
+- differences an existing requirement already removes when a driver meets it: the display
+  domains and coprocessors (R1, R5a, R7), the first port's seven domains (D4), the five clock
+  muxes of R18; whether they are removed at Linux's commit is what the commit walk (L24) reads;
+- words that vary under macOS or carry the instrument's values: `MCC.planeN+0x680`/`+0x684`
+  (emulated, A5), `DCSn+0x500`, the guarded words' hardware values (A3), the cores' and clusters'
+  domain words (which core reports on, L12);
+- differences in the history bits 8 and 9 alone (PMS `0x1f0000ff` / `0x1f0002ff`, ATC0_COMMON),
+  and the twelve SoC clock words and `0x23d240024` that differ in bit 8 alone (under macOS bit 8
+  of such words changes with no write, R52: a reading of the hardware, not a value to write);
+- words that macOS's own machine changes between awake and the commit with no write and that
+  Linux holds at macOS's awake value (`0x23d240040`, `0x23d240314`): no write to copy; they are
+  readings for the glue (open question 69);
+- ANS2 (on at macOS's commit, off under Linux): a domain Linux has lower than macOS, with its
+  coprocessor stopped in both; no reason found that it would hold the SoC up.
+
+**The commit walk (L24).** 12 of the 118 words had arrived when this section was written
+(indices 0, 1, 20, 21, 40, 41, 60, 61, 81, 137, 193, 249): the eight
+`MCC.planeN+0x680`/`+0x684` words (varying, left out above) and **`DCS0-3+0x7b0` = 3 at Linux's commit** (C4). A candidate whose word reads
+macOS's value at Linux's commit when the walk completes is moot; by D5 (d) its switch then makes
+reads only.
+
+**Where the Linux outcome points (judgment, not observation).** No Linux run since ds16 ended in
+the reset 5-7 s after the commit with which every failed macOS run under the instrument ended
+(4.4 row 12), and an earlier Linux driver did reach the always-on program's first step (L18; its
+boot state was not read). The reading that would most narrow this list is open question 56:
+watchdog 2 and `0x23d2b8028` just after the driver's write `0x23b718004` = 0. Armed there, the
+always-on side started and something later holds it (C1, C3-C5, C8-C14, C16, C17 stay in
+question); not armed, the step that starts it is not taken (C2, C6, C7, C15 first).
+
+**Common to every candidate (test form, with D5).** Switch: a boolean module parameter
+`cand_cN` (N = 1..17), default off. "Entry start": after D3's decisions on the coprocessors and
+before the driver's first device write of the entry. Every access is 32 bits (R49). Domain
+writes take the forms of section 4.3, R56 and R57 by the value read: turn-off of a bit-28-clear
+word R56 form 1, of a bit-28-set word R56 form 2; turn-on from request 0 R57 (ii) (W v with bits
+0-11 cleared, W that | `0xf`, read until bits 4-7 read `0xf`, then, where the entry says "with
+bit 28", W that | bit 28); parents before children for a turn-on (1.9; W1-2c), children before
+parents for a turn-off. "*Reading*" marks a state at the commit that the hardware, not the
+driver's write, sets: a simulated machine may model it, a test must not require the driver to
+produce it.
+
+**C1. The secure enclave's power domain gated at the commit.** Switch `cand_c1`.
+- *Observed.* SEP `0x23b700c00` reads **`0x1000230f`** (request `0xf`, bit 28 set, bits 4-7 and
+  24-27 0, bits 8, 9, 13 set) with macOS awake (G, H, I, before the detach and I's awake-extra)
+  and at every commit read (G, H, I; 4.2a); macOS reads it once in the entry (T-0.0225, the same
+  value) and writes it only at the wake, `0x1000200f` (W1-2c, all eight; `r12-candidates.txt`).
+  macOS sends `sep` no power message and never touches its +`0x44`/+`0x48` (R4, section 0). **[LINUX]** `0x1f0020ff`
+  (bits 4-7 and 24-27 `0xf`, bits 8, 9 clear) before the entry (ds13, ds14, ds15; 4.2a).
+- *Why a candidate.* Under macOS the enclave's domain is power-gated by its automatic power at
+  every reading, awake included; under Linux it is fully on. *Reference* (2.2, T8140, measured):
+  "a commit with it running never returned" (the enclave self-gates after a control message); of
+  the reference's stall causes this is the one whose outcome, no return and no reset at 5 s,
+  matches Linux's (L16, L21).
+- *Requirement.* Place: after the last coprocessor stop of R4/R5/R5a and before R16. R SEP's
+  word; if bits 4-7 are not 0: R56 form 2 (W v with bits 28, 9, 8 cleared; R until bits 4-7
+  read `0xf`, bounded; W (v2 with bits 0-9 replaced by `0x3f0`); R until bits 4-7 read 0,
+  bounded). At the commit: SEP bits 0-3 = 0 (the driver's write) and bits 4-7 = 0 (*reading*).
+  Wake: D5 (f), by D1 the request `0xf` with bit 28, the value of macOS's W1-2c write
+  `0x1000200f`.
+- *Not observed.* macOS never lowers SEP's request: its state 0 comes with request `0xf`. A
+  request-0 write to this word, and what the enclave does then, are in no capture; the form is
+  the one macOS uses on other bit-28 words (R56). The device tree flags SEP "critical", "on"
+  (`pmgr-devices.json`); *Reference*: Aurora's t8103 tree marks it "Locked on". So the target
+  state is macOS's, the act is the spec stage's choice.
+
+**C2. The power manager's four sub-blocks on before R22a.** Switch `cand_c2`.
+- *Observed.* `0x23b748000`, `400`, `800`, `c00` read **1** before every entry and are stopped
+  in R22a (all eight); at every wake they read 0 and macOS writes them 1 in the order `000`,
+  `c00`, `800`, `400` (W1-2h, all eight). **At boot (A, B: the first access to the page in the
+  page-touch map, t 1.048 / 1.131 s) `0x23b748000` reads 0**: macOS's kernel turns them on
+  during boot as at the wake (the boot write itself is below the map's resolution). With them on
+  the status words read low byte 1 (I's awake-extra: `0x4d4d01`, `0x404001`, `0x1`,
+  `0x404001`), at the commit `0x515100`, `0x494900`, 0, `0x494900` (R22a). `0x23b720030`,
+  `034`, `044`, whose repeated byte equals the status words' bytes (L3), read `0x014d514d`,
+  `0x01404940`, `0x01404940` awake and `0x01515151`, `0x01494949`, `0x01494949` at the commit
+  (R52); macOS never accesses that page (no touch-map record, no access in A-I).
+  **[LINUX]** the four control words read 0 (L3), the status words `0x616100`, `0x7f7f00`, 0,
+  `0x6c6c00`, and `0x23b720030`/`034`/`044` `0x01616161`, `0x017f7f7f`, `0x016c6c6c` before the
+  entry (L2; ds13, ds15). An earlier driver's entry timed out in R22a's wait on `0x23b7487e0`
+  (evidence ds8).
+- *Why a candidate.* R22a is the step straight before R22's write `0x23b718004` = 0, after which
+  the always-on side's first observed step follows within 1.3-7.5 microseconds (R62). Under
+  Linux R22a meets four sub-blocks in the state macOS's kernel leaves only before it has
+  finished booting, and the words tied to their status hold higher values. *Reference* (2.1,
+  T8140): the commit parks "DVFM" and brings "the SoC perf word" to its sleep state before the
+  commit word; correspondence not established.
+- *Requirement.* At entry start, for `0x23b748000`, `c00`, `800`, `400` in this order: R; if 0:
+  W 1. Then for their status words in the same order (`0x23b7483e0`, `fe0`, `be0`, `7e0`): R
+  until the low byte reads 1, bounded. Then the entry as section 8 has it: at R22a each control word reads
+  1 and R22a stops it (W 0, R its status until low byte 0). At the commit: the four control words
+  0 (R22a's writes); the status words' low bytes 0 and `0x23b720030`/`034`/`044` are *readings*
+  (macOS's commit values above, for the glue to record). Wake: macOS's own (W1-2h); nothing put
+  back.
+- *Not observed.* What the sub-blocks do under Linux once on; whether their status reaches low
+  byte 1 after a write of 1 (macOS reads no status word at the wake): the wait is the spec
+  stage's choice.
+
+**C3. The SoC and memory performance words at macOS's values.** Switch `cand_c3`.
+- *Observed.* `0x23b058000` = **`0x333`**, `0x23b05c000` = **`0x444`**, `0x23b060000` =
+  **`0x222`** with macOS awake and at every commit read (G, H, I; appendix B). macOS never
+  accesses `0x23b05c000` or `0x23b060000` (no record in A's and B's boot touch map, no access in
+  any full log A-I), nor `0x23b058000` in any full log (its page's first access at boot is a read
+  of `0x23b058068`). **[LINUX]** `0x444`, `0x666`, `0x333` (ds13, ds15; L2).
+- *Why a candidate.* Each word is three equal hexadecimal digits, one or two steps higher under
+  Linux. *Reference* (2.1, 2.2, T8140, implemented): before the commit word the driver brings
+  "the SoC perf word (clk-perf word 0) to state 3" (state in bits 11:8, busy bit 31) and "DCS to
+  state 4 via state 6"; "the engine's first step polls for DCS at this state and has no way to
+  get it there". On the M1 macOS's words hold 3 and 4 in bits 11:8 where Linux's hold 4 and 6.
+  The correspondence is by value only.
+- *Requirement.* At entry start, in the order `0x23b058000`, `0x23b05c000`, `0x23b060000`: R; if
+  not macOS's value: W macOS's value (`0x333`, `0x444`, `0x222`); R until it reads that value,
+  bounded. At the commit each reads macOS's value (*reading*: the hardware may not take the
+  write; the test checks the write and the bounded wait). Wake: D5 (f), after R31.
+- *Not observed.* Any write to these words by anyone: macOS's values come from something other
+  than macOS's kernel (the boot loader, a coprocessor such as `pmp`, or the hardware). What the
+  three digits mean and whether a write is honoured.
+
+**C4. The DRAM controllers' `+0x7b0` at 0.** Switch `cand_c4`.
+- *Observed.* DCSn+`0x7b0` (`0x2002007b0` + n x `0x40000`, n = 0..7) read **0** in every
+  snapshot of every capture, awake and at the commit; **macOS never accesses them**, not even at
+  boot in A and B, where the memory-controller range is logged access by access from the start
+  (1.1). The DCS domain words read state 0, 4 or `0xf` with bits 8 and 9 set at macOS's commit
+  and awake (`0x1000030f`, `0x1400034f`, `0x1f0003ff`, [VARIES]; 4.2a, R46). **[LINUX]** **3** on
+  all eight before the entry (ds13, ds15) and **at Linux's commit for DCS0-3** (L24; the walk
+  had not reached DCS4-7); the eight DCS domain words `0x1f0002ff` before the entry (state `0xf`,
+  bit 8 clear).
+- *Why a candidate.* The only one of the 448 DRAM-controller words read that differs between the
+  systems (same on all eight channels and two boots, and still there at the commit); and the DCS
+  domain words show the channels gating under macOS and not under Linux. *Reference* (2.2,
+  T6040, measured): the engine expects each DCS to gate itself after self-refresh, which needs a
+  DCS dynamic power-gate setting macOS makes at boot and after every wake; Linux did not make it
+  and "the engine waited for good on the first DCS pair power gate". Which M1 word is that
+  setting is not known; `+0x7b0` is the only one the readings offer.
+- *Requirement.* At entry start, for n = 0..7 ascending: R DCSn+`0x7b0`; if not 0: W 0. At R16's
+  first write and at the commit each reads 0. The DCS domain words at the commit are *readings*
+  (macOS's values above). Wake: D5 (f), the value read written back after R31.
+- *Not observed.* Any write to the word; what 3 means (no t8103 source names it). Whether the
+  DCS domain words then gate under Linux.
+
+**C5. The clock-gated (request 4) domains at request 0.** Switch `cand_c5`.
+- *Observed.* SOC_SPMI0, SOC_SPMI1, SOC_SPMI2 (`0x23b700118`, `120`, `128`), PMS_FPWM0-4
+  (`0x23b700148`-`0x23b700168`, stride 8), AFT0 (`0x23b7001a8`), DEVC0_IVDMC (`0x23b7001b0`),
+  FPWM0 (`0x23b7001d8`), FPWM2 (`0x23b7001e8`): at **every wake** each reads request 4
+  (`0x0f000244`, `0x244` or `0x344`) and macOS writes it by R56 form 3 ((v with bits 0-9
+  replaced by `0x340`): `0x0f000340`, `0x340`), reading `..200` after (R57, all eight); with macOS
+  awake and at every commit read they request 0 (`0x0f000200`, `0x200`; 4.2a). **[LINUX]**
+  request 4 before the entry: `0x0f000244`, `0x244` (ds13-ds15; L15).
+- *Why a candidate.* Twelve domains are clock-gated (powered) under Linux and power-gated under
+  macOS, and macOS's own wake takes exactly these from 4 to 0 every time. *Reference* (3.3):
+  state 4 "reads as on for sleep checks"; (2.2) a domain on at the commit held the engine on
+  T6050 ("the machine resets five seconds after the commit"; VENC0_SYS: "the entry's last phase
+  waits for its power gate").
+- *Requirement.* At entry start, each of the twelve: R; if bits 0-3 = 4: W (v & ~`0x3ff`) |
+  `0x340`; R. Order among them not claimed (macOS's wake order is in `r12-candidates.txt`). At the
+  commit each requests 0 (state 0, bit 9: *reading*). Wake: D5 (f), by D1 back to request 4.
+- *Not observed.* Request 4 lowered by macOS before a sleep (R56 (c): form 3 is seen at the wake
+  only); the form is macOS's on the same twelve words.
+
+**C6. The power-gate header word `0x23b71c000` set before the always-on side's first step.**
+Switch `cand_c6`.
+- *Observed.* `0x80000000` with macOS awake and at every commit left alone (R67 (b), five); at
+  every wake read 0 and written `0x80000000`, with `0x23b71c040` read and written `0x80000000`,
+  before any other core starts (R67 (c), fifteen); **at boot (A, B: first access to the page in
+  the touch map, t 0.934 / 1.063 s) it reads 0**, so macOS's kernel sets it during boot as well
+  (the write itself below the map's resolution). **[LINUX]** 0 awake on two boots (L19, L20); not
+  read before the entry or at the commit. [HV-CHANGED] cleared 0.28 ms before T, after R22 and
+  after the always-on side's first step: power-down and wake (R69).
+- *Why a candidate.* Linux never sets the word macOS sets at boot and at every wake. R69 cleared
+  it only after the always-on side's first step had been taken (R62: that step follows R22 by
+  microseconds, about 15.6 ms before the clear), so a word clear when that step starts, as under
+  Linux, is untried (open question 67 (b)). *Reference* (2.2, T8140, T8132, T6050, measured): the
+  per-cluster word whose bit 31 lets the boot cluster's cores power down; left clear by the
+  loader; "the sleep never gets past its first sequence".
+- *Requirement.* At entry start: R `0x23b71c000`; if bit 31 is clear: W `0x80000000`; R
+  `0x23b71c040`; if bit 31 is clear: W `0x80000000` (W1-2a's form). At R22's W `0x23b718004` = 0
+  and at the commit `0x23b71c000` reads `0x80000000`. Wake: macOS's own (R67 (c)); nothing put
+  back.
+- *Not observed.* What the word does on the M1; the boot write's place.
+
+**C7. The always-on clock words `0x23d24003c` and `0x23d240048` enabled.** Switch `cand_c7`.
+- *Observed.* **`0x81100100`** and **`0x82100100`** with macOS awake and at every commit read
+  (G-I, K; R63). macOS never accesses the page `0x23d240000` (no touch-map record at boot, no
+  access in A-I). **[LINUX]** `0x01101100` and `0x00101100` before the entry: bit 31 clear, bit
+  12 set, bits 24-27 1 and 0 (L2; ds13, ds15).
+- *Why a candidate.* Two always-on clock words that macOS has with bit 31 set have it clear under
+  Linux, and the always-on side runs the program that, by the lab's decode, powers the chip down
+  (4.4). Bit 31 as an enable is a reading of macOS's own clock writes (R18's `0x80100000`; the
+  audio path's `0x86101000`, then `0x00101000` when audio stops), not a documented name. Under
+  macOS `0x23d240040` goes from `0x02100100` to `0x01101100` (bit 31 clear, bit 12 set) between
+  awake and the commit with no write (R52), so bit 12 set goes with bit 31 clear there too.
+- *Requirement.* At entry start, each: R; if bit 31 is clear: W macOS's value (`0x81100100`,
+  `0x82100100`). At the commit each has bit 31 set and bits 24-27 1 and 2 (bits 8 and 12:
+  *reading*). Wake: D5 (f).
+- *Not observed.* Any write to these words; which clocks they are.
+
+**C8. `pmp` stopped at the commit whatever PMS_SRAM reads.** Switch `cand_c8`.
+- *Observed.* macOS stops `pmp` in every entry (R4, R5; +`0x44` `0x10` -> 0) and then reads the
+  196,608 bytes of R6; at the commit PMP `0x1f0f03ff` and PMS_SRAM `0x1f0003ff` (both on; R52),
+  PMS_SRAM `0x1000030f` awake (request `0xf` with automatic power). **[LINUX]** PMP `0x1f0000ff`
+  (on) and PMS_SRAM `0x0f000300` (request 0) before the entry; `pmp`'s +`0x44`, +`0x48` not read
+  (skipped because PMS_SRAM reported state 0; L15); with the stock kernel `pmp` was running in
+  ds4 (L4).
+- *Why a candidate.* If PMS_SRAM's state decides that `pmp` is "found with its domain off"
+  (D3), a running `pmp` is left running at the commit, where macOS's is always stopped.
+  *Reference* (2.2, T8140, measured): "a commit with the PMP and SIO still running reset the SoC
+  5.5 s later".
+- *Requirement.* At R4/R5's place for `pmp`: whatever PMS_SRAM reads, if PMP (`0x23b7003d8`)
+  reads bits 4-7 = `0xf`: R `pmp`'s +`0x48`, +`0x44`. If +`0x44` bit 4 is set: turn PMS_SRAM on
+  with bit 28 (macOS's awake request) if it reads request 0; then `pmp` as D3 has it for a
+  coprocessor found running (R4's exchange, R5's stop; silent: bounded wait, then R5's register
+  stop), then R6. If bit 4 is clear: no message. At the commit `pmp`'s +`0x44` bit 4 is clear.
+  Wake: R5w, R6w for `pmp` if the entry stopped it (section 8); PMS_SRAM by D1.
+- *Not observed.* What `pmp` reads or answers under Linux (open question 38); which domain R6's
+  block is in.
+
+**C9. The second port's domains and MSG off.** Switch `cand_c9`.
+- *Observed.* ATC1_COMMON `0x23b700448` `0x2300`, ATC1_PCIE `0x23b700450` `0x300`, ATC1_USB_AON
+  `0x23d280090` `0x300`, ATC1_USB `0x23d2800a0` `0x300`, MSG `0x23d280078` `0x200` with macOS awake
+  (I) and at the commit (H, I); read, never written, in every capture (R56). **[LINUX]**
+  `0x23ff`, `0x3ff`, `0x2ff`, `0x2ff`, `0x2ff` (on) before the entry (L15).
+- *Why a candidate.* Five domains on under Linux that are off at every macOS reading, which no
+  requirement turns off (R56 has no observed turn-off for them; D4 covers the first port only).
+  *Reference* (2.2): a USB-side domain on at the commit, "the machine resets five seconds after
+  the commit; macOS never sleeps with AUSS on" (T6050); ATC conditions on T6040.
+- *Requirement.* With R7's domain turn-offs (after R5a): by R56 form 1, children before parents:
+  ATC1_USB, ATC1_PCIE (and ATC1_CIO_PCIE, ATC1_CIO_USB, ATC1_CIO if found on), ATC1_USB_AON,
+  ATC1_COMMON, then MSG: each R; if bits 0-3 are not 0: W (v & ~`0x3ff`) | `0x3f0`; R. At the
+  commit each requests 0 (state: *reading*). Wake: D5 (f), by D1.
+- *Not observed.* macOS's turn-off of any of them (never on under macOS); the form is R56's
+  general one for a bit-28-clear word (R56 (b)). MSG carries the device tree flag "critical".
+
+**C10. APCIE_GP gated at the commit.** Switch `cand_c10`.
+- *Observed.* APCIE_GP `0x23b7003e8`: `0x1000230f` with macOS awake (I) and at the commit (H, I);
+  in the entry it goes down by itself, with no write: G `0x1f0023ff` at T-7.4 s, `0x1400234f`,
+  `0x1000230f` from T-0.017 s (`r12-candidates.txt`); the wake writes `0x0f002000`,
+  `0x0f00200f`, `0x1f00200f` (W1-2c). **[LINUX]** `0x1f0020ff` (on, bits 8 and 9 clear) before
+  the entry (ds13).
+- *Why a candidate.* As C1, for the general PCIe block's domain: power-gated by its automatic
+  power under macOS, on under Linux.
+- *Requirement.* After R14 (the PCIe writes): R; if bits 4-7 are not 0, R until they are,
+  bounded (macOS's word comes down by itself within the entry); if still not 0: R56 form 2 as C1.
+  At the commit bits 4-7 = 0 (*reading*). Wake: D5 (f), by D1 (macOS's W1-2c turn-on).
+- *Not observed.* A write lowering APCIE_GP's request; *Reference*: Aurora's tree comments the
+  domain "Breaks things if shut down".
+
+**C11. No domain word with bit 11 set at the commit.** Switch `cand_c11`.
+- *Observed.* Bit 11 is read set only while macOS waits for a turn-on, never at rest and never
+  at a commit (section 0; 4.2a). FPWM1 `0x23b7001e0` reads `0x2ff` (on) awake and at every commit;
+  in F it was turned off and back on (W `0x0`, `0xf`, ..., `0x1000000f`; R40). GFX `0x23b7003f8`
+  `0x0f002300` at the commit. **[LINUX]** FPWM1 **`0x0a00`** (request 0, state 0, bits 9 and 11)
+  and GFX **`0x0f002b00`** (bits 8, 9, 11) before the entry (L15).
+- *Why a candidate.* Two words latched busy at rest under Linux. *Reference* (2.2, 3.3, T8140): a
+  domain off with BUSY latched holds the power manager's poll until a watchdog (seen there at the
+  wake); the T8140 driver clears it with a pulse of bit 12, which no M1 capture shows.
+- *Requirement.* At entry start: FPWM1: R; if bit 11 is set: turn on with bit 28 (R57 (ii); F's
+  writes); left on, as at macOS's commit. GFX: R; if bit 11 is set: turn on without bit 28, then
+  R56 form 1. At the commit FPWM1 requests `0xf`, GFX 0; bit 11 clear in both (*reading*). Wake:
+  D5 (f), by D1.
+- *Not observed.* Whether a turn-on clears a latched bit 11.
+
+**C12. SIO and its children on, with automatic power off at R23.** Switch `cand_c12`.
+- *Observed.* With macOS awake SIO_BUSIF `0x23b7001c0`, SIO `0x23b7001c8`, SIO_CPU `0x23b7001d0`
+  read `0x1400024f` (request `0xf`, bit 28); in E5-8j, after R22 and 15 microseconds before R24,
+  macOS's last power-domain writes clear their bit 28 with the request kept (SIO, SIO_BUSIF
+  `0x0f0000ff`, held by the instrument, A3; SIO_CPU `0x0400024f`, commit `0x0f0002ff`; R23,
+  R23a). At the commit their children request on: SPI_P, UART_N `0xff`, AUDIO_P `0x2ff`, UART_P
+  and UART0-8 `0xff` (UART_P and UART0 the instrument's held values, macOS's own request on; 4.2a).
+  **[LINUX]** SIO_BUSIF, SIO, SIO_CPU `0x0f000200` and SPI_P, UART_P, AUDIO_P, UART_N, UART0-8
+  `0x200` (all request 0) before the entry (L15, 4.2a).
+- *Why a candidate.* macOS's last domain writes before R24 are on these three, and they leave
+  them on with automatic power off; under Linux the same step meets domains that are off.
+  *Reference* (2.1 step 9, T8140): "SIO_CPU AUTO_ENABLE cleared" in the commit body.
+- *Requirement.* At entry start (D3's decision for `sio` taken on the state found before; `sio`
+  is not messaged or started by this candidate): turn on with bit 28, parents first: SIO_BUSIF,
+  SIO, SIO_CPU; then SPI_P, UART_P, AUDIO_P; then UART_N, UART0-UART8 (`0x23b700268`,
+  `0x23b700270`-`0x23b7002b0`). The entry then runs as section 8 has it, R10's `sio` translator
+  step and R23 now meeting the domains on. At R23 the three read request `0xf` with bit 28; at the
+  commit they request `0xf` with bit 28 clear, the children request `0xf`, and `sio`'s +`0x44`
+  bit 4 is clear. Wake: D5 (f), by D1.
+- *Not observed.* What Linux's `sio` does when its domains come on (L6: it did not answer once
+  started by Linux's own driver).
+
+**C13. Each core's timers disabled at its final write.** Switch `cand_c13`.
+- *Observed.* In every captured power-down (fifteen) each core went down with the instrument's
+  own EL2 timers stopped (A6, [ARTEFACT, in every power-down]) and its guest physical timer
+  `CNTP_CTL_EL02` with ENABLE 0: macOS's own `0x6` where read (six, R65), the instrument's 0 in
+  A-J (R59). The guest virtual timer was left enabled in two power-downs (`det19b`, `det21`,
+  R68). **[LINUX]** at the final write (L23): core 0 EL2 physical `0x7` (enabled, masked,
+  condition met), EL2 virtual `0x4`, `CNTV_CTL_EL02` `0x7`, `CNTP_CTL_EL02` `0x7`; cores 1 and 7
+  `CNTP_CTL_EL02` `0x7`, their other three 0; cores 2-6 not read; `ISR_EL1` 0 on every core
+  (L22).
+- *Why a candidate.* Nothing is pending at Linux's cores, but two kinds of timer that every macOS
+  power-down had disabled are enabled (masked, condition met) under Linux. *Reference* (2.2,
+  T8140): "a timer left running also ends WFI". The cheapest candidate to try.
+- *Requirement.* In each core's last job, before R43's accesses: `CNTP_CTL_EL02` written with
+  ENABLE 0 and IMASK 1 (reads `0x6` or `0x2`); the physical and virtual timer controls the kernel
+  uses at EL2 (`CNTP_CTL_EL0`, `CNTV_CTL_EL0` as accessed at EL2) written with ENABLE 0. No
+  requirement on `CNTV_CTL_EL02`. At the final write those three have bit 0 = 0; R59 holds as
+  before. Wake: nothing put back by the driver (the kernel's own timer code programs its timers
+  after the resume).
+- *Not observed.* Whether a masked, enabled timer matters to a core's power-down on the M1.
+
+**C14. The audio clocks as macOS leaves them.** Switch `cand_c14`.
+- *Observed.* `0x23b0400d4`-`0x23b0400e8` (six words) read **`0x100`** awake and at every commit
+  (G-I); **macOS's boot writes `0x23b0400d4` = 0** (A, B: the first access to the page, core 1,
+  t 2.962 / 1.221 s); in E and F the audio path writes `0x23b0400d8` = `0x86101000` when playback
+  starts and `0x00101000` when it stops (L2 note). The NCO words `0x23b044000`, `048000`,
+  `04c000`, `050000`, `054000` read `0x80000000` and are written 0 then `0x80000000` at every wake
+  (W1-6, all eight); `0x23b048000` reads `0x80000000` at every commit. **[LINUX]** the six words
+  `0x85100100`, `0x86100100`, `0x87100100`, `0x88100100`, `0x89100100`, `0x89100100` (bit 31 and
+  bits 24-27 set); `0x23b048000` = 0 (ds13, ds15; the other four NCO words not read).
+- *Why a candidate.* The audio switch's clocks are left enabled under Linux while their domains
+  (SIO_ADMA, MCA0-5, AUDIO_P) are off; under macOS they are cleared when audio stops.
+  *Reference* (2.1, 3.9): the T8140 and T6050 commits park clock muxes and clear clock words
+  before the commit word.
+- *Requirement.* At entry start: each of the six, ascending: R; if bits 24-31 are not 0: W 0. Then
+  each NCO word, ascending: R; if not `0x80000000`: W 0, W `0x80000000` (W1-6's form). At the
+  commit the six read bits 24-31 = 0 (the rest: *reading*, macOS `0x100`) and the five NCO words
+  `0x80000000`. Wake: the six by D5 (f); the NCO words by macOS's own W1-6, nothing put back.
+- *Not observed.* Which clock each word drives; a write of 0 to the five words other than
+  `0x23b0400d4`.
+
+**C15. `0x23b718000` and `0x23b718004` at `0xf` before R22 (conditional).** Switch `cand_c15`.
+- *Observed.* `0x23b718000` reads `0xf` at macOS's boot (A, B touch map) and before its R22
+  write in every entry; `0x23b718004` reads `0xf` before R22's write (all eight; R19, V11); at
+  every wake macOS writes both `0xf` and polls `0x23b718004` (`0x1f` ... `0x2f`; R30). **[LINUX]**
+  not read before the entry; after an entry that did not power down the wake's poll of
+  `0x23b718004` timed out (L8, ds12).
+- *Why a candidate.* R22's write `0x23b718004` = 0 is the write the always-on side's first step
+  follows (R62); what the word holds under Linux before it is not known. A difference only if it
+  does not read `0xf`.
+- *Requirement.* Immediately before R22a: R `0x23b718000`, R `0x23b718004`; if either is not
+  `0xf`: W `0x23b718000` = `0xf`, W `0x23b718004` = `0xf`, R `0x23b718004` until it reads `0x2f`,
+  bounded (R30's form). At R22's writes both read `0xf` (*reading* if the hardware does not take
+  the writes). Wake: macOS's own (R30).
+- *Not observed.* The words under Linux (open question 69).
+
+**C16. The GPIO domain on.** Switch `cand_c16`.
+- *Observed.* GPIO `0x23b700130` reads `0xff` awake and at every commit (G-I); at every wake read
+  `0x2ff` and written `0xff`, `0xff`, `0x100000ff` (all eight). **[LINUX]** `0x200` (request 0)
+  before the entry (4.2a).
+- *Why a candidate.* A domain on at every macOS reading and off under Linux. *Reference* (3.3,
+  Aurora `dd2a90a2`): "SEP needs the GPIO state on". Weak; listed because a driver can act on it.
+- *Requirement.* At entry start: R; if request 0: turn on with bit 28. At the commit request
+  `0xf`. Wake: D5 (f), by D1.
+
+**C17. The SoC clock words' bits 24-27 at macOS's value.** Switch `cand_c17`.
+- *Observed.* 28 words read bits 24-27 = 7 at every macOS commit and awake (G-I; appendix B) and
+  6 under Linux (`0x23b0400b0`: 2) before the entry (L2; ds13, ds15): `0x23b040000`, `004`,
+  `00c`, `010`, `024`, `03c`, `040`, `050`-`06c` (eight), `080`, `084`, `094`, `098`, `0b0`,
+  `0b4`, `0c0`, `0c4`, `0c8`, `0cc`, `0d0`, `134`, `138`. No macOS write to any of them in any full
+  log (A-I); whether its boot writes them is below the touch map's resolution. (R18's
+  `0x23b04014c` and `0x23b040154` also read 6 under Linux; they are left to R18.)
+- *Why a candidate.* The largest group of differing words; their bits 24-27 differ between the
+  systems and never between macOS's awake and commit; by the pattern of R18 and the audio path a
+  source field (a reading of the bit pattern, not a name).
+- *Requirement.* Immediately before R18, each word ascending: R; if bits 24-27 are not 7: W v
+  with bits 24-27 = 7, the other bits as read. At the commit bits 24-27 read 7 (*reading* if not
+  taken). Wake: D5 (f), after R30.
+- *Not observed.* What the field selects; whether a write is taken; what changing it does to a
+  running block (the devices are suspended by then).
+
+**Summary** (ranked; each behind its switch `cand_cN`, D5):
+
+| # | What | Why it is a candidate | Evidence (macOS / Linux) |
+|---|---|---|---|
+| C1 | SEP domain to state 0 before R16 (R56 form 2) | gated under macOS at every reading, on under Linux; Reference T8140: running enclave "never returned" | G-I awake and commit `0x1000230f` / `0x1f0020ff` (ds13-15) |
+| C2 | four power-manager sub-blocks on at entry start, so R22a stops running blocks | R22a is the step before the write that the always-on side's first step follows; macOS turns them on at boot and every wake | 1 awake, 0 at boot (A, B), wake writes 1 (all eight) / 0 (L3), ds8 timed out in R22a |
+| C3 | `0x23b058000`/`05c000`/`060000` to `0x333`/`0x444`/`0x222` | perf-state-like words one or two steps higher under Linux; Reference T8140: perf word 3, DCS 4 | G-I, never accessed by macOS / `0x444`/`0x666`/`0x333` |
+| C4 | DCSn+`0x7b0` = 0 | only differing DRAM-controller word; DCS domains gate under macOS only; Reference T6040: DCS dynamic gate | 0 always, never accessed / 3 on all eight, 3 at Linux's commit (DCS0-3) |
+| C5 | twelve request-4 domains to request 0 (form 3) | clock-gated domains count as on; macOS lowers exactly these at every wake | R57, all eight / request 4 (L15) |
+| C6 | `0x23b71c000` (and `040`) set at entry start | set by macOS at boot and every wake, never by Linux; R69 cleared it only after the first step; Reference: boot-cluster power-gate enable | 0 at boot then `0x80000000` / 0 (L19, L20) |
+| C7 | `0x23d24003c`, `0x23d240048` with bit 31 | always-on clocks enabled under macOS, disabled under Linux | G-I, K / bit 31 clear (L2) |
+| C8 | `pmp` stopped whatever PMS_SRAM reads | a running `pmp` may be skipped under D3; Reference T8140: running PMP resets | R4, R5 / PMP on, PMS_SRAM off, +`0x44` unread |
+| C9 | ATC1_COMMON, ATC1_PCIE, ATC1_USB_AON, ATC1_USB, MSG off (form 1) | on under Linux, off at every macOS reading, no requirement lowers them | H, I / L15 |
+| C10 | APCIE_GP to state 0 after R14 | gated by itself in macOS's entry, on under Linux | G's entry, H, I / `0x1f0020ff` |
+| C11 | FPWM1, GFX without bit 11 (turn-on clears the latch) | busy latched at rest under Linux only | section 0 / `0x0a00`, `0x0f002b00` |
+| C12 | SIO family on at entry start, R23 then clears bit 28 | macOS's last domain writes before R24 act on on-domains | R23, R23a / all off |
+| C13 | timers disabled at each final write | enabled (masked, met) under Linux where every power-down had them off | fifteen power-downs / L23 |
+| C14 | audio-switch clock words 0, NCO words `0x80000000` | audio clocks left enabled with their domains off | boot write, W1-6 / L2 |
+| C15 | `0x23b718000`/`004` at `0xf` before R22 (only if not) | the trigger word's state under Linux is unread | `0xf` at boot and every entry / not read |
+| C16 | GPIO domain on | on under macOS, off under Linux | G-I / 4.2a |
+| C17 | 28 SoC clock words' bits 24-27 = 7 | largest group of differing words | G-I / L2 |
 
 ## 9. Open questions
 
@@ -4941,6 +5391,35 @@ readings of Linux, 66-67 of macOS under the hypervisor.
     macOS's entry (at the detach, after macOS's own wake or boot set it) and read it at the
     first `0x23d2c4000` write and at the commit (whether macOS's entry sets it back is itself
     part of the reading: no logged entry writes it). Way out without hands: as above.
+68. **Each candidate of 8.2 carried into macOS** (round 12). *Settles it, per candidate:* a run
+    of det18's recipe in which the instrument, at the detach (before macOS's entry), puts one
+    word or domain into Linux's state and holds it there: C2 the four sub-blocks written 0 and
+    macOS's R22a writes passed through; C3 `0x23b058000`/`05c000`/`060000` written
+    `0x444`/`0x666`/`0x333`; C4 DCSn+`0x7b0` written 3; C5 the twelve domains written request 4;
+    C6 `0x23b71c000` written 0 (open question 67 (b)); C7 `0x23d24003c`/`048` written
+    `0x01101100`/`0x00101100`; C9 the five domains turned on; C14 the six audio words and the
+    NCO written Linux's values; C16 GPIO turned off; C17 bits 24-27 written 6. Not carried: C1
+    and C10 (SEP's and APCIE_GP's state is their own automatic power's; see (c)), C11 (a latch
+    the instrument cannot set), C12 (SIO and UART0 carry the instrument's console, A3), C13 (the
+    EL2 timers are the instrument's, R59), C8 and C15 (no Linux value read). A run that then does not power down
+    marks its candidate as one that holds the SoC up on the M1; one that powers down and wakes
+    sets it aside. All [HV-CHANGED] by construction. Way out without hands: the alarm, watchdog
+    1, and the 5-7 s reset of every failed run. (c) For C1 and C10: whether macOS sends `sep`
+    anything at all in the logged windows (none in R4) and what the SEP word reads at boot in
+    A's and B's touch map; a full log of macOS's boot for the pages `0x23b700000`
+    (SEP's word), `0x23b748000`, `0x23b71c000`, `0x23b058000`-`0x23b060000`, `0x23d240000` and
+    DCS0 (+`0x20`, +`0xc`, +`0x7b0`) would also give the boot writes of C2 and C6 and say whether
+    anything writes C3's and C7's words.
+69. **The candidates' words under Linux, before the entry and at the commit** (round 12). The
+    commit walk (L24) covers C3, C4, C5's, C9's, C11's, C12's, C16's domain words, SEP, the clock
+    words of C7, C14 (`0x23b048000` only) and C17. Not covered: the sub-blocks' control and status
+    words (C2), APCIE_GP (C10), `0x23b71c000`/`040` (C6), `0x23b718000`/`004` (C15), the four
+    other NCO words (C14), `pmp`'s +`0x44`/+`0x48` (C8), cores 2-6's timer controls and
+    `VM_TMR_FIQ_ENA_EL2` (C13), and `0x23d240040`, `0x23d240314` (which macOS's own machine
+    changes between awake and the commit). *Settles it:* the glue's probe reading each of these
+    before the driver's entry and at the commit point, one per run as the walk does. Together
+    with open question 56 (watchdog 2 and `0x23d2b8028` right after the driver's `0x23b718004` =
+    0) this would say which candidates' words still differ when the always-on side would start.
 
 ## 10. With and without the cable
 
@@ -5192,6 +5671,12 @@ captured on. The numbers L1-L15 are for reference from tests and from section 4.
   macOS side of every comparison above; on the Linux side all of them are still unread at the
   commit, 4.4a.)* *(Round 10: no new reading at the commit; L19 adds two register scans of Linux
   awake.)* *(Round 11: no new reading at the commit; L20 adds four words read with Linux awake.)*
+  *(Round 12: read at the cores' final writes: nothing pending at any core and the timer
+  controls of cores 0, 1, 7 (L22, L23); the commit walk has begun to read the 118 differing words
+  at the commit (L24). Still not read at the commit: the domain words outside the 118, watchdog 2
+  and `0x23d2b8028` after the driver's `0x23b718004` = 0, `0x23d2c4000`, the AP wake-source masks,
+  `0x23d0d9378` after the glue's commands, the CPU block, the power-gate page, the sub-blocks'
+  control and status words, `VM_TMR_FIQ_ENA_EL2`, cores 2-6's timers.)*
 - **L12: the domain dumps of ds6 and ds13 ("ps prepare", two boots) are equal** in 135 of 137
   words; they differ only in which core's domain reports on (ds6: PCPU1 `0x1f0`, ECPU3 `0x100`;
   ds13 the other way round). *(This round, gap Q15.)* ds13's dump was taken after Linux had parked
@@ -5374,6 +5859,61 @@ captured on. The numbers L1-L15 are for reference from tests and from section 4.
   another boot. Under macOS `0x23b71c000` reads `0x80000000` awake and at every commit left
   alone; it read 0 at every wake before macOS set it, and at the commits of `det23`, `det24` after
   the instrument cleared it (R69); boot is not logged. At Linux's commit: not read.
+  *(Round 12.)* "Boot is not logged" holds for the full log; the page-touch map of A and B (1.1)
+  does reach macOS's boot, and there the first access to the page is a read of `0x23b71c000` =
+  **0** (A t 0.934 s, B t 1.063 s; `r12-candidates.txt`): at boot macOS finds the word as Linux
+  has it, and has it at `0x80000000` by the time it is idle (8.2 C6).
+- **L21 (run ds19, bare metal, 2026-11-18 07:00; evidence "Run ds19"; added round 12).** Kernel
+  ds19 (the clean-room logic at `deepsleep-clean` `46dfa94`, passing its tests at `202e351`; the
+  glue after its own independent tests and review), command line `var/deepsleep/ds19.cmdline`
+  (`wdt=120`, `alarm_secs=60`, no snapshot, trace or probe), cable and charger in. Sleep started
+  07:00:47; the M3 saw the host disconnect at 07:00:50.41; **no wake at the alarm**; the M1 came
+  back in stock Omarchy with a kernel start of 07:03:02, about 135 s after the start (watchdog 1's
+  120 s plus the entry and the boot, as ds17-1 to -3). Record `44 57 00 40 2c 3d 02 30 9b 00` =
+  'W' (commit point reached, watchdog armed), the last access a 32-bit write to `0x23d2c4000` by
+  core 0. Power chip after: `0x0201` `00`, `0x9f03` `50`, fault shadow `0x000800` (watchdog
+  reset only), `0xd000` `01`, `0xd00c` `00`. So the outcome of L17 again, with the round-8 driver.
+- **L22 (runs ds19p-74, ds19p-75, 07:05-07:11; evidence "Runs ds19p-74, ds19p-75"; added round
+  12).** Kernel ds19 with the glue's probe on (`probe=1`, `probe_k` set per run; command line
+  `var/deepsleep/ds19p.cmdline`), cable and charger in; each run: no wake at the alarm, a reset
+  about 150 s after the start, `0x0201` `00`. Record byte 1 `'q'` (probe, watchdog armed), bytes
+  2-3 k with bit 15 = captured, bytes 4-7 the value; four bits per core c at bits 4c..4c+3:
+  - k = 74, `0x00000000`: at each core's final write `ISR_EL1` F, I, A clear and `IPI_SR_EL1`
+    bit 0 clear, **cores 0-7**: nothing pending at any core (the state R59 asks for);
+  - k = 75, `0xfeeeeeef`: the ISTATUS bit (condition met) of the four timer controls (bit 0 EL2
+    virtual, 1 EL2 physical, 2 `CNTV_CTL_EL02`, 3 `CNTP_CTL_EL02`): cores 0 and 7 all four set,
+    cores 1-6 all but the EL2 virtual.
+- **L23 (runs ds19p, k 20-28 and 67-70, 17:31-18:16; evidence "Runs ds19p, k 20-28 and 67-70";
+  added round 12).** Twelve probe runs of ds19 (`probe=1`, `wdt=120`, cable and charger in), one
+  value each: the timer controls at the core's final write (k = 18 + 7c + r; r 2 EL2 virtual
+  `CNTV_CTL_EL0`, 3 EL2 physical `CNTP_CTL_EL0`, 4 `CNTV_CTL_EL02`, 5 `CNTP_CTL_EL02`; bit 0
+  ENABLE, 1 IMASK, 2 ISTATUS). Every run ended in the watchdog reset.
+
+  | Core | EL2 virtual | EL2 physical | `CNTV_CTL_EL02` | `CNTP_CTL_EL02` |
+  |---|---|---|---|---|
+  | 0 | `0x4` (off, met) | `0x7` (on, masked, met) | `0x7` | `0x7` |
+  | 1 | `0x0` | `0x0` | `0x0` | `0x7` |
+  | 7 | `0x0` | `0x0` | `0x0` | `0x7` |
+
+  No timer is on and unmasked at these cores' final write; several are on and masked with their
+  condition met. Each value is from a separate run. Core 7's ISTATUS bits read 0 here for three
+  controls and 1 in L22's run: run-to-run variation or a misreading in one of the two modes, not
+  settled (evidence). Cores 2-6 not read. Against macOS (R59, R65): `CNTP_CTL_EL02` is `0x6`
+  (ENABLE 0) at every core's final write in the six captures that read it and 0 in A-J (the
+  instrument's), so ENABLE 1 there is a difference (8.2 C13); the EL2 timers at macOS's
+  power-downs are the instrument's own and were stopped by it in all fifteen (A6).
+- **L24 (the commit walk, ds19, running 2026-11-18 from 18:41; `var/commit-walk/ds19-commit-118.tsv`,
+  the observation stage's file, not yet in the evidence file; added round 12).** The 118 words of
+  L1 (the indices of `var/commit-walk/differing-118.k`, in the key order of
+  `macos135-det8-real-commit.json`), read at Linux's commit point, one per run. Record: byte 1
+  `'c'`, bytes 2-3 the index with bit 15 = changed by itself, bytes 4-7 the value at Linux's
+  commit (little-endian); bytes 8-9 are not interpreted here. **12 of 118 had arrived when this
+  round was written** (at 19:00), none flagged changed by itself:
+  - indices 0, 1, 20, 21, 40, 41, 60, 61 (`MCC.plane0-3+0x680`/`+0x684`): `0xb51`, `0xcfa`,
+    `0xc85`, `0xc30`, `0xdef`, `0xb51`, `0xf56`, `0xb9b` (words that vary under macOS and are
+    emulated under the instrument, A5);
+  - indices 81, 137, 193, 249 (**`DCS0+0x7b0` to `DCS3+0x7b0`**): **3** each, as before the
+    entry (L2); macOS: 0 at every reading (8.2 C4).
 
 ## Appendix: scripts and extracts (all in `var/spec/`)
 
@@ -5447,6 +5987,7 @@ Run with `tools/hv-trace-kit/venv/bin/python`, from `var/spec/`, after `build_db
 | (observation stage) `var/commit-state/r6_core_state.py`, `r6_snapdiff.py` | `r6-det12.txt` (each core's state at its final write, E7), `macos135-det12-vs-det11.txt` (K's commit and wake snapshots against J, 1.7d) |
 | (observation stage) `var/commit-state/r7_probe.py`, `r7_wd2start.py`; `r6_core_state.py` on the round-10 logs | `r7-det18.txt`, `r7-det19b.txt`, `r7-det21.txt` (the probe sets, the CPU block and the power-gate page awake and at the commit), `r7-wd2start-det*.txt` (watchdog 2's start against the log), `r7-det*-core-state.txt` (E7), `r7-pwrgate-records.md` (1.7e, 4.1c, 4.1d) |
 | `r11_checks.py` | `r11-checks.txt` (round 11): `det18`, `det23`, `det24` from their detached logs: the instrument's write of `0x23b71c000` (probe sequence 100, with values) against the core-state and core-down records; the header words and CPU block awake and at the commit; every access to `0x23b71c000`, `040`, `080`, `088`; the probe sets and watchdog 2's start against `W 0x23b718004` = 0; each core's guest timer and due time, `HCR_EL2` VI/VF, the instrument's IPI words, `ISR_EL1`, `IPI_SR_EL1`, `PMCR0_EL1`, `PMSR_EL1`, `PSTATE` DAIF; the wake status, wake-entry words and the time of the header write; every write before T to the watchdog page and the wake-source masks (also `det19b`, `det21`) (1.7f, E7, 4.1c, 4.1d, R62, R63, R67, R69) |
+| `r12_candidates.py` | `r12-candidates.txt` (round 12): every logged access in A-I (full logs and A's and B's boot page-touch map) to the words of the candidates C1-C17, per word and capture the values read and written and the times (8.2) |
 | `r10_checks.py` | `r10-checks.txt`: the probe sets and the start of watchdog 2 against `0x23b718004` = 0; each core's guest timer, due time, virtual FIQ and timer FIQ enable in L, `det19b`, `det21`; the CPU block and the 23 power-gate words that change; every access to the four header words in all thirteen captures with a wake (databases and detached logs); Linux's register scans (snapshots 12 and 16) against macOS (1.7e, E7, 4.1c, 4.1d, L19) |
 
 Capture selection: the pairwise scripts compare the two captures named in the environment
@@ -5485,7 +6026,59 @@ written but hold their awake value. The 137 domain words are in 4.2a.
 - `0x23d240000`..: `0x23d240000` `0x80100010`; `0x23d240004`-`0x23d24001c` `0x81100100`; `0x23d240020` `0x81100000`; `0x23d240024`-`0x23d240034` `0x81100100`; `0x23d240038` `0x81100000`; `0x23d24003c` `0x81100100`; `0x23d240040` `0x1101100`; `0x23d240044`-`0x23d24004c` `0x82100100`; `0x23d240050` `0x80100100`; `0x23d240054` `0x81100000`; `0x23d240304` `0x10000000`; `0x23d240308` `0x1000000`; `0x23d240314` `0x1000000`; `0x23d240320` `0x0`; `0x23d240330`-`0x23d240370` `0x0`.
 - `0x23d2c0000`..: `0x23d2c0000`-`0x23d2c000c` `0x0`; `0x23d2c0010` `0x880ff04`; `0x23d2c0014` `0x7`; `0x23d2c0018` `0x1`; `0x23d2c001c` `0xff0`; `0x23d2c0020`-`0x23d2c003c` `0x0`.
 
-## Changes in this round (round 11, 2026-11-18: the round-11 runs det23 and det24, the power-gate header word cleared at the commit, Linux awake again, the requirements since round 6 as test statements)
+## Changes in this round (round 12, 2026-11-18: run ds19 and its probe runs, the commit walk's first words, every observed difference written as a candidate requirement C1-C17, decision D5)
+
+Inputs: the spec at `7216e7b` (repository at `cdead1f`); the evidence file's "Run ds19", "Runs
+ds19p-74, ds19p-75" and "Runs ds19p, k 20-28 and 67-70"
+(`docs/evidence/2026-11-17-deepsleep-clean-runs/README.md`, commits `0726bd0`, `153780c`,
+`aa1a977`); the commit walk's file `var/commit-walk/ds19-commit-118.tsv` as it stood at 19:00
+(running), with `var/commit-walk/differing-118.k`; the earlier Linux readings of section 12
+(`var/commit-state/linux-ds13-bare-preentry-vs-macos-commit.tsv`, `linux-ds13-bare-ps-words.json`);
+the capture databases `var/spec/db/cap{3,4,d,e,f,g,h,i}.db` and `commit-state-ghi.tsv`; the
+power manager's table `var/map-20261117/adt/pmgr-devices.json`; the rules
+`docs/agents/cleanroom-cycle.md` ("Faster cycles") and `AGENTS.md`; the reference
+`docs/reference/asahi-aurora-sleep-deep-dive.md` (sections 2.1-2.3, 3.3, 3.4, 3.8, 3.9), marked
+as reference where used. Inline marks "round 12" are this round's.
+
+**Checked against the data**
+- ds19 and the probe runs: taken from the evidence text (no data file holds the probe values
+  beyond the evidence's tables).
+- The commit walk: 12 of 118 at 19:00; read from the file, decoded by the brief's record layout.
+- Every "macOS never accesses" and "macOS writes" statement of 8.2: `r12_candidates.py` over all
+  eight capture databases, including A's and B's boot page-touch map. New from it: at boot
+  `0x23b71c000` reads 0 and `0x23b748000` reads 0 (A, B), macOS's boot writes `0x23b0400d4` = 0
+  (A, B), DCSn+`0x7b0` is never accessed even at boot (A, B log that range in full),
+  `0x23b05c000`, `0x23b060000`, `0x23b720000`'s page and `0x23d240000`'s page are never accessed,
+  APCIE_GP goes down by itself during G's entry, SEP is written `0x1000200f` at every wake.
+
+**Requirements added:** none to section 8. **Candidate requirements added** (section 8.2, new):
+C1-C17, each with the difference observed, why it is a candidate, its requirement in test form
+(place, order, reads, writes, the state at the commit, the wake) and what is not observed; a
+ranked summary table. **Decision added:** D5 (each candidate behind its own switch `cand_cN`, off
+by default; reads before writes, bounded waits, the wake rule), with its test-table row in 8.1.
+
+**Requirements changed or withdrawn:** none. D1-D4 unchanged.
+
+**Sections changed or added:** status; 4.4 (round-12 note: rows 4, 6, 12); 4.4a (round-12
+note: C3, C4, C6, C10, C12, C13); 8 (D5); 8.1 (D5 row); 8.2 (new); 9 (68, 69 new); 12 (L11, L20's
+boot note; L21-L24 new); appendix (`r12_candidates.py`).
+
+**The orchestrator's questions, how each was dealt with**
+1. Every observed difference between macOS at and before its commit and Linux's readings that a
+   driver could act on: C1-C17 in 8.2, ranked by judgment; the differences left out are listed
+   there with the reason.
+2. Each written so that a test author can hold a driver to it behind its own switch: the
+   "Requirement" bullet of each, with the common rules and D5 (a)-(f).
+3. D5 recorded as a decision (section 8, after D4).
+4. The new Linux readings as [LINUX] statements: L21-L24, L11, 4.4's round-12 note.
+5. The commit walk: 12 of 118 had arrived (eight varying memory-controller words and
+   DCS0-3+`0x7b0` = 3 at Linux's commit); no candidate rests on the walk alone (C4 is the one it
+   confirms reaches the commit).
+6. The macOS readings under the hypervisor that would sharpen the candidates: open question 68
+   (each candidate's Linux state carried into macOS, [HV-CHANGED]; macOS's boot logged in full
+   for the candidates' pages); the Linux readings: open questions 56 and 69.
+
+## Changes in round 11 (2026-11-18: the round-11 runs det23 and det24, the power-gate header word cleared at the commit, Linux awake again, the requirements since round 6 as test statements)
 
 Inputs: the spec at `cda3fe5` (repository at `fea08ef`); the evidence file's "Linux awake, stock
 kernel (2026-11-18 03:54)" (commit `cbeff4a`) and "Hypervisor round 8" (commit `fea08ef`)
