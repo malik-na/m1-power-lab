@@ -49,9 +49,15 @@ candidate of the kernel side's, with decisions D9-D11 (8.2 C18) (round 15, 2026-
 two points of the glue's C and arm64 review settled as decisions: the first arming of watchdog 1
 moved to the glue's first device access of its sleep step, and the "left armed" exception ending in
 a panic, with Linux's own driver of watchdog 1 not active as a precondition of a `wdt` run (D7 (a),
-(c), (e); L31) (round 15b, 2026-11-19, listed in "Changes in round 15b" at the end, with the earlier
-rounds' lists below it). It states what macOS did, not
-why, and not what is
+(c), (e); L31) (round 15b, 2026-11-19), and with the glue test author's gaps GL10-GL13 and the `pmp`
+client's test author's gaps G1-G27 answered: the sleep step defined as the glue's suspend callbacks
+from `begin` to `end`, a `run_on` not answered sent the panic way only when the release also fails,
+the panic leaving the exception's record standing, D7 (e)'s check on Linux's flags only; the
+watchdog read under the test command line (L32); which of the logic and the client makes each of
+`pmp`'s steps (D3 (b), D9 (b) restated), the client's start-up order without the kernel's RTKit
+library, its buffers, its waits' bounds and its ways out (D9-D11) (round 15c, 2026-11-19, listed in
+"Changes in round 15c" at the end, with the earlier rounds' lists below it). It states what macOS
+did, not why, and not what is
 needed for sleep to work; the candidates of 8.2 are differences, not causes.
 Nothing here comes from any Linux sleep driver's code. Section 12 records what was **read on the
 machine under Linux** (the state a driver starts from); every such statement is marked
@@ -3934,6 +3940,11 @@ Before the SoC goes down:
   *(Round 15; 1.7h, R74.)* In det33 (det18, det23 the same steps) they follow core 0's
   active-action writes of PMP, PMS_SRAM, PMS and of the twelve words at `0x23b549000`+ (W1-2h),
   and every byte written equals the byte R6 read (196,608 of 196,608).
+  *(Round 15c, gap G26; D3 (b).)* For Linux, R5, the translator writes of R73, R6, and at the wake
+  R6w, R55 and R5w are made for a `pmp` (and R5, R5w for a `sio`) **that the same entry stopped**:
+  macOS made them only after its own stop of a coprocessor it found running (every capture), and a
+  coprocessor found already stopped is D3 (b)'s. Which of the logic and the `pmp` client makes them
+  is D9 (b).
 - **R7 [BOTH]** Domains GFX, DISPEXT_CPU0, DISPEXT_FE, DISP0_CPU0, DISP0_FE, RMX, APCIE_ST have
   been written to their off values of section 4, each after its coprocessor's R4 exchange (E2).
   *(This round.)* Each after its coprocessor's R5a stop, by the forms of R56.
@@ -4580,6 +4591,19 @@ After the SoC comes up, before macOS is back at idle:
   28) at the first sample after (e); how macOS turned them on at boot is not logged (at the wake: R74).
   In test form (with D9): the kernel side's start makes (a)-(e) in this order, with PMP and PMS_SRAM
   reading state `0xf` before (e). Not testable as written: the translator's table address (DRAM).
+  *(Round 15c, gaps G2, G3; 1.7h item 3, evidence "macOS's pmp start-up", det10.)* (c) in full, as
+  det10 logged it (the translator's page in full, one boot), the writes in this order: +`0xfc` = 0;
+  +`0xfc` = 0 again; +`0x200` = 0; +`0x2f0` = 0; +`0x34` = `0xffffffff`; +`0x20` = `0x100000`;
+  +`0x100` = `0x80`; +`0x13c` = `0x100`; +`0x200` = the table address with bit 31; +`0xfc` = 1. The
+  reads between them (+`0x0` `0x0ed01020`, +`0x4` `0x11037`, +`0x60`, +`0x80`-`0x8c`, +`0xf0`, +`0x68`,
+  +`0x6c`, +`0x20`, and +`0xfc` 0 before the last write) are macOS's and allowed, not required. So
+  **+`0xfc` = 0 is written twice** at boot, with reads between (R +`0x80`-`0x8c`, +`0x0`, +`0x4`,
+  +`0x60`, +`0xf0`); a test that counts one write or two holds the client to det10's sequence of
+  writes, both included. Whether the last three accesses come before or after (d)-(e) is not
+  established (1.7h item 3); the client makes them before (d). (b)'s "no other SRAM write below
+  `0x23b540000`" is all that is logged; `0x23b540000`-`0x23b57ffff` is logged in full in no boot, so
+  **the client writes no SRAM word at boot but the block's 180** (a decision on what is not read; open
+  question 79 would show whether macOS writes there).
 - **R72 [boot: det33 = det34b word for word]** *(new round 15; 1.7h)* **The RTKit start-up and
   endpoint `0x20`'s opening**, as 1.7h's table and list: after (e), every word macOS sends answers
   the word before it or follows macOS's own order there: HELLO_REPLY `0x00200000000c000c`; STARTEP 1,
@@ -4602,6 +4626,15 @@ After the SoC comes up, before macOS is back at idle:
   `0x80`, then stream 15's `0x100` read). After R6: E5 item d's twelve 64-bit reads at
   `0x23b549000`+ (already section 8's). The words' values do not change at any of these steps in a
   capture with the message sent.
+  *(Round 15c, gap G9; evidence "macOS's pmp start-up", section 4, det33 detached, the translator's
+  page in full.)* The translator's accesses after R5's stop, in det33's order: R +`0x40`, R +`0xfc`
+  (1), R +`0x100` (`0x80`), R +`0xfc` (1), **W +`0xfc` = 0**, R +`0x13c` (`0x100`), R +`0xfc` (0),
+  **W +`0xfc` = 0**, R +`0x40`, R +`0x100c`. In test form: each of the two writes is the value last
+  read from +`0xfc` with bit s cleared (s = 0, then 15), **the read of +`0xfc` immediately before it**
+  (no translator access between that read and the write), and a read of that stream's TCR (+`0x100`,
+  then +`0x13c`) since the previous write; the first +`0xfc` read and the +`0x40`, +`0x100c` reads are
+  macOS's and allowed, not required. det18 and det23 were compared for the management words, the
+  mailbox word, +`0x44` and the SRAM reads, not for these.
 - **R74 [det33; det18, det23 the same steps; det35-det37 the same messages]** *(new round 15; 1.7h;
   amends R6w and R55's place)* **At the wake:** PMP, PMS_SRAM and PMS turned on in core 0's active
   actions (W1-2), in these forms (PMP and PMS: W `0x0f0000ff` twice, W `0x1f0000ff`; PMS_SRAM:
@@ -4662,6 +4695,26 @@ After the SoC comes up, before macOS is back at idle:
   driver's entry `dcp` and `dcpext` read +`0x44` `0x10` (running), +`0x48` `0x2d`, and the
   domains of `gfx-asc`, `ans`, `sio` and PMS_SRAM read state 0 (L15). What a coprocessor answers
   under Linux, and a bound for its reply, are not observed (open questions 38, 50).
+  **(b) "Found stopped", made exact for `sio` and `pmp`** *(new round 15c, gap G26)*: a `sio` or
+  `pmp` whose domain is on and whose +`0x44` reads bit 4 clear at the driver's R4/R5 place gets
+  **no message, no write to its control page, mailbox page or translator, no R6** (for `pmp`), and
+  **at the wake no R6w, R55 or R5w**: the wake restarts only a coprocessor the same entry stopped
+  (C8's "R5w, R6w for `pmp` if the entry stopped it"; D2's rule for R5a's four). Reads of its domain
+  words, +`0x48` and +`0x44` (the reads that tell its state) stay allowed. This is 8.1's test form of
+  D3 ("found stopped (+`0x44` 0), no message and no write") applied to `sio` and `pmp`, which section 8
+  had left to R5, R6, R6w, R55 and R5w as unconditional [BOTH] statements. Reasons: (1) macOS made
+  R5's stop, R6 and the wake's restore only for a coprocessor it had found running and stopped
+  itself (every capture; open question 37: macOS never met a stopped one); (2) the wake's R5w writes
+  +`0x44` = `0x10`, which starts the coprocessor's firmware: done to a `pmp` that was not running
+  before the entry, it would start one Linux never started (L29) from SRAM no start had prepared,
+  which no capture or reading shows; (3) with C18 on, the `pmp` client stops `pmp` and saves its SRAM
+  before `enter` (D10 (b)), so a logic that stopped and saved it again would make R5, the translator
+  writes and R6 twice, and its R5w at the wake would restart `pmp` before the client's R6w writes the
+  same SRAM under a running CPU. This changes the logic as it stands at kernel `HEAD` `d441389d4`
+  (gap G26: there the logic makes R5's register stop, the two +`0xfc` writes and R6 at the entry and
+  R6w, R55, R5w at the wake for a `pmp` found stopped); the change goes through the logic's own cycle
+  (its test author: D9 (b)'s test; `docs/agents/cleanroom-cycle.md`). Until the logic passes that
+  test, a run with `cand_c18` on would make those steps twice; such runs wait for it.
 - **D4 — a decision about Linux, not an observation of macOS** (the orchestrator's default to
   gap W4): *the driver is held to all seven first-port domains (ATC0_COMMON, ATC0_USB_AON,
   ATC0_USB, ATC0_PCIE, ATC0_CIO, ATC0_CIO_PCIE, ATC0_CIO_USB) being requested off at the commit,
@@ -4834,8 +4887,31 @@ After the SoC comes up, before macOS is back at idle:
   (a) to R15: the glue's pre-entry diagnostics, the parking and the entry's first steps), not the
   entry's (d); (iii) the round-13 and round-14 places also covered D3's reads (each coprocessor's
   domain word and +`0x44`, read before any write of the entry), and this one still does, with no
-  hook inside `enter`. What Linux's suspend path does before the glue's sleep step (device
-  suspend, the other platform steps) is outside the glue and not covered by watchdog 1;
+  hook inside `enter`. *(Withdrawn round 15c: "What Linux's suspend path does before the glue's
+  sleep step (device suspend, the other platform steps) is outside the glue and not covered by
+  watchdog 1".)*
+  *(Round 15c, gap GL11.)* **The sleep step is every callback of the glue's in one pass of Linux's
+  suspend path, from its `begin` to its `end`** (Linux's platform suspend callbacks, in Linux's order:
+  `begin`, then the devices' suspend, `prepare`, the devices' late (and noirq) suspend,
+  `prepare_late`, the other cores taken offline, `enter`, `wake`, `finish`, the devices' resume,
+  `end`; *documentation of Linux*: the comments on `struct platform_suspend_ops`,
+  `include/linux/suspend.h`, aurora-silicon/linux `integration/aurora` `1f38ff8f4`: `begin` "is
+  executed right prior to suspending devices", `end` is called "right after resuming devices ... or
+  [when] the transition to the sleep state has been aborted"). So **D7 (e)'s check and then R61's four
+  writes come first in `begin`**, before `begin`'s record ('Da'), its read of the power chip's clock,
+  any core's going offline (in `prepare` or wherever the glue or Linux takes them offline), `dump`'s
+  reads in `prepare_late`, the parking check and `enter`. N's first stretch is then from `begin` to
+  R15 and **covers Linux's device suspend** (the `pmp` client's entry part among it, D10 (b)) and the
+  platform steps between; open question 82 is widened to that stretch. Reasons: (i) the run must end
+  without hands wherever it hangs (`AGENTS.md`), and a device's suspend that hangs is as dark as the
+  glue's read that hangs (L25); arming in `enter` would leave `begin`'s SPMI record and clock read,
+  the offlining and `dump`'s reads uncovered, against (a)'s own rule; (ii) with (e) met Linux's
+  watchdog driver makes no access to watchdog 1 in its suspend or resume step (*reference, not the
+  test kernel's code*: aurora-silicon/linux `1f38ff8f4` `drivers/watchdog/apple_wdt.c`,
+  `apple_wdt_suspend` and `apple_wdt_resume` write the watchdog only when it is active or marked
+  running in hardware), so the arming made in `begin` is not undone by the device suspend between;
+  (iii) every way back to Linux after `begin` passes through the glue again (`enter`'s return, or
+  `end` when Linux aborts before `enter`), so a disarm point exists for each ((c));
   (b) at the commit point, in the glue's commit-point step (D8 (b)), it makes them again after
   every other write of its own, as R61 and L17 have it (the count restarts there);
   *(round 14c, gap GL1)* so R61's four are the last device writes before the **first** core's
@@ -4883,12 +4959,39 @@ After the SoC comes up, before macOS is back at idle:
   (iv) a Linux missing a core it had parked is not a clean return, and a reset is the one way
   out of it that needs no hands. What Linux's own resume does after the disarm is outside the
   glue and not covered by watchdog 1;
+  *(round 15c, gap GL10)* **A `run_on` not answered goes the disarm way or the panic way by the
+  core's release, not by the job.** When a `run_on` for a job of the entry (the Stop or PowerDown job
+  of a parked core) is not answered (-ETIMEDOUT), the glue goes on to its way back and tries that
+  core's release as it does every parked core's (bounded, as its other waits); if **every** parked
+  core is then given back, the way back is the plain one (record, cores, disarm last, return:
+  "a `run_on` not answered" in the list above means this case); if any core's release is not
+  answered, it is the exception (record, panic). "Cannot be given back" means only the release not
+  answered. Reasons: whether Linux has all its cores, which is what the exception is for (reason
+  (iv)), is decided by the release, and a job that did not answer says nothing of it; the release is
+  tried with watchdog 1 armed, so a hang in it still ends by itself; the record of D8 (c) (1) is
+  written before the release in both cases, so it names the job's wait either way;
+  *(round 15c, gap GL11)* **Linux's abort before `enter`** is a way back too: when Linux abandons the
+  suspend after `begin` and before `enter` (a device's suspend failing, a wakeup pending, `prepare`
+  or `prepare_late` failing), it resumes the devices and calls the glue's `end` without `enter`; the
+  glue then disarms watchdog 1 in `end`, as its last device write of that sleep (its record first,
+  if it makes one; no core is parked before `enter`, so none to give back). After an `enter` that
+  returned, `end` makes no watchdog write (the disarm was made before `enter` returned). So the
+  devices' resume after an abort is covered and after an `enter` is not;
+  *(round 15c, gap GL13)* **the exception's panic leaves the exception's record standing**: the
+  glue's own panic notifier (which writes a 'P' record into `0x9f04`-`0x9f0d` on a panic) **writes
+  nothing on this panic**; the glue marks the panic as the exception's before it calls `panic()`, and
+  the notifier, finding the mark, makes no device access. On every other panic it writes its 'P'
+  record as before (ds10, ds11). Reasons: "no other device write after the record" and reason (4)
+  above; the exception's record names the job's wait and the core (D6 (g)), which the 'P' record
+  would replace with "a panic", the one fact the reset itself already gives;
   (d) with `wdt` unset it makes none of these writes. The logic writes nothing to watchdog 1's
   bite or control in any case; R15's write of watchdog 1's count (`0x23d2b0010` = 0) inside the
   entry restarts the count and does not disarm it. N must exceed the entry's duration (ds20 used
   30) *(round 15b)* and each of the stretches (a) to R15, R15 to (b), (b) to the power-down; the
   first now holds the glue's pre-entry diagnostics, whose duration is not read (open question
-  82). What the readings say next to it: in five macOS runs the
+  82); *(round 15c)* with (a) in `begin` it also holds Linux's device suspend and the
+  platform steps up to `enter`, the `pmp` client's entry part among them (its waits bounded by D11
+  (d)). What the readings say next to it: in five macOS runs the
   instrument armed watchdog 1 (150 s) at the start of E1, 7.5 s before T, and again at the
   commit, and each powered down and woke at the alarm (`det26`, `det27`, `det28`, `det30`, `det31`;
   1.7g, [HV-CHANGED]); in the two C3 runs of the same recipe, which did not reach a commit, the
@@ -4916,6 +5019,30 @@ After the SoC comes up, before macOS is back at idle:
   the reading finds it active with that command line, every `wdt` run is refused until the
   command line or the system's watchdog setting is changed; that change is the lab's, not the
   glue's.
+  *(Round 15c, gap GL11.)* The check is the first thing the glue does in `begin` ((a)), so "no
+  device access at all in that sleep" covers `begin`'s record and clock read too: on a refusal
+  `begin` returns -EBUSY with no device access, Linux then calls none of `prepare`, `enter` and
+  `finish` (`include/linux/suspend.h`), and any glue callback it still calls for that sleep (`end`)
+  makes no device access either.
+  *(Round 15c, gap GL12; L32.)* **What the check reads, and what it gives.** "Active" is Linux's
+  `WDOG_ACTIVE` flag of the watchdog device bound to `/soc/watchdog@23d2b0000` (`watchdog_active()`),
+  "marked as running in hardware" is that device's `WDOG_HW_RUNNING` flag (`watchdog_hw_running()`):
+  **Linux's flags only**, read from the watchdog device's own state in memory, never the control
+  word `0x23d2b001c` (no device access is allowed before (a)). *Reference, not the test kernel's code*
+  (aurora-silicon/linux `1f38ff8f4`, `drivers/watchdog/apple_wdt.c`): `apple_wdt`'s probe sets
+  `WDOG_HW_RUNNING` when it reads watchdog 1's control with the reset enable (bit 2) set, so the flag
+  says that watchdog 1 was armed when Linux found it; its suspend and resume steps write watchdog 1
+  when either flag is set (resume: count 0, control = reset enable). **No driver bound** to that node
+  (module not loaded, node disabled or absent): the check gives **"not driving"** and the sleep goes
+  on: with no watchdog device for watchdog 1 nothing of Linux's watchdog core can ping, stop or
+  restart it, which is all (e) guards against. **A driver bound whose watchdog device the glue
+  cannot find or read**: the check gives a **refusal** (-EBUSY, no device access), since the glue
+  cannot then tell. How the glue finds the device is the C half's; on ds21's kernel the class device
+  `watchdog0` had **no `device` link** to `23d2b0000.watchdog` although `apple_wdt` was bound to it
+  (L32), so a lookup through that sysfs link would not find it there. On ds21's command line no
+  process held `/dev/watchdog0` and systemd reported no runtime or reboot watchdog (L32), so
+  "active" is not set there unless something in the kernel opened it; `WDOG_HW_RUNNING` was not read
+  (open question 81).
 - **D8 — a decision about Linux, not an observation of macOS** (new round 14, gaps Z1, Z4, Z10):
   *the tested logic and the kernel glue meet at three points inside one call of `enter`; the
   logic exposes these, the glue does the rest.*
@@ -4992,7 +5119,9 @@ After the SoC comes up, before macOS is back at idle:
   (`0x23d2b001c` = 0), the glue's last device write; **(4)** the failure returned to the
   suspend path. The same order on every other way back of D7 (c) (its record, the cores, the
   disarm last), and on its exception (a core not given back) *(round 15b; replaces "(1) and (4)
-  only")* (1) and then the panic of D7 (c): no (2), (3) or (4). Reasons: the
+  only")* (1) and then the panic of D7 (c): no (2), (3) or (4). *(Round 15c, gap GL13.)* On
+  that panic the glue's panic notifier writes no record (D7 (c)), so (1) is the record standing
+  after the reset. Reasons: the
   record is raw polled SPMI commands, and a controller that does not answer would hang the glue
   there; before the disarm that hang is ended by watchdog 1, after it by nothing; and with the
   record first, a hang in (2) still leaves a record that names the wait that ran out (ds20's C5
@@ -5073,12 +5202,59 @@ After the SoC comes up, before macOS is back at idle:
   +`0x48` `0x2e`, PMP `0x1f0f03ff`, PMS_SRAM `0x1f0003ff`), no access by the logic to `pmp`'s
   mailbox page, control page beyond C8's reads, SRAM (`0x23b500000`-`0x23b57ffff`, except the twelve
   words) or translator, in the entry or the wake.
+  *(Round 15c, gap G26; replaces "what section 8 already gives it and does not change" for `pmp`
+  found stopped.)* Section 8 as written did not give this: R5, R6, R6w, R55 and R5w are [BOTH]
+  statements with no condition, D3 said only that a stopped coprocessor is sent nothing, and the
+  logic at kernel `HEAD` `d441389d4` makes R5's register stop, the two +`0xfc` writes and R6 at the
+  entry and R6w, R55, R5w at the wake for a `pmp` in the test's state (gap G26). **Decided: D3 (b)**
+  (no write, no R6 and no restore for a `sio` or `pmp` found stopped), a change of the logic through
+  its own cycle; the client keeps all of C18's steps. **Who makes each of `pmp`'s steps:**
+
+  | Step | `cand_c18` off | `cand_c18` on (client's part made) |
+  |---|---|---|
+  | start at boot (R71, R72), `…550000` after the opening | nobody (`pmp` not started, L29) | client (D10 (a)) |
+  | entry: R73's endpoint-`0x20` words | nobody | client, before `enter` |
+  | entry: R4's exchange, R5's stop, R73's two +`0xfc` writes, R6 | the logic, **only for a `pmp` it finds running** (domain on, +`0x44` bit 4 set; C8 decides "domain on" when `cand_c8` is on); nobody for one found stopped (D3 (b)) or with its domain off (D3) | client, before `enter`; the logic then finds it stopped and makes none (D3 (b)) |
+  | entry: E5 item d's twelve 64-bit reads at `0x23b549000`+ | the logic, at its place (section 8) | the logic, at its place |
+  | wake: PMP, PMS_SRAM, PMS on (R30's table, R74's forms) | the logic | the logic; the client only if one still reads off (C18 (f), D10 (c)) |
+  | wake: the twelve writes (W1-2h) | the logic | the logic |
+  | wake: R6w, R55, R5w | the logic, **only if its entry stopped `pmp`** (D3 (b)) | client, **only if its entry part made R6 in this suspend** (D10 (e)); the logic makes none (its entry stopped nothing) |
+  | wake: short handshake, the five words | nobody | client |
+  | `pmp` running at the commit | never: found running, the logic stops it; found stopped, it stays stopped | never: the client stopped it (C18 (d); each of D11 (d)'s ways out at the entry ends in R5's stop); an entry part the switch skipped leaves `pmp` to the logic's rule, as in the other column (D10 (e)) |
+
+  So no step is made by both, and each step macOS makes is made by one of them whenever `pmp` was
+  running at entry start. **Test form, the logic** (no `cand_c18` behaviour; it does not read the
+  switch): (i) the simulated `pmp` stopped at the logic's R4/R5 place (+`0x44` 0, +`0x48` `0x2e`, PMP
+  `0x1f0f03ff`, PMS_SRAM `0x1f0003ff`): in the entry, no access to `pmp`'s mailbox page, no write to
+  its control page (reads of +`0x48`, +`0x44` allowed), no access to its translator, no access to its
+  SRAM but the twelve 64-bit reads; at the wake, the domain table and the twelve writes only, no
+  access to `pmp`'s mailbox page, control page, translator or SRAM otherwise; the same with
+  PMS_SRAM reading `0x1000030f` (macOS's self-gating value after the 0x55 word, R75); (ii) the
+  simulated `pmp` running (+`0x44` `0x10`, domains on): section 8's R4, R5, R73's two +`0xfc` writes
+  and R6 in the entry, R6w, R55, R5w at the wake, as before; (iii) its domain off: no access to its
+  blocks (D3). **Test form, the client**: C18 (b), (d), (f) with D10 (e)'s rule per part; it never
+  relies on the logic for any of `pmp`'s steps. Reasons: D3 (b)'s; and the client cannot leave R4-R6
+  to the logic (an entry part of R73's words only, `pmp` left running): the logic decides "domain
+  off" on PMS_SRAM's reported state (L15), which reads 0 in macOS's self-gating value `0x1000030f`
+  (in 1336 of det35's 1821 idle and entry samples, 1.7h), so whether the logic stopped `pmp` would
+  depend on one read, and its R5w at the wake would restart `pmp` with no one to answer its HELLO
+  until the client's resume step (macOS answers within 0.2 ms, 1.7h; what `pmp` does when the
+  answer is late is not read).
   (c) **Neither** writes the C3 words (R70).
   (d) The client goes through the clean-room cycle as the glue does (an independent test author on
   its interface view; its C half reviewed against this spec; `docs/agents/cleanroom-cycle.md`).
   What the captures say next to it: macOS's `pmp` driver action is separate from core 0's quiesce
   and active actions (E3 and W3 against E5 and W1, 1.7h); the twelve words are core 0's, the rest
   the driver action's, which is the split above.
+  (e) **The translator is the client's alone** *(new round 15c; the gap list's note outside the
+  tests)*. With `cand_c18` on, `0x23b300000` is programmed only by the client (R71 (c), R73's two
+  writes, R55) with its own table (D11 (a)); C18 (a)'s nodes do not bind it to Linux's translator
+  (IOMMU) driver (no `iommus` link from `pmp`'s node to it, and no compatible of that driver on the
+  translator's node), and the client maps its buffers itself. Reasons: R71 (c), R73 and R55 are
+  macOS's exact sequences and the client's test holds them; a second owner would write the same
+  registers at its own times (*reference*: aurora-silicon/linux `1f38ff8f4`
+  `drivers/iommu/apple-dart.c` has its own suspend, resume and tunable steps for a translator), and
+  the reference tree's `iommus = <&pmp_dart 0>` (L29) is not used for this node.
 - **D10 — a decision about Linux, not an observation of macOS** (new round 15; C18): *when the
   client acts in Linux's boot, suspend and resume.*
   (a) **Boot:** at the client's probe, once PMP, PMS_SRAM and PMS are on, at whatever point of
@@ -5099,6 +5275,83 @@ After the SoC comes up, before macOS is back at idle:
   with its CPU halted, as after a sleep. Reason: an earlier Linux that sent only SET_IOP_POWER
   `0x220` to a `pmp` stopped by an entry got no answer (L30); macOS restarts `pmp` only by R74.
   (d) With `cand_c18` off the client makes none of this (D5 (a)).
+  *(Round 15c, gaps G1, G16, G12, G22: (a) completed.)* **The domains at boot are Linux's
+  power-domain driver's**, through C18 (a)'s `power-domains` (the earlier module's start found PMP
+  and PMS_SRAM `0x1f0000ff`, held on by Linux, L30; the stock kernel turns PMP and PMS on with bit 28,
+  L29); the client writes no domain word at boot. **Before any access to `pmp`** the client allocates
+  and maps all its buffers (D11 (a), (c)); then it reads PMP, PMS_SRAM and PMS. If a buffer cannot be
+  had, or any of the three does not read state `0xf` (bits 4-7) with bit 28, the client makes **no
+  other access** (no SRAM, translator, mailbox or control-page access, no word), logs which, and its
+  probe returns an error: Linux runs as without C18 for that boot (L29) and the later parts make no
+  access ((e)). Reasons: R71 has the three on with bit 28 before macOS's start; with the buffers had
+  first, a buffer that cannot be had stops the start before `pmp` runs, so nothing is left running
+  (G16); a domain the client finds off is D3's "domain found off". **A boot wait that runs out**
+  (D11 (d)): **R5's register stop alone**, its five accesses (R +`0x8114`, W the value read with bit
+  0 cleared, R +`0x48`, R +`0x44`, W +`0x44` = 0), no R4 words (no exchange was finished, and they
+  would go to a firmware that has not answered), no translator write, no R6; then `pmp` counts as not
+  started for that boot ((e)).
+  *(Round 15c, gaps G10, G13, G14: (b) completed.)* **The entry part's accesses** are C18 (d)'s, in
+  that order, and nothing else on `pmp`'s blocks and the power-manager words: reads of PMP, PMS_SRAM
+  and PMS before its first word are allowed, nothing interleaves R6's 49,152 reads; the kernel
+  mailbox driver's own status and FIFO accesses on the mailbox page are the driver's. **An entry wait
+  that runs out:** no further word; R5's register stop (its five accesses; R4's words already sent
+  stay sent, none is sent after the wait), then R73's two +`0xfc` writes and R6, as after a normal
+  stop; the part reports the timeout to the C half, which logs it and **lets the suspend go on**
+  (D3's "silent": the register stop, then the entry continues). The wake part after it is the normal
+  one (R6w, R55, R5w, the short handshake, the five words). Reason: after the register stop `pmp`'s
+  CPU is stopped and its SRAM saved, the state a normal entry leaves, so the wake can restore it as
+  R74 has it; without R6 the wake would have nothing to write back. **The entry after a wake whose
+  wait ran out** (R5w made, the handshake or the words not finished; D11 (d)): the entry part sends
+  no word and makes R5's register stop (five accesses), R73's two +`0xfc` writes and R6; the wake
+  after it is the normal one. Reasons: that `pmp` did not finish the wake's handshake, so words to it
+  would end in waits that run out; its CPU runs (R5w wrote +`0x44` = `0x10`) and must be stopped
+  before the commit (C8's reason, *Reference* T8140); the next wake then gets the whole handshake
+  again. The client knows this from its own record of the wake part, not from a read.
+  *(Round 15c, gaps G11, G15: (c) completed.)* **Domains at the start of the wake part:** if PMS
+  does not read state `0xf`, the client writes no domain and goes as below (a domain that does not
+  come on); otherwise PMP, then PMS_SRAM (R74's order), each only if it does not read state `0xf`
+  with bit 28, by R74's form for that word; PMS is not written by the client (the logic's domain
+  table writes it, R30). **A domain that does not reach state `0xf`** within the wait's bound
+  (PMS_SRAM's "read until state `0xf`", R74): the client reports and makes nothing more in that wake
+  (no R6w, R55 or R5w); `pmp` stays stopped and the later parts make no access until the next boot
+  ((e)). Reason: R6w writes SRAM in PMS_SRAM's domain, and a `pmp` restarted without its SRAM written
+  back is in no capture.
+  (e) **The switch and the chain of parts** *(new round 15c, gaps G12, G15, G17, G18)*. Each part
+  reads `cand_c18` at its own start (the boot part at the probe, the entry part and the wake part at
+  theirs). With the switch off at a part's start, that part makes **no call of any kind** on the
+  client's machine interface: no device access, no wait, no buffer, no translator value (G17). A part
+  acts only if the part before it acted to its end: the entry part only if the boot part of this
+  boot sent the 0x55 word and no later part has given `pmp` up (a boot that found a domain off or no
+  buffer, (a); a wake whose domain did not come on, (c)); the wake part only if this suspend's entry
+  part made R6. So: **on at boot, off at an entry**: that entry part and the wake part after it make
+  nothing; `pmp`, still running, falls to the logic's own rule (D9 (b)'s table, `cand_c18` off: the
+  logic stops it if it finds its domain on, and with PMS_SRAM self-gating at `0x1000030f` it may find
+  it off and leave `pmp` running; that is the run's set-up, not the client's), and the client counts
+  `pmp` as not its own until the next boot; **on at an entry, off at the wake after it**: that wake
+  part makes nothing, `pmp` stays stopped, and the later parts make nothing until the next boot; **off
+  at boot, on later**: the client never acts in that boot (`pmp` never started). Reasons: each part
+  rests on the state the part before it left (the entry's stop on a started `pmp`, the wake's R6w on
+  the entry's R6), and a part that acts on a state it did not make is in no capture; the switch is
+  read per part as D5 has the logic's switches read per entry.
+  (f) **Words outside the client's waits** *(new round 15c, gaps G24, G25, G27)*. While `pmp` runs in
+  the client's view (from R71 (e) at boot to the entry part's R5 stop, and from R5w at a wake whose
+  handshake got through to the next entry part's stop), the client answers what `pmp` sends outside
+  its waits, also while it waits for another word (that word stays awaited): endpoint-2 LOG words
+  echoed; endpoint-4 type-8 and type-4 words (`0x0080…`, `0x0040…`) echoed; buffer requests answered
+  (D11 (a)); any other word (endpoint-4 type `0xc`, which macOS received at boot and did not answer,
+  1.7h; a kdebug GET_BUFFER; a word of no known kind) logged and not answered. **This includes the
+  wake's short handshake** (G25): macOS answered such words in the middle of its boot start-up (ten
+  endpoint-4 type-8 words each way between the crashlog reply and IOP power `0x20`; a syslog LOG
+  between `0x000200000023b549` and its first request, evidence "macOS's pmp start-up", section 2), and
+  no recorded wake had one. Before R71 (e), from the entry part's stop to the wake's R5w, after a part
+  that gave `pmp` up ((e)) and with the switch off, the client sends nothing (D3: found stopped, it
+  sends nothing). The rule is "echo the word received", so payloads and EPMAP bitmaps no capture
+  shows (G27) are covered by it; macOS's own echoes carried LOG index 0 and no type-8 or type-4
+  payload. Of G27's other values: a word arriving ahead of an awaited answer is seen (the LOG above);
+  +`0x8114` reading `0x24401` for `pmp` is seen under Linux after the earlier module's stop (I2A,
+  L30), `0x28801` for `pmp`'s +`0x8114` is not (it is in the A2I word's polls at macOS's boot); +`0xfc`
+  reading `0x8001` at the entry is not (macOS read 1). Section 8's rules on read values (R5's "the
+  value read, bit 0 cleared", R5a's "bit s cleared") are rules, so a test may use such values.
 - **D11 — a decision about Linux, not an observation of macOS** (new round 15; C18): *which words
   the client sends.* (a) **Endpoint `0x20`: macOS's words exactly** (R72-R74), except the IOVA in
   the opening's `0x0001…` word, which is an address the client has mapped (macOS: `0x3c000`; an
@@ -5122,6 +5375,87 @@ After the SoC comes up, before macOS is back at idle:
   leaves `pmp` as it is and reports. (e) The mailbox's store width is the kernel mailbox driver's
   (macOS sends the word and its endpoint in one 128-bit store; the earlier Linux start's width is
   not read, its words were answered, L30).
+  *(Round 15c, gaps G5, G6, G7: (a) completed.)* **Fields.** *Documentation*
+  (aurora-silicon/linux `1f38ff8f4` `drivers/soc/apple/rtkit.c`, the buffer request and reply): the
+  size in bits 44-51 in units of 4 KiB, the IOVA in bits 0-43 in bytes; every value seen agrees:
+  macOS's replies (4 at `0x18000`, `0x10` at `0x20000`, 1 at `0x34000`) do not overlap, and L30's
+  (1 at `0xfffec000`, `0xfffd0000`, `0xfffcc000`) were answered. The translator's page is 16 KiB
+  (PARAMS1 `0x0ed01020` read at boot, bits 24-27 = `0xe`; the reference's `DART_PARAMS1_PAGE_SHIFT`),
+  and every IOVA macOS gave is 16 KiB aligned. **Decided:** a buffer of size field s is at least s x
+  4 KiB, in whole 16 KiB translator pages, at a 16 KiB-aligned IOVA; no two of the client's buffers
+  overlap. The opening's word `0x0001…` carries the IOVA in bits 0-31 (both words seen, `0x3c000` and
+  `0xffff0000`, have bits 32-47 zero; bits 48-55 = 1) and no size; the size `pmp` uses there is not
+  read, and the client maps **one 16 KiB page** for it (decision; open question 83). The client sends
+  each buffer's start. **"At once"** (D10 (a)): the 0x55 word is the client's next word after it has
+  received `0x0020300000010000`, with no wait for any word and no delay of its own between (answers
+  to words arriving meanwhile, D10 (f), allowed). **"Not answered"**: the client makes no wait for a
+  reply to a code-`0xe` word or to the wake's five; it goes on to its next step; a delay of its own is
+  allowed (macOS's entry had 0.37 s before R4, R73). **A buffer request after the boot's** (none in
+  any capture: none after the start in macOS's boot captures, none in any wake, 1.7h): for an endpoint
+  whose boot buffer is at least the size asked, the client re-sends that buffer's reply word (the same
+  IOVA and size field); otherwise it maps a new buffer of the size asked and replies with it, keeping
+  the old one mapped. **Every buffer stays mapped until the client unbinds**, across sleeps: the
+  wake's handshake gives no buffer (R74) and R55 writes the boot's table again, so `pmp` keeps the
+  boot's addresses. Reason: the firmware may still write into a buffer it was given (the reference's
+  comment on a repeated request, rtkit.c, says the same).
+  *(Round 15c, gaps G4, G20, G21, G23: (c) revised; replaces "The kernel's RTKit library may be used
+  where its words are those of L30's start, which `pmp` answered (SET_IOP_POWER `0x220` before
+  HELLO_REPLY included)".)* **The client sends every word itself through the mailbox; the kernel's
+  RTKit library is not used for `pmp`.** So the library's own words (SET_IOP_POWER `0x220` before
+  HELLO_REPLY, L30) and its own waits do not occur (G21), and every word is visible to the client's
+  test (G23). **The start-up, in this order** (macOS's, R72, without kdebug's START and buffers):
+  (1) after HELLO: HELLO_REPLY `0x00200000000c000c`, the first word the client sends; (2) after EPMAP
+  base 0 (`0x008000000000001f`): STARTEP 1, 2, 3, 4 ascending, then the EPMAP reply
+  `0x0080000000000001`; (3) after EPMAP base 1 (`0x0088000100000001`): `0x0088000100000000`; (4) each
+  buffer request (endpoints 1, 4, 2) answered as it comes, before the client's next word of its own;
+  (5) after the unrequested IOP power `0x0070000000000020`: AP power `0x00b0000000000020`, its echo
+  awaited; (6) once the echo has come and the three buffer requests are answered: STARTEP
+  `0x0050002000000002`; (7) after `0x0` on endpoint `0x20`: the opening; after `0x000200000023b549`:
+  the 8-bit read of `0x23b549400`, the two request pairs; then the 0x55 word. The client waits
+  (bounded, (d)) for each word named after "after" and for the three buffer requests. **No
+  SET_IOP_PWR_STATE at boot** (macOS sends none, R72), so G20's word is not sent; in the reference's
+  layout it would be `0x0060000000000220` (type 6 in bits 52-59, rtkit.c; documentation only).
+  Reasons: macOS's order is the one recorded twice word for word (det33 = det34b) and its opening was
+  followed by the change (R75); L30's order also reached the opening, but with a word macOS never
+  sends at boot; a client that sends every word itself is tested word by word.
+  *(Round 15c, gaps G19, G22: (d) completed.)* **The longest gaps seen** (from
+  `var/commit-state/r10-pmpstart-det33-boot.txt`, `-det34b-boot.txt` (receipt times on the M3, to
+  0.1 ms), `-det33-entry.txt`, `-det33-wake.txt` (the M1's timer); each from the word the awaited
+  one follows):
+
+  | Awaited word | From | Longest gap |
+  |---|---|---|
+  | HELLO `0x00100000000c000c` | +`0x44` = `0x10` (R71 (e); R5w) | 1.1 ms (det34b); wake 0.1 ms |
+  | EPMAP base 0 `0x008000000000001f` | HELLO_REPLY | 0.6 ms; wake 0.1 ms |
+  | EPMAP base 1 `0x0088000100000001` | EPMAP reply base 0 | 0.7 ms (det34b); wake < 0.1 ms |
+  | buffer request, endpoint 1 | EPMAP reply base 1 | 0.3 ms |
+  | buffer request, endpoint 4 | endpoint 1's reply | 0.3 ms (det33, the first endpoint-4 record) |
+  | IOP power `0x0070000000000020` | +`0x44` = `0x10` | 18.0 ms (det33; det34b 17.5); wake 0.6 ms |
+  | buffer request, endpoint 2 | AP power `0x20` | 0.4 ms |
+  | AP power echo `0x00b0000000000020` | AP power `0x20` | 1.0 ms (det33); wake 0.1 ms |
+  | `0x0` on endpoint `0x20` | STARTEP `0x20` | 0.5 ms |
+  | `0x000200000023b549` | the opening | 589 ms (det34b); L30 63-65 ms |
+  | `0x0020100000010003` | `0x0020000000010003` | 0.3 ms |
+  | `0x0020300000010000` | `0x0020200000010000` | 0.6 ms |
+  | `0x0020900000630000` | `0x0020800000630000` | 0.3 ms (boot); entry < 0.1 ms |
+  | AP `0x201` echo | AP `0x201` | 0.1 ms (entry) |
+  | `0x0070000000000201` | IOP `0x201` | 0.3 ms (entry) |
+
+  **Decided: every wait's bound is 1 s, except `0x000200000023b549`'s, 6 s** (ten times 0.59 s,
+  rounded up); the client may make a bound longer, up to twice these. Reasons: ten times every other
+  gap is under 0.2 s, and these are macOS's gaps under the hypervisor, not Linux's (Linux's mailbox
+  interrupt and scheduling are not timed); a bound that ends early costs a run, a longer one costs
+  seconds only when `pmp` does not answer; the entry part's three waits (R73's one and R4's two)
+  then take at most 6 s, within N = 30 with the rest of D7's first stretch (D7 (a), (d)). In test
+  form: no wait ends before its bound unless its word has come, and every wait ends. **A boot wait that runs out: R5's
+  register stop alone**, five accesses, no R4 words (D10 (a)).
+  (f) **`pmp`'s control page** *(new round 15c, gap G8)*: the client's only accesses to
+  `0x23bc00000` are R71 (e)'s two at boot, R5's three (R +`0x48`, R +`0x44`, W +`0x44` = 0) at each
+  register stop (the entry's, and those of D10 (a), (b)), and R5w's two at the wake; no other read
+  (no +`0x48` at boot, no +`0x44` before the entry's words): each part is decided by the client's own
+  record of the parts before it (D10 (e)), not by a read. On the mailbox page: R71 (d), R5's and
+  R5w's +`0x8114` accesses and the words; the kernel mailbox driver's own status and FIFO accesses
+  are the driver's.
 
 ### 8.1 The requirements since round 6, as statements a test can check (round 11)
 
@@ -5345,7 +5679,7 @@ D4, the seven first-port domain words read request 0 at the commit.
 | D1-D4 | as stated | Decision |
 | D5 | each candidate of 8.2 behind its own switch, off by default; (a)-(f) of D5 | Decision |
 | D6 | *(revised round 14; round 14b; round 14c)* R16's or R22a's wait runs out (no other wait): no further entry step; no read added; each written word put back once, in reverse order of first writes (1.9's order for domains): domains by D1 (request 4 by form (4r)), other words read first to the value read, words never read first left as written; nothing put back in coprocessor blocks, SPMI, the CPU start/stop block, the watchdog block or the pair `0x23b718000`/`004` (no write of either after the wait, whatever C15 read); bounded put-back waits; failure returned, record names the wait: its word, and the kind and core of the wait's last read (32-bit read, core 0), not a put-back access's | Decision (round 13; ds20 C5 hung, L25); form (4r) from the always-on program's decode |
-| D7 | *(revised round 14; round 14c; round 15b)* glue, `wdt` = N: precondition, Linux's watchdog core not driving watchdog 1 (checked without device access; else -EBUSY, no device access); R61's four writes as the glue's first device accesses of its sleep step (before any diagnostic read, record, trace mark, parking or `enter`) and again in the commit-point step, last before the first core's final write (the probe record after them with `probe=1`); disarmed as the glue's last device write on every way back to Linux (D6's failure, a `run_on` not answered, `snap=1`'s stop, `snap=4`'s return, any error, the wake), except when a parked core cannot be given back (record, then panic, left armed, no return); none without `wdt` | Decision (round 13); macOS [HV-CHANGED] 5/5 power-downs with the early arm (1.7g); L31; panics in the sleep step reset (ds10, ds11) |
+| D7 | *(revised round 14; round 14c; round 15b; round 15c)* glue, `wdt` = N: precondition, Linux's watchdog core not driving watchdog 1 (its `WDOG_ACTIVE` and `WDOG_HW_RUNNING` flags, read without device access; no driver bound: not driving; a driver whose state cannot be read: refusal; else -EBUSY, no device access in any callback of that sleep); R61's four writes as the glue's first device accesses of its sleep step, first in `begin` (before `begin`'s record and clock read, the offlining, any diagnostic read, record, trace mark, parking or `enter`) and again in the commit-point step, last before the first core's final write (the probe record after them with `probe=1`); disarmed as the glue's last device write on every way back to Linux (D6's failure, a `run_on` not answered whose core's release is answered, `snap=1`'s stop, `snap=4`'s return, any error, the wake; in `end` after Linux's abort before `enter`), except when a parked core's release is not answered (record, then panic, left armed, no return; the glue's panic notifier writes nothing on that panic); none without `wdt` | Decision (round 13); macOS [HV-CHANGED] 5/5 power-downs with the early arm (1.7g); L31; panics in the sleep step reset (ds10, ds11) |
 | D8 | *(new round 14; round 14b; round 14c)* logic and glue: `c3_readings() -> [Option<u32>; 9]`, `None` until read in this `enter`, for after `enter` returns; the commit-point step called after R38's third write and C3 (iii), before the final writes, with the same nine as its argument; one record per step (`snap=2`/walk, else C3 with `cand_c3`, else 'W'), no glue access after the step but `probe=1`'s record after the first final write; C3 record: a 4-bit code per slot plus the latest odd value in part (f); on D6's return the glue writes the failure record, gives the cores back, then disarms watchdog 1 | Decision (round 14) |
 | R70 | no write to `0x23b058000`, `0x23b05c000`, `0x23b060000`; only 32-bit reads of the first word of the last two pages | all captures, 48 boots (touch maps) |
 | R71 | *(new round 15)* `pmp`'s start at boot: SRAM header, boot-argument block written back as read, translator, +`0x8114` = `0x20001`, +`0x44` = `0x10` | det33, det34b; the block `135map4`, the translator `det10` (one boot each) |
@@ -5353,9 +5687,10 @@ D4, the seven first-port domain words read request 0 at the commit.
 | R73 | *(new round 15)* entry: `…550001`/`…540001`, `0x208` `0x63` answered, `…550000`/`…540000` before R4 for `pmp`; translator +`0xfc` after R5 | det33; det18, det23; det35-det37 |
 | R74 | *(new round 15)* wake: PMP, PMS_SRAM, PMS on; twelve words; R6w; R55; R5w; short handshake (EPMAP echoed, no STARTEP, no buffers, no opening); `…630001`, both `…0001`, both `…0000` | det33; det18, det23; det35-det37 |
 | R75 | *(new round 15)* none (basis of C18): the words change after `pmp`'s start and after the 0x55 word, not while it is dropped | [HV-CHANGED] 1 boot, 2 wakes dropped; 4 boots, 2 wakes sent |
-| D9 | *(new round 15)* C18 is the kernel side's (`pmp` client); the logic has no C18 behaviour: with `pmp` found stopped no access to its mailbox, SRAM (but the twelve words) or translator, in entry or wake | Decision |
-| D10 | *(new round 15)* client: boot at probe, the word right after the opening; entry part before `enter`; wake part after `enter` returns, also on failure | Decision |
-| D11 | *(new round 15)* endpoint `0x20` macOS's words (own IOVA); at boot only `…550000` after the opening; no kdebug; short handshake at the wake; bounded waits | Decision |
+| D3 (b) | *(new round 15c)* `sio`/`pmp` found stopped (domain on, +`0x44` bit 4 clear): no message, no write to its blocks or translator, no R6; at the wake no R6w, R55, R5w | Decision (changes the logic at `HEAD`, G26) |
+| D9 | *(new round 15; (b) restated, (e) new, round 15c)* C18 is the kernel side's (`pmp` client); the logic has no C18 behaviour: with `pmp` found stopped no access to its mailbox, SRAM (but the twelve words) or translator, in entry or wake, also with PMS_SRAM `0x1000030f`; found running, section 8's R4-R6, R6w, R55, R5w; the translator the client's alone | Decision |
+| D10 | *(new round 15; completed round 15c)* client: boot at probe, the word right after the opening; entry part before `enter`; wake part after `enter` returns, also on failure; no domain write at boot, buffers before any access, domain off or no buffer: no access, error; boot timeout: R5's register stop alone; entry timeout: register stop, translator, R6, sleep goes on; after a wake timeout: next entry stops without words; switch read per part, a part acts only after the part before it; LOG, type-8, type-4 words echoed while running, also in the wake's handshake | Decision |
+| D11 | *(new round 15; completed round 15c)* endpoint `0x20` macOS's words (own IOVA, bits 0-31; one 16 KiB page); at boot only `…550000` after the opening, at once; no kdebug; every word sent by the client in macOS's start-up order, no RTKit library, no SET_IOP_PWR_STATE at boot; buffers: size x 4 KiB in 16 KiB pages, distinct, kept mapped; short handshake at the wake; bounds 1 s (6 s for `0x000200000023b549`); control page only R71 (e), R5, R5w | Decision |
 
 ### 8.2 Candidate requirements C1-C17 (round 12) and C18 (round 15)
 
@@ -5790,7 +6125,8 @@ Switch `cand_c6`.
   *(Round 15; C18, D9.)* With `cand_c18` on, the `pmp` client has stopped `pmp` and made R6 before
   `enter` (D10 (b)): C8 then reads PMP on, +`0x48` `0x2e`, +`0x44` bit 4 clear, and makes no
   message, no stop and no R6; the wake makes no R5w, R6w or R55 for `pmp`; PMS_SRAM is found on
-  (C18 (c)), so C8 turns nothing on.
+  (C18 (c)), so C8 turns nothing on. *(Round 15c, G26.)* That is D3 (b), now stated for `pmp` found
+  stopped with or without `cand_c8`.
 - *Not observed.* What `pmp` reads or answers under Linux (open question 38; partly, L30); which
   domain R6's block is in.
 
@@ -6007,6 +6343,14 @@ Switch `cand_c6`.
   `0x0020e00000540001`, `0x0020e00000550000`, `0x0020e00000540000` (det33's order).
   (g) With the switch off: no access to `pmp`'s control page, mailbox, SRAM or translator, and
   PMP, PMS_SRAM, PMS as Linux has them now (L29).
+  *(Round 15c, gaps G1-G27.)* Completed by D9 (b) (the logic makes none of (d)'s or (f)'s steps for
+  the `pmp` the client stopped; D3 (b)), D9 (e) (the translator the client's alone), D10 (a)-(c)
+  (domains at boot are Linux's, buffers before the first access, every way out), D10 (e) (the switch
+  read per part; a part acts only after the part before it), D10 (f) (words outside the waits,
+  echoed also in the wake's handshake), D11 (a) (fields, sizes, "at once", later buffer requests),
+  D11 (c) (the start-up's order; no kernel RTKit library, no SET_IOP_PWR_STATE at boot), D11 (d)
+  (bounds: 1 s, 6 s for `0x000200000023b549`), D11 (f) (control-page accesses), R71 (c) (det10's
+  writes in full, both +`0xfc` = 0) and R73 (the translator's reads before each +`0xfc` write).
   **Test lines** (the client's test author): the words and accesses of (b), (d), (f) in order, each
   wait bounded (D11 (d)); (d) complete before the logic's `enter` is called; (f) after `enter`
   returns, on success and on failure; no endpoint-`0x20` word sent before the reply to the request
@@ -6636,12 +6980,29 @@ readings of Linux, 66-67 of macOS under the hypervisor.
     the reset read on the M3 (the M1's port dropping) and the fault shadow and record read after;
     it says whether the panic's restart or watchdog 1's bite ends it, and how long a core that does
     not answer delays it. Way out without hands: watchdog 1, armed by D7 (a).
+    *(Round 15c; L32.)* **Partly answered.** On ds21's kernel and command line no process holds
+    `/dev/watchdog0` and systemd reports no runtime or reboot watchdog, so nothing in user space makes
+    it active; on the stock kernel systemd holds it (30 s). `state`, `timeout`, `bootstatus`,
+    `hw_running` do not exist (`CONFIG_WATCHDOG_SYSFS` not set). **Still open:** whether
+    `WDOG_HW_RUNNING` is set on the test kernels (by the reference's `apple_wdt`, when watchdog 1's
+    control reads the reset enable at its probe). *Settles it:* `0x23d2b001c` and `0x23d2b0014` read
+    32-bit over `/dev/mem` on a ds21-like boot with nothing holding `/dev/watchdog0` (with nothing
+    holding it, Linux's core keeps a watchdog it found running pinged and armed, so bit 2 set says
+    `WDOG_HW_RUNNING`, clear says neither flag); and the second part above.
 82. **The duration of the glue's pre-entry work** (round 15b, Linux; D7 (a), (d)). From D7 (a)'s
     arming to R15's restart of the count, with each diagnostic option (`snap` 1, 2, 4 and
     `probe=1`) and with none: the glue's trace marks' times or the kernel log's timestamps around
     the sleep step. It says whether N = 30 covers the first stretch with the 792-word snapshot (ds13
     and ds15 suggest seconds at most: `echo mem` returned 4 s after the start in ds13, including
     the suspend and resume, but the stretch itself was not timed).
+    *(Round 15c, GL11.)* With (a) in `begin`, the stretch runs from `begin` to R15 and includes
+    Linux's device suspend (the `pmp` client's entry part with `cand_c18`); to be timed the same way,
+    from `begin`'s first mark.
+83. **The size of `pmp`'s endpoint-`0x20` buffer** (round 15c; D11 (a), gap G5). The opening's word
+    carries an IOVA and no size; macOS gave `0x3c000` (the last of its IOVAs), the earlier Linux start
+    `0xffff0000`. *Settles it (macOS, under the hypervisor):* one boot with the translator's table at
+    its TTBR (det10: `0x8217dc000`) read from DRAM after the opening, giving the mapping macOS made at
+    `0x3c000` and its length. Until then D11 (a)'s one 16 KiB page.
 
 ## 10. With and without the cable
 
@@ -7252,6 +7613,31 @@ captured on. The numbers L1-L15 are for reference from tests and from section 4.
   `apple_wdt`'s resume step restarts watchdog 1 (count 0, reset enabled) when it is active, after
   the platform's wake step; this spec has not read that code and uses the report only as the
   reason for D7 (c) and (e).
+  *(Round 15c.)* The reference's code (aurora-silicon/linux `1f38ff8f4`,
+  `drivers/watchdog/apple_wdt.c`) has been read as reference since: its resume step starts watchdog
+  1 (count 0, control = reset enable) when the device is active **or** marked running in hardware,
+  its suspend step stops it (control 0) on the same condition, and its probe marks it running in
+  hardware when it reads the control's reset enable; the test kernels' own code is not read.
+- **L32 (Linux awake, stock kernel `7.3.0-0test5-1-ARCH` and ds21 `7.2.11-ds21`, 2026-11-19
+  02:59-03:05; read-only, no sleep started, no `/dev/mem`; evidence "ds21", section "Watchdog reads",
+  commit `33ef97f`; added round 15c).** On **ds21's command line** (`panic=10
+  systemd.watchdog_sec=0 apple_deepsleep.enable=1 apple_deepsleep.alarm_secs=60 no_console_suspend
+  apple_deepsleep.wdt=30`): **no process holds `/dev/watchdog` or `/dev/watchdog0`** (every
+  `/proc/*/fd`); `systemctl show`: `WatchdogDevice=` empty, `RuntimeWatchdogUSec=0`,
+  `RebootWatchdogUSec=0`; no systemd hardware-watchdog line in the journal; `apple-watchdog`
+  (`apple_wdt`, built in) bound to `/soc/watchdog@23d2b0000`, but `/sys/class/watchdog/watchdog0`
+  is under `/sys/devices/virtual/watchdog/` with **no `device` link** (cause not read). On the
+  **stock** command line: systemd (pid 1) holds `/dev/watchdog0` (fd 15), `RuntimeWatchdogUSec=30s`,
+  `RebootWatchdogUSec=2min`, from `/etc/systemd/system.conf.d/90-maclab-watchdog.conf` (present on
+  both boots; `systemd.watchdog_sec=0` makes it read 0); `watchdog0` -> the platform device, with a
+  `device` link. On both: `CONFIG_WATCHDOG_SYSFS` not set (no `state`, `timeout`, `bootstatus`,
+  `identity`, `hw_running`, `timeleft`, `nowayout`), `WATCHDOG_HANDLE_BOOT_ENABLED=y`,
+  `WATCHDOG_NOWAYOUT` not set, `watchdog.handle_boot_enabled=Y`. Not read: whether watchdog 1 was
+  running in hardware (`WDOG_HW_RUNNING`), `0x23d2b0014` and `0x23d2b001c` (open question 81). The
+  same evidence's two `wdt=30` runs of ds21 (`cand` `0x3fffe` and `0x1020`) each reached the commit
+  point (the C3 record, D8 (f)'s own example bytes `64 43 36 64 f3 00 00 00` after 'D' 'V'; and 'W')
+  and ended in a reset, first answer 62-63 s after the start, fault shadow bit 11 only; whether the
+  chip powered down first, and whether the reset was watchdog 1's, are not read.
 
 ## Appendix: scripts and extracts (all in `var/spec/`)
 
@@ -7367,6 +7753,109 @@ written but hold their awake value. The 137 domain words are in 4.2a.
 - `0x23d0e0000`..: `0x23d0e2100` `0x1000100`.
 - `0x23d240000`..: `0x23d240000` `0x80100010`; `0x23d240004`-`0x23d24001c` `0x81100100`; `0x23d240020` `0x81100000`; `0x23d240024`-`0x23d240034` `0x81100100`; `0x23d240038` `0x81100000`; `0x23d24003c` `0x81100100`; `0x23d240040` `0x1101100`; `0x23d240044`-`0x23d24004c` `0x82100100`; `0x23d240050` `0x80100100`; `0x23d240054` `0x81100000`; `0x23d240304` `0x10000000`; `0x23d240308` `0x1000000`; `0x23d240314` `0x1000000`; `0x23d240320` `0x0`; `0x23d240330`-`0x23d240370` `0x0`.
 - `0x23d2c0000`..: `0x23d2c0000`-`0x23d2c000c` `0x0`; `0x23d2c0010` `0x880ff04`; `0x23d2c0014` `0x7`; `0x23d2c0018` `0x1`; `0x23d2c001c` `0xff0`; `0x23d2c0020`-`0x23d2c003c` `0x0`.
+
+## Changes in round 15c (2026-11-19: the glue test author's gaps GL10-GL13 and the `pmp` client's test author's gaps G1-G27; the sleep step, the panic's record, D7 (e)'s check; who makes each of `pmp`'s steps, and the client's order, buffers, bounds and ways out)
+
+Inputs: the spec at `f411b43` (round 15b); the gap lists `docs/spec/gaps-reported-by-glue-tests-r3b.md`
+(lab `f15960c`) and `docs/spec/gaps-reported-by-glue-tests-r4.md` (lab `4e4b50a`, with its fill and
+review: G1-G27, G19 amended); the coordinator's message on G26; evidence
+`docs/evidence/2026-11-17-deepsleep-clean-runs/README.md` sections "ds21" (`33ef97f`), "macOS's pmp
+start-up and endpoint-0x20 exchange", "Hypervisor round 11" and "Earlier Linux runs with pmp started",
+with the decoder outputs `var/commit-state/r10-pmpstart-det33-boot.txt`, `-det34b-boot.txt`,
+`-det33-entry.txt`, `-det33-wake.txt` for the gaps of D11 (d); *reference, read as data*:
+aurora-silicon/linux `integration/aurora` `1f38ff8f4` (`include/linux/suspend.h`,
+`drivers/watchdog/apple_wdt.c`, `drivers/soc/apple/rtkit.c`, `drivers/iommu/apple-dart.c`). No
+test, glue, driver `src/` or old driver branch was read. No new capture or run. The evidence file is
+not changed. Inline marks "round 15c" are this round's. All answers are decisions about Linux except
+where a reading is named.
+
+**The glue (GL10-GL13):**
+- **GL10** (a `run_on` not answered: disarm or panic?): decided by the core's **release**: the glue
+  tries the release as for every parked core; all given back: the plain way back with the disarm; a
+  release not answered: the exception (record, panic). D7 (c).
+- **GL11** (which callback is the sleep step): **the glue's callbacks from `begin` to `end`**; D7 (e)'s
+  check and then R61's four writes first in `begin`, before its record, its clock read, the offlining,
+  `dump`'s reads and `enter`; so N also covers Linux's device suspend; "no device access at all in
+  that sleep" covers `begin`'s record and read; Linux's abort before `enter` is a way back, disarmed in
+  `end`. D7 (a), (c), (d), (e); open question 82 widened.
+- **GL12** (no driver bound; which flag): no driver bound to `/soc/watchdog@23d2b0000` gives **"not
+  driving"** (the sleep goes on); a bound driver whose state cannot be read gives a refusal; "active"
+  and "marked running in hardware" are Linux's `WDOG_ACTIVE` and `WDOG_HW_RUNNING` only, never the
+  control word. D7 (e); L32 (ds21: no holder, no `device` link); open question 81 partly answered.
+- **GL13** (the panic notifier's 'P'): **the notifier writes nothing on the exception's panic** (the
+  glue marks it before `panic()`), so the exception's record stands; on any other panic it writes 'P'
+  as before. D7 (c), D8 (c).
+
+**The `pmp` client (G1-G27):**
+- **G1** (a domain not on at boot): the client writes no domain at boot (Linux's power-domain driver's,
+  through C18 (a)); finding any of the three not at state `0xf` with bit 28: no other access, an error
+  from its probe, later parts nothing. D10 (a), (e). **G16** (no buffer) has the same answer: buffers
+  are had before any access to `pmp`. D10 (a).
+- **G2** (SRAM writes above `0x23b540000`): none but the block's 180 (not logged in any boot; open
+  question 79). R71 note.
+- **G3** (+`0xfc` = 0 once or twice): **twice**, det10's sequence of writes in full. R71 note.
+- **G4, G20, G21, G23** (one answer): **the kernel's RTKit library is not used**; the client sends every
+  word itself in macOS's start-up order (written out step by step); no SET_IOP_PWR_STATE at boot, so
+  G20's word is not sent (its reference form noted); the library's waits do not occur. D11 (c).
+- **G5** (fields and sizes): size bits 44-51 in 4 KiB units, IOVA bits 0-43 (reference fields, every
+  value seen agrees); buffers in whole 16 KiB translator pages (PARAMS1 read), 16 KiB aligned, not
+  overlapping; the opening's IOVA in bits 0-31; its size not read, one 16 KiB page (open question 83).
+  D11 (a).
+- **G6** ("at once", "not waited for"): the 0x55 word is the client's next word after
+  `0x0020300000010000`, no wait or delay between; "not answered" means no wait for a reply, a delay
+  allowed. D11 (a).
+- **G7** (buffer requests after boot): re-send the boot's reply for that endpoint if large enough, else
+  a new buffer, the old kept; all buffers mapped until unbind, across sleeps. D11 (a).
+- **G8** (control-page accesses): exactly R71 (e), R5's and R5w's; parts decided by the client's own
+  record, not by reads. D11 (f).
+- **G9** (the reads before each +`0xfc` write): det33's ten accesses written out; required: a read of
+  +`0xfc` immediately before each write and of that stream's TCR since the previous one. R73 note.
+- **G10** (other accesses in the entry part): C18 (d)'s only, reads of the three domains before the
+  first word allowed, nothing interleaved with R6. D10 (b).
+- **G11** (both domains off at the wake): PMS must read state `0xf`, then PMP, then PMS_SRAM, R74's
+  order and forms; PMS not written by the client. D10 (c).
+- **G12** (after a boot wait ran out): R5's register stop alone; later parts nothing. D10 (a), (e).
+  **G22** (R5's stop without R4): the same answer, five accesses, no R4 words. D10 (a), D11 (d).
+- **G13** (after an entry wait ran out): R5's register stop, then the translator's two writes and R6;
+  the sleep goes on; the wake part is the normal one. D10 (b).
+- **G14** (after a wake wait ran out): the next entry part sends no word and makes the register stop,
+  the translator's writes and R6; the wake after it is the normal one. D10 (b).
+- **G15** (PMS_SRAM never at state `0xf`): report, no R6w, R55 or R5w, `pmp` stays stopped, later
+  parts nothing. D10 (c), (e).
+- **G17, G18** (the switch; one answer): each part reads `cand_c18` at its start; off: no call of any
+  kind; a part acts only after the part before it acted; the three mixed cases written out. D10 (e).
+- **G19** (bounds of the other waits): the longest gap for every awaited word, from the decoder
+  outputs (table); **1 s for every wait, 6 s for `0x000200000023b549`**, up to twice allowed.
+  D11 (d).
+- **G24, G25** (words outside the waits; LOG during the wake's handshake): echoed whenever `pmp` runs
+  in the client's view, **also inside the wake's handshake** (macOS answered such words inside its
+  boot start-up); nothing from the entry's stop to the wake's R5w or after a part gave `pmp` up.
+  D10 (f).
+- **G26** (D9 (b) against the logic at `HEAD`): section 8 did not give D9 (b); **decided D3 (b)**: a
+  `sio` or `pmp` found stopped gets no message, no write, no R6 and no restore at the wake; the logic
+  changes through its own cycle; the client keeps all of C18's steps; a table of who makes each step
+  with `cand_c18` off and on, and the test form for each side. D3 (b), D9 (b), R6 note, C8 note.
+- **G27** (values no capture shows): which are seen (a word ahead of an awaited answer; `0x24401` on
+  `pmp`'s +`0x8114` under Linux, L30) and which are not; the echo and section 8's rules on read values
+  cover the rest. D10 (f).
+- **The translator's owner** (the gap list's note outside the tests): the client alone; C18 (a)'s
+  nodes do not bind it to Linux's translator driver. D9 (e).
+
+**Observations added:** L32 (the watchdog under ds21's command line and the stock one; ds21's two
+`wdt` runs reached the commit point and reset). **Notes added:** R6 (the restore only for a
+coprocessor the entry stopped), R71 (det10's writes in full; no SRAM write but the block), R73 (the
+translator's reads), C8, C18, L31 (the reference's `apple_wdt` read). **Decisions changed:** D3 (b)
+new; D7 (a) (the sleep step, `begin`), (c) (GL10, the abort in `end`, GL13), (d), (e) (GL11, GL12);
+D8 (c) (GL13); D9 (b) restated, (e) new; D10 (a)-(c) completed, (e), (f) new; D11 (a), (d) completed,
+(c) revised (no RTKit library), (f) new. **Open questions:** 81 partly answered, 82 widened, 83 new.
+
+**Sections changed:** status; 8 (R6 note, R71 note, R73 note, D3, D7, D8 (c), D9, D10, D11); 8.1 (rows
+D3 (b), D7, D9, D10, D11); 8.2 (C8 note, C18 note); 9 (81, 82, 83); 12 (L31 note, L32 new).
+
+**Corrections:** D9 (b)'s round-15 statement that section 8 "already gives" the logic's behaviour for
+a `pmp` found stopped was wrong (gap G26): section 8's R5, R6, R6w, R55 and R5w had no condition; it is
+now D3 (b). D7 (a)'s round-15b sentence that Linux's device suspend is outside the glue and not
+covered is withdrawn (GL11). D11 (c)'s permission of the kernel's RTKit library is withdrawn (G4).
 
 ## Changes in round 15b (2026-11-19: two points of the glue's C and arm64 review; watchdog 1's first arming and the "left armed" exception)
 
