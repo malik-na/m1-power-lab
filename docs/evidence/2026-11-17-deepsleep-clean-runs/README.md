@@ -2085,3 +2085,10 @@ longer swaps modules; `tuxvdmtool` runs with `--no-recover` (no unbind or rebind
   `duplicate filename` on the M3.
 
 Not yet tested: a restart of a frozen M1 (the real case).
+
+## Run ds20, all candidate switches but C3 and C5 together (2026-11-19 00:05-00:08)
+
+`cand` = `0x3ffd6` (C1, C2, C4, C6-C17), otherwise as the single-switch runs. Outcome RESET 63 s
+after the start: record `44 57 00 40 2c 3d 02 30 a0 00` ('W': commit reached, watchdog armed),
+`0x0201` = `04`, fault shadow `0x001c00` (bit 12 set since the USB-C restart test at 23:57). So
+with every candidate but C3 and C5 on together, the SoC still stays up after the commit.
