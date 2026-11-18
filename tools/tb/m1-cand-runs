@@ -1,0 +1,38 @@
+#!/bin/bash
+# Unattended candidate-switch runs of the deep-sleep driver on the M1, one sleep per mask.
+#   tools/tb/m1-cand-runs <kernel.tar.zst> <tag> <cmdline file> <out.tsv> <mask> [<mask> ...]
+# Each run: stock kernel up -> the test kernel booted once (its modules restored first) ->
+# apple_deepsleep.cand set to the mask -> a real sleep -> the outcome, one of:
+#   WOKE   the M1 answers again on the test kernel with the same boot id (it slept and woke);
+#   RESET  it answers on the stock kernel (watchdog or other reset; the power chip is read);
+#   DARK   nothing answers within the bound: the series stops (it may be asleep; Naeem's hands).
+# The run needs apple_deepsleep.wdt on the command line; real.sh refuses a sleep without it.
+set -u
+here=$(cd "$(dirname "$0")" && pwd)
+pkg=${1:?pkg}; tag=${2:?tag}; cl=${3:?cmdline}; out=${4:?out.tsv}; shift 4
+"$here/m1-claim" check || exit 1
+krel=$(zstd -dc "$pkg" | tar -t | sed -n 's|^usr/lib/modules/\([^/]*\)/vmlinuz$|\1|p' | head -1)
+m1() { timeout "${T:-20}" "$here/m1tb" "$1" 2>/dev/null || timeout "${T:-20}" ssh -o ConnectTimeout=6 m1ts "$1" 2>/dev/null; }
+up() { local end=$(( $(date +%s) + $2 )) r; while [ "$(date +%s)" -lt "$end" ]; do r=$(T=8 m1 "echo \$(uname -r) \$(cat /proc/sys/kernel/random/boot_id)") && case "$r" in *"$1"*) echo "$r"; return 0;; esac; sleep 3; done; return 1; }
+log() { echo "$(date +%T) $*"; }
+REC='python3 -c "import os;f=os.open(\"/sys/bus/nvmem/devices/spmi_nvmem0/nvmem\",os.O_RDONLY);g=lambda a,n:(os.lseek(f,a,0),os.read(f,n).hex(\" \"))[1];print(g(0x9f04,10),\"|0201\",g(0x201,1),\"|shadow\",g(0xa47b,3))"'
+for mask in "$@"; do
+	up 0test5 300 >/dev/null || { log "mask=$mask: stock kernel not up"; exit 1; }
+	timeout 400 "$here/m1-bootonce" "$pkg" "$tag" "$cl" >/dev/null 2>&1 || { log "mask=$mask: boot-once failed"; exit 1; }
+	b=$(up "$krel" 200) || { log "mask=$mask: test kernel not up"; exit 1; }
+	boot=${b##* }
+	s=$(m1 "sleep 8; P=/sys/module/apple_deepsleep/parameters; echo $mask > \$P/cand && echo cand=\$(cat \$P/cand) wdt=\$(cat \$P/wdt) && systemd-run --unit=cand$mask /bin/bash /var/lib/m1power-ds/real.sh >/dev/null 2>&1 && echo started \$(date +%T)") || s=
+	case "$s" in *started*) ;; *) log "mask=$mask: sleep not started ($s)"; exit 1;; esac
+	t0=$(date +%s); sleep 15; res=DARK; r=
+	while [ $(( $(date +%s) - t0 )) -lt 240 ]; do
+		r=$(T=8 m1 "echo \$(uname -r) \$(cat /proc/sys/kernel/random/boot_id)") && { case "$r" in *"$boot"*) res=WOKE;; *0test5*) res=RESET;; *) res=OTHER;; esac; break; }
+		sleep 3
+	done
+	dt=$(( $(date +%s) - t0 ))
+	rec=; [ $res = RESET ] && rec=$(m1 "$REC")
+	[ $res = WOKE ] && rec=$(m1 "sed -n 2,3p /var/lib/m1power-ds/real.out | tr '\n' ' '")
+	printf '%s\t%s\t%s\t%ss\t%s\n' "$mask" "$(date +%T)" "$res" "$dt" "$rec" | tee -a "$out"
+	[ $res = DARK ] && { log "DARK after mask=$mask: stopping; the M1 may be asleep"; exit 2; }
+	[ $res = WOKE ] && { m1 'systemctl reboot' >/dev/null; sleep 20; }
+done
+log "series done"
