@@ -3952,3 +3952,304 @@ In stock Omarchy (`7.3.0-0test5-1-ARCH`, up since 04:19:00), with the default bo
 untouched. ds23p's kernel stays on the ESP under `s2r/ds23p`. The read log
 `/var/lib/m1power-pmpdart.log` was removed before the reboot, and its absence was checked on stock.
 The claim is released.
+
+## Hypervisor round 12: what macOS maps for pmp, and its opening page (det38, det39, 2026-11-19 04:46-04:57)
+
+Readings only, two macOS 13.5 boots under the hypervisor, no sleep. Taken for the spec's open
+questions 83, 84 (g) and 85 (lab `7a6e366`): what macOS's translator for `pmp` (DART
+`0x23b300000`, ADT `/arm-io/dart-pmp`) maps, and what the page at IOVA `0x3c000` holds. The table
+was walked from DRAM with every guest CPU stopped (m1n1's rendezvous), reads only: the DART's
+registers by 32-bit reads, the table pages and every DRAM page it maps by memory reads. No page
+the DART maps to MMIO was read. Times `t` are seconds from the touch map's start. Where a reading
+was not taken, the text says so.
+
+**Short answer.**
+- **One table, stream 0, the same at every point read (2.6 s to 77.3 s).** TCR0 `0x80`, TCR15
+  `0x100`, ENABLED_STREAMS `0x1`, one valid TTBR (`0x200`: det38 `0x808229f8`, det39 `0x8082282c`).
+  The L1 table has 5 valid entries (indices 0, 96, 97, 98, 99: IOVA `0x0`-`0x1ffffff` and
+  `0xc0000000`-`0xc7ffffff`), each pointing at one L2 page.
+- **113 valid 16 KiB pages:**
+  - **13 DRAM pages**, IOVA `0x4000`-`0x4bfff` (not `0x0`, `0xc000`, `0x14000`, `0x1c000`,
+    `0x30000`, `0x38000`). Their physical addresses differ between the two boots.
+  - **100 MMIO pages, `0x190000` bytes, IOVA `0xc0000000`-`0xc6003fff`**, in 34 ranges. **Each range
+    is one ADT `/arm-io/pmp` `reg` entry, at its address and size: every non-zero entry from index 3
+    (`pio-reg-index` = 3) to 43.** Identical in both boots.
+  - Count, total and span are those of the earlier Linux module's "34 windows" (`0x190000` bytes
+    at `0xc0000000`-`0xc6004000`, as this round's brief quotes them from spec round 15e). That
+    module's own IOVA-to-address list is not read here, so whether each window sits at the same
+    IOVA is not compared.
+- **Not mapped:** `pmp` reg 0 (`0x23bc00000`, control and mailbox), reg 1 (`0x23b850000`), reg 2
+  (the SRAM `0x23b500000`), and the SRAM segments' IOVAs `0x100000000` / `0x10002c000` (ADT
+  `segment-ranges`).
+- **Every PTE ends in `0x3`:** bit 0 (VALID) and bit 1 (SP_DIS in the reference driver). Bits 7/8
+  (NO_WRITE / NO_READ in the reference) are clear. The subpage fields (bits 40-63) are 0.
+- **When `pmp`'s CPU is released, its DART has no table yet** (det39, read inside the trap of
+  macOS's `W 0x23bc00044` = `0x10`, before the write was done): TTBR `0x200` = 0,
+  ENABLED_STREAMS = 0. The TCRs are already set. The TTBR write (`0x8082282c`) and the enable come
+  after it, from another CPU. det38's log has the same order, by receipt time.
+- **Page IOVA `0x3c000`** (both boots byte for byte the same at each point):
+  - **When macOS writes `0x000100000003c000`, and just after:** 77 non-zero bytes, all in
+    `+0x2000`-`+0x207f`. That 0x80-byte block equals bytes `0x80`-`0xff` of the ADT property
+    `/arm-io/pmp/iop-pmp-nub` `energy-model-dram-configs` (0x200 bytes; the node's `dram-capacity`
+    is 8). The rest of the page is zero.
+  - **By the read of `pmp`'s `0x000200000023b549`:** `+0x0`-`+0x19cf` written (3197 bytes changed;
+    `+0x2000` block unchanged). A header reading `EHUB`, `PM`, `FAST_DIE`, then **90 records of
+    0x48 bytes** (two 32-bit words, then a 64-byte name): `ehub-node-mask`,
+    `pm-device-sampling-mask`, `pm-device-counter-mask`, `pm-dcs-rt-*-bw-threshold-v*`,
+    `pm-gpu-constraint-p1..p6-dcs/-soc`, `pm-gpu-read/write-bw-threshold-*`,
+    `pm-ane-bw-threshold-*`, `pm-sep-bw-threshold-*`, `fast-die-*`.
+  - **No guest CPU wrote the page** between the opening word and 139 s (det39: writes to the page
+    trapped from the opening word on: 0 writes). **No guest CPU read it** in that time either.
+  - The first 0x40 bytes were still zero at every mailbox access up to the one just before
+    `pmp`'s reply was read (det39: changed at `t` 4.15, the reply read at 4.21).
+  - Unchanged from the reply to 77.3 s.
+- **Page IOVA `0x48000`, `+0x2000`-`+0x228f`: a table of 41 (IOVA, size) pairs, one for each
+  `pmp` reg index 3-43, each the IOVA and size the DART maps that entry at** (all 34 non-zero
+  entries match; the 7 zero-size entries are zero). Present when the opening word is written.
+  Words `+0x0`/`+0x4`/`+0x8` went 0/0/0 -> 2/`0x01000000`/`0x01000000` before the reply with no
+  guest CPU write.
+- **Page IOVA `0x40000`:** a table of names and numbers (`SOC`, `VMIN` `0x28d`, `VNOM` `0x2bf`,
+  `VMAX` `0x371`, `DCS`, `DISP`, `ECPU`, `PCPU`, `GPU`, `ISP`, `VENC`, `VDEC`, `ANE`, `PCIE`, `ATC0`,
+  `NRO0`, …). Empty when the opening word is written; 64 non-zero bytes just after it, 164 at the
+  reply, 224 at the 0x55 message. No guest CPU write. macOS's CPUs read `+0x0`-`+0x2c0` right
+  after the reply (288 reads, t 4.245-4.284, 7 pcs).
+- **At 77.3 s, 6.2 s after `0x0020e00000550000`:** the TTBR, the five L1 entries and all 113 PTEs
+  are as at the opening word. The three pages are as at the 0x55 message. Between the reply and the
+  0x55 message only `0x40000` changed (164 -> 224 non-zero bytes).
+
+### The runs
+
+- **Hypervisor:** `~/m1n1-next` `c2d99a4e` (build `v2.0.0-148-gc2d99a4e`, round 11's), unchanged;
+  `hv_hold_msg` left 0. The proxy client is `~/m1n1` (`c288f8d4`), unchanged.
+- **Host side, private (`var/commit-state/`):**
+  - `r12_pmp_dart.py`, a run_guest script loaded before the touch map. It traps the mailbox page
+    `0x23bc08000` synchronously, and with `R12_CTRL=1` the control page `0x23bc00000` too. Dumps:
+    - `start-pre`: macOS's `W +0x44` = `0x10`, before the write (det39);
+    - `open-pre`: the `W 0x23bc08800` = `0x000100000003c000`, before the write;
+    - `open-post`: the next mailbox access, the write done;
+    - `reply`: the read of `0x000200000023b549` from `0x23bc08830`;
+    - `m55-pre` / `m55-post`: the same for `0x0020e00000550000`;
+    - `late`: the first clock tick 6 s after `m55-pre`.
+
+    Each dump is the DART's words, the L1 and L2 pages and the 13 DRAM pages. With
+    `R12_PAGE_TRAP` (det39: `0x3c000,0x40000,0x48000`), guest CPU writes to those DRAM pages are
+    trapped synchronously and their reads traced, from `open-pre` on. Writes through `pmp`'s DART
+    are not seen by such a trap. At `start-pre` it also reads `pmp`'s SRAM header and its
+    boot-argument block (32-bit reads).
+  - `r12-macos-up.sh`: `harness/macos-up.sh` with that script added to run_guest.
+- **Recipe:** round 11's boot, without the hold and the sleep:
+  - `R12_OUT=<dir> [R12_CTRL=1 R12_PAGE_TRAP=0x3c000,0x40000,0x48000] FULL=0 REAL_S2R=0
+    SETTLE_EPOCHS=24 S2R_TOUCH_TICK=250 S2R_TOUCH_SAMPLE=<round 10's nine words>
+    S2R_TOUCH_FULL=0x23bc00000+0x4000,0x23bc08000+0x4000,0x23b300000+0x4000
+    var/commit-state/r12-macos-up.sh detNN`;
+  - the camera showed the login window;
+  - `harness/hv-reboot.sh`.
+
+  The M1 was claimed as `observation` for each run and released between them and at the end.
+- **The no-hands way out:** the attached host and `hv-reboot.sh`; for a dead hypervisor,
+  `tools/m1-reboot/m1-reboot.sh`. Neither boot hung; both ended with `hv-reboot.sh`.
+
+| Run | Run times | `+0x44` / opening / reply / 0x55 (t) | Dumps | Page traps |
+|---|---|---|---|---|
+| det38 | 04:46:40-04:49:20, log to t 148 | async log 2.33 / 2.62 / 3.82 / 71.11 | open-pre, open-post, reply, m55-pre, m55-post, late (77.3) | none |
+| det39 | 04:54:24-04:56:54, log to t 139 | trap 2.32 / 2.64 / 4.21 / 71.15 | start-pre (0 PTEs), then the same six (late 77.3) | 3 pages from 2.64: 0 writes, 288 reads |
+
+- **Login window on the camera** in both runs (04:49:08, 04:56:41). No dump error. Every dump took
+  0.017-0.061 s of host time.
+- **Timing changed by the traps:** the reply was read 1.2 s (det38) and 1.58 s (det39) after the
+  opening word. Round 10's captures, without the mailbox trapped, show 0.27-0.59 s. The page
+  contents were still the same in both runs.
+
+### 1. The DART's words (every dump; det39's `start-pre` where it differs)
+
+- PARAMS1 `0x0ed01020`, PARAMS2 `0x11037`, CONFIG `0x80016100`, `+0x68` `0xf0f0f`, `+0x6c`
+  `0x80808`, REMAP `0x03020100 0x07060504 0x0b0a0908 0x0f0e0d0c` (det38's log).
+- ERROR `0x6000400` in every dump, `start-pre` included.
+- ENABLED_STREAMS `0x1` (`start-pre`: 0).
+- TCR sids 0-14 `0x80`, sid 15 `0x100`, both at `start-pre` already. macOS's own writes in the log
+  are only to sid 0 and sid 15.
+- TTBR sid 0 slot 0: as above (`start-pre`: 0).
+  - Of the other 63 TTBR words, `+0x2f0` reads 0 (macOS writes it 0). The other 62 hold non-zero
+    values with bit 31 clear (det38: `+0x204` `0x73e9665`, `+0x208` `0xbbde7a3`, …), the same at
+    every dump of a boot, `start-pre` included. No table was walked for them.
+
+### 2. The mapping, by range (det38 = det39 for every MMIO entry)
+
+DRAM, physical addresses det38 / det39:
+
+| IOVA | det38 PA | det39 PA | Named in the captures' messages |
+|---|---|---|---|
+| `0x4000` | `0x8229f0000` | `0x822860000` | kdebug SET_BUFFER0 |
+| `0x8000` | `0x8229ec000` | `0x82285c000` | — |
+| `0x10000` | `0x8229fc000` | `0x822830000` | kdebug SET_BUFFER1 |
+| `0x18000` | `0x8228c8000` | `0x8227ec000` | crashlog buffer |
+| `0x20000`, `0x24000`, `0x28000`, `0x2c000` | `0x8228d8000`, `d4000`, `d0000`, `cc000` | `0x822880000`, `83c000`, `838000`, `834000` | ioreport buffer `0x20000` |
+| `0x34000` | `0x8228dc000` | `0x8227f0000` | syslog buffer |
+| `0x3c000` | `0x822a64000` | `0x822868000` | endpoint `0x20` opening word |
+| `0x40000` | `0x822a60000` | `0x8228a4000` | — |
+| `0x44000` | `0x822a9c000` | `0x8228a0000` | — |
+| `0x48000` | `0x822a98000` | `0x82289c000` | — |
+
+MMIO, with the ADT `/arm-io/pmp` reg index each range equals, and the other ADT nodes whose `reg`
+covers it:
+
+| IOVA | Size | PA | `pmp` reg | Also inside |
+|---|---|---|---|---|
+| `0xc0000000` | `0x4000` | `0x200024000` | 3 | `mcc` reg 1, `error-handler` reg 2 |
+| `0xc0004000` | `0x4000` | `0x200064000` | 4 | `mcc` reg 1, `error-handler` reg 5 |
+| `0xc0008000` | `0x4000` | `0x2000a4000` | 5 | `mcc` reg 1, `error-handler` reg 8 |
+| `0xc000c000` | `0x4000` | `0x2000e4000` | 6 | `mcc` reg 1, `error-handler` reg 11 |
+| `0xc0010000` | `0x4000` | `0x200158000` | 7 | `mcc` reg 0, `error-handler` reg 0 |
+| `0xc0014000`-`0xc0020000` | 4 × `0x4000` | `0x200204000`, `244000`, `284000`, `2c4000` | 8-11 | `mcc` reg 2, `error-handler` reg 17 |
+| `0xc0024000` | `0x4000` | `0x200170000` | 35 | `mcc` reg 0, `error-handler` reg 0 |
+| `0xc1000000` | `0x4000` | `0x204d10000` | 17 | `sgx` reg 0, reg 1 |
+| `0xc1004000` | `0x4000` | `0x204e20000` | 38 | `sgx` reg 0 |
+| `0xc1008000` | `0x8000` | `0x204d80000` | 43 | `sgx` reg 0 |
+| `0xc2000000`-`0xc200c000` | 4 × `0x4000` | `0x210058000`, `158000`, `258000`, `358000` | 18-21 | `pmgr` reg 10-13, one each |
+| `0xc2010000` | `0x60000` | `0x210e20000` | 22 | `pmgr` reg 5 (`0x210e20000`+`0x2000`), 7, 9 |
+| `0xc2070000` | `0x4000` | `0x210e48000` | 23 (also inside reg 22) | `pmgr` reg 7 |
+| `0xc2074000` | `0x8000` | `0x210ee0000` | 42 | — |
+| `0xc3000000`-`0xc300c000` | 4 × `0x4000` | `0x211058000`, `158000`, `258000`, `358000` | 24-27 | `pmgr` reg 19, 20, 24, 25, one each |
+| `0xc3010000` | `0x60000` | `0x211e20000` | 28 | `pmgr` reg 14 (`0x211e20000`+`0x2000`), 16, 18 |
+| `0xc3070000` | `0x4000` | `0x211e48000` | 29 (also inside reg 28) | `pmgr` reg 16 |
+| `0xc3074000`, `0xc307c000`, `0xc3084000` | 3 × `0x8000` | `0x211ee0000`, `ee8000`, `ef0000` | 39, 40, 41 | — |
+| `0xc4000000` | `0x14000` | `0x23d100000` | 30 | `pmgr` reg 23, `dockchannel-uart` reg 1 |
+| `0xc4014000` | `0x30000` | `0x23d128000` | 31 | `pmgr` reg 23, `dockchannel-uart` reg 0 |
+| `0xc4044000` | `0x4000` | `0x23d0d8000` | 32 | `nub-spmi` reg 0-2 |
+| `0xc5000000` | `0x4000` | `0x26b90c000` | 33 | `ane` reg 0 |
+| `0xc6000000` | `0x4000` | `0x23c100000` | 37 | `gpio` reg 0 |
+
+`pmgr`'s wide `reg` ranges 6, 8, 15, 17, 26 and 27, and the `mtrtempsensor*` nodes' 16 MiB ranges, also cover the
+`0x210…`/`0x211…` rows. They are left out of the last column.
+
+- **ADT values** (the tree m1n1 held in this run, `r12-adt.bin`):
+  - `/arm-io/pmp`: `pio-reg-index` 3, `pio-vm-base` `0xc0000000`, `pio-vm-size` `0x40000000`;
+    44 `reg` entries, 7 of them of size 0 (12-16, 34, 36).
+  - `/arm-io/dart-pmp`: `pio-vm-base` `0xc0000000`, `pio-vm-size` `0x40000000`,
+    `pio-granularity` `0x1000000`, `vm-size` `0xbff00000`, `page-size` `0x4000`, `sids` `0x8001`,
+    `bypass` `0x8000`.
+  - Its child `mapper-pmp` `pio-range`: 34 (address, size) pairs, 32 non-zero and 2 zero.
+    - The 32 are `pmp` reg 3-11, 17-22, 24-28, 30-33, 35, 37-43, with their sizes, `0x188000` in
+      all.
+    - Not listed: reg 23 and reg 29. They lie inside reg 22 and reg 28 and are mapped a second time
+      on their own (`0xc2070000`, `0xc3070000`), which brings the total to `0x190000`.
+- **The IOVA layout, as it reads:**
+  - One 16 MiB IOVA slot (`pio-granularity`) for each 16 MiB block of physical address, in the
+    order the blocks first appear by reg index: `0x200…` -> `0xc0`, `0x204…` -> `0xc1`, `0x210…` ->
+    `0xc2`, `0x211…` -> `0xc3`, `0x23d…` -> `0xc4`, `0x26b…` -> `0xc5`, `0x23c…` -> `0xc6`.
+  - Within a slot, the ranges are packed in reg-index order.
+
+  This describes this table. It is not a reading of how macOS built it.
+
+### 3. Page IOVA 0x3c000
+
+- **`open-pre` = `open-post`** (both boots): 77 non-zero bytes, `+0x2000`-`+0x207e`. They equal
+  `energy-model-dram-configs[0x80:0x100]`. The property has four 0x80-byte blocks, beginning
+  `08000000 06000000`, `08000000 ff000000`, `10000000 06000000`, `10000000 ff000000`; this is the
+  second.
+  - Who wrote it is not read: no trap was on the page before the opening word. The page was not
+    mapped at `start-pre` (det39).
+- **`reply`:** `+0x0`-`+0x19cf`, then the `+0x2000` block; the rest zero.
+  - Header, 32-bit words:
+    - `+0x00` `0x42554845` (`EHUB`);
+    - `+0x14` 2, `+0x18` 1;
+    - `+0x20` `PM`;
+    - `+0x38` `0x3f`, `+0x3c` 1;
+    - `+0x40` `FAST_DIE`;
+    - `+0x54` 1, `+0x58` `0x1a`, `+0x5c` `0x40`.
+  - Then 90 records of 0x48 bytes from `+0x80`. Records 0, 64 and 89:
+    - `+0x080`: a 0, b 0, `ehub-node-mask`;
+    - `+0x1280`: a `0x00ffff02`, b `0x13880000`, `fast-die-ts`;
+    - `+0x1988`: a `0x00010808`, b `0x000c0000`, `fast-die-pacc-ts5i-offset`.
+
+    The full list, with both words, is in `r12-det38-tables-reply.txt`.
+  - Counts: 1 `ehub` record, 2 `pm-device-*`, 17 `pm-dcs-*`, 12 `pm-gpu-constraint-*`, 16
+    `pm-gpu-read/write-bw-threshold-*`, 8 `pm-ane-*`, 8 `pm-sep-*`, 26 `fast-die-*`.
+  - The 13.5 kernelcache (`kc/kernelcache-13.5.macho`) contains the string
+    `pm-device-sampling-mask`. The other names are found neither in it nor in the ADT as whole
+    strings.
+- **Who wrote it (det39):**
+  - Guest CPU writes to the page were trapped from `open-pre` to the end of the log (t 139): none.
+  - Guest CPU reads were traced over the same time: none.
+  - The first 0x40 bytes, read at every mailbox access from `open-pre` to the reply, changed once,
+    at `t` 4.1535. That was the status read after macOS's endpoint-4 echo `W 0x0080000000000000`
+    (t 4.1456). It returned `0x209b01`; the reply word itself was read at 4.2135. The page is
+    mapped in `pmp`'s DART. Whether another device's translator maps the same physical page is
+    not read.
+- **`m55-pre`, `m55-post`, `late`:** byte for byte as at `reply`.
+
+### 4. Pages IOVA 0x48000 and 0x40000
+
+- **`0x48000`:**
+  - `+0x2000`-`+0x228f`: 41 slots of (64-bit IOVA, 64-bit size). Slot k holds `pmp` reg (k + 3):
+    the IOVA and size where the DART maps it. All 34 non-zero entries match; reg 12-16, 34 and 36
+    are zero, and so is slot 41 (reg 44, which does not exist).
+  - Present at `open-pre` in both boots.
+  - `+0x0` (32-bit words): 0 0 0 at `open-pre`, 2 `0x01000000` `0x01000000` at `reply`. No guest
+    CPU write (det39).
+  - No guest CPU read of the page.
+- **`0x40000`:**
+  - Non-zero bytes: 0 (`open-pre`), 64 (`open-post`), 164 (`reply`), 224 (`m55-pre` and later).
+    The same counts and bytes in both boots.
+  - No guest CPU write (det39).
+  - Guest CPU reads, det39: 288 at t 4.245-4.284, `+0x0`-`+0x2c0`, from 7 pcs, CPU 2 only (8- and
+    64-bit). None after.
+- **The boot-argument block, det39 at `start-pre`:**
+  - SRAM `+0x22c`/`+0x230` = `0x3a800`/`0x2d0`.
+  - 54 records, the same tags and values as `135map4`'s except `STKG`
+    (`0xe6c69c09006dc582`).
+  - `IOBA` 0, `IOSZ` 0. No record holds `0x3c000`, `0x40000` or `0x48000`.
+- **The other DRAM pages, at `late`:**
+  - `0x4000`, `0x8000`, `0x44000`: zero.
+  - `0x10000`: `+0x0`-`+0x1fff` all `0xff`.
+  - `0x18000`: all `0xef`.
+  - `0x20000`: begins `bROI…Duty cycle`; `0x24000`-`0x2c000` hold more such records.
+  - `0x34000`: syslog entry `main.cpp:4480`, `PMP started`.
+  - Between the boots, `0x20000`-`0x2c000` differ at some of the points; the rest are the same at
+    each point.
+
+### Left out, and why
+
+- **Who wrote what was already there when the opening word was written** (the `+0x2000` block at
+  `0x3c000`, the window table at `0x48000`): the traps go on at `open-pre`. Before that the pages'
+  physical addresses are not known, and at `start-pre` nothing is mapped.
+- **`pmp`'s own accesses** to these pages: a stage-2 trap sees only the guest's CPUs. What `pmp`
+  reads, and when, is not observable this way.
+- **Writes the trap could miss:** a write by another bus master to the same physical page is not
+  trapped either. Which other translators map these pages is not read.
+- **The MMIO behind the 34 ranges:** not read.
+- **Sleep and wake:** no sleep was taken. The wake's new TTBR (det33 `0x80822544`) has not been
+  walked.
+- **The earlier Linux module's own window list:** not read. Only its count, total and span, as
+  this round's brief quotes them from spec round 15e, are compared above.
+- **Decoding the records:** the meaning of the two words in each 0x48-byte record, of the `EHUB`
+  header, and of the `0x40000` and `0x48000` header words is not read.
+- **Timing:** the synchronous traps on the mailbox and control pages slowed macOS's side of the
+  exchange (reply read 1.2-1.6 s after the opening word, against 0.27-0.59 s untrapped).
+- **Order of the pmp start and the TTBR write:** the two run on different CPUs (det38: CPUs 2 and
+  0; det39: 0 and 1). The order seen in det39 is that boot's, under traps.
+
+### Files (private)
+
+- `var/commit-state/r12_pmp_dart.py`, `r12-macos-up.sh`; decoders `r12_analyze.py`,
+  `r12_tables.py`, `r12_pio.py`.
+- Dumps: `var/commit-state/r12-det38/` and `r12-det39/`:
+  - `r12-<tag>.json`: the DART's words, the L1 entries, every PTE, the DRAM pages read;
+  - `r12-<tag>-pt-<pa>.bin`: the table pages;
+  - `r12-<tag>-iova-<iova>.bin`: the DRAM pages;
+  - `r12-events.jsonl`: the dumps, the traps, every traced read, the boot-argument words, the
+    header watch;
+  - `r12-bootargs.bin`; `r12-adt.bin`, `r12-adt-pmp.txt`, `r12-adt-regs.json`.
+- Decoder outputs:
+  - `var/commit-state/r12-det38-analysis.txt`, `r12-det39-analysis.txt`;
+  - `r12-det38-tables-reply.txt`, `r12-det39-tables-reply.txt`;
+  - `r12-det38-pio.txt`, `r12-det39-bootargs.txt`.
+- Hypervisor logs: `tools/hv-trace-kit/runs/20261116-mac135/*-det38.*`, `*-det39.*`.
+- Camera frames:
+  - `var/m1-look/20261119-044603-*` (before), `-044908-*` (det38 login window);
+  - `-045352-*` (before det39), `-045641-*` (det39 login window), `-045725-*` (after).
+
+### M1 left
+
+In stock Omarchy (`7.3.0-0test5-1-ARCH`, up since 04:57:02; camera 04:57:25 shows the desktop),
+default boot entry untouched. The claim is released.
