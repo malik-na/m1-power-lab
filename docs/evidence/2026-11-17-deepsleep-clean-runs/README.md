@@ -3532,3 +3532,166 @@ Claim `obs-ds21` taken 02:59, released 03:05. Raw outputs kept in the session on
 `RuntimeWatchdogUSec=30s` again. The frame `var/m1-look/20261119-030454-state-now.jpg` shows the
 desktop. ds21's kernel stays on the ESP under `s2r/ds21` (as `m1-bootonce` leaves it); the
 default boot entry is untouched. The claim is released.
+
+## Linux round: the pmp client at boot (ds22p, cand 0x40000) (2026-11-19 03:44-03:50)
+
+Readings only, on bare metal, boot only: no sleep and no `pm_test` were started. The M1 was
+claimed as `linux-obs-pmp` and driven over Thunderbolt. Registers were read over `/dev/mem`,
+32-bit, `O_RDONLY` and `PROT_READ`, with the same eleven addresses as the round "Linux round: pmp
+and the endpoint-0x20 message". `pmp`'s mailbox FIFOs were not read. Nothing was written to any
+of these registers. The driver's and the client's source were not read. Raw output (private):
+- `var/commit-state/linux-pmp-client-ds22p-20261119.txt` (steps 1, 3 and 4);
+- `var/commit-state/linux-pmp-client-ds22p-dmesg-20261119.txt` (ds22p's full `dmesg`).
+
+**Short answer.** The client bound, mapped four buffers and then waited 6 s for `pmp`'s word
+`0x000200000023b549`, which did not come. The client then logged that it had stopped `pmp`'s
+mailbox and given PMP and PMS_SRAM back to genpd. From 39 s after boot onward, `pmp` +`0x44` read
+`0x0`, as on the stock kernel. The three words stayed `0x444/0x666/0x333` in every sample. Four
+words differ from the stock kernel: `pmp` +`0x48`, both mailbox control words and `ps_PMP`. No
+reading was taken during the client's 6 s window.
+
+### 1. Stock kernel, before (03:44:50)
+
+- `7.3.0-0test5-1-ARCH`, up since 03:04:17. The camera frame
+  `var/m1-look/20261119-034425-state-linuxobs-pmp-start.jpg` shows the Omarchy desktop.
+- `apple_pmp` **is loaded** (`98304 2 appledrm,aurora`), as in the earlier round, with no device
+  under `/sys/bus/platform/drivers/apple_pmp/` (only `bind`, `module`, `uevent`, `unbind`).
+  `apple_pmp_v1` is not loaded. `dmesg` has no line containing `pmp`.
+- genpd: `pmp` on, `pms` on, `pms_busif` on, `pms_sram` `off-0`, `pms_fpwm0`-`4` `off-0`.
+
+| Word | 03:44:50 |
+|---|---|
+| `0x23b058000` / `0x23b05c000` / `0x23b060000` | `0x444` / `0x666` / `0x333` |
+| `pmp` +`0x44` / +`0x48` | `0x0` / `0x2a` |
+| mailbox A2I `0x23bc08110` / I2A `0x23bc08114` | `0x20001` / `0x20001` |
+| `ps_PMP` `0x23b7003d8` | `0x1f0000ff` |
+| `ps_PMS_SRAM` `0x23b7003e0` | `0x0f000300` |
+| `ps_PMS` `0x23b700140` | `0x1f0000ff` |
+| `ps_DCS0` `0x23b700300` | `0x1f0002ff` |
+
+These are the 01:10:54 values of the earlier round, word for word.
+
+### 2. The boot
+
+`tools/tb/m1-bootonce var/kernels/ds22p/kernel.tar.zst ds22p var/deepsleep/ds22p.cmdline` at
+03:45:07. The kernel `7.2.11-ds22p` was up since 03:45:22 and answered on Thunderbolt by 03:45:54.
+Nothing was frozen, and `m1-reboot.sh` was not used.
+- Command line extra words: `panic=10 systemd.watchdog_sec=0 apple_deepsleep.enable=1
+  apple_deepsleep.alarm_secs=60 no_console_suspend apple_deepsleep.cand=0x40000`.
+- Module parameters read back: `cand=262144` (`0x40000`), `enable=Y`, `wdt=0`, `alarm_secs=60`,
+  `dump=N`, `probe=N`, `trace=N`, `snap=0`.
+- The camera frame `var/m1-look/20261119-034850-state-linuxobs-pmp-ds22p.jpg` shows the Omarchy
+  desktop.
+
+### 3. ds22p: the client's log, complete
+
+Every `dmesg` line of the boot from `apple-deepsleep` or `apple-deepsleep-pmp`, in order. There
+are no others.
+```
+[    0.067774] apple-deepsleep: cores: logical CPU of cores 0-7 (MPIDR 0-3, 10100-10103): 0 1 2 3 4 5 6 7
+[    0.067782] apple-deepsleep: mailbox at 0x0000000803c50a40: version 1, 8 cores, loader reset vector 0x803b80000, 0 resumes so far
+[    0.069009] apple-deepsleep: pmp: C18: nodes for pmp, its mailbox and its translator added; the client boots at its probe
+[    0.069012] apple-deepsleep: enabled: mem_sleep "deep" sleeps through the tested logic; power chip /soc/spmi@23d0d9300/pmic@f; alarm +60 s
+[    0.069166] apple-deepsleep-pmp 23bc00000.coprocessor: buffer: 16384 bytes at IOVA 0x4000 (bus 0x000000081173c000)
+[    0.069302] apple-deepsleep-pmp 23bc00000.coprocessor: buffer: 65536 bytes at IOVA 0xc000 (bus 0x0000000806100000)
+[    0.069313] apple-deepsleep-pmp 23bc00000.coprocessor: buffer: 16384 bytes at IOVA 0x20000 (bus 0x000000080e228000)
+[    0.069413] apple-deepsleep-pmp 23bc00000.coprocessor: buffer: 65536 bytes at IOVA 0x28000 (bus 0x0000000806110000)
+[    6.105254] apple-deepsleep: pmp: boot: a wait ran out, for 0x000200000023b549; 0 received messages dropped, 0 sends failed, 0 accesses refused (first 0x0)
+[    6.105316] apple-deepsleep-pmp 23bc00000.coprocessor: pmp not running: mailbox stopped, PMP and PMS_SRAM given back to genpd
+```
+- Between `0.069413` and `6.105254` the kernel logged other drivers' lines (iommu groups,
+  `simpledrm`, "genpd: Disabling unused power domains" at `0.162310`, "Freeing initrd memory" at
+  `0.190076`), and nothing from the client. The client's next lines come immediately before
+  "Freeing unused kernel memory" and `Run /init`.
+- **Step by step, what was and was not logged:**
+
+  | Step | Logged |
+  |---|---|
+  | DT nodes for `pmp`, mailbox and translator | yes (`0.069009`) |
+  | power domains (PMP, PMS_SRAM) on | no line; only the final "given back to genpd" |
+  | SRAM block | no line |
+  | translator (DART) setup | no line beyond the node line; four buffer lines (IOVA `0x4000`, `0xc000`, `0x20000`, `0x28000`) |
+  | start (+`0x44`) | no line |
+  | endpoint 0 handshake, endpoints 1-3 | no line |
+  | endpoint `0x20` opening | the wait for `0x000200000023b549` ran out (`6.105254`) |
+  | endpoint-`0x20` `0x55` word | no line (not reached, by the log's own order) |
+  | refused accesses | `0 accesses refused (first 0x0)`; `0 sends failed`; `0 received messages dropped` |
+
+  In macOS's capture (sections above), `0x000200000023b549` is the word `pmp` sends on endpoint
+  `0x20` after macOS's `SEND 0x000100000003c000`.
+- No line in this boot contains `SError`, `Internal error`, `Unable to handle`, a DART fault, or
+  `timeout` other than the client's own "wait ran out". The `asahi` GPU driver logs
+  `MMU: IO map: 0x23bc00000:0x4000` at `6.369223`, after the client's last line.
+- `journalctl -k -b -p warning` has the client's two lines at `6.105`, and none other from it.
+
+**Devices and drivers on ds22p (03:46):**
+- DT nodes added:
+  - `soc/coprocessor@23bc00000`: compatible `apple,t8103-pmp-deepsleep-c18`, no `status`. Its
+    `reg` is `ctrl` `0x23bc00000`+`0x10000`, `sram` `0x23b500000`+`0x80000` and `dart`
+    `0x23b300000`+`0x4000`. It has no `mboxes`, `iommus` or `power-domains` property.
+  - `soc/mailbox@23bc08000`: `apple,t8103-asc-mailbox`, `apple,asc-mailbox-v4`, no `status`;
+    interrupts AIC 511-514.
+  - `soc/iommu@23b300000`: `apple,t8103-dart`, `status = "disabled"`.
+- Bound devices:
+  - `23bc00000.coprocessor` is bound to `apple-deepsleep-pmp`. It has a device link to supplier
+    `23bc08000.mailbox`, and its runtime PM status reads `unsupported`.
+  - `23bc08000.mailbox` is bound to `apple-mailbox`.
+  - No device at `0x23b300000` is bound to `apple-dart`.
+- `apple_pmp` **is loaded** (`49152 1 asahi`). Its aliases are `apple,t6000-pmp-v2` and
+  `apple,t8140-pmp-v2`, and no device is bound to it. `apple_pmp_v1` is not loaded (the file
+  `apple-pmp-v1.ko` exists).
+- genpd after the client gave up: `pmp` on, `pms` on, `pms_busif` on, `pms_sram` `off-0`,
+  `pms_fpwm0`-`4` `off-0` (as on the stock kernel).
+
+### 4. ds22p: the words, once a second
+
+First sample at 03:46:01 (39 s after boot, about 33 s after the client's last line). Then 120
+samples at 1 s, 03:46:38-03:48:37. **0 changes**: all 121 samples read:
+
+| Word | ds22p (every sample) | Stock, step 1 | macOS (round 10, det33/34b) |
+|---|---|---|---|
+| three words | `0x444/0x666/0x333` | same | `0x444/0x444/0x444` from n 5 (t 3.0), `0x333/0x444/0x222` after the `0x55` word |
+| `pmp` +`0x44` | `0x0` | same | `0x10` from n 4 (t 2.76) |
+| `pmp` +`0x48` | **`0x8`** | `0x2a` | `0x2a` before the start; `0x0c`/`0x2c` at n 4; `0x2e` after the stop at entry |
+| A2I `0x23bc08110` | **`0x107801`** | `0x20001` | not in the sampled set |
+| I2A `0x23bc08114` | **`0x26600`** | `0x20001` | macOS writes `0x22200` at the entry's stop (t 447.85) |
+| `ps_PMP` | **`0x1f0f00ff`** | `0x1f0000ff` | `0x1f0f00ff` at n 4; `0x1f0f03ff` / `0x1000030f` later |
+| `ps_PMS_SRAM` | `0x0f000300` | same | `0x1f0000ff` at n 4; `0x1000030f` after the `0x55` word |
+| `ps_PMS` | `0x1f0000ff` | same | `0x1f0000ff` at n 4; `0x1f0002ff` at n 5 |
+| `ps_DCS0` | `0x1f0002ff` | same | |
+
+- **First sample that differs from step 1:** the first one, 03:46:01. The four bold words differ;
+  the three words, +`0x44`, `ps_PMS_SRAM`, `ps_PMS` and `ps_DCS0` do not.
+- **Against macOS:** no sample reaches `0x444/0x444/0x444`, +`0x44` `0x10` or `ps_PMS_SRAM`
+  `0x1000030f`. `ps_PMP` reads `0x1f0f00ff`, the value macOS's sample n 4 read. `+0x48` `0x8` is
+  none of the values read under macOS above.
+- What the four changed words held during the client's 6 s (0.07-6.1 s after kernel start): not
+  read.
+
+### 5. Stock kernel, after (03:49:48)
+
+`systemctl reboot` from ds22p at 03:49:06. Stock `7.3.0-0test5-1-ARCH`, up since 03:49:21,
+answered on Thunderbolt at 03:49:41.
+- The eleven words read exactly as in step 1: `0x444/0x666/0x333`, +`0x44` `0x0`, +`0x48` `0x2a`,
+  A2I/I2A `0x20001`/`0x20001`, `ps_PMP` `0x1f0000ff`, `ps_PMS_SRAM` `0x0f000300`, `ps_PMS`
+  `0x1f0000ff`, `ps_DCS0` `0x1f0002ff`.
+- genpd `pms_sram` `off-0`, `pmp` on, `pms` on. No `coprocessor@23bc0…` node. `apple_pmp` loaded
+  (`98304 2 appledrm,aurora`).
+- The camera frame `var/m1-look/20261119-034950-state-linuxobs-pmp-end.jpg` shows the desktop.
+
+### Left out
+
+- Readings during the client's 6 s boot window: none (the first read was 39 s after boot).
+- What the client wrote to +`0x44`, the SRAM, the DART or the mailbox: the client logs no line for
+  these steps, and its source was not read.
+- `pmp`'s SRAM (`0x23b500000`-`0x23b57ffff`, incl. `0x23b549000`), the DART's registers and the
+  mailbox FIFOs: not read.
+- Whether `pmp` ran at all during the window, or its CPU was started, cannot be told from these
+  readings.
+
+### M1 left
+
+In stock Omarchy (`7.3.0-0test5-1-ARCH`, up since 03:49:21), reached over Thunderbolt. The
+default boot entry is untouched. ds22p's kernel stays on the ESP under `s2r/ds22p`, and its
+modules under `/usr/lib/modules/7.2.11-ds22p` (as `m1-bootonce` leaves them). The reader script
+copied to `/root` was removed. The claim is released.
