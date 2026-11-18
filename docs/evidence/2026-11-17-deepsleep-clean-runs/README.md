@@ -2092,3 +2092,241 @@ Not yet tested: a restart of a frozen M1 (the real case).
 after the start: record `44 57 00 40 2c 3d 02 30 a0 00` ('W': commit reached, watchdog armed),
 `0x0201` = `04`, fault shadow `0x001c00` (bit 12 set since the USB-C restart test at 23:57). So
 with every candidate but C3 and C5 on together, the SoC still stays up after the commit.
+
+## Hypervisor round 10: what lowers the performance-state words (proxy series, det33, det34, det34b, 2026-11-19 00:31-01:04)
+
+Readings only. Taken for the spec's open question 70 (the C3 words `0x23b058000`, `0x23b05c000`,
+`0x23b060000`; spec at lab `c8b735c`). Values are written `058000/05c000/060000`. Where a
+reading was not taken, the text says "unknown". Nothing here says which agent writes the words:
+the readings give an order of events, not a cause.
+
+**Short answer.**
+- **Bare m1n1 proxy, no OS, 300 s at 1 s:** the words did not move (`0x444/0x666/0x333` in all 301
+  samples), nor did `pmp`'s +`0x44`/+`0x48` (`0x0`/`0x2a`) or the PMP, PMS_SRAM, PMS power-state words.
+- **macOS boot, two captures (det33, det34b), the same in both:**
+  1. The words read the proxy's values in every sample up to and including the first one after
+     macOS's `W 0x23bc00044` = `0x10` (`pmp` started; no sample between t 0.76 and 2.76). In the
+     next one, taken after `pmp`'s RTKit
+     handshake and endpoint `0x20`'s first exchange, they read **`0x444/0x444/0x444`**
+     (det33: t 2.765 -> 3.003 s; det34b: 2.757 -> 3.256 s).
+  2. From then until about 69 s they sit at `0x444/0x444/0x444` with one-sample rises of the first
+     two (`0x555`, `0x666`): of the samples from t 3.5 to 69 s, 31 of 235 (det33) and 22 of 247
+     (det34b) differ from the sample before.
+  3. **At 69.5 s (det33) and 69.25 s (det34b) all three change in one sample to
+     `0x333/0x444/0x222`.** The last `pmp` mailbox message before that sample, in both, is
+     endpoint `0x20` message **`0x0020e00000550000`**, sent 127 ms (det33) and 22 ms (det34b)
+     before it. No other endpoint-`0x20` message lies between the sample before and that sample.
+     In the same sample `ps_PMP` and `ps_PMS_SRAM` read `0x1000030f` for the first time (before:
+     `0x1f0f03ff` / `0x1f0003ff`).
+  4. After that the third word stays `0x222` in every sample. The first two rise for single
+     samples now and then.
+- **macOS idle, entry, sleep and wake (det33, one capture, the detached hypervisor's own clock at
+  250 ms):**
+  - Idle for 448 s: `0x333/0x444/0x222` with 17 one-sample rises of the first two words (incl.
+    `0x80000555` and `0x80000444`: bit 31 set). One endpoint-`0x20` message in the first 447 s
+    (`0x0020e00000540000` at t 440.9).
+  - The entry: unchanged up to the last sample, 0.16 s before T. This includes macOS's
+    `0x0020e00000550001` (T−0.82 s) and `pmp`'s stop (`W 0x23bc00044` = 0 at T−0.43 s). The
+    commit snapshot reads the same.
+  - **Wake:** the first sample, 1.1 ms after the guest's re-entry, reads `0x333/0x555/0x333`, and
+    the second (0.25 s later) the same. macOS restarts `pmp` (`W 0x23bc00044` = `0x10`, 0.354 s
+    after the re-entry) and sends endpoint `0x20` messages, among them `0x0020e00000550001`
+    (0.459 s) and **`0x0020e00000550000`** (0.469 s); the last before the next sample is
+    `0x0020e00000540000` (0.470 s). That next sample (0.50 s after the re-entry) reads **`0x333/0x444/0x222`**, and every sample to the read-out (35.8 s) the
+    same.
+
+### The change and the runs
+
+- **Proxy series (`c3idle1`):** `harness/proxy-probe.sh c3idle1 harness/c3_proxy_series.py 300 1`
+  (new script, reads only) at a freshly booted installed m1n1 proxy (`v2.0.0-131-gbd6`),
+  00:31:54-00:36:54. Each second, 32-bit reads of: the three words; `pmp` +`0x44`, +`0x48`;
+  `ps_PMP` `0x23b7003d8`, `ps_PMS_SRAM` `0x23b7003e0`, `ps_PMS` `0x23b700140`; the cluster
+  command words `0x210e20020`, `0x211e20020`.
+- **Host side** (lab, this commit):
+  - `hv_touch_map.py` `S2R_TOUCH_SAMPLE`, unset (off) by default: a list of words read over the
+    proxy at each clock tick until full logging starts, with the guest stopped. A word written
+    `addr@cond` is read only while the power-state word `cond` has actual state (bits 4-7) `0xf`.
+    Record `tsample`.
+  - `real_s2r_on(tick_ms=, tick_words=)` sets the hypervisor's detached clock (below).
+  - `detached_fmt.py` decodes kind 29 as `tick-sample`, with a test in
+    `tests/core/test_hv_detached.py`.
+- **Hypervisor:** `~/m1n1-next` branch `m1power/hv-detached`, local commit `5c696a89` on top of
+  `52a272cf`, not pushed; build `v2.0.0-146-g5c6`. One option, `hv_det_tick_ms`, 0 (off) by
+  default:
+  - While detached, on the hypervisor's own 1 kHz tick (core 0, under the hypervisor lock), it
+    reads the up-to-16 words of `hv_det_tick_addr[]` every N ms. Each read is 32-bit and guarded,
+    and has the same optional power-state condition. Each word is logged as kind 29, with the
+    sample number.
+  - The tick does not run while core 0 is down, so there is no sampling during the sleep.
+- **Sampled words** (both clocks): the three words; `pmp` +`0x44` and +`0x48`, each conditioned on
+  `ps_PMP`; `ps_PMP`, `ps_PMS_SRAM`, `ps_PMS`, `ps_DCS0` (`0x23b700300`).
+- **Recipe:** det18's, with these changes:
+  - `S2R_TOUCH_TICK=250` (the touch map's clock at 250 ms instead of 1 s);
+  - `S2R_TOUCH_FULL=0x23bc00000+0x4000,0x23bc08000+0x4000,0x210e20000+0x4000,0x211e20000+0x4000`:
+    `pmp`'s control page, its mailbox page and both CPU clusters' pages logged in full from the
+    instrument's start (the rest of device space as the 5 s touch map);
+  - `FULL=0`, so the boot clock kept sampling past the login window;
+  - the switch to full logging was made by hand once the camera showed the login window.
+
+  In full:
+  - `WD1=150 ALARM=90 FULL=0 S2R_TOUCH_TICK=250 S2R_TOUCH_SAMPLE=... S2R_TOUCH_FULL=...
+    S2R_ARGS='core_state=1, c4_probe=1, tick_ms=250, tick_words=[...]' harness/macos-up.sh detNN`;
+  - then (det33 only) `full <det8's four pages>` into the control file;
+  - `PRE=<awake_snap of commit-snap-list-r7.json> ARGS='commit_snap=<that list>'
+    harness/detach135.sh det33`;
+  - `harness/detached-wake-readout.sh det33 35` (read-out 35 s after the wake, not 20);
+  - `harness/hv-reboot.sh`, `tools/tb/m1-pmu-dump`.
+
+  The M1 was claimed as `observation` throughout and released at the end.
+- **The no-hands way out, named before det33:** the hypervisor's alarm at commit + 90 s; watchdog
+  1 at commit + 150 s. For a hang before the commit, the hypervisor's own proxy stays reachable
+  over USB, so `detach_readout.py --reboot` would end the run. The boot captures needed none,
+  because the host stayed attached. Every run ended without hands; the USB-C restart was not
+  used.
+- **Files (private):**
+  - `tools/hv-trace-kit/runs/20261119-proxy/c3idle1.out`;
+  - `tools/hv-trace-kit/runs/20261116-mac135/*-det33.*`, `*-det34.*`, `*-det34b.*`
+    (`touch-*.jsonl`, `detached-det33.jsonl`, `run-*.out`, `vuart-*.log`);
+  - the scripts `var/commit-state/r10_c3_series.py`, `r10_pmp_msgs.py`, `r10_window.py`, and
+    their outputs:
+    - `r10-det33-boot.txt`, `r10-det34b-boot.txt` (every change of a sampled word);
+    - `r10-det33-pmp-boot.txt`, `r10-det34b-pmp-boot.txt`, `r10-det33-pmp-detached.txt`
+      (`pmp` traffic merged with the samples);
+    - `r10-det33-detached.txt`, `r10-det33-wake-window.txt`;
+  - `var/m1-state/pmu-20261119-005236-after-det33.txt`, `pmu-20261119-010450-after-det34b.txt`;
+  - camera frames `var/m1-look/20261119-0*`.
+
+| Run | What | Outcome |
+|---|---|---|
+| c3idle1 | proxy, no OS, 300 s at 1 s | no word moved |
+| det33 | boot sampled 0-207.8 s (788 samples), login window on the camera at 00:41:19 (t ≈ 203 s); detach 00:41:31; idle, entry, sleep, wake sampled by the detached clock (1931 samples) | T = 448.277 s after the detach; **asleep 89.87 s, woke at the alarm**, wake status `0 / 0x400000 / 0`; USB device left/back 00:50:28.469 / 00:50:29.183; read out at wake + 35.8 s: 1,239,407 records, 0 dropped; commit snapshot 1328 words, 0 errors |
+| det34 | boot | **macOS did not boot:** after the arm (00:53:52, CNTPCT 54 s) the run logged 16 trapped system-register accesses (det33: 304), no device access and no console output for 180 s; the camera showed m1n1's logo. Cause not read. Rebooted with `hv-reboot.sh` |
+| det34b | boot (det34 repeated) | boot sampled 0-395.3 s (1534 samples), READY 01:00:39; no sleep: rebooted with `hv-reboot.sh` (run_guest's exit 01:04:22) |
+
+Power chip after det33 (alarm wake, then `hv-reboot.sh`):
+- `0x0201` `00`, `0x9f03` `00`;
+- `0x9f04`-`0x9f0c` `48 00 01 3f ff ff 47 50 00`;
+- `0xa47b`-`d` `00 08 00`, `0xd000` `01`, `0xd00c` `00`.
+
+These are det18's values. After det34b (rebooted without a sleep): `0x9f03` `ff`, `0x9f04`-`0x9f0c` all
+`00`, the rest the same (as after det25's bring-up).
+
+### 1. Bare proxy, no OS (`c3idle1`)
+
+301 samples, 0 changes. Every sample:
+- the words `0x444/0x666/0x333`;
+- `pmp` +`0x44` `0x0`, +`0x48` `0x2a`;
+- `ps_PMP`, `ps_PMS_SRAM`, `ps_PMS` `0xf0000ff`;
+- cluster commands: E `0x100105`, P `0x100101`.
+
+### 2. macOS boot (det33, det34b)
+
+Times "t" are seconds from the touch map's start, on the M3's clock at receipt (the tick samples
+are taken with the guest stopped; device accesses are timed by the USB link's buffering). The
+CPU clusters' pages, `pmp`'s control page and mailbox are logged in full. Other pages show only
+their first access per 5 s epoch, so "no access" to them between two samples is **not**
+established.
+
+| Step | det33 | det34b |
+|---|---|---|
+| first sample (hypervisor running, guest not yet at `pmp`) | t 0.255: `0x444/0x666/0x333`, `pmp` +`0x44` 0, +`0x48` `0x2a` | t 0.255: the same |
+| CPU clusters | macOS writes their command words only at t 1.09-1.12: each `0x40002101101`, then `0x40000101101` twice; also `+0x400`-`+0x4f8` and `+0x580`-`+0x648` = 0, `+0x660`, `+0x0f8`. No cluster write after that in the capture. Its first reads of the E cluster include `+0x6a8` = `0x4444443333222110` and `+0x6e0` = `0x6666665555444333`; the P cluster `+0x6a8`/`+0x6b0`/`+0x6e0`/`+0x6e8` are read too | the same writes at t 1.04-1.06 (the same values) |
+| `pmp` started | t 2.6748 `R 0x23bc00044` = 0, `W` = `0x10` (core 2) | t 2.6018 (core 3) |
+| sample after the start | n 4, t 2.765: words unchanged; +`0x44` `0x10` | n 4, t 2.757: the same |
+| between it and the next sample | RTKit management exchange on endpoint 0 (t 2.675-2.694), endpoints 1-3. Endpoint `0x20`: `RECV 0x0`, `SEND 0x000100000003c000` (t 2.70); then at t 2.975-2.981 `RECV 0x000200000023b549`, `SEND 0x0020000000010003`, `RECV 0x0020100000010003`, `SEND 0x0020200000010000`, `RECV 0x0020300000010000` | endpoint `0x20`: the same five at t 3.212-3.228, then `SEND 0x0020e000005c0000/…0001/…0000`, `0x0020c00000640021` (`RECV …d…`), `SEND 0x0020a00000640020` (t 3.243) |
+| **first change** | **n 5, t 3.003: `0x444/0x444/0x444`** (058000 unchanged; 05c000 `0x666`->`0x444`; 060000 `0x333`->`0x444`); `ps_PMP` `0x1f0f03ff`, `ps_PMS` `0x1f0002ff` | **n 5, t 3.256: the same** |
+| t 3.5-69 | 31 of 235 samples differ from the one before: 05c000 `0x444`<->`0x555` (also `0x666`), 058000 now and then `0x555` (first at n 97, t 28.5); 060000 `0x444` throughout | 22 of 247; the same pattern (058000 first `0x555` at t 25.8) |
+| endpoint `0x20` from t 5.4 / 4.5 s | single `0x0020e…` messages (ids `0x63`-`0x68`, `0x5c`) up to t 50.1, none t 50.1-69.38 | a burst of 30 `0x00204…`/`0x00205…` pairs at t 24.98-25.01; `0x0020e00000660000` at t 49.16; none t 49.16-69.23 |
+| sample before the second change | n 243, t 69.255: `0x444/0x444/0x444` | n 253, t 69.006: the same |
+| between them (all logged accesses and first touches) | t 69.334-69.347 first touches of `0x23b2e0c00`, `0x211ef1600`, `0x211000000`, `0x211ef4600`; **`dcpext`** (`0x271c00000`, ADT `/arm-io/dcpext`) `R 0x271c08110` = `0x29901`, `R 0x271c00048` = `0x2e`; `R 0x27130c040` = `0x6000400`; **`pmp` `SEND` endpoint `0x20` `0x0020e00000550000` (t 69.3808, core 0)**; `R 0x23b700368` (DISPEXT_FE's power-state word) = `0x23ff`; `R 0x27200c000` = 0; `W 0x272008014` = 1; first touches of `0x211ee9000`, `0x211eec000`, `0x23b2a1000`, `0x23b2a4000`, `0x210ee1000`, `0x210000000`, `0x210ee4000`, `0x23b281200`, `0x23b284200`, `0x211ee1400`, `0x211ee4400`, `0x23b299200`, `0x23b29c200` (t 69.40-69.49); the clusters' pages read only (`+0x20` `0x40000101101`, `+0x588` 0) | first touches `0x211ee9000`, `0x211eec000`; `dcpext` `R 0x271c08110` = `0x29901`, `R 0x271c00048` = `0x2e`; `R 0x27130c040` = `0x6000400`; **`SEND` `0x0020e00000550000` (t 69.2321, core 0)**; `R 0x23b700368` = `0x23ff`; `R 0x27200c000` = 0; `W 0x272008014` = 1; the clusters' pages read only |
+| **second change** | **n 244, t 69.508: `0x333/0x444/0x222`**; same sample: `ps_PMP` `0x1000030f`, `ps_PMS_SRAM` `0x1000030f` (first time), `ps_DCS0` `0x1000030f`, `pmp` +`0x44`/+`0x48` not read (condition) | **n 254, t 69.254: the same**, with the same power-state readings |
+| afterwards | 060000 `0x222` in every sample; 543 samples t 70-209.4, one not at `0x333/0x444/0x222` (05c000 `0x555`, t 107.0); `ps_PMP` alternates between `0x1f0f03ff` and `0x1000030f` (`pmp` +`0x44` `0x10` whenever read) | 1278 samples t 70-395, 14 one-sample rises of the first two words; 060000 `0x222` throughout |
+
+Endpoint `0x20` messages with id `0x55` in the boot captures: `SEND 0x0020a00000550023` /
+`RECV 0x0020b00000550023` at t 3.55 (det33) and 3.64 (det34b), and `SEND 0x0020e00000550000` at
+the second change. No `0x0020e…550001` in either boot.
+
+*Documentation, not an observation:* in the ADT's power-manager table
+(`var/map-20261117/adt/pmgr-devices.json`), device id `0x55` is DISPEXT_FE (power-state word
+`0x23b700368`, flag `notify_pmp`), id `0x54` DISP0_FE. The other ids seen in `0x0020e…`
+messages are also devices with `notify_pmp`: `0x5c` JPG, `0x63` GFX, `0x64` ISP_SYS,
+`0x65` VENC_SYS, `0x66` AVD_SYS, `0x68` ANE_SYS. That the message's id field is this device id
+is not established; it is a match of numbers.
+
+### 3. macOS idle, entry, sleep and wake (det33, detached clock)
+
+Times are seconds from the detach marker (the M1's timer). Every access in the log is complete
+(full logging) except det8's four skipped pages.
+
+- **Idle, t 0-447:**
+  - 1784 samples. 17 have a rise of the first two words for one sample: 05c000 `0x555`, `0x666`,
+    `0x80000555`, `0x80000444`; 058000 `0x444`, `0x555`. 060000 is `0x222` in every sample.
+  - Endpoint `0x20`: one message, `SEND 0x0020e00000540000` at t 440.92. There are 10
+    endpoint-4 messages in the whole log.
+  - `ps_PMP` alternates between `0x1f0f03ff` and `0x1000030f`.
+- **Entry:**
+  - Endpoint `0x20`: `SEND 0x0020e00000550001` at t 447.4617 and `0x0020e00000540001` at 447.4645,
+    then `SEND 0x0020800000630000` / `RECV 0x0020900000630000` at 447.468. In the samples after
+    them (n 1786, 447.616 on), the words are unchanged.
+  - Endpoint 0 management (`0x00b0000000000201`, `0x0060000000000201` / `0x0070000000000201`) at
+    447.846.
+  - `R 0x23bc00048` = `0x2e`, `R 0x23bc00044` = `0x10`, `W 0x23bc00044` = 0 at 447.8461.
+  - Samples n 1787 (447.866) and n 1788 (448.117): `0x333/0x444/0x222`, `pmp` +`0x44` 0, +`0x48`
+    `0x2e`, `ps_PMP` `0x1f0f03ff`.
+  - T (last core) 448.2775. The commit snapshot (448.2775-448.2796) has `0x333/0x444/0x222`,
+    `ps_PMP` `0x1f0f03ff`.
+- **Sleep:** no samples (core 0 down); the gap between samples is 90.03 s.
+- **Wake:**
+
+  | t | Reading or access |
+  |---|---|
+  | 538.1498 | wake entry; the wake snapshot reads `0x333/0x555/0x333`, `ps_PMP` `0xf0003ff` |
+  | 538.1501 | re-entry of the guest |
+  | 538.1512 (n 1789) | `0x333/0x555/0x333`; `pmp` +`0x44` 0, +`0x48` `0x2a`; `ps_PMP` `0xf0003ff`, `ps_PMS_SRAM` `0xf000300`, `ps_PMS` `0xf0002ff` |
+  | 538.159-538.161 | macOS's 89 reads of `0x23b058068`/`080`/`098` (as R70) |
+  | 538.1789 | `0x23b050000`: R `0x80000000`, W 0, W `0x80000000`; `0x23b054000` the same. Neither page is the three words' |
+  | 538.4016 (n 1790) | `0x333/0x555/0x333`; `ps_PMP` `0x1f0003ff` |
+  | 538.4016-538.5046 | 24,576 writes over `0x23b544000`-`0x23b55bfff` (and the rest of that range before 538.40, not counted here); the `0x23b300000` page at 538.5046 |
+  | 538.5047 | `W 0x23bc00044` = `0x10` (`pmp` started) |
+  | 538.5048-538.5054 | endpoint 0 handshake |
+  | 538.5957 | endpoint `0x20` `SEND 0x0020e00000630001` |
+  | 538.6087 | `SEND 0x0020e00000550001` |
+  | 538.6107 | `SEND 0x0020e00000540001` |
+  | 538.6187 | **`SEND 0x0020e00000550000`** |
+  | 538.6198 | `SEND 0x0020e00000540000` |
+  | 538.6517 (n 1791) | **`0x333/0x444/0x222`**; `pmp` +`0x44` `0x10`, +`0x48` `0x2c`, `ps_PMP` `0x1f0f03ff` |
+  | to 573.755 (n 1931) | `0x333/0x444/0x222` in every sample; read-out at 573.978 |
+
+  The other pages accessed in the window 538.40-538.65 are listed in `r10-det33-wake-window.txt`
+  (among them `dcp` and `dcpext` mailboxes, `0x27200c000`/`0x272008000`, `0x23200c000`/
+  `0x232008000`, the SMC mailbox, the power manager's power-state page).
+  No access to `0x23b058000`, `0x23b05c000` or `0x23b060000` anywhere in the detached log (R70
+  holds in this capture).
+
+### Left out, and why
+
+- **Which agent writes the words:** not read. The readings give the order of events only. In both
+  boots and the one wake, the first sample at the awake values follows `pmp`'s start and an
+  endpoint-`0x20` message `0x0020e00000550000`. At the boot it also coincides with the first
+  `0x1000030f` reading of `ps_PMP` and `ps_PMS_SRAM`. Separating "`pmp` acts on that message" from
+  "something else in the same 22-250 ms" would need a finer clock, or that message withheld or
+  delayed (an [HV-CHANGED] run, not done).
+- **The first change at t ≈ 3 s:** the 0.24-0.50 s between the two samples holds `pmp`'s start,
+  RTKit's handshake and endpoint `0x20`'s first exchanges (plus other blocks' first touches). Which
+  one comes first in time is not resolved by these samples.
+- **Pages other than `pmp`'s two and the clusters' during the boot:** first touch per 5 s epoch
+  only (the touch map). A boot with everything logged in full was not run.
+- **Wake series:** one capture (det33); 35.8 s of samples after the wake. A second sleep and wake
+  was not run.
+- **Boot clock side effects:** the 250 ms clock stops the guest about 4 times a second. det34's
+  boot stalled before macOS ran (cause not read); det33 and det34b booted. The detached clock's
+  reads by core 0 every 250 ms ran through det33's idle and entry, and the sleep and wake came as
+  in det18 (asleep 89.87 s, the same wake status).
+- **`pmp` +`0x44`/+`0x48` while `ps_PMP` read other than actual state `0xf`:** not read (the
+  condition). These are the `off` entries in the files.
+
+### M1 left
+
+In stock Omarchy (kernel 7.3.0-0test5-1-ARCH, up since 2026-11-19 01:04:29), reached over
+Thunderbolt. The camera frame `var/m1-look/20261119-010452-state-after-round10.jpg` shows the
+desktop. The claim is released.

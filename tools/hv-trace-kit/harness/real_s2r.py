@@ -33,7 +33,8 @@ def wdt_state(tag=""):
 _CLKGEN = (0x23b040140, 0x23b040144, 0x23b040148, 0x23b04014c, 0x23b040154)  # muxes macOS parks (= 0x80100000) before the commit
 def real_s2r_on(spin=0, alarm=0, mask=(), wake="reset", wd1=0, core_state=0, keep_state=0,
                 sample_ms=0, sample_max_ms=0, sample_pmu_every=0, sample_hold=0,
-                keep_timers=0, keep_vfiq=0, c4_probe=0, pg_clear=0, cand=0):
+                keep_timers=0, keep_vfiq=0, c4_probe=0, pg_clear=0, cand=0,
+                tick_ms=0, tick_words=()):
     p.write32(_A_CNT, 0); _slots.clear()
     try:
         # wake="proxy": the handler keeps the hypervisor image alive, restores these clkgen words,
@@ -123,6 +124,25 @@ def real_s2r_on(spin=0, alarm=0, mask=(), wake="reset", wd1=0, core_state=0, kee
         except KeyError:
             if _v:
                 raise
+    # round 10 (m1n1-next 5c696a89, local): tick_ms=N samples tick_words while detached, every N ms
+    # on the hypervisor's own tick (detached log kind 29). tick_words: [(addr, cond), ...], cond 0
+    # or a power-state word whose actual state (bits 4-7) must be 0xf for addr to be read. Reads only.
+    if tick_ms or tick_words:
+        if len(tick_words) > 16:
+            raise ValueError("at most 16 tick words")
+        _ta, _tc = _base + _sym("hv_det_tick_addr"), _base + _sym("hv_det_tick_cond")
+        for _i, (_a, _c) in enumerate(tick_words):
+            p.write64(_ta + 8 * _i, _a)
+            p.write64(_tc + 8 * _i, _c)
+        p.write32(_base + _sym("hv_det_tick_n"), len(tick_words))
+        p.write32(_base + _sym("hv_det_tick_ms"), tick_ms)
+        print(f"[s2r-real] detached tick every {tick_ms} ms: " + " ".join(
+            f"{a:#x}" + (f"@{c:#x}" if c else "") for a, c in tick_words))
+    else:
+        try:
+            p.write32(_base + _sym("hv_det_tick_ms"), 0)
+        except KeyError:
+            pass
     wdt_state("at arm")
     try:
         import time as _t

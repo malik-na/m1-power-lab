@@ -23,6 +23,11 @@
 #                                   the whole device space (the listed ranges excepted: they are
 #                                   handed back to the hardware unlogged), and stop the clock: no
 #                                   byte goes to the Mac from then on, so a real sleep is safe.
+#   S2R_TOUCH_SAMPLE words read at every clock tick until full logging starts (round 10, spec open
+#                    question 70): "0xADDR[@0xCOND],...", 32-bit reads over the proxy with the guest
+#                    stopped. With @0xCOND (a power-state word) the word is read only while that
+#                    word's actual state (bits 4-7) is 0xf. Record {"ev":"tsample","n","t","v":{addr:
+#                    value | "off <cond value>" | "ERR ..."}}. Off when unset.
 #   S2R_TOUCH_SNAP   the snapshot list, JSON [[address, name], ...]
 #                    (default var/recfg/commit-snap-list-wide.json, 793 words)
 # Snapshots are also taken by themselves when the last guest CPU goes down for sleep
@@ -56,6 +61,13 @@ class TouchMap:
         self.full = False
         self.ctl = os.environ.get("S2R_TOUCH_CTL", "")
         self.snap_list = None
+        self.samples = []           # (addr, cond) read at each tick (S2R_TOUCH_SAMPLE)
+        for part in filter(None, os.environ.get("S2R_TOUCH_SAMPLE", "").split(",")):
+            a, _, c = part.partition("@")
+            self.samples.append((int(a, 16), int(c, 16) if c else 0))
+        self.nsample = 0
+        if self.samples:
+            self.rec("tsample-words", words=["%#x" % a + ("@%#x" % c if c else "") for a, c in self.samples])
         self._install()
         self._hooks()
         ms = int(os.environ.get("S2R_TOUCH_TICK", "1000"))
@@ -127,7 +139,27 @@ class TouchMap:
         self.epoch_t = time.time()
         return True
 
+    def _sample(self):
+        v, errs = {}, 0
+        for a, c in self.samples:
+            try:
+                if c:
+                    ps = self.hv.p.read32(c)
+                    if (ps >> 4) & 0xf != 0xf:
+                        v["%#x" % a] = "off %#x" % ps
+                        continue
+                v["%#x" % a] = "%#x" % self.hv.p.read32(a)
+            except Exception as e:
+                v["%#x" % a] = "ERR %s" % e
+                errs += 1
+                if errs >= 2:
+                    break
+        self.nsample += 1
+        self.rec("tsample", n=self.nsample, v=v)
+
     def _tick(self):
+        if self.samples and not self.full:
+            self._sample()
         changed = self._maybe_rearm()
         if self.ctl and os.path.exists(self.ctl):
             lines = open(self.ctl).read().split("\n")

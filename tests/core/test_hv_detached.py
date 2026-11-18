@@ -292,6 +292,23 @@ def test_s2r_timer_write_probe_records():
     assert F.MAX_CSNAP >= 1400      # round 7's commit list (r6 + CPU block + power-gate records)
 
 
+def test_detached_tick_sample_records():
+    """Round 10: the detached clock's samples come back with their sample number, word and value;
+    a faulted read and a word skipped for its condition are marked."""
+    entries = [F.decode_entry(r) for r in (
+        F.make_entry(1000, 100, 24000000, 0, F.K_DETACH),
+        F.make_entry(1000 + 6000000, 0x23b058000, 0x333, 1, F.K_TICK, width=2),
+        F.make_entry(1000 + 6000001, 0x23bc00044, 0x3ff, 1, F.K_TICK, width=2, multi=True),
+        F.make_entry(1000 + 12000000, 0x23b05c000, 0, 2, F.K_TICK, width=2, write=True),
+    )]
+    recs = list(F.records(entries, 1000, 24000000))
+    assert [r["ev"] for r in recs] == ["detached", "tick-sample", "tick-sample", "tick-sample"]
+    assert {k: recs[1][k] for k in ("n", "addr", "data", "error", "skipped", "t")} == \
+        {"n": 1, "addr": "0x23b058000", "data": "0x333", "error": False, "skipped": False, "t": 0.25}
+    assert recs[2]["skipped"] and recs[2]["data"] == "0x3ff"
+    assert recs[3]["n"] == 2 and recs[3]["error"] and not recs[3]["skipped"]
+
+
 def test_first_layout_still_decodes_and_the_list_reaches_the_block():
     c = F.Ctl()
     c.set("magic", F.MAGIC_V1)
