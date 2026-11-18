@@ -101,3 +101,49 @@ Also, outside the tests (the C half's reviewer list in `TESTS.md`): C18 (a)'s de
 translator's tunables and `iommus = <&pmp_dart 0>` in the reference tree (L29); if Linux's own
 translator driver binds `dart-pmp`, it writes +`0xfc`, +`0x200`, +`0x100`, +`0x13c` itself, beside
 the client's R71 (c) and R55 writes. Which of the two owns the translator is not stated.
+
+## Fill (after the audit and the critic; tests commit `3acfeb1` in `~/Work/deepsleep-glue-tests-r4`)
+
+Amended:
+- **G5.** Tests now accept an IOVA anywhere inside a buffer the client mapped (D11 (a) "an address
+  the client has mapped"), not only a buffer's start; the four IOVAs stay distinct.
+- **G6.** "Not waited for" (code-`0xe` words, D11 (a); the wake's five words) is now held by
+  structure: no receive with a timeout between those words and the next request, or the part's
+  return. A delay is allowed, so macOS's own gaps pass (0.37 s before R4 at the entry, R73; 24 ms
+  over the wake's five, 1.7h). "At once" for the 0x55 word at boot (D10 (a)) is still held as
+  under 10 ms.
+- **G7.** Buffer requests after the boot are now tested: one reply on the same endpoint, macOS's
+  size field, an IOVA in a mapped buffer. Which buffer (the boot's again or a new one) is still
+  not stated.
+- **G24.** Tests: no action at all after the entry part has stopped `pmp` (before the wake), after
+  a boot whose wait ran out, after a boot that found a domain off; an echo after a wake that got
+  through (C18 (b) "While running", D3 "found stopped, it sends nothing").
+
+New:
+- **G25. LOG words during the wake's short handshake.** C18 (b) has LOG words echoed "while
+  running"; R74 records none at the wake. Not stated: whether one arriving during the handshake
+  is echoed. Tests hold the echo at boot and at the entry, not at the wake.
+- **G26. D9 (b) and the logic as it is.** D9 (b) says the logic, with `pmp` found stopped at entry
+  start (+`0x44` 0, +`0x48` `0x2e`, PMP `0x1f0f03ff`, PMS_SRAM `0x1f0003ff`), makes no access to
+  `pmp`'s mailbox page, its control page beyond C8's reads, its SRAM except the twelve words, or its
+  translator, and that section 8 "already gives" this and "does not change". The round's brief says
+  the logic gets no new behaviour. Against the logic at kernel `HEAD` (`d441389d4`), D9 (b)'s test
+  fails for `cand` 0, `0x40000` and `0x40100`:
+  - at the entry: R5's register stop on `pmp` (+`0x8114` R/W, +`0x44` W 0), translator +`0xfc` W 0
+    twice, and R6's 49,152 reads;
+  - at the wake: R6w, R55 and R5w;
+  - 98,271 forbidden accesses with `0x40000`.
+
+  Both cannot hold. Either the logic changes (through its own cycle), or D9 (b) is restated
+  (for example, the client leaves `pmp` in a state that the logic's C8/D3 treats as "domain off").
+  This needs a decision from Naeem and the spec stage.
+- **G27. Values the tests use that no capture shows.** The tests use these to hold "echoed",
+  "answered before the next word", and R5's and R5a's rules as rules, not constants:
+  - LOG and type-8 words with payloads;
+  - EPMAP words at the wake with other bitmaps (`0x0080000000000017`, `0x0088000100000003`);
+  - unrelated messages arriving ahead of an awaited answer (a LOG word, `0x00c0000000000000`,
+    `0x0020b00000550023`);
+  - +`0x8114` reading `sio`'s `0x24401` / `0x28801` for `pmp`;
+  - +`0xfc` reading `0x8001` at the entry.
+
+  Whether `pmp` ever sends these or reads so is not in the captures.
