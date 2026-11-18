@@ -32,6 +32,9 @@ and Linux's written out as candidate requirements C1-C17, each to be tried behin
 under the hypervisor (section 1.7g), the Linux runs of the candidate switches (section 12,
 L25-L28), what the captures say about who writes the words of candidate C3 (8.2 C3, R70), C3 and
 C5 revised, and decisions D6 and D7 on the driver's failure path and its watchdog (round 13,
+2026-11-19), and with the round-10 test author's gaps Z1-Z10 answered: D6's waits, put-back
+and cores made exact, D7's first arming moved before `enter` and its second into the glue's
+commit-point step, the logic's interface to the glue as decision D8, C3's places and C5's four reads made exact (round 14,
 2026-11-19, listed in "Changes in this round" at the end, with the earlier rounds' lists below
 it). It states what macOS did, not why, and not what is
 needed for sleep to work; the candidates of 8.2 are differences, not causes.
@@ -4403,43 +4406,148 @@ After the SoC comes up, before macOS is back at idle:
   section 8 has it governs and nothing is put back. Nothing in the captures supports or
   contradicts D5; it is how the candidates are to be tried, not a statement about the machine.
 - **D6 — a decision about Linux, not an observation of macOS** (round 13; the orchestrator's
-  brief of 2026-11-19, after ds20, L25): *a wait that runs out in the entry ends the entry in a
-  clean return to Linux: no hang, and what the entry changed is put back.* In test form:
-  (a) every wait of the entry is bounded (as before); D5 (e) still governs a candidate's own wait,
-  after which the entry goes on; (b) when any other wait of the entry ends without the value it
-  waits for, the driver takes no further step of the entry: no write of `0x23b718004` (R22), of
-  `0x23d2c4000` (R24, R37, R38), of the commit's power-chip commands (R38, R60), and no core's
-  final writes (R43, R64); (c) it puts back, in the reverse order of its own changes, every word
-  the entry wrote: a power-domain word to the request the entry read before changing it (D1's
-  rule and forms), any other word to the value the driver read before its first write of it; a
-  coprocessor the entry stopped stays stopped (D2); (d) every wait of the put-back is bounded,
-  and one that runs out does not stop the put-back of the remaining words; (e) cores 1-7, if the
-  entry had parked them, are given back to Linux; (f) watchdog 1, if the glue armed it at the
-  entry's start (D7), is disarmed (`0x23d2b001c` = 0) before Linux runs again; (g) the entry
-  returns a failure to Linux's suspend path, which resumes, and the record names the wait that ran
-  out (word, width, core: what ds20's 'T' record already gives). What the readings say next to
-  it: in ds20 with `cand_c5` a wait ran out, the record says so, and the M1 then hung instead of
-  returning (L25), so on the machine the failure path did not return. macOS gives no failure path
-  to copy: no wait of macOS's ran out in any capture; its one abandoned entry (F, section 11.1)
-  stopped 0.14 s into E1, before any power-manager write, and left the hardware back at idle as
-  far as logged.
+  brief of 2026-11-19, after ds20, L25; *revised round 14, gaps Z2-Z7: which waits, which words
+  are put back and how, in what order, and what "cores given back" is*): *a wait that runs out in
+  the entry ends the entry in a clean return to Linux: no hang, and what the entry changed and
+  can put back from its own reads is put back.* In test form:
+  (a) every wait of the entry is bounded (as before). *(Round 14, gap Z6.)* **The D6 waits are
+  exactly two:** R16's poll of `0x200001c04` and R22a's four status-word waits. No other wait is
+  a D6 wait: a domain turn-off has none (R56: the first read after the write reported state 0 in
+  every instance; a wait for it is not observed); a coprocessor's reply that does not come is
+  D3's case (a bounded wait, then the register stop, R5a; the entry goes on); a candidate's own
+  wait is D5 (e) (the entry goes on); a wait the driver makes that section 8 does not state as one
+  (on the SPMI controller's reply status, for example, R60) ends and the entry goes on. Reason:
+  R16 and R22a are the only places in the captures where macOS reads one word repeatedly until it
+  changes (R16: 39 to 65 polls; R22a: 1 to 9 reads per status word), so they are the only places
+  where "the value did not come" is defined by an observation; every other wait is the spec
+  stage's or the driver's, and each already has a way on.
+  (b) when a D6 wait ends without the value it waits for, the driver takes no further step of
+  the entry: no write of `0x23b718004` (R22), of `0x23d2c4000` (R24, R37, R38), of the commit's
+  power-chip commands (R38, R60), no core's final writes (R43, R64), and no access of a candidate
+  placed after that wait. *(Round 14.)* Both D6 waits come before R22, so R23's SIO writes, R36's
+  interrupt-controller writes and R38's commands are never made before a D6 return.
+  (c) the put-back. *(Round 14, gaps Z2, Z3, Z5, Z7; replaces "every word the entry wrote ... to
+  the value the driver read before its first write of it".)* **D6 adds no read to the entry**:
+  up to the wait, the entry's accesses are section 8's and the switched-on candidates', as
+  without D6 (no capture has a read at the places where macOS writes a word without reading it).
+  After the wait the driver puts back each word the entry wrote, **once**, by the first of these
+  rules that applies:
+  1. *Not put back, whatever was read:* the blocks of the coprocessors the entry stopped
+     (mailbox, +`0x44`, +`0x8114`; a stopped coprocessor stays stopped, D2, and a message sent
+     is not unsent); the SPMI controllers' words and the power chip's registers (R8, R9: a
+     command sent is not undone; R9's `0x9f01` = `0x50` is written before any read of it, E3);
+     the CPU start/stop block `0x23b754000`-`0x23b75401c` (e); and **the watchdog block
+     `0x23d2b0000`-`0x23d2b8fff`** (gap Z3): its words are counts, controls and the glue's
+     watchdog 1 (D7), and writing an earlier value back would move watchdog 1's count back while
+     it is armed. R15's writes there stay as made (of them only `0x23d2b800c` is read first, 0,
+     and written 0); the failure path's only write to that block is the glue's disarm, (f).
+  2. *A power-domain word:* back to the request the entry read before its first write of it
+     (every domain write of the entry follows a read of the word: R56's forms, D5 (d)), by D1's
+     forms. **A word read at request 4** (C5's twelve; gap Z7) is put back by **form (4r)**: one
+     write of v with bits 0-9 replaced by `0x244`, v the value read just before that write, then
+     reads until bits 4-7 read 4, bounded. Form (4r) is the always-on program's: its wake
+     sequence 10 writes FPWM0 and FPWM2 the word `0x244` and polls each until (v & `0xf0`) =
+     `0x40` (`var/recfg/seq10-11.txt`, the decode, as in 8.2 C5), after its sleep sequence 0 has
+     written them 0; an application processor's write of request 4 over request 0 is in no
+     capture (R57), so this is the program's form taken for the driver, not macOS's kernel's.
+     For Linux's values of the twelve (`0x0f000244`, `0x244`, L15) it writes back the value read.
+  3. *Any other word that the same core read with a 32-bit read after entry start and before
+     the entry's first write of it:* to the value of that read (the latest such read).
+  4. *Any other word:* **not put back** (gap Z2): left as the entry wrote it, and no read is
+     added to learn its earlier value. Examples among section 8's writes before R16: R13's
+     `0x24a820900`, `0x24a820904`, `0x23d1f0900` (`0xffffffff`; E5-2 reads `0x23c100c48`, not
+     them). A test decides rules 3 and 4 from the driver's own trace.
+  5. *The interrupt controller* (gap Z3): R36's writes come after R24 and are never made before
+     a D6 return ((b)). Should a later round add a D6 wait after them, `0x23b104100`+4k (a word
+     whose written ones set bits, so a write of the value read cannot clear what the entry set)
+     is put back by R36w's rule as macOS's wake does it (E6-1): `0x23b104180`+4k written the
+     bitwise inverse of the value read from it, `0x23b104100`+4k the value read from
+     `0x23b104180`+4k.
+  **Order** (gap Z5): the words are put back in the reverse order of the entry's **first** write
+  of each (the word first written last goes first); a word written at several places (a domain
+  turned on by a candidate and off later, a sub-block's control word) is put back once, at the
+  position of its first write, to its value before that write. Domain words also keep 1.9's
+  order (a parent on before its children, a child off before its parent); where the two orders
+  would differ, 1.9's governs. Reason: each word put back once to its value before the entry
+  gives the state at entry start whatever the order; reverse first writes is the order of an
+  undo of single changes, and parents first is the only turn-on order seen (W1-2c; 1.9).
+  (d) every wait of the put-back is bounded, and one that runs out does not stop the put-back of
+  the remaining words.
+  (e) cores 1-7 (*round 14, gap Z4; replaces "are given back to Linux" as a step of the
+  logic's*): the logic asks no core for anything further (no final write; (b)), and the put-back
+  writes nothing to the CPU start/stop block: no stop bit cleared, no start word written. macOS
+  never writes a stop bit back (at every wake +`0x0` reads 0 with no write of macOS's, 4.1d,
+  R66); each core's R11 write sets its own bit only, so a write of a value read could not clear
+  it; and W2's start words follow a power-down, which a D6 return has not had. Returning each
+  parked core to Linux is the glue's (D8 (c)). What a stop bit left set does to a core that goes
+  on running Linux is not observed (open question 73).
+  (f) watchdog 1, if the glue armed it (D7), is disarmed by the glue (`0x23d2b001c` = 0) after
+  `enter` returns the failure and before the glue returns to Linux's suspend path (D7 (c), D8
+  (c)); the logic makes no write to the watchdog block on this path.
+  (g) the entry returns a failure to Linux's suspend path, which resumes, and the record names
+  the wait that ran out (word, width, core: what ds20's 'T' record already gives).
+  What the readings say next to it: in ds20 with `cand_c5` a wait ran out, the record says so, and
+  the M1 then hung instead of returning (L25), so on the machine the failure path did not return.
+  macOS gives no failure path to copy: no wait of macOS's ran out in any capture; its one
+  abandoned entry (F, section 11.1) stopped 0.14 s into E1, before any power-manager write, and
+  left the hardware back at idle as far as logged.
 - **D7 — a decision about Linux, not an observation of macOS** (round 13; the orchestrator's
   brief of 2026-11-19; `AGENTS.md`, "A bare-metal sleep run must end without hands even when it
-  hangs before the commit"; L16, L17, L25): *with `wdt` = N set, the glue arms watchdog 1 at the
-  start of the entry, so that a hang before the commit ends by itself.* In test form (the glue):
-  (a) at entry start (8.2's definition: after D3's decisions on the coprocessors, before the
-  driver's first device write of the entry) the glue makes R61's four writes:
-  `0x23d2b001c` = 0, `0x23d2b0010` = 0, `0x23d2b0014` = N x 24,000,000, `0x23d2b001c` = 4;
-  (b) at the commit point it makes them again after every other write, as R61 and L17 have it (the
-  count restarts there); (c) on D6's return it writes `0x23d2b001c` = 0 before Linux runs again;
-  (d) with `wdt` unset it makes none of these writes. R15's write of watchdog 1's count
-  (`0x23d2b0010` = 0) inside the entry restarts the count and does not disarm it. N must exceed
-  the entry's duration (ds20 used 30). What the readings say next to it: in five macOS runs the
+  hangs before the commit"; L16, L17, L25; *places revised round 14, gap Z10*): *with `wdt` = N
+  set, the glue arms watchdog 1 before the entry starts, so that a hang before the commit ends by
+  itself.* In test form (the glue):
+  (a) *(round 14; replaces "at entry start (8.2's definition ...)")* immediately before it calls
+  `enter`, with no access of its own in between, the glue makes R61's four writes:
+  `0x23d2b001c` = 0, `0x23d2b0010` = 0, `0x23d2b0014` = N x 24,000,000, `0x23d2b001c` = 4.
+  The round-13 place (entry start, inside `enter`) and this one differ only by D3's reads (each
+  coprocessor's domain word and +`0x44`, read before any write of the entry): arming first also
+  ends a hang in those reads, and needs no hook inside `enter`;
+  (b) at the commit point, in the glue's commit-point step (D8 (b)), it makes them again after
+  every other write of its own, as R61 and L17 have it (the count restarts there);
+  (c) on D6's failure return, after `enter` returns and before the glue returns to Linux's
+  suspend path, it writes `0x23d2b001c` = 0;
+  (d) with `wdt` unset it makes none of these writes. The logic writes nothing to watchdog 1's
+  bite or control in any case; R15's write of watchdog 1's count (`0x23d2b0010` = 0) inside the
+  entry restarts the count and does not disarm it. N must exceed the entry's duration (ds20 used
+  30). What the readings say next to it: in five macOS runs the
   instrument armed watchdog 1 (150 s) at the start of E1, 7.5 s before T, and again at the
   commit, and each powered down and woke at the alarm (`det26`, `det27`, `det28`, `det30`, `det31`;
   1.7g, [HV-CHANGED]); in the two C3 runs of the same recipe, which did not reach a commit, the
   machine restarted about 150 s after that first arming (1.7g); ds20's C3 and C5 runs, with
   watchdog 1 armed only at the commit, stayed dark until the power button (L25).
+- **D8 — a decision about Linux, not an observation of macOS** (new round 14, gaps Z1, Z4, Z10):
+  *the tested logic and the kernel glue meet at three points inside one call of `enter`; the
+  logic exposes these, the glue does the rest.*
+  (a) **C3's nine values** (gap Z1). The logic exposes them through an accessor,
+  `c3_readings(&self) -> [Option<u32>; 9]` (the test author's `[u32; 9]` with "not read" made
+  explicit): slots 0-2 hold the reads at C3's place (i), in C3's order (`0x23b058000`,
+  `0x23b05c000`, `0x23b060000`), slots 3-5 those at (ii), slots 6-8 those at (iii). Every slot is
+  `None` from the start of each `enter`; a slot holds `Some(v)` from the moment the logic has made
+  that read until the next `enter` starts, whatever `enter` returns (success, D6's failure). With
+  `cand_c3` off all nine stay `None`; after a D6 return the places the entry did not reach stay
+  `None`. The accessor is valid inside the glue's commit-point step ((b)), where on an entry with
+  the switch on all nine are filled, so the glue can record them before the cores go down.
+  Reason: in ds20's C3 run the record could not say where the entry stopped ('a' only, L25); a
+  `None` says a place was not reached, and 0 cannot stand for "not read" because 0 is a value
+  these words can hold (the always-on program's wake sequence 4 writes all three 0; decode, 8.2
+  C3). What the glue does with them (its record's format, the power chip's bytes, a log) is the
+  glue's.
+  (b) **The commit point** (gap Z10). The logic calls one step of the glue's (named here the
+  *commit-point step*; its name in code is the test author's) after the entry's third and last
+  write of `0x23d2c4000` (R38) and C3's place (iii) reads, and before any core's final write
+  (R43, R44): between R38's third write and that call the logic makes no access but C3 (iii)'s
+  reads. The glue makes its record there and, with `wdt`, D7 (b); the logic does not see what.
+  After the step returns, the cores' final writes follow with no device write between (R39,
+  R61). This is the place where the glue already writes its 'W' record and arms watchdog 1 (L17:
+  "the last access before it a 32-bit write to `0x23d2c4000` by core 0"; L25, L26).
+  (c) **The failure return** (gaps Z4, Z10). When `enter` returns D6's failure, the logic has
+  finished the put-back ((c)-(d) of D6) and asks no core for anything further. The glue then, in
+  this order: returns cores 1-7 from where it parked them to Linux by its own means, disarms
+  watchdog 1 (D7 (c)), and returns the failure to the suspend path (watchdog 1 last, so that a
+  hang while the cores are returned still ends by itself). Neither is a device access the
+  logic makes or a test of the logic sees.
+  (d) Entry start (8.2's definition) stays the place of the candidates' first accesses; D7 no
+  longer uses it.
 
 ### 8.1 The requirements since round 6, as statements a test can check (round 11)
 
@@ -4657,8 +4765,9 @@ D4, the seven first-port domain words read request 0 at the commit.
 | R68, R69 | none (bases of R59 and R67) | [HV-CHANGED] |
 | D1-D4 | as stated | Decision |
 | D5 | each candidate of 8.2 behind its own switch, off by default; (a)-(f) of D5 | Decision |
-| D6 | a wait that runs out (not a candidate's): no further entry step, put-back in reverse order (D1 for domains, value read for others), bounded put-back waits, cores given back, watchdog 1 disarmed, failure returned, record names the wait | Decision (round 13; ds20 C5 hung, L25) |
-| D7 | glue, `wdt` = N: R61's four writes at entry start and again at the commit point; disarmed on D6's return; none without `wdt` | Decision (round 13); macOS [HV-CHANGED] 5/5 power-downs with the early arm (1.7g) |
+| D6 | *(revised round 14)* R16's or R22a's wait runs out (no other wait): no further entry step; no read added; each written word put back once, in reverse order of first writes (1.9's order for domains): domains by D1 (request 4 by form (4r)), other words read first to the value read, words never read first left as written; nothing put back in coprocessor blocks, SPMI, the CPU start/stop block or the watchdog block; bounded put-back waits; failure returned, record names the wait | Decision (round 13; ds20 C5 hung, L25); form (4r) from the always-on program's decode |
+| D7 | *(revised round 14)* glue, `wdt` = N: R61's four writes just before `enter` and again in the commit-point step; disarmed after D6's return; none without `wdt` | Decision (round 13); macOS [HV-CHANGED] 5/5 power-downs with the early arm (1.7g) |
+| D8 | *(new round 14)* logic and glue: `c3_readings() -> [Option<u32>; 9]`, `None` until read in this `enter`; the commit-point step called after R38's third write and C3 (iii), before the final writes; on D6's return the glue gives the cores back, then disarms watchdog 1 | Decision (round 14) |
 | R70 | no write to `0x23b058000`, `0x23b05c000`, `0x23b060000`; only 32-bit reads of the first word of the last two pages | all captures, 48 boots (touch maps) |
 
 ### 8.2 Candidate requirements C1-C17 (round 12)
@@ -4871,6 +4980,17 @@ Switch `cand_c3`.
   (iii) at the commit point, before the cores' final writes. It hands the nine values, in that
   order, to the glue for its record. No wait, and nothing else changes. With the switch off,
   none of these reads. Wake: nothing (nothing was written).
+  *(Round 14, gaps Z9, Z1.)* The places, exactly: (i) as 8.2's "entry start", with D5 (c)'s
+  ascending order among candidates there; (ii) **core 0's first three device accesses after its
+  write `0x23b718004` = 0**, before any other access (R23's SIO accesses follow them; no other
+  candidate has a place there); (iii) **after the entry's third and last write of `0x23d2c4000`
+  (R38) and before the logic calls the glue's commit-point step (D8 (b))**, so before every core's
+  final write, with no other access of the logic's between that write and the call (R39: macOS
+  makes no device write after R38; reads are not excluded there). The test author's reading of
+  (ii) stands; that of (iii) ("after the entry's last write of `0x23d2c4000` and before the first
+  core's final write") stands and is narrowed to before the commit-point step. "Hands to the
+  glue" is D8 (a): `c3_readings`, slots in the order (i), (ii), (iii), `None` for a read not made
+  in this `enter`.
 - *Not observed.* Whether bits 0-3 are the only field a write sets; what a write by an
   application processor does to the hardware (the three runs that made one did not reach a
   commit, and none was read afterwards); what the program does when its wait runs out; who sets
@@ -4943,6 +5063,22 @@ Switch `cand_c3`.
   bounded (macOS: at the first read); a wait that ends without it is D5 (e): the entry goes on.
   At the commit each that was written requests 0 (state 0, bit 9: *reading*). Wake: D5 (f), by
   D1 back to request 4.
+  *(Round 14, gap Z8.)* **The four reads are C5's own**: 32 bits each, by core 0, in the order
+  PMS `0x23b700140`, SIO_BUSIF `0x23b7001c0`, SIO `0x23b7001c8`, SIO_CPU
+  `0x23b7001d0`, as C5's first four accesses at its place, immediately before its first access to
+  the twelve; C5 decides on these four alone, and no other read of the same words (section 8's,
+  D3's, C12's, an earlier candidate's) stands for them. Reasons: C12's turn-ons, the step just
+  before, change the SIO family, so only a read after them shows the state C5 acts on; and the
+  record of a C5 run must show the state where C5 decided (in ds20 the step that read SIO_BUSIF
+  is not known, open question 72). The order is a decision: parents first as the observed
+  turn-ons have them (macOS's wake turns PMS on before SIO_CPU, W+0.0135 and W+0.0137; the
+  always-on program's sequence 10 turns SIO_BUSIF on before SIO, `seq10-11.txt`; C12's
+  parents-first turn-on is SIO_BUSIF, SIO, SIO_CPU). **C5's own
+  wait, for a test:** no later step of the entry accesses the twelve (macOS's application
+  processors never access them in any entry, 18 captures; none is among R25's domain writes), so
+  a test may hold one of them at a non-zero state through C5's wait and the rest of the entry:
+  its request at the commit is 0 (the write) and its state is a *reading*. Under D6 a word C5
+  wrote is put back by form (4r) (D6 (c) 2).
 - *Not observed.* Request 4 lowered with the SIO family off (the one run that did, on Linux,
   timed out on SIO_BUSIF); request 4 lowered during an entry (only at the wake, R56 (c)); which
   of the twelve, if any, needs the SIO family or PMS on.
@@ -5157,9 +5293,9 @@ Switch `cand_c6`.
 |---|---|---|---|
 | C1 | SEP domain to state 0 before R16 (R56 form 2) | gated under macOS at every reading, on under Linux; Reference T8140: running enclave "never returned" | G-I awake and commit `0x1000230f` / `0x1f0020ff` (ds13-15) |
 | C2 | four power-manager sub-blocks on at entry start, so R22a stops running blocks | R22a is the step before the write that the always-on side's first step follows; macOS turns them on at boot and every wake | 1 awake, 0 at boot (A, B), wake writes 1 (all eight) / 0 (L3), ds8 timed out in R22a |
-| C3 | *(revised round 13)* no write (R70); `0x23b058000`/`05c000`/`060000` read at entry start, after R22's trigger, at the commit point | macOS never writes them; the always-on program's sleep sequence starts by moving them to 3 and 4 (decode); every application-processor write so far was followed by no commit | awake and commit `0x333`/`0x444`/`0x222`, wake `0x333`/`0x555`/`0x333`, no access; earlier Linux driver's commit macOS's values (L28) / `0x444`/`0x666`/`0x333`; ds20 C3 dark (L25) |
+| C3 | *(revised round 13; places exact and the values' interface, round 14)* no write (R70); `0x23b058000`/`05c000`/`060000` read at entry start, as core 0's first three accesses after R22's trigger, after R38's third write before the commit-point step; nine values through D8 (a) | macOS never writes them; the always-on program's sleep sequence starts by moving them to 3 and 4 (decode); every application-processor write so far was followed by no commit | awake and commit `0x333`/`0x444`/`0x222`, wake `0x333`/`0x555`/`0x333`, no access; earlier Linux driver's commit macOS's values (L28) / `0x444`/`0x666`/`0x333`; ds20 C3 dark (L25) |
 | C4 | DCSn+`0x7b0` = 0 | only differing DRAM-controller word; DCS domains gate under macOS only; Reference T6040: DCS dynamic gate | 0 always, never accessed / 3 on all eight, 3 at Linux's commit (DCS0-3) |
-| C5 | *(revised round 13)* twelve request-4 domains to request 0 (form 3, macOS's wake order), only with PMS, SIO_BUSIF, SIO, SIO_CPU on (else reads only) | macOS lowers exactly these at every wake, after PMS and the SIO family are on | R57, all eight; 18 wakes / request 4 (L15), SIO family off; ds20 C5 timed out on SIO_BUSIF and hung (L25); macOS with request 4 powered down (`det30`) |
+| C5 | *(revised round 13; its four reads exact, round 14)* twelve request-4 domains to request 0 (form 3, macOS's wake order), only with PMS, SIO_BUSIF, SIO, SIO_CPU on (else reads only), decided on C5's own four reads in that order right before the twelve | macOS lowers exactly these at every wake, after PMS and the SIO family are on | R57, all eight; 18 wakes / request 4 (L15), SIO family off; ds20 C5 timed out on SIO_BUSIF and hung (L25); macOS with request 4 powered down (`det30`) |
 | C6 | `0x23b71c000` (and `040`) set at entry start | set by macOS at boot and every wake, never by Linux; R69 cleared it only after the first step; Reference: boot-cluster power-gate enable | 0 at boot then `0x80000000` / 0 (L19, L20) |
 | C7 | `0x23d24003c`, `0x23d240048` with bit 31 | always-on clocks enabled under macOS, disabled under Linux | G-I, K / bit 31 clear (L2) |
 | C8 | `pmp` stopped whatever PMS_SRAM reads | a running `pmp` may be skipped under D3; Reference T8140: running PMP resets | R4, R5 / PMP on, PMS_SRAM off, +`0x44` unread |
@@ -5690,6 +5826,17 @@ readings of Linux, 66-67 of macOS under the hypervisor.
     after the record (the failure path, D6). *Settles it:* the glue's trace for that run's step,
     and one run of the revised C5 with `cand_c12` off (reads only by its precondition) and one
     with it on.
+
+73. **A CPU stop bit left set under Linux** (round 14, Linux; D6 (e)). After a D6 return the
+    stop bits cores 1-7 wrote to `0x23b754000` (R11) stay set: macOS never clears them by a write
+    (at every wake +`0x0` reads 0, 4.1d), and no capture has a core run on after its stop bit
+    with no power-down following. What a set bit does to a core that goes on running Linux (its
+    next idle, a power-down of its own, nothing), and what clears the bit short of a power-down,
+    are not observed. *Settles it (Linux, bare metal):* one core of cores 1-7 writes its bit
+    with Linux otherwise running, then idles and is woken by an interrupt; `0x23b754000`,
+    `0x23b754004` and that core's domain word read before, after the write and after the wake-up,
+    with the core's progress counted (a per-core heartbeat). Way out without hands: watchdog 1
+    armed before the write (D7's four writes, N = 30).
 
 ## 10. With and without the cable
 
@@ -6352,7 +6499,77 @@ written but hold their awake value. The 137 domain words are in 4.2a.
 - `0x23d240000`..: `0x23d240000` `0x80100010`; `0x23d240004`-`0x23d24001c` `0x81100100`; `0x23d240020` `0x81100000`; `0x23d240024`-`0x23d240034` `0x81100100`; `0x23d240038` `0x81100000`; `0x23d24003c` `0x81100100`; `0x23d240040` `0x1101100`; `0x23d240044`-`0x23d24004c` `0x82100100`; `0x23d240050` `0x80100100`; `0x23d240054` `0x81100000`; `0x23d240304` `0x10000000`; `0x23d240308` `0x1000000`; `0x23d240314` `0x1000000`; `0x23d240320` `0x0`; `0x23d240330`-`0x23d240370` `0x0`.
 - `0x23d2c0000`..: `0x23d2c0000`-`0x23d2c000c` `0x0`; `0x23d2c0010` `0x880ff04`; `0x23d2c0014` `0x7`; `0x23d2c0018` `0x1`; `0x23d2c001c` `0xff0`; `0x23d2c0020`-`0x23d2c003c` `0x0`.
 
-## Changes in this round (round 13, 2026-11-19: the candidates carried into macOS, the ds20 switch runs, who writes C3's words, C3 and C5 revised, decisions D6 and D7)
+## Changes in this round (round 14, 2026-11-19: the round-10 test author's gaps Z1-Z10; D6 and D7 revised, D8 new, C3's places and C5's four reads exact)
+
+Inputs: the spec at `c8b735c`; the gap list `docs/spec/gaps-reported-by-tests-r10.md` (lab
+`d47c906`; the test author's `TESTS.md` section 16 at tests commit `eb9f9a0`, not read here: the
+gap file is the only channel); the readings already cited by D6, D7, C3 and C5 (L17, L25, L26,
+4.1d, R11, R15, R16, R22a, R36, R56, R57, R66, E5-2); the always-on program's decode
+`var/recfg/seq10-11.txt` (sequence 10's writes of FPWM0 and FPWM2 `0x244` and their polls for
+state 4; SIO_BUSIF before SIO) and `var/recfg/t8103-recfg-decoded.txt` (PMS's word
+`0x23b700140`); the evidence file's runs ds10, ds17 and ds20 (the glue's commit point and its
+record), read only. No new capture or run. Inline marks "round 14" are this round's.
+
+**Decisions changed:** D6 (a) the D6 waits are exactly R16's and R22a's; (b) both precede R22, so
+R23, R36 and R38 never precede a D6 return; (c) rewritten: no read added, each word put back once
+by five rules (not put back: coprocessor blocks, SPMI and the power chip, the CPU start/stop block,
+the watchdog block; domains by D1 with the new form (4r) for request 4; other words read first to
+the value read; words never read first left as written; the interrupt controller by R36w's rule
+should it ever be reached), in reverse order of first writes with 1.9's order for domains; (e) the
+logic writes nothing to the CPU start/stop block, giving the cores back is the glue's; (f) the
+disarm is the glue's after `enter` returns. D7 (a) the first arming moves to just before `enter`;
+(b) the second is made in the glue's commit-point step; (c) the disarm after `enter` returns.
+**Decision added:** D8 (the logic's interface to the glue: `c3_readings`, the commit-point step,
+the failure return). **Candidates changed:** C3 (the places (ii) and (iii) exact; the values
+through D8 (a)); C5 (its four reads exact, in order, its own; its wait testable by holding a word).
+**Open question added:** 73 (a stop bit left set under Linux).
+
+**Sections changed or added:** status; 8 (D6, D7, D8); 8.1 (rows D6, D7, D8); 8.2 (C3, C5,
+summary rows C3 and C5); 9 (73). The evidence file is not changed.
+
+**The test author's gaps, how each was answered**
+- **Z1** (C3's nine values: no interface): D8 (a). `c3_readings(&self) -> [Option<u32>; 9]`,
+  slots (i), (ii), (iii) in C3's word order; all `None` at the start of each `enter`; `Some` once
+  read, kept until the next `enter`, whatever `enter` returns; with `cand_c3` off or a place not
+  reached, `None`; readable in the glue's commit-point step. `None` rather than 0 because the
+  always-on program writes these words 0 (decode). The record's format is the glue's.
+- **Z2** (D6 (c) and words written without a read): D6 (c) rules 3 and 4. D6 adds no read; a word
+  the same core read after entry start and before its first write goes back to the value read; a
+  word never read first is not put back (the suite's choice stands).
+- **Z3** (the watchdog block and the interrupt controller's "set" words): D6 (c) rules 1 and 5.
+  The watchdog block `0x23d2b0000`-`0x23d2b8fff` is never put back (its words are counts and the
+  glue's watchdog 1; the glue's disarm is the only failure-path write there). R36's writes come
+  after R24 and are never made before a D6 return; should that change, R36w's rule, not the value
+  read.
+- **Z4** (D6 (e), cores "given back"): D6 (e) and D8 (c). The logic asks no core for anything
+  further and writes nothing to `0x23b754000`-`0x23b75401c` (no stop bit cleared, no start word:
+  macOS never clears a stop bit, W2's start words follow a power-down); the glue returns the
+  parked cores to Linux. The suite's allowance of start words after the wait is withdrawn. What a
+  stop bit left set does under Linux: open question 73.
+- **Z5** (D6 (c), the order for a word changed at several places): D6 (c), "Order". Each word put
+  back once, to its value before the entry's first write of it, in the reverse order of first
+  writes; for domain words 1.9's parent/child order governs where the two differ.
+- **Z6** (D6, which waits): D6 (a). Only R16's poll and R22a's status waits; a coprocessor's
+  bounded wait stays D3's "go on" (the suite's choice stands), as do candidates' waits (D5 (e))
+  and any wait section 8 does not state as one.
+- **Z7** (D6 (c) for a domain found at request 4): D6 (c) rule 2, form (4r): W v with bits 0-9
+  replaced by `0x244`, then reads until bits 4-7 read 4, bounded; the always-on program's form
+  in its wake sequence 10 (decode); no application processor's write of request 4 over request 0
+  is in any capture (R57), which D6 states.
+- **Z8** (C5's four reads): 8.2 C5, round-14 note. C5's own four 32-bit reads by core 0, in the
+  order PMS, SIO_BUSIF, SIO, SIO_CPU, immediately before its first access to the twelve; no other
+  read stands for them; the decision rests on them alone. C5's own wait can be tested by holding
+  a word's state: no later entry step accesses the twelve.
+- **Z9** (C3's places (ii) and (iii)): 8.2 C3, round-14 note. (ii) as the suite has it (core 0's
+  first three accesses after `W 0x23b718004` = 0); (iii) after R38's third write of `0x23d2c4000`
+  and before the glue's commit-point step, hence before the first core's final write.
+- **Z10** (D7's places inside `enter`): D7 (a)-(c) and D8 (b). The first arming moves to just
+  before the glue calls `enter` (it differs from entry start by D3's reads only and also covers
+  them); the second is made in the glue's commit-point step, which the logic calls after R38's
+  third write and C3 (iii), before the final writes (where the glue already arms it, L17); the
+  disarm after `enter` returns D6's failure.
+
+## Changes in round 13 (2026-11-19: the candidates carried into macOS, the ds20 switch runs, who writes C3's words, C3 and C5 revised, decisions D6 and D7)
 
 Inputs: the spec at `99aee86` (repository at `10db7c8`); the evidence file's "Hypervisor round 9:
 candidates injected into macOS (det26-det32r)", "Linux awake (2026-11-18 21:15)", "Runs ds20,
