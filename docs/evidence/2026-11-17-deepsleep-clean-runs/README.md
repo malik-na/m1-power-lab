@@ -3695,3 +3695,153 @@ In stock Omarchy (`7.3.0-0test5-1-ARCH`, up since 03:49:21), reached over Thunde
 default boot entry is untouched. ds22p's kernel stays on the ESP under `s2r/ds22p`, and its
 modules under `/usr/lib/modules/7.2.11-ds22p` (as `m1-bootonce` leaves them). The reader script
 copied to `/root` was removed. The claim is released.
+
+## Linux round: the pmp client at boot, second build (ds23p) (2026-11-19 04:10-04:15)
+
+This round repeats the ds22p round (section above) with the client's next build: package
+`var/kernels/ds23p/kernel.tar.zst`, kernel `7.2.11-ds23p`. Its command line `var/deepsleep/
+ds23p.cmdline` is byte for byte ds22p's (`apple_deepsleep.enable=1 apple_deepsleep.cand=0x40000`,
+`alarm_secs=60`, no `wdt`, `systemd.watchdog_sec=0`, `panic=10`). The parameters read back the
+same.
+- Boot only: no sleep, no `pm_test`.
+- The same eleven words, read with the same read-only 32-bit `/dev/mem` reader; each sample now
+  also carries `/proc/uptime`. The reader was piped over ssh and nothing was copied to the M1.
+- Claimed as `linux-obs-pmp`. The driver's and the client's source were not read.
+- Raw output (private): `var/commit-state/linux-pmp-client-ds23p-20261119.txt` and
+  `var/commit-state/linux-pmp-client-ds23p-dmesg-20261119.txt`.
+
+**Short answer.** `pmp` did not answer. As with ds22p, the client's 6 s wait for
+`0x000200000023b549` ran out. This time the probe failed with `-110` and left no driver bound,
+where ds22p's client stayed bound.
+- The domains now attach through the node's `power-domains`, and `pms_sram` stays **on**
+  (`ps_PMS_SRAM` `0x1f0000ff`; ds22p: `off-0`, `0x0f000300`).
+- The other ten words are ds22p's values in every sample, from 23.4 s after kernel start to
+  155 s. The three words never moved from `0x444/0x666/0x333`.
+
+### 1. Stock kernel, before (04:10:16)
+
+- `7.3.0-0test5-1-ARCH`, up since 03:49:21. The frame
+  `var/m1-look/20261119-041013-state-linuxobs-ds23p-start.jpg` shows the Omarchy desktop.
+- The eleven words read exactly as in the ds22p round's steps 1 and 5:
+  - the three words `0x444/0x666/0x333`;
+  - +`0x44` `0x0`, +`0x48` `0x2a`;
+  - A2I/I2A `0x20001`/`0x20001`;
+  - `ps_PMP` `0x1f0000ff`, `ps_PMS_SRAM` `0x0f000300`, `ps_PMS` `0x1f0000ff`, `ps_DCS0`
+    `0x1f0002ff`.
+- genpd: `pms_sram` `off-0`, `pmp` on, `pms` on.
+- `apple_pmp` loaded (`98304 2 appledrm,aurora`), with no device bound; `apple_pmp_v1` not
+  loaded. No `dmesg` line contains `pmp`.
+
+### 2. The boot
+
+`m1-bootonce ... ds23p` issued the reboot at 04:10:32. `7.2.11-ds23p` was up since 04:10:47, and
+the series started on the first ssh that answered, at 04:11:11. Nothing was frozen, and
+`m1-reboot.sh` was not used. The frame `var/m1-look/20261119-041350-state-linuxobs-ds23p.jpg`
+shows the Omarchy desktop.
+
+### 3. ds23p: the client's log and the kernel's lines about the pmp node, complete
+
+Every line from `apple-deepsleep`, `apple-deepsleep-pmp`, the device core or genpd that names the
+pmp node, its domains or its probe. There are no others: no `devices_deferred` entry, no
+`genpd` line other than the general one at `0.161897`, no DART fault, no SError or oops.
+```
+[    0.067738] apple-deepsleep: cores: logical CPU of cores 0-7 (MPIDR 0-3, 10100-10103): 0 1 2 3 4 5 6 7
+[    0.067747] apple-deepsleep: mailbox at 0x00000008038b4a40: version 1, 8 cores, loader reset vector 0x8037e4000, 0 resumes so far
+[    0.068888] apple-deepsleep: pmp: /soc/power-management@23b700000/power-controller@3e0 given phandle 0xff for pmp's power-domains
+[    0.069093] apple-deepsleep: pmp: C18: nodes for pmp, its mailbox and its translator added; the client boots at its probe
+[    0.069096] apple-deepsleep: enabled: mem_sleep "deep" sleeps through the tested logic; power chip /soc/spmi@23d0d9300/pmic@f; alarm +60 s
+[    0.069200] apple-deepsleep-pmp 23bc00000.coprocessor: buffer: 16384 bytes at IOVA 0x4000 (bus 0x000000080e4bc000)
+[    0.069320] apple-deepsleep-pmp 23bc00000.coprocessor: buffer: 65536 bytes at IOVA 0xc000 (bus 0x0000000806100000)
+[    0.069330] apple-deepsleep-pmp 23bc00000.coprocessor: buffer: 16384 bytes at IOVA 0x20000 (bus 0x0000000810810000)
+[    0.069334] apple-deepsleep-pmp 23bc00000.coprocessor: buffer: 16384 bytes at IOVA 0x28000 (bus 0x0000000810814000)
+[    0.161897] PM: genpd: Disabling unused power domains
+[    6.150185] apple-deepsleep: pmp: boot: a wait ran out, for 0x000200000023b549; 0 received messages dropped, 0 sends failed, 0 accesses refused (first 0x0)
+[    6.150221] apple-deepsleep-pmp 23bc00000.coprocessor: error -ETIMEDOUT: not started
+[    6.150247] apple-deepsleep-pmp 23bc00000.coprocessor: probe with driver apple-deepsleep-pmp failed with error -110
+[   27.616421] apple-pmgr-pwrstate 23b700000.power-management:power-controller@3e0: sync_state() pending due to 23bc00000.coprocessor
+[   27.616436] apple-pmgr-pwrstate 23b700000.power-management:power-controller@3d8: sync_state() pending due to 23bc00000.coprocessor
+```
+`journalctl -k -b -p warning` has the three lines at `6.150` and no other line naming the client or
+the node. The `asahi` GPU driver again logs `MMU: IO map: 0x23bc00000:0x4000` (`6.521625`).
+
+**Step by step, against ds22p:**
+
+| Step | ds22p | ds23p |
+|---|---|---|
+| power-domains given to the node | no line; node has no `power-domains` | `0.068888`: `power-controller@3e0` given phandle `0xff`; the node has `power-domains = <0x7a 0xff>` (`pmp` `@3d8`, `pms_sram` `@3e0`), `power-domain-names` `pmp`, `pms_sram` |
+| nodes added | `0.069009` | `0.069093` (same text) |
+| buffers | IOVA `0x4000` 16 KB, `0xc000` 64 KB, `0x20000` 16 KB, `0x28000` **64 KB** | the same IOVAs and sizes, but `0x28000` is **16 KB** |
+| SRAM block, translator setup, start (+`0x44`), endpoint 0 handshake, endpoints 1-3 | no line | no line |
+| endpoint-`0x20` opening | wait for `0x000200000023b549` ran out at `6.105254` | the same wait ran out at `6.150185`; 0 dropped, 0 failed sends, 0 refused accesses |
+| `0x55` word | no line | no line |
+| outcome | "pmp not running: mailbox stopped, PMP and PMS_SRAM given back to genpd"; device stays **bound** | "error -ETIMEDOUT: not started"; **probe failed with error -110**; no driver bound |
+| later | nothing | `27.616`: `sync_state()` pending on `power-controller@3e0` and `@3d8` due to `23bc00000.coprocessor` |
+
+**Devices on ds23p (04:13):**
+- `soc/coprocessor@23bc00000`: compatible `apple,t8103-pmp-deepsleep-c18`. Its `reg` is the
+  same as ds22p's (`ctrl` `0x23bc00000`+`0x10000`, `sram` `0x23b500000`+`0x80000`, `dart`
+  `0x23b300000`+`0x4000`), plus `power-domains` (above). No driver is bound.
+  - Device links: supplier `power-controller@3d8` and supplier `power-controller@3e0`, both
+    `status=available`, `sync_state_only=0`.
+  - No supplier link to the mailbox; ds22p had one, to `23bc08000.mailbox`.
+  - `waiting_for_supplier` `0`; runtime status `unsupported`.
+- `soc/mailbox@23bc08000`: as in ds22p, bound to `apple-mailbox`.
+- `soc/iommu@23b300000`: compatible now `apple,t8103-pmp-dart-deepsleep-c18` (ds22p:
+  `apple,t8103-dart`), `status = "disabled"`, not bound to `apple-dart`.
+- genpd: **`pms_sram` on**, `pmp` on, `pms` on, `pms_busif` on, `pms_fpwm0`-`4` `off-0`. Neither
+  `pmp` nor `pms_sram` lists a device.
+- `apple_pmp` loaded (`49152 1 asahi`, aliases `apple,t6000-pmp-v2`, `apple,t8140-pmp-v2`), no
+  device bound; `apple_pmp_v1` not loaded.
+
+### 4. ds23p: the words, once a second
+
+- **First sample: 04:11:11, `/proc/uptime` 23.43 s** (17 s after the client's last line at
+  6.15 s). This was the earliest the M1 answered over ssh.
+- That series ran 5 samples (23.43-27.43 s). The ssh `timeout 6` used for the early start cut it
+  off. A second series of 120 samples at 1 s then ran from 04:11:23 to 04:13:22 (uptime
+  35.71-155.14 s).
+- **0 changes** across all 125 samples:
+
+| Word | ds23p (every sample, 23.4-155 s) | ds22p (39-158 s) | Stock (steps 1 and 5) | macOS (round 10) |
+|---|---|---|---|---|
+| three words | `0x444/0x666/0x333` | same | same | `0x444/0x444/0x444` from t 3.0; `0x333/0x444/0x222` after the `0x55` word |
+| `pmp` +`0x44` | `0x0` | `0x0` | `0x0` | `0x10` from t 2.76 |
+| `pmp` +`0x48` | `0x8` | `0x8` | `0x2a` | `0x2a`, then `0x0c`/`0x2c`, `0x2e` |
+| A2I `0x23bc08110` | `0x107801` | `0x107801` | `0x20001` | not sampled |
+| I2A `0x23bc08114` | `0x26600` | `0x26600` | `0x20001` | macOS writes `0x22200` at the entry's stop |
+| `ps_PMP` | `0x1f0f00ff` | `0x1f0f00ff` | `0x1f0000ff` | `0x1f0f00ff` at n 4 |
+| `ps_PMS_SRAM` | **`0x1f0000ff`** | `0x0f000300` | `0x0f000300` | `0x1f0000ff` at n 4; `0x1000030f` after the `0x55` word |
+| `ps_PMS` | `0x1f0000ff` | same | same | `0x1f0000ff` at n 4 |
+| `ps_DCS0` | `0x1f0002ff` | same | same | |
+
+- **Against step 1:** the first sample (23.43 s) already differs in +`0x48`, A2I, I2A, `ps_PMP` and
+  `ps_PMS_SRAM`.
+- **Against ds22p:** only `ps_PMS_SRAM` differs.
+- **Against macOS:** `ps_PMP` and `ps_PMS_SRAM` now both read macOS's sample-n-4 values
+  (`0x1f0f00ff`, `0x1f0000ff`). +`0x44` never reads `0x10`. The three words never reach
+  `0x444/0x444/0x444`.
+- 0-23 s (including the client's 0.07-6.15 s window): not read.
+
+### 5. Stock kernel, after (04:14:41)
+
+`systemctl reboot` from ds23p at about 04:13:55. Stock `7.3.0-0test5-1-ARCH`, up since
+04:14:17, answered at 04:14:35.
+- The eleven words read exactly as in step 1 (`ps_PMS_SRAM` `0x0f000300` again).
+- genpd `pms_sram` `off-0`, `pmp` on, `pms` on. No `coprocessor@23bc0…` node. `apple_pmp`
+  loaded as before.
+- The frame `var/m1-look/20261119-041442-state-linuxobs-ds23p-end.jpg` shows the desktop.
+
+### Left out
+
+- Readings before 23.4 s after kernel start, so none inside the client's window.
+- What the client wrote to +`0x44`, the SRAM, the DART or the mailbox: it logs no line for those
+  steps, and its source was not read.
+- `pmp`'s SRAM (incl. `0x23b549000`), the DART's registers and the mailbox FIFOs: not read.
+- Whether `pmp`'s CPU ran during the window cannot be told from these readings.
+
+### M1 left
+
+In stock Omarchy (`7.3.0-0test5-1-ARCH`, up since 04:14:17), with the default boot entry
+untouched. `m1-bootonce` removed ds22p's ESP copy; ds23p's kernel stays on the ESP under
+`s2r/ds23p`, with its modules under `/usr/lib/modules/7.2.11-ds23p`. No file was left in `/root`.
+The claim is released.
