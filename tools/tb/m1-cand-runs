@@ -10,6 +10,8 @@
 # wake and its path written with the outcome: the screen is read from the frame, not asked of
 # Naeem (2026-11-18: "keep using camera to see what's on the screen instead of asking me").
 # The run needs apple_deepsleep.wdt on the command line; real.sh refuses a sleep without it.
+# Linux's own watchdog driver (apple_wdt) is unbound on the test boot before the sleep: the glue
+# refuses a wdt sleep while that driver drives watchdog 1 (spec D7 (e); ds28's first run was refused).
 set -u
 here=$(cd "$(dirname "$0")" && pwd); repo=$(cd "$here/../.." && pwd)
 pkg=${1:?pkg}; tag=${2:?tag}; cl=${3:?cmdline}; out=${4:?out.tsv}; shift 4
@@ -24,7 +26,7 @@ for mask in "$@"; do
 	timeout 400 "$here/m1-bootonce" "$pkg" "$tag" "$cl" >/dev/null 2>&1 || { log "mask=$mask: boot-once failed"; exit 1; }
 	b=$(up "$krel" 200) || { log "mask=$mask: test kernel not up"; exit 1; }
 	boot=${b##* }
-	s=$(m1 "sleep 8; P=/sys/module/apple_deepsleep/parameters; echo $mask > \$P/cand && echo cand=\$(cat \$P/cand) wdt=\$(cat \$P/wdt) && systemd-run --unit=cand$mask /bin/bash /var/lib/m1power-ds/real.sh >/dev/null 2>&1 && echo started \$(date +%T)") || s=
+	s=$(m1 "sleep 8; P=/sys/module/apple_deepsleep/parameters; echo $mask > \$P/cand && { [ ! -e /sys/bus/platform/drivers/apple-watchdog/23d2b0000.watchdog ] || echo 23d2b0000.watchdog > /sys/bus/platform/drivers/apple-watchdog/unbind; } && echo cand=\$(cat \$P/cand) wdt=\$(cat \$P/wdt) && systemd-run --unit=cand$mask /bin/bash /var/lib/m1power-ds/real.sh >/dev/null 2>&1 && echo started \$(date +%T)") || s=
 	case "$s" in *started*) ;; *) log "mask=$mask: sleep not started ($s)"; exit 1;; esac
 	t0=$(date +%s); sleep 15; res=DARK; r=
 	while [ $(( $(date +%s) - t0 )) -lt 240 ]; do
