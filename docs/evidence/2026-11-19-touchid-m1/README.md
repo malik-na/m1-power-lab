@@ -48,3 +48,7 @@ Naeem restarted the M1 into macOS 13.5 after the enrolment and reports that it b
 - Sleep/resume with the driver loaded; the lid-closed reader hiding.
 - The data-ready interrupt (#223's pin 104): capture worked by polling, so it was not needed here.
 - Aurora's fprintd patches (failed-delete recovery, lockout reporting) are not installed.
+
+## Upstream
+
+omacom/omarchy-mac-pkgs#162 (draft): offer Touch ID on the J313 with `xart_guard=0`; waits on omacom/omarchy-pkgs#2737 (libfprint sep-bio v4 and v5).
