@@ -37,9 +37,13 @@ and `aurora-sep-userspace` (read as data).
 The enclave's hwrng survey fails on every load (`survey failed after 5 attempts (EIO)`); not
 investigated. Raw logs: `var/touchid/` (private).
 
+## macOS after the write
+
+Naeem restarted the M1 into macOS 13.5 after the enrolment and reports that it booted and everything worked (his report; no reading taken here).
+
 ## What this does not establish
 
-- That macOS 13.5 on the M1 still boots and logs in after the xART write (not run).
+- macOS beyond Naeem's report: FileVault state, keychain and macOS's own Touch ID were not checked one by one.
 - PAM: `sudo`, polkit and the lock screen are not wired to fprintd (no `pam_fprintd` lines).
 - Sleep/resume with the driver loaded; the lid-closed reader hiding.
 - The data-ready interrupt (#223's pin 104): capture worked by polling, so it was not needed here.
