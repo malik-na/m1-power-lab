@@ -1,8 +1,29 @@
-# The clean-room cycle
+# The clean-room cycle (the build lane)
 
-Observation -> spec -> tests -> implementation, then again. Each stage is done by its own agent.
+Since 2026-11-20 the work has two lanes (Naeem: "Two speeds"). Finding out what the hardware does
+is the probe lane: `docs/agents/probe-lane.md`. This file is the build lane, for code we keep.
+
+Observation -> spec -> tests -> implementation. Each stage is done by its own agent.
 No stage's agent may change or sway another stage's work. The orchestrator (the session Naeem
 talks to) only carries finished work forward by path and commit.
+
+**Once per milestone, with the spec frozen.** On 2026-11-19, 10 of 14 test rounds and 8 of 12
+implementation rounds were redone only because the spec changed after the tests were locked.
+So:
+
+- The build lane starts only when the probe lane has settled what the behaviour is.
+- The spec is frozen when the test authors start. Gaps and review points found after that go on
+  one list (`docs/spec/gaps-<milestone>.md`) and are answered in a single spec pass at the end of
+  the milestone, followed by one delta round. A gap that makes a test impossible to write is the
+  only reason to stop early.
+- Tests for the logic, the glue and any client are written in one wave, in parallel.
+- A new reading from the M1 does not reopen the spec mid-milestone; it goes on a fact card
+  (`docs/cards/`) and into the next milestone.
+- Every brief names the fact cards to read. The spec and the evidence file are opened by section,
+  through the cards' pointers, never whole.
+- An agent's report back to the orchestrator is at most 15 lines; details go in a file it names.
+- Models follow `~/.claude/rules/pstack-models.md`: Haiku for mechanical work, Opus medium by
+  default, Opus high for design and review only.
 
 | Stage | Agent | Reads | Writes | Must not |
 |---|---|---|---|---|
