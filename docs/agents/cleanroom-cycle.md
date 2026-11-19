@@ -34,10 +34,13 @@ Two more rules (Naeem, 2026-11-17):
   docs; survey in `docs/evidence/2026-11-06-aurora-silicon-survey.md`) and cite the page for
   anything taken from them. Documentation explains readings; it is marked as documentation, not
   as an observation. Asahi code is not pulled.
-- **Aurora Silicon code** (Naeem, 2026-11-17: "any repository/any branch ... for reference"). The
-  observation and spec agents, and the kernel glue's author, may read aurora-silicon code as a
-  reference for what the hardware is and does, citing repository, branch and commit. It is read
-  as data and never run or built here. The driver's author still works from the tests alone.
+- **Aurora Silicon code** (Naeem, 2026-11-17: "any repository/any branch ... for reference";
+  widened 2026-11-20: "We're okay to use any code from Aurora Silicon as it is or modified. They
+  are in partnership with us."). Any stage may read, build, run, use or modify aurora-silicon code
+  (any repository, any branch), citing repository, branch and commit; tools and infrastructure
+  (the M1's boot loader `aura`, m1n1, scripts) may be taken from it directly. The clean-room
+  separation between stages still holds: the driver logic's author works from the tests alone, and
+  no stage hands another its conclusions.
 - **What the hypervisor is for** (Naeem, 2026-11-17, after a Linux guest left the M1 dark). The
   hypervisor stage reads macOS, the system whose sleep and wake work, by the recipe that has
   already run unattended (det8). Linux is read on bare metal. Before any hypervisor run the
