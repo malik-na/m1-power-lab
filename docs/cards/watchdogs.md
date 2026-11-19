@@ -24,6 +24,10 @@ A reset at begin + `wdt` + about 15 s means no wake reached any CPU code. 2026-1
 - ds28's first run, `apple_wdt` driving watchdog 1: the sleep was refused (-EBUSY), no device access; unbound, it slept [evidence "ds28", "The refused sleep"].
 - The M1's loader mb2 re-arms watchdog 1 on its reset path when control bit 2 is set: 45 s, then 75 s before the kernel's entry [evidence "The boot loader's wake breadcrumb", provenance].
 
+- Watchdog 2 at Linux's commit (just before the first `0x23d2c4000` write): control 4; `0x23d2b8028` = `0x01000000` (sequence 12 entered), as macOS; yet no Linux run resets at 5 s [docs/experiments/2026-11-20-m1-engine-start.md, 2026-11-20-m1-sequence1.md].
+- In the decoded program only sequence 1 disarms watchdog 2 (`0x082a0`), after its `0x0201` = 01 write; sequence 0 arms it for 5 s first [var/recfg/t8103-recfg-brief.txt lines 7-10, 79, 92].
+- `0x23d2b8028` reads 2 on a stock boot after a reset: the boot overwrites it [var/regmap/scan-m1-aonprog-after-run2/reads.txt; hwdb snapshot 2].
+
 ## Decided: the glue (D7 as of round 15d)
 - `wdt` = N: the check first in `begin` (no device access): Linux's watchdog core must not drive watchdog 1 (`WDOG_ACTIVE`, `WDOG_HW_RUNNING`); else -EBUSY, nothing armed [D7 (e)].
 - No driver bound = "not driving", sleep goes on; a bound driver the glue cannot read = refusal [D7 (e) GL12].

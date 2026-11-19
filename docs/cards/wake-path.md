@@ -40,6 +40,8 @@ What has to happen, in order, for a wake to reach Linux, and what each run saw o
 
 ## Open
 
+- Settled 2026-11-20: the SoC never powers down after Linux's commit; the always-on program stops before sequence 0 (no wake can follow). The two questions below are moot until sequence 0 runs. [docs/cards/state.md, milestone 1]
+
 - Which one: the SoC never powers down; it powers down and nothing wakes it; or it woke with memory lost (looks like B). Read that settles it: a power-down signature (the M1's own draw, or `0x0201` after the reset) in one sleep. [experiment card "Not covered"; evidence 2026-11-17, Observation round 4 table]
 - The breadcrumb code has never been seen to write. Read that settles it: start the loader's reset path on purpose (a reset after the hand-off, outside a sleep) and read `0x9f0b`. [experiment card, Result]
 - The M3's draw (flat about 8.1 W) does not tell powered-down from up. [evidence 2026-11-17, ds28, ds29]

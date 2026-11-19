@@ -44,6 +44,9 @@ Read them, and `0x0201`, the fault shadow and `0xd000`, after every run with `to
 
 ## Established: the other bytes
 - `0x0201`: always-on program decode: sleep sequence 1 writes `01`, sequence 5 `02`, wake sequence 10 `00` [evidence "Observation round 4"; spec 4.4].
+- `0x0201` 04 before and 04 after runs 3-4 of 2026-11-20 (read on the test kernel, `spmi_nvmem3`, and after the reset); 04 after runs 1-2: no clean-room run has left 01 (the old driver did, runs 27b, 32, 42) [docs/experiments/2026-11-20-m1-*.md; var/m1-state/pmu-*.txt].
+- Power-chip `0x2621` (sequence 0 writes 1) reads 00 after every run, macOS sleeps included: cleared, no use as a marker [var/m1-state/pmu-*.txt].
+- On the test kernel the power chip's nvmem is `spmi_nvmem3`, on stock `spmi_nvmem0` [2026-11-20, run 3 start].
 - `0x0201` after runs: `04` after ds16, ds17 and ds20; `00` after ds19p and ds21-ds29 [evidence "Run ds17"; "Runs ds19p-74"; "Runs ds20"; "ds21"; "ds29"].
 - `0x9f03` "boot-error-stage": `0x50` after resets, `0x00` after macOS's wakes [evidence "Observation round 4"; spec 1.7d].
 - Fault shadow `0xa47b`-`d`, LE word: bit 11 `wdog,reset_in_1`; bit 10 `btn_rst`; bit 12 `dbg_rst,reset_in_2`; bit 18 `dblclick_timeout` [evidence "Observation round 4"].

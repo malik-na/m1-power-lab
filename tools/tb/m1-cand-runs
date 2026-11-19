@@ -26,7 +26,7 @@ for mask in "$@"; do
 	timeout 400 "$here/m1-bootonce" "$pkg" "$tag" "$cl" >/dev/null 2>&1 || { log "mask=$mask: boot-once failed"; exit 1; }
 	b=$(up "$krel" 200) || { log "mask=$mask: test kernel not up"; exit 1; }
 	boot=${b##* }
-	s=$(m1 "sleep 8; P=/sys/module/apple_deepsleep/parameters; echo $mask > \$P/cand && { [ ! -e /sys/bus/platform/drivers/apple-watchdog/23d2b0000.watchdog ] || echo 23d2b0000.watchdog > /sys/bus/platform/drivers/apple-watchdog/unbind; } && echo cand=\$(cat \$P/cand) wdt=\$(cat \$P/wdt) && systemd-run --unit=cand$mask /bin/bash /var/lib/m1power-ds/real.sh >/dev/null 2>&1 && echo started \$(date +%T)") || s=
+	s=$(T=45 m1 "sleep 8; P=/sys/module/apple_deepsleep/parameters; echo $mask > \$P/cand && { [ ! -e /sys/bus/platform/drivers/apple-watchdog/23d2b0000.watchdog ] || echo 23d2b0000.watchdog > /sys/bus/platform/drivers/apple-watchdog/unbind; } && echo cand=\$(cat \$P/cand) wdt=\$(cat \$P/wdt) pre0201=\$(f=\$(ls /sys/bus/nvmem/devices/spmi_nvmem*/nvmem 2>/dev/null | head -1); if [ -n \"\$f\" ]; then od -An -tx1 -j513 -N1 \$f | tr -d \" \"; else echo none:\$(ls /sys/bus/nvmem/devices | tr \"\\n\" ,); fi)) && systemd-run --unit=cand$mask /bin/bash /var/lib/m1power-ds/real.sh >/dev/null 2>&1 && echo started \$(date +%T)") || s=
 	case "$s" in *started*) ;; *) log "mask=$mask: sleep not started ($s)"; exit 1;; esac
 	t0=$(date +%s); sleep 15; res=DARK; r=
 	while [ $(( $(date +%s) - t0 )) -lt 240 ]; do
@@ -37,7 +37,7 @@ for mask in "$@"; do
 	rec=; [ $res = RESET ] && rec=$(m1 "$REC")
 	[ $res = WOKE ] && rec=$(m1 "sed -n 2,3p /var/lib/m1power-ds/real.out | tr '\n' ' '")
 	cam=; [ $res != WOKE ] && cam=$("$repo/tools/hv-trace-kit/harness/m1-state.sh" 2>/dev/null | sed -n 's/.*frame: //p' | tail -1)
-	printf '%s\t%s\t%s\t%ss\t%s\t%s\n' "$mask" "$(date +%T)" "$res" "$dt" "$rec" "${cam:+camera $cam}" | tee -a "$out"
+	printf '%s\t%s\t%s\t%ss\t%s\t%s\t%s\n' "$mask" "$(date +%T)" "$res" "$dt" "$rec" "${cam:+camera $cam}" "$(echo ${s%%started*})" | tee -a "$out"
 	[ $res = DARK ] && { log "DARK after mask=$mask: stopping; the M1 may be asleep"; exit 2; }
 	[ $res = WOKE ] && { m1 'systemctl reboot' >/dev/null; sleep 20; }
 done
