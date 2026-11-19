@@ -17,14 +17,14 @@
 #
 # The new file: var/bootloader/boot.bin.breadcrumb = the installed boot.bin with only its first
 # 4 MiB (the m1n1 loader) replaced by the breadcrumb build (~/Work/m1n1-mb2-breadcrumb, branch
-# m1power/wake-breadcrumb); the device trees, the SIO alias and u-boot after 0x400000 are the same
+# m1power/wake-breadcrumb, 91d54c2, built with RELEASE=1 CHAINLOADING=1 ESP_STAGE2=1); the device trees, the SIO alias and u-boot after 0x400000 are the same
 # bytes. Read the result with tools/m1n1/read-breadcrumb.sh.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
 tb="$repo/tools/tb"
 NEWF="$repo/var/bootloader/boot.bin.breadcrumb"
-NEW=ef4372065fa3ac11aebe534e61795a690414e9facc17b9e5cac32269d15702bd
+NEW=396dd5df4584b21217700f8c07fae2ba49c5e69fcdd45130d41ad58c7def981a
 OLD=0a1e47f3c02b7731c87eb8f37ea9b4781f376ef695c9078195b5f4d40900b20a
 KEEP=boot.bin.pre-breadcrumb-${OLD:0:8}
 D=/boot/efi/m1n1
@@ -42,6 +42,8 @@ set -eu
 D=$D; NEW=$NEW; OLD=$OLD; KEEP=$KEEP; SIZE=$size
 findmnt -n /boot/efi >/dev/null || { echo "STOP: /boot/efi is not mounted. Nothing changed."; exit 1; }
 cd "\$D"
+# hash as read from the partition (O_DIRECT, past the page cache); a cached read where the kernel refuses
+dsum() { b=\$(dd if="\$1" iflag=direct bs=1M status=none 2>/dev/null | sha256sum | cut -c1-64); if [ -n "\$b" ] && [ "\$b" != "\$(printf '' | sha256sum | cut -c1-64)" ]; then echo "\$b"; else sha256sum "\$1" | cut -c1-64; fi; }
 cur=\$(sha256sum boot.bin | cut -c1-64)
 if [ "\$cur" = "\$NEW" ]; then echo "boot.bin is already the breadcrumb build. Nothing to do."; exit 3; fi
 [ "\$cur" = "\$OLD" ] || { echo "STOP: boot.bin is \$cur, not the expected \$OLD. Nothing changed."; exit 1; }
@@ -55,7 +57,7 @@ avail=\$(df -B1 --output=avail /boot/efi | tail -1 | tr -d ' ')
 if ! { [ -f "\$KEEP" ] && [ "\$(sha256sum "\$KEEP" | cut -c1-64)" = "\$OLD" ]; }; then
 	cp -p boot.bin "\$KEEP"
 	sync
-	[ "\$(sha256sum "\$KEEP" | cut -c1-64)" = "\$OLD" ] || { echo "STOP: the kept copy \$KEEP does not read back with its hash. boot.bin unchanged."; exit 1; }
+	[ "\$(dsum "\$KEEP")" = "\$OLD" ] || { echo "STOP: the kept copy \$KEEP does not read back from the partition with its hash. boot.bin unchanged."; exit 1; }
 fi
 echo "kept: \$D/\$KEEP"
 cat > restore-pre-breadcrumb.sh <<'RESTORE'
@@ -66,9 +68,26 @@ cat > restore-pre-breadcrumb.sh <<'RESTORE'
 # ($KEEP, mb2 + SIO alias) back over boot.bin.
 # It touches nothing but boot.bin in its own folder. The breadcrumb build is not kept here (it is
 # on the M3, var/bootloader/boot.bin.breadcrumb).
+#
+# From macOS, by hand:
+#   1. If the M1 is dark or hung: hold the power button until it is off, then hold it again until
+#      the startup options appear.
+#   2. Choose the macOS volume and log in.
+#   3. Terminal: diskutil list. Find Omarchy's FAT32 EFI partition (Linux nvme0n1p4, most likely
+#      disk0s4; it holds a folder m1n1 with this script in it), then
+#        sudo diskutil mount disk0sN
+#   4. sudo sh "/Volumes/<EFI name>/m1n1/restore-pre-breadcrumb.sh"
+#      It must print DONE.
+#   5. Restart, hold the power button for the startup options, choose Omarchy.
+# If the macOS volume starts the m1n1 proxy instead of macOS: the M3 can chainload the kept file
+# over USB (proxyclient tools/chainload.py -r); if Omarchy comes up on it (not tried), this script can be
+# run over Thunderbolt (sudo sh /boot/efi/m1n1/restore-pre-breadcrumb.sh).
 d=\$(cd "\$(dirname "\$0")" && pwd)
 OLD=$OLD
-sum() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "\$1" | cut -c1-64; else sha256sum "\$1" | cut -c1-64; fi; }
+if command -v shasum >/dev/null 2>&1; then H="shasum -a 256"
+elif command -v sha256sum >/dev/null 2>&1; then H=sha256sum
+else echo "STOP: neither shasum nor sha256sum is on this system (recoveryOS may have neither). Run this from a full macOS or from Linux. Nothing changed."; exit 1; fi
+sum() { \$H "\$1" | cut -c1-64; }
 [ -f "\$d/$KEEP" ] || { echo "STOP: no $KEEP beside this script (\$d). Nothing changed."; exit 1; }
 [ "\$(sum "\$d/$KEEP")" = "\$OLD" ] || { echo "STOP: the kept file does not have its hash. Nothing changed."; exit 1; }
 if [ "\$(sum "\$d/boot.bin")" = "\$OLD" ]; then echo "boot.bin is already the pre-breadcrumb one. Nothing to do."; exit 0; fi
@@ -88,7 +107,8 @@ m1 "cat > $D/boot.bin.breadcrumb-new && sync" < "$NEWF"
 m1 "bash -s" <<EOF
 set -eu
 cd $D
-[ "\$(sha256sum boot.bin.breadcrumb-new | cut -c1-64)" = "$NEW" ] || { echo "STOP: the uploaded boot.bin.breadcrumb-new does not have the expected hash. boot.bin unchanged."; exit 1; }
+dsum() { b=\$(dd if="\$1" iflag=direct bs=1M status=none 2>/dev/null | sha256sum | cut -c1-64); if [ -n "\$b" ] && [ "\$b" != "\$(printf '' | sha256sum | cut -c1-64)" ]; then echo "\$b"; else sha256sum "\$1" | cut -c1-64; fi; }
+[ "\$(dsum boot.bin.breadcrumb-new)" = "$NEW" ] || { echo "STOP: the uploaded boot.bin.breadcrumb-new does not have the expected hash. boot.bin unchanged."; exit 1; }
 [ "\$(sha256sum boot.bin | cut -c1-64)" = "$OLD" ] || { echo "STOP: boot.bin changed while this ran. Not installed; boot.bin.breadcrumb-new left beside it."; exit 1; }
 mv -f boot.bin.breadcrumb-new boot.bin
 sync
@@ -99,3 +119,5 @@ else echo "STOP: boot.bin reads back as \$back (\$how), not $NEW. Put the old on
 ls -l $D/boot.bin $D/$KEEP $D/restore-pre-breadcrumb.sh
 EOF
 echo "Not rebooted. The next boot of Omarchy runs the breadcrumb loader."
+echo "While it is installed: no package upgrade on the M1 (an update-m1n1 run, e.g. from an aura"
+echo "upgrade, rebuilds boot.bin from aura's m1n1 and drops both mb2 and the breadcrumb)."

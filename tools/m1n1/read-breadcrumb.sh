@@ -2,6 +2,15 @@
 # Read and decode the M1 boot loader's wake breadcrumb: power-chip scratch bytes 0x9f04-0x9f0d.
 #   tools/m1n1/read-breadcrumb.sh                 read on the M1 over Thunderbolt (read only)
 #   tools/m1n1/read-breadcrumb.sh --hex "44 56 43 32 24 43 f2 5a 01 00"   decode given bytes
+#   tools/m1n1/read-breadcrumb.sh --commit "<time>" [--alarm 20] [--wdt 150] [--boot 15]
+#       also time the reset: <time> is when the sleep committed, by the M3's clock (anything
+#       `date -d` reads, or @<epoch>). The M1's kernel start is put on the M3's clock (the M3's time
+#       at the read minus the M1's uptime), so the M1's own clock does not matter. Printed: kernel
+#       start - commit, and what each outcome predicts. --boot is the time from a watchdog reset to
+#       the kernel's start (ds29: up again 165 s after the sleep started with wdt 150, so about 15).
+#   Run procedure (review 2026-11-20): read once just before the sleep run (the scratch can be
+#   cleared between runs, cause unknown), note the commit time on the M3, and read again right
+#   after the reset with --commit, before any macOS boot and before another sleep.
 #
 # Read through the kernel's nvmem device (as tools/tb/m1-pmu-dump does), so no command is put on
 # the SPMI controller Linux owns, and nothing is written. Run it right after the M1 is back from a
@@ -27,10 +36,22 @@
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 
-if [ "${1:-}" = --hex ]; then
-	hex=${2:?"--hex needs ten bytes"}
+hex=; commit=; alarm=20; wdt=150; boot=15; uptime=; m3at=
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--hex) hex=${2:?"--hex needs ten bytes"}; shift 2;;
+	--commit) commit=$(date -d "${2:?"--commit needs a time"}" +%s.%N) || exit 1; shift 2;;
+	--alarm) alarm=${2:?}; shift 2;;
+	--wdt) wdt=${2:?}; shift 2;;
+	--boot) boot=${2:?}; shift 2;;
+	*) echo "usage: $0 [--hex \"10 bytes\"] [--commit <time> [--alarm s] [--wdt s] [--boot s]]"; exit 2;;
+	esac
+done
+if [ -n "$hex" ]; then
 	meta="given bytes"
+	[ -z "$commit" ] || { echo "--commit needs a reading on the M1, not --hex"; exit 2; }
 else
+	t0=$(date +%s.%N)
 	raw=$("$here/../tb/m1tb" -o BatchMode=yes 'python3 -I -' <<'EOF'
 NV = "/sys/bus/nvmem/devices/spmi_nvmem0/nvmem"
 with open(NV, "rb") as f:
@@ -44,9 +65,13 @@ print("read on the M1 at %s, uptime %.0f s, booted %s, boot_id %s" % (
     open("/proc/sys/kernel/random/boot_id").read().strip()))
 EOF
 )
+	t1=$(date +%s.%N)
 	hex=$(printf '%s\n' "$raw" | sed -n 1p)
 	meta=$(printf '%s\n' "$raw" | sed -n 2p)
+	uptime=$(printf '%s\n' "$meta" | sed -n 's/.*uptime \([0-9.]*\) s.*/\1/p')
+	m3at=$(python3 -I -c "import sys; print((float(sys.argv[1]) + float(sys.argv[2])) / 2)" "$t0" "$t1")
 fi
+
 
 python3 -I - "$hex" "$meta" <<'EOF'
 import sys
@@ -119,3 +144,34 @@ elif m == 0 and s == 0 and rec == "V" and trusted:
 else:
     print("breadcrumb: none recognised")
 EOF
+
+if [ -n "$commit" ]; then
+	python3 -I - "$commit" "$m3at" "$uptime" "$alarm" "$wdt" "$boot" <<'EOF'
+import sys, time
+commit, m3at, up, alarm, wdt, boot = (float(x) for x in sys.argv[1:7])
+start = m3at - up
+d = start - commit
+print("timing (M3 clock): commit %s, the M1's kernel started %s: %.0f s after the commit"
+      % (time.strftime("%F %T", time.localtime(commit)),
+                           time.strftime("%F %T", time.localtime(start)), d))
+print("  predicted with alarm %g s, watchdog at the commit %g s, reset-to-kernel %g s:" % (alarm, wdt, boot))
+for what, at in (("no wake reached the CPU (watchdog at the commit)", wdt + boot),
+                 ("vector ran: 'Z' before the mailbox check, 'M', 'U', or empty if SPMI failed", alarm + 30 + boot),
+                 ("'Z' after the mailbox check, or 'N'", alarm + 45 + boot),
+                 ("'H', the kernel's wakemark stub ran", alarm + 60 + boot),
+                 ("'H', the kernel stub never ran", alarm + 75 + boot)):
+    print("    %5.0f s  %s" % (at, what))
+mid = (wdt + alarm + 30) / 2 + boot
+if d < 0:
+    print("  the kernel started before the commit time given: not this run's reset")
+elif d > wdt + boot + 60:
+    print("  %.0f s is over a minute past every prediction: another reset or boot came after this"
+          " run's; this reading may not be the run's" % d)
+elif d < mid:
+    print("  %.0f s is nearer a reset set at the wake (alarm + 30..75 s) than the commit watchdog;"
+          " a wake from another source than the alarm moves these by its own time" % d)
+else:
+    print("  %.0f s is nearer the commit watchdog: no reset was set at a wake (or a wake came more"
+          " than %.0f s after the commit)" % (d, wdt - 30))
+EOF
+fi
