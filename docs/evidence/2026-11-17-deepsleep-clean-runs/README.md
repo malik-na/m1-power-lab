@@ -4609,3 +4609,331 @@ are the same in both boots.
 ### M1 left
 
 Not read by this agent. The orchestrator rebooted the M1 to the stock kernel after each run.
+
+## Linux round: the pmp client with macOS's opening region (ds27p) (2026-11-19 ~05:30)
+
+One boot-only run of the `pmp` client after D17 (spec round 15f): the translator holds macOS's
+34 MMIO windows and the 64 KiB opening region at IOVA `0x3c000` is filled before the opening
+word. No sleep was started. Written from the raw files only (private, `var/commit-state/`):
+`linux-pmp-client-ds27p-dmesg-20261119.txt` (written 05:31; 560 lines, the client's lines and a
+few others, not the whole log) and `linux-pmp-client-ds27p-words-20261119.txt`. The client's
+source was not read.
+
+- Kernel `7.2.11-ds27p` #31, probe line `spec lab 9444f02, build 2c556d0, cand 0xc0000`
+  (kernel tree `2c556d07c`). Command line `var/deepsleep/ds27p.cmdline` = ds24p's with
+  `cand=0xc0000`.
+- Buffers (`#2`-`#9`): IOVA `0x4000`, `0x8000`, `0x10000` (named in no word), crashlog `0x18000`,
+  ioreport `0x20000` (`0x10000`), syslog `0x34000`, the opening region `0x3c000` (`0x10000`),
+  and `#9 MMIO: 34 ranges mapped, 0x190000 bytes, IOVA 0xc0000000-0xc6003fff`. These are the
+  IOVAs macOS answered in hypervisor round 12.
+- `#10`: `+0x2000 0x80 bytes (energy-model-dram-configs 0x80-0xff), +0xe000 0x290 bytes (41
+  records) written; the rest zero`. `+0xe000` of `0x3c000` is IOVA `0x4a000` = `0x48000` +
+  `0x2000`, where round 12 read the (IOVA, size) table.
+
+**Short answer.**
+- **`pmp` answered the opening and ran.** After the opening word `0x000100000003c000` (`#73`,
+  boot+`0x729` µs) the exchange goes on to `#315 boot: end: pmp's CPU running; 0x2 words received
+  not answered` and `boot: done` (0.219 s). No crashlog word came.
+- **The endpoint-`0x20` sequence is macOS's** (round 12's table, t 2.70-2.98, and the
+  `0x0020e00000550000` of det33/det34b):
+
+  | # | Dir | Endpoint | Word | boot+µs |
+  |---|---|---|---|---|
+  | 71 | received | 0x20 | `0x0000000000000000` | `0x724` |
+  | 73 | sent | 0x20 | `0x000100000003c000` | `0x729` |
+  | 74-303 | both | 0x4 | 115 × `0x0080000000000000` each way (macOS: 115 each way) | `0xab6`-`0x2290e` |
+  | 304 | received | 0x20 | `0x000200000023b549` | `0x23493` |
+  | 306 / 309 | sent / received | 0x20 | `0x0020000000010003` / `0x0020100000010003` | `0x2388d` / `0x23df8` |
+  | 307 / 308 | received / sent | 0x2 | `0x0050000000000000` (syslog LOG, echoed) | `0x23a52` / `0x23c2d` |
+  | 311 / 312 | sent / received | 0x20 | `0x0020200000010000` / `0x0020300000010000` | `0x2417d` / `0x24335` |
+  | 314 | sent | 0x20 | `0x0020e00000550000` | `0x2468b` |
+
+  - From the opening word to `0x000200000023b549`: `0x22d6a` µs (142.7 ms). macOS: 274.6 ms
+    (2.7004 to 2.9750).
+  - Before `#71` the exchange is ds24p-ds26p's word for word, except the buffer IOVAs in the
+    replies (`#38` `0x0010400000018000`, `#40` `0x0011000000020000`, `#67` `0x0010100000034000`,
+    macOS's values).
+- **The opening region after the boot is macOS's byte for byte.** The 64 KiB were rebuilt from
+  the `dump after the boot: opening +XXXX:` rows (0.23-0.78 s; `0xddb` non-zero bytes, as the
+  client's line prints). Compared with round 12's det38 page files
+  (`var/commit-state/r12-det38/r12-<point>-iova-<iova>.bin`, the four pages `0x3c000`-`0x48000`
+  laid at `+0x0`, `+0x4000`, `+0x8000`, `+0xc000`):
+  - `reply`: **0 bytes differ** in any of the four pages.
+  - `m55-pre` and `late`: `0x3c000`, `0x44000`, `0x48000` the same; `0x40000` differs in 60 bytes
+    (`+0x3b0`-`+0x44c`).
+  - So `pmp` wrote, as under macOS, the `EHUB` header and the 90 records of 0x48 bytes
+    (`ehub-node-mask` to `fast-die-pacc-ts5i-offset`, `+0x0`-`+0x19a8` non-zero), 164 non-zero
+    bytes at `0x40000` (`SOC`, `VMIN`, `VNOM`, `VMAX`, `DCS`, ..., `NRO01`), and the words 2,
+    `0x01000000`, `0x01000000` at `0x48000`+`0x0`. The `+0x2000` block and the table at
+    `+0xe000` are as the client wrote them.
+- **The C3 words awake with `pmp` running** (words file; the first line `43.08 298.36` is the
+  uptime pair; five samples follow, then one at uptime 66.07):
+
+  | Uptime | `0x23b058000` | `0x23b05c000` | `0x23b060000` | `pmp`+0x44 | `pmp`+0x48 | PMP | PMS_SRAM |
+  |---|---|---|---|---|---|---|---|
+  | 43 s (×5) | `0x444` | **`0x444`** | `0x333` | `0x10` | `0x2c` | `0x1f0003ff` | `0x1f0f03ff` |
+  | 66 s | `0x444` | `0x444` | `0x333` | `0x10` | | | |
+
+  - ds26p (`pmp` stopped by the client after its failed start) read `0x444`/`0x666`/`0x333`,
+    `+0x44` 0, `+0x48` 8. Stock Linux awake reads `0x444`/`0x666`/`0x333` (L27). macOS at the
+    commit reads `0x333`/`0x444`/`0x222` (8.2 C3).
+  - `#11` before the start read PMP, PMS_SRAM, PMS `0x1f0000ff`; at 43 s PMP reads `0x1f0003ff`
+    and PMS_SRAM `0x1f0f03ff`.
+
+**What ds27p does not show.**
+- What `pmp` does with the opening region, or what the two words "received not answered" were
+  (the log names only their count).
+- Whether `pmp` is the writer of the change of `0x23b05c000` to `0x444`: the run has no read of
+  it between the start and 43 s, and no run with D17 and `pmp` stopped.
+- The ioreport, syslog and crashlog buffers' bytes (the line says 7 buffers; only the opening's
+  hex rows are in the file).
+- The rest of the kernel log (the file holds the client's lines and a few others only).
+
+## ds28: logic, glue and the pmp client together; the commit with macOS's C3 values; the M3's battery power during the sleep (2026-11-19 05:39-05:55)
+
+Readings only, from `var/commit-walk/ds28-all.tsv`, `var/commit-state/ds28-all-dmesg-20261119.txt`,
+`var/commit-state/ds28-m3-power-20261119.tsv`, `var/commit-state/ds28-m3-power-B-20261119.tsv`
+(private), the kernel tree's commit messages and the command-line files `var/deepsleep/ds28*.cmdline`.
+
+- Kernel `7.2.11-ds28` #32, kernel tree `a8d9ef4b8` ("merge pmp-client: the pmp client in the
+  glue through round 3d"; logic and glue as main, the client as `2c556d07c`). Its commit message
+  places the client's entry part first in `prepare_late`, under watchdog 1 armed in `begin`, and
+  its wake part after the disarm ("not covered").
+- Probe line `build a8d9ef4, cand 0xc0000`. The client's boot is ds27p's word for word (all
+  logged words of `#1`-`#315` compared by script), and the opening region's 64 KiB rebuild is
+  byte for byte ds27p's. `0x000200000023b549` came at boot+`0x2f5ec` µs (ds27p `0x23493`).
+- `cand` at the run was the mask in the rows below (`0xffffe` = C1-C17 + C18); the boot-time
+  `cand` is the command line's.
+
+### The runs
+
+| Ended (M3) | Command line | Mask | Outcome (first answer after the start) | Record `0x9f04`-`0x9f0d` | `0x0201` | fault shadow |
+|---|---|---|---|---|---|---|
+| 05:39:33 | `ds28.cmdline` (alarm 60, `wdt=30`) | `0xffffe` | WOKE 16 s: the sleep was refused | — | — | — |
+| 05:41:12 | the same, `apple_wdt` unbound | `0xffffe` | RESET 59 s | `44 56 43 32 24 43 f2 00 00 00` | `00` | `00 08 00` |
+| 05:45:08 | `ds28b.cmdline` (alarm 20, `wdt=120`) | `0xffffe` | RESET 148 s | `44 56 43 32 24 43 f2 00 00 00` | `00` | `00 08 00` |
+| A, start 05:47:23 | as the row above (power file's name `A_with_pmp_0xffffe`) | `0xffffe` | RESET, stock up since 05:49:38 | `44 56 43 32 24 43 f2 00 00 00` | `00` | `00 08 00` |
+| B, start 05:52:03 | power file's name `B_without_pmp` | not in the file | RESET, stock up since 05:54:18 | `44 56 64 43 36 64 f3 00 00 00` | `00` | `00 08 00` |
+
+- **The refused sleep (dmesg at 33.70 s):** `begin: wdt: Linux's watchdog drives watchdog 1
+  (marked running in hardware); sleep refused (-EBUSY), no device access in this sleep`, then
+  `end: wdt: counts ... N = 30 s; the sleep was refused, nothing armed`, and `PM: suspend exit`
+  at 33.71 s. This is D7 (e)'s refusal. How `apple_wdt` was unbound for the next rows is not in
+  the raw files (the orchestrator's note says it was unbound).
+- The `ds28-all` dmesg is that first boot only (it ends at 33.75 s). The later rows have no
+  kernel log from the sleeping kernel.
+- B's command line is not in its file. `var/deepsleep/ds28c.cmdline` is alarm 20, `wdt=120`,
+  boot `cand=0x0`. B's mask at the run is not recorded.
+- The rows' camera frames: `var/m1-look/20261119-054110-state-now.jpg`,
+  `...-054506-state-now.jpg` (not looked at by this agent).
+
+**The record, by D8 (f)** (byte 2 + s/2, low nibble for an even slot, code d = d × `0x111`):
+
+| Byte | Value | Low -> slot | High -> slot |
+|---|---|---|---|
+| 2 | `0x43` | 3 -> 0 | 4 -> 1 |
+| 3 | `0x32` | 2 -> 2 | 3 -> 3 |
+| 4 | `0x24` | 4 -> 4 | 2 -> 5 |
+| 5 | `0x43` | 3 -> 6 | 4 -> 7 |
+| 6 | `0xf2` | 2 -> 8 | `0xf`: no slot coded `0xe` |
+
+- **At all three places (entry start, after R22's trigger, after R38's third write):
+  `0x23b058000` = `0x333`, `0x23b05c000` = `0x444`, `0x23b060000` = `0x222`.** That is macOS's
+  commit reading (8.2 C3) and D8 (f)'s `43 32 24 43 f2 00 00 00`. Bytes 7-9 `00 00 00`.
+- ds21 (C1-C17, no client) read `64 43 36 64 f3`: `0x444`/`0x666`/`0x333` at all three places.
+  B's record is ds21's, byte for byte.
+- So with C18 in the mask the three words already hold macOS's values at the entry's start;
+  ds27p read `0x444`/`0x444`/`0x333` awake, which is neither.
+- The record is made at the commit-point step (D8 (b), (f)): the commit point was reached in
+  every RESET row.
+
+### Times against what each outcome predicts
+
+Watchdog 1 is armed first in `begin` (glue round 3c); from a watchdog-1 reset to the stock
+kernel's start the rows give about 15 s.
+
+| Row | `wdt` | No wake (bite at `begin` + `wdt`) | Observed |
+|---|---|---|---|
+| 05:41:12 | 30 s | kernel ~45 s, first answer later | first answer 59 s |
+| 05:45:08 | 120 s | kernel ~135 s | first answer 148 s |
+| A | 120 s | kernel ~05:49:38 | up since 05:49:38 (+135 s) |
+| B | 120 s | kernel ~05:54:18 | up since 05:54:18 (+135 s) |
+
+A wake that resumed Linux would have answered as WOKE with the alarm (20 s / 60 s); none did. A
+wake that reached Linux and then hung would also end at the same bite, so these times alone do
+not tell "no wake" from "a wake that hung before the disarm"; ds28 has no wake marker.
+
+### The M3's battery power during A and B
+
+The files sample the M3's battery `power_now` (column 2, µW, negative = discharging) about once
+a second; column 3 is unlabelled and follows column 2's previous sample; A's column 4 is a
+power-role string (`[source]_sink`, `source_[sink]`), the port not named. Values below are the
+discharge in W.
+
+| Window | A (with the client) | B (`B_without_pmp`) |
+|---|---|---|
+| awake on ds28, the 30 s before the start | mean 19.6 W (05:46:50-05:47:23) | mean 18.5 W (05:51:35-05:52:03) |
+| start + 0.6 to + 3.6 s | 17.7, 19.4, 18.2, 17.6 | 17.6, 19.1, 17.6, 16.9 |
+| step down | + 4.6 s 14.0, + 5.6 s 7.95 | + 4.6 s 11.2, + 5.6 s 7.97 |
+| **flat part** | **05:47:28.6-05:49:32.3 (123.8 s), mean 8.13, median 8.07, 7.71-10.44 W** | **05:52:08.6-05:54:06.3 (117.6 s), mean 8.10, median 8.08, 7.80-8.90 W** |
+| end of the flat part | + 129.3 s: 10.4, then 11-12 W, 20 W at + 139 s | + 124.3 s: 13.6, 24.7, 10.6, then 11-13 W |
+| stock up since | + 135 s | + 135 s |
+| after the reset | 17.5 W (05:49:55-05:51:00) | baseline, the M1 idle on stock until 05:55:23: mean 17.2 W (05:54:40-05:55:24) |
+
+- A's column 4 read `source_[sink]` at 05:46:27-05:46:29 and at 05:49:28-05:49:29 (+ 125 s);
+  `[source]_sink` otherwise.
+- Each file also has a 2-4 s dip to 8-9 W before the start (A 05:46:28-05:46:30, B
+  05:51:08-05:51:12). What the M1 was doing then is not in the files.
+
+**What ds28 does not show.**
+- Whether the SoC powered down after the commit. The M3's discharge fell by about 10 W some 5 s
+  after the start and stayed flat until about the watchdog time, the same with and without the
+  client; which part of the M3's or the M1's load that 10 W is, is not read. The flat part is the
+  same within 0.03 W, so this reading does not tell A's state from B's.
+- What C18 did at the entry beyond leaving the C3 words at macOS's values; whether `pmp` was
+  running or stopped at the commit (the record carries neither).
+- Any wake: no record is written after the commit in this kernel.
+
+## ds29: wake markers in the kernel, none written (2026-11-19 06:17-06:25)
+
+Readings only, from `var/commit-state/ds29-m3-power-20261119.tsv` (private; its `#` lines are the
+outcomes) and the kernel tree's commit message. Kernel tree `52669b5bb` ("wakemark, a diagnostic
+outside the spec"). Command line `var/deepsleep/ds29.cmdline`: alarm 20 s, `wdt=150`,
+`wakemark=3`, boot `cand=0xc0000`; the mask at the run is `0xffffe` by the orchestrator's note
+(not in the file).
+
+`wakemark=3`, by the commit message:
+- bit 0: a stub in core 0's mailbox slot in place of `cpu_resume`: count 0, bite 60 s, then
+  `cpu_resume`; and before `apple_ds_leave_early`: count 0, bite 90 s, then the record `'Dr'`;
+- bit 1: core 0's wait after its final write writes the record `'DA'` once if its WFI returns
+  more than alarm + 2 s after the commit-point step.
+
+| Run | Sleep started (M3) | Outcome | M1 up since | Up - start | Record | `0x0201` | shadow |
+|---|---|---|---|---|---|---|---|
+| 1 | 06:17:51 | RESET at 06:20:49 | 06:20:36 | 165 s | `44 56 43 32 24 43 f2 00 00 00` | `00` | `00 08 00` |
+| 2 | 06:22:00 | RESET at 06:24:58 | 06:24:45 | 165 s | `44 56 43 32 24 43 f2 00 00 00` | `00` | `00 08 00` |
+
+**Predicted kernel start for each outcome** (begin ≈ the start; reset to kernel about 15 s):
+
+| Outcome | Predicted | Record left |
+|---|---|---|
+| no wake reached a CPU; core 0's WFI never returned | start + 150 + 15 = **165 s** | the C3 record |
+| core 0's WFI returned after alarm + 2 s, no power-down | 165 s | `'DA'` |
+| a wake reached the stub at about + 20 s, nothing after | 20 + 60 + 15 = 95 s | the C3 record |
+| a wake reached `leave_early`'s mark | about 20 + 90 + 15 = 125 s or later | `'Dr'` |
+| a wake that resumed Linux | WOKE | the way back's record |
+
+- **Both runs: 165 s and the C3 record** (macOS's values, as ds28). Neither `'Dr'` nor `'DA'`
+  is there. The times are the "no wake reached a CPU" row's; `'DA'` absent says core 0's wait did
+  not record a return after alarm + 2 s (or that write did not land).
+
+**The M3's battery power** (sampled every 0.5 s; values change about once a second; discharge
+in W):
+
+| Window | Run 1 | Run 2 |
+|---|---|---|
+| awake, the 20-25 s before the start | mean 17.6 W | mean 18.1 W |
+| flat part | 06:17:56.4-06:20:21.0 (start + 5.4 to + 150.0 s), mean 8.21, median 8.17, 7.79-9.81 W | 06:22:05.3-06:24:06.8 (+ 5.3 to + 126.8 s), mean 8.10, median 8.04, 7.83-9.16 W |
+| after | + 150.5 s 13.8 W, then 10-13 W, 15.8 W at + 168 s | + 127.3 s 13.3, + 128.3 s 25.4, + 129.3 s 9.9; **flat again 06:24:09.3-06:24:39.0, mean 8.29 W**; + 159.5 s 12.3 W, then 11-19 W |
+
+- A 3.5 s dip to about 8 W also comes 50 s before each start (06:17:01-06:17:05,
+  06:21:10-06:21:14). What the M1 did then is not in the file.
+- Run 1's flat part ends at start + 150 s, the `wdt` time. Run 2's ends at + 127 s with a 1 s
+  peak, comes back for 30 s, and ends at + 159.5 s; the kernel start is + 165 s in both. What
+  happened at run 2's + 127 s is not read.
+
+**What ds29 does not show.**
+- Whether the SoC powered down and was never woken, or never powered down. The markers live in
+  the kernel; a wake that never reached the kernel's code (or the loader's hand-off to it) leaves
+  no mark in this build.
+- The cause of run 2's + 127 s peak.
+
+## The boot loader's wake breadcrumb, one ds29 sleep (2026-11-20 01:34-01:40)
+
+Readings from `var/commit-state/breadcrumb-run1-20261120.txt` (private; the output of
+`tools/m1n1/read-breadcrumb.sh --commit`), `var/bootloader/` (private), the loader repository
+`~/Work/m1n1-mb2-breadcrumb` (branch `m1power/wake-breadcrumb`) and lab commits `bc60a04`,
+`9366fb7`. Times IST, the M3's clock.
+
+### Which loader the M1 runs (provenance readings)
+
+| File | sha256 | What it is |
+|---|---|---|
+| `/boot/efi/m1n1/boot.bin` (the M1's stage 2, Nov 16) | `0a1e47f3...` | `var/bootloader/m1/boot.bin` |
+| its first 4 MiB | `24a8d4dc...` | = `mb1-in/m1n1-mb2.bin` on the M1 (`var/bootloader/m1/p2/m1-sha256.txt`) = `var/bootloader/rebuild/m1n1-mb2-rebuilt-on-m3.bin` |
+| `var/bootloader/rebuild/boot-sio.bin` (rebuilt on the M3) | `0a1e47f3...` | **the installed `boot.bin`, byte for byte** |
+| `boot.bin.pre-sio-26844aaf` | `26844aaf...` | = `rebuild/boot-mb2.bin` |
+| `/usr/lib/asahi-boot/m1n1.bin` (package `aura` 1.0.0b13.r20261113-3) | `cea13d62...` | not the installed loader |
+
+- So the M1 boots the lab's build "mb2", not the `aura` package's m1n1: the mb2 source is the
+  M1's `src-mb2-07fae2d.tar.gz` (sha256 `33455cc8...`), imported as loader commit `d5b416c`
+  ("Ante042/m1n1 15a9a68 + t8103 watchdog mark"), and it rebuilds to the installed bytes.
+- **mb2's own reset path already re-arms watchdog 1** (`src/s2r.c` at `d5b416c`,
+  `s2r_wdt_mark`): on the t8103 boot CPU, and only if watchdog 1's control bit 2 is set, count 0
+  and bite N s: 45 s in `s2r_reset_enter` (after the mailbox and slot checks), 75 s in
+  `s2r_reset_resume` before branching to the slot's entry. `s2r_reset_enter` returns without a
+  mark if the mailbox is gone or has no slot.
+
+### The breadcrumb build
+
+- Loader commits `4599569` (the breadcrumb) and `91d54c2` (review: watchdog 1 set count 0,
+  bite 30 s, control 4, never switched off). At the reset vector (`cpu_reset`), on MPIDR 0 with
+  MIDR Apple part `0x22` only, MMU off, no stack: watchdog 1 to 30 s; read the AON wake status
+  `0x23d00401c`-`2c`; one raw SPMI write of `0x9f0b` = `'Z'`, `0x9f0c` = wake-source bits. Later
+  from C, `0x9f0b` only: `'M'` (mailbox gone), `'U'` (no slot), `'N'` (no entry, parks),
+  `'H'` (branching to the entry). A cold boot enters at `_start` and writes nothing.
+- `var/bootloader/boot.bin.breadcrumb` sha256 `396dd5df...` (`.sha256` file); against the
+  installed `0a1e47f3` it differs in 253,374 bytes, all between byte 2517 and byte 1,028,218 (the
+  first 4 MiB). An earlier build `ef437206` (`var/bootloader/v1-ef437206/`) is the pre-review
+  one.
+- Installed with `tools/m1n1/install-breadcrumb.sh` (keeps `boot.bin.pre-breadcrumb-0a1e47f3` and
+  a `restore-pre-breadcrumb.sh` beside it). The install's output and a read of the ESP's hash
+  during the run are not in the raw files; that it was installed, cold-booted, and was restored
+  afterwards is the orchestrator's account.
+
+### The run
+
+ds29 sleep (`cand` `0xffffe`, alarm 20 s, `wdt=150`, `wakemark=3`), the commit given as
+01:36:00.
+
+| Reading | Value |
+|---|---|
+| `0x9f04`-`0x9f0d`, read 01:39:05, uptime 20 s, booted 01:38:45 (boot_id `472565bb-...`) | `44 56 43 32 24 43 f2 00 00 00` |
+| decode | 'D','V', the C3 record; slots 0-8 `3 4 2 3 4 2 3 4 2` (macOS's `0x333`/`0x444`/`0x222`, as ds28/ds29) |
+| `0x9f0b`-`0x9f0c` | `00 00`: no breadcrumb |
+| the M1's kernel start - commit | **165 s** |
+
+Byte 6's high nibble is `f`, so the record's bytes 7-8 (`0x9f0b`/`0c`) are 0 at the commit; any
+loader mark after it would show there.
+
+**Predicted kernel start** (from the reader's output; alarm 20 s, reset to kernel 15 s):
+
+| Outcome | Predicted | `0x9f0b` |
+|---|---|---|
+| no wake reached the boot CPU (watchdog 1 from the sleep) | **165 s** | 0 |
+| the vector ran; `'Z'` before the mailbox check, `'M'`, `'U'`, or empty if SPMI failed (30 s) | 65 s | `'Z'`/`'M'`/`'U'`/0 |
+| `'Z'` after the mailbox check (mb2's 45 s), or `'N'` | 80 s | `'Z'`/`'N'` |
+| `'H'` and the kernel's wakemark stub ran (60 s) | 95 s | `'H'` |
+| `'H'`, the stub never ran (mb2's 75 s) | 110 s | `'H'` |
+
+- **Observed: 165 s and no breadcrumb**, the first row on both counts. By the reader: no reset
+  was set at a wake, or a wake came more than 120 s after the commit.
+- The bites set at the vector would cut a 150 s count short only if the vector ran; 165 s with
+  nothing at `0x9f0b`/`0c` agrees with no run of the loader's reset vector after the commit.
+  The reader's own list of what "none" allows: no wake reached the boot CPU, the loader image in
+  RAM was lost, or the SPMI write failed (the last would still give 65-110 s).
+
+**What this run does not show.**
+- Which of "the SoC never powered down" and "it powered down and nothing woke it" happened: both
+  reach no CPU code and both end at the sleep's watchdog bite.
+- That the ten bytes were written by this run: the raw file has no read from just before the
+  sleep, and the same bytes were ds29's record on 11-19. The reader's procedure (read once before
+  the run) is not reflected in the file.
+- That the breadcrumb code can write at all on a real reset: no positive control (a reset after
+  the hand-off, outside a sleep) is in the raw files.
+- No camera frame and no power samples for this run are in the raw files.
+
+### M1 left
+
+Not read by this agent. By the orchestrator's account, the original loader (`0a1e47f3`) was
+restored and the M1 cold-booted on it at 01:39:43.
