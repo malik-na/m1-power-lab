@@ -46,6 +46,8 @@ Each domain is one 32-bit word in the power manager; macOS turns domains off and
 - At macOS's own commit `0x23b71c090` reads `0x8004030c` (bit 30 clear) and `0x23b71c360` `0xc004030b` (bit 30 set). [4.1c table]
 - With one core kept running after macOS's commit, neither record changed in 4.9 s. [4.1c]
 - Since then: the clean-room logic turns SIO's family on (C12) and gates APCIE_GP (C10); ds28/ds29 ran them, and no run read the two records after Linux's commit. [C12; C10; evidence "ds28", "ds29"]
+- At Linux's commit (core 0 just before its final write) against macOS's commit values: AOP config `0x23d2c0000`-`3c`, `0x23d2c4000`, `0x23d2b8028`/`040`, watchdog 2 bite/control, `0x23d0d9378`, MSG, NUB_GPIO, ATC1_USB_AON, ATC1_USB, NUB_SPMI/AON/FABRIC and `0x23d2800b0`-`c0`, `060`/`068` are equal; ATC0_USB_AON `0x23d280088` and ATC0_USB `0x23d280098` differ from macOS's `0xff` (the entry turns them off in R54) [docs/experiments/2026-11-20-m2-commit-aon-compare.md, milestone-2 run 3].
+- `0x23b718004` (P cluster) reads `0x10` at Linux's commit, cores 4-7 down: state 1 in bits 4-7, not 0; macOS's wake reads 0 there after a power-down and polls `0x1f` -> `0x2f` when bringing it up [milestone-2 run 4, k 157; spec 3457-3462, 3749]. macOS's value at its commit: not read. 50 ms later (core 0 held) it reads `0x50`, not 0; the old driver's run 26 recorded "P 0x50" in the same place, and that driver's other runs reached sequence 1, so `0x50` is unlikely to be the gate (inference; its meaning, bit 6, is unknown) [milestone-2 run 8; docs/evidence/2026-11-16-run26-watch/README.md 35].
 
 ## Decided
 

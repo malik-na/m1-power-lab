@@ -53,6 +53,7 @@ Established: with every candidate on, the entry reaches the commit point every t
 - ds29 (two runs) and the breadcrumb run: commit reached, no wake marker, no breadcrumb, kernel up 165 s after the start [evidence "ds29"; "The boot loader's wake breadcrumb"].
 - macOS reaches its commit with the same words and powers down; Linux with them does not wake [8.2 C3; evidence "ds28"].
 - The always-on program's first step (watchdog 2 armed for 5 s) follows R22's `0x23b718004`=0 under macOS by 1.3-7.5 us [R62].
+- Milestone 2 (2026-11-20, 8 runs): none of these starts sequence 0 after the commit (`0x0201` 04 -> 04, back at 165 s each): the AOP told AP power `0x201` (alone, or after its sensor and queue stops); an L1 clean by set/way with the cache off before every core's WFI; the first USB-C port's always-on domains left on as found; all three together; core 0 held 20 or 50 ms [docs/experiments/2026-11-20-m2-*.md; var/milestone2/runs.tsv].
 
 ## Open
 - Does the SoC power down after Linux's commit and never wake, or never power down? Settles it: a breadcrumb positive control, or a power reading that separates the two [evidence "The boot loader's wake breadcrumb", "What this run does not show"].
