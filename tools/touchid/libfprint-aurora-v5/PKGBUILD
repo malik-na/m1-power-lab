@@ -1,0 +1,89 @@
+# Omarchy's libfprint-git (omacom/omarchy-pkgs pkgbuilds/libfprint-git, pkgrel 5),
+# rebuilt for the M1 Air's Touch ID: the kernel's apple_sep speaks /dev/sep-bio
+# interface 5, and Omarchy's aurora driver accepts only 4. On aarch64 the aurora
+# driver is Aurora Silicon's libfprint series instead of Omarchy's three patches:
+# aurora-silicon/aurora-sep-userspace main a227a350d7ba, libfprint/ (the Fedora
+# aurora13 build's Patch1000-1010 and apple-sep.h), which accepts interfaces 4
+# and 5 (0005). Built on the v1.94.100 tag (80a4b5ec), the series' own base:
+# Omarchy's pin (6f9479c, ten commits later, for Synaptics/FocalTech readers)
+# rejects the series' tests/meson.build hunk. fprintd-aurora-touchid.conf
+# is Omarchy's drop-in, unchanged.
+
+pkgname=libfprint-git
+pkgver=1.94.100.r0.g80a4b5e
+pkgrel=1
+epoch=2
+pkgdesc="Library for fingerprint readers (Omarchy's pinned snapshot, with Aurora's Apple Touch ID driver for sep-bio v4 and v5 on aarch64)"
+url="https://fprint.freedesktop.org/"
+arch=(aarch64)
+license=(LGPL-2.1-or-later)
+depends=(gcc-libs glib2 glibc libgudev libgusb openssl pixman)
+makedepends=(git glib2-devel gobject-introspection gtk-doc meson python-cairo python-gobject systemd)
+provides=("libfprint=$pkgver" libfprint-2.so)
+conflicts=(libfprint)
+groups=(fprint)
+
+_aurora_patches=(
+  libfprint-1.94.100-apple-sep.patch
+  0002-aurora-report-unusable-captures-as-retries.patch
+  0003-hide-lid-covered-readers-while-the-lid-is-closed.patch
+  0004-aurora-refuse-unbound-enrollment.patch
+  0005-aurora-support-v4-and-v5.patch
+  0006-aurora-report-finger-lift-and-lockout.patch
+  0007-aurora-name-retry-causes-and-keep-waiting.patch
+  0008-aurora-report-the-touch-id-lockout-as-locked-out.patch
+  0009-aurora-say-why-touch-id-needs-the-password.patch
+  0010-let-a-front-end-ask-whether-the-reader-needs-the-password.patch
+  0011-aurora-name-a-touch-of-another-enrolled-finger.patch
+)
+source=(
+  "git+https://gitlab.freedesktop.org/libfprint/libfprint.git#commit=80a4b5ec612892c5c056c48dddaa561452cf37ec"
+  "${_aurora_patches[@]}"
+  apple-sep.h
+  fprintd-aurora-touchid.conf
+)
+b2sums=(
+  'SKIP'
+  '6a134d190b6a9faf0efedb71e6051e8eb2e6f8f6bf01adbcdb46a042af95b2a8e47ffcb094c5c2d4cf32e90d81579420541a42ab2396f248e5071cdc654be795'
+  '3d0984cf527c3d9c3a9541c360691538f3ce24836455df21217de00510bbf64abc4e886908aae4f34c170bc13803f40483ce7bad0a69d8674338c347d19241e5'
+  'c07a74619ddf1a1a62a896ee461dc5f256eb46e0e5182967d52bee680ba68eb75f976eed4ba0846b49e52e040e8d8e206b4df750450ba2272d1eff13acc9a190'
+  '4adff3b2d55d594d3c2b8d6c97854a3651e5f77bf7ab73bfdb5bd0e7899f15fdd98f9a197dc62d4d347b9433d669dd42a20dffc7d851fc16601a1591829a14ec'
+  '834dacd2f7dc94338deb53b1f96619b0245c0e7f81b8706dd81a55ed3e017b76badb654133e9d32ed3d990d0b0c04d383ffa3e9954163fdb445f7a201abef1a7'
+  '1decf3292f4711881262e9784eea3f479e3ceede63e677c065706d27cf7ea48e8dee4125c70df19b5af27c4122153b4109d71d10c0a07df9f9e4001440ff8232'
+  '86b6c3c2ba43d60dbc04a22097625cc02ac76a589d1376e7cc392cc8ee3b9652251889f2614ff9cc7b60cddb5f3c0557b6d68089e0241e4d5330a11af38b6c90'
+  '25ec5c8d3355a04d60d9efe2f8da6c797920424e2e68acdcd1b042e88b4d7bde6c5617d7ba48dfc2ba0f5ba0f4efd9e126e7d055c3163c9c7689c33ac35f51fc'
+  '916997245534c8cbd7929822cfa9dd0cea55998f563ec02beba1c96e2bd18f011591d2e0eeb44a931f6f93499192ac63d63738f6c94636e5ff68fce14a80b8f7'
+  'b5efc6f4f42d591b0d0558ae5860f8fe7499ba1f4586e75608647a7c1df50be0f7530040b287d41fcd7f0b76483b7a05f72377d4d94af3a4d133573ccc0949b3'
+  '10b07fd1d52883b6da9a9d8af5101f8bd91bb3f0cd77c119056d44937b2bb7a1ccdefdf92a466c8b2fa1071ba8a22b9c908879d414723597eabefae95d9c24af'
+  '3b27296f886efdd887134e7c98912a991fe9f08b095e55f620ec864435c7eaa28925471a27d8453fd5dbcf9eedf1c6bd28903fc66598b96df3cd79dce209888c'
+  'b9a1a88f443548c2693722d80c660b4ceca8d2c398938a1f9d3d7f12aa61ef57d32c7630c1fd4076e6edb6be21770917f2dfeb0ff6f4ed8598a02c6c079653fc'
+)
+
+pkgver() {
+  cd libfprint
+  git describe --long --tags --abbrev=7 | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+}
+
+prepare() {
+  cd libfprint
+  git reset -q --hard
+  git clean -qfdx
+  local p
+  for p in "${_aurora_patches[@]}"; do
+    echo "applying $p"
+    patch -p1 --forward --no-backup-if-mismatch < "$srcdir/$p"
+  done
+  install -Dm644 "$srcdir/apple-sep.h" "$srcdir/aurora-uapi/linux/apple-sep.h"
+}
+
+build() {
+  CFLAGS+=" -I$srcdir/aurora-uapi"
+  arch-meson libfprint build -D drivers=all -D installed-tests=false
+  meson compile -C build
+}
+
+package() {
+  meson install -C build --destdir "$pkgdir"
+  install -Dm644 "$srcdir/fprintd-aurora-touchid.conf" \
+    "$pkgdir/usr/lib/systemd/system/fprintd.service.d/50-libfprint-aurora-touchid.conf"
+}
