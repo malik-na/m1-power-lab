@@ -1,7 +1,7 @@
 # State of the deep-sleep work (read this first)
 
 Linux reaches macOS's commit conditions, but no wake has ever reached the boot CPU.
-2026-11-20, after milestone 2: the always-on program never starts its power-down (sequence 0) after our commit; every lead of milestones 1-2 is ruled out.
+2026-11-20, after milestone 3 (SEP: fully on at the commit; gating it on the probe kernel failed; see below). After milestone 2: the always-on program never starts its power-down (sequence 0) after our commit; every lead of milestones 1-2 is ruled out.
 
 ## Established
 
@@ -14,7 +14,7 @@ Linux reaches macOS's commit conditions, but no wake has ever reached the boot C
 ## The one open question
 
 - After Linux's commit the always-on engine accepts the cores going idle, stops watchdog 2, and never enters sequence 0 (AWAKE->AOP_DDR). What does it wait on between the cores going idle and sequence 0's first write? Not any of milestone 2's leads (below). [docs/experiments/2026-11-20-m1-engine-sampler.md; docs/agents/milestone-2-report.md]
-- Unread and still open: the Secure Enclave's domain `0x23b700c00` and PMGR `0x23b74c200` at Linux's commit. The old driver gated the SEP by message before every entry and some of its runs reached sequence 1; the clean-room entry leaves it on or forces it down (C1) without a message [side notes old-vs-clean-entry.md item 3; coprocessors.md Open].
+- The Secure Enclave, not settled (milestone 3): at Linux's commit `0x23b700c00` reads `0x1f0020ff` (fully on; macOS `0x1000230f`), `0x23b74c200` = 4; `0x0201` 04 -> 04. On the probe kernel the SEP answered no sleep request (tags `0x7f` and 8) and did not gate itself after `rmmod apple_sep`, so no commit with the SEP gated was run. Stock Omarchy's idle SEP reads `0x1000230f` [docs/agents/milestone-3-report.md; cards/coprocessors.md].
 
 ## Milestone 2 readings (2026-11-20, 8 runs, none started sequence 0: `0x0201` 04 -> 04, back at 165 s)
 
@@ -44,9 +44,9 @@ Linux reaches macOS's commit conditions, but no wake has ever reached the boot C
 - Two lanes: probe (throw-away, experiment card, safety check) and build (clean-room, once per milestone, spec frozen). [docs/agents/probe-lane.md; docs/agents/cleanroom-cycle.md]
 - Stop condition: if the next kernel build gives no solid next step, stop the deep-sleep work. [memory deepsleep-stop-condition, 2026-11-19]
 
-## Recommendation (after milestone 2)
+## Recommendation (after milestone 3)
 
-Milestone 2 gave no solid next step: by the stop condition the deep-sleep work stops here unless Naeem chooses the one remaining unread difference, the Secure Enclave (2 runs: read `0x23b700c00`/`0x23b74c200` at the commit, then gate the SEP by message as the old driver did). Not the build lane. [docs/agents/milestone-2-report.md]
+The SEP question is open, not ruled out: the one difference left is that Linux's SEP is fully on at the commit where macOS's is gated, and no run has committed with it gated. The next step, if Naeem takes it: one run of `2026-11-20-m3-sep-sleep-message.md` on a kernel whose SEP gates when idle (stock Omarchy's does; the probe kernel's sensor bring-up fails and its SEP stays on). Otherwise the stop condition applies. [docs/agents/milestone-3-report.md]
 
 ## Where the code is
 
@@ -59,6 +59,7 @@ Milestone 2 gave no solid next step: by the stop condition the deep-sleep work s
 | Spec | `docs/spec/macos-13.5-sleep-wake-observed.md` round 15f `9444f02` | ds27p-ds29 and the breadcrumb run not in it | [handoff] |
 | Milestone 1 probes | `~/Work/dsk-probe-m1-leads` `probe/m1-leads` `6fe52a780` (k 76-143, `m1fix`, sampler) | probe lane, not reviewed, never merged | [docs/agents/milestone-1-report.md] |
 | Milestone 2 probes | same worktree, `probe/m2-aop` `a9680e86b` (`m1aop`, k 144-169), `probe/m2-cache` `e1442a487` (`m1fix` bits 3-4); packages `var/kernels/m2aop/`, `var/kernels/m2cache/` | probe lane, safety-checked, never merged | [docs/agents/milestone-2-report.md] |
+| Milestone 3 probe | same worktree, `probe/m3-sep` `ecbbcc4aa` (k 170-172 SEP words; `apple_sep.probe_sleep`); package `var/kernels/m3sep/` | probe lane, safety-checked, never merged | [docs/agents/milestone-3-report.md] |
 | Loader | `boot.bin` `0a1e47f3` (mb2 + SIO alias); breadcrumb `91d54c2` not installed | | [boot-chain.md] |
 
 ## Read more
