@@ -22,6 +22,7 @@ Linux reaches macOS's commit conditions, but no wake has ever reached the boot C
 - At core 0's last write: nothing pending on core 0 (FIQ, IRQ, timers, IPI); no BUSY-latched power-state word before R22; DEBUG_USB idle as macOS's with the cable in [run 1, k 173].
 - Wake sources: pending and unmasked at core 0's last write in run 1 only; none in runs 3-4 (C14 met), no sequence 0 [2026-11-20-m4-pending-wake-source.md].
 - With no device access from R38's third `0x23d2c4000` write to the cores' WFIs (no SPMI record, no watchdog-1 re-arm, no probe reads; m4fix bit 6), still 04 -> 04, back at 166 s: our write after the commit is ruled out [2026-11-20-m4-quiet-commit.md, run 5].
+- macOS (existing captures): writes `0x23d2b8008` = 0 at T-18 ms (det36), as Linux with m4fix bit 3; cores 0-7 ISR 0, IPI_SR 0 at its commit (det18). Its cluster words at the commit: not read; on 2026-11-20 the macOS volume booted macOS natively, no m1n1 proxy, so no hypervisor run [2026-11-20-m4-macos-cluster-words.md].
 - Not built: PMC voters (no t8103 word). Not run: the cable out (the software cut is not clearly safe for the M3; a pulled cable needs Naeem) [2026-11-20-m4-debug-link.md, -pmc-voters.md].
 
 ## Milestone 2 readings (2026-11-20, 8 runs, none started sequence 0: `0x0201` 04 -> 04, back at 165 s)
