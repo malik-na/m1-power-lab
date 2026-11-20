@@ -20,5 +20,6 @@ Safety        Probe kernel probe/m4-batch (boot once, m1-bootonce), safety-check
               Nothing needs Naeem.
 Budget        Shares milestone 4's build (2 at most) and run 1 (4 runs at most); 1 agent writes the
               probe, 1 checks it.
-Result        (after the run)
+Result        B. Runs 1, 3, 4: k 173 bit 27 set in run 1 (the re-mask ran); 0x0201 04 -> 04, 165 s
+              in each. Ruled out with the batch.
 ```

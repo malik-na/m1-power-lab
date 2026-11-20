@@ -17,5 +17,11 @@ Not covered   macOS's cluster values at its commit: no capture has them; a hyper
               would be needed.
 Safety        Reads only, in run 1 (see 2026-11-20-m4-deep-wfi.md).
 Budget        No extra run.
-Result        (after the run)
+Result        Run 1 k 173: bits 21-23 = 1 (0x23b718004 state 1, as 0x10), bits 24-26 = 1
+              (0x23b718000 state 1); bit 14 set (masks = macOS's, written by m1fix bit 0); bit 13 set
+              (a wake status bit pending and unmasked at core 0's last write). Run 2 k 180 = 0 (not in
+              word 1); run 3 k 185 = 0x80000000 (none at the commit-point step's start); run 4 k 186
+              = 0x80000000 (none at core 0's last write, run 1's switches). So the pending bit was
+              seen in 1 of 2 runs with the same switches, and sequence 0 did not start either way.
+              See 2026-11-20-m4-pending-wake-source.md.
 ```

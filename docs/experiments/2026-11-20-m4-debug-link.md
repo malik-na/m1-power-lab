@@ -27,5 +27,10 @@ Not covered   Anything the cable holds other than the debug domains (port 0 sour
 Safety        Run 1 reads only for this item. A cable-out run needs Naeem's hands or a software
               cut judged safe for the M3; the run would be driven over Tailscale (m1ts).
 Budget        Reads in run 1; a cable-out run would be one of the 4.
-Result        (after the run)
+Result        A. Run 1: k 173 bit 15 clear: DEBUG_USB 0x23d2800b8 state 0 at core 0's last write
+              with the cable in, as macOS's. Aurora's own test would not cut the link here. No
+              cable-out run was made: the software cut was judged "not clearly safe" for the M3
+              (fast repeated re-attach never tried; the 11-16 resets' cause unproven;
+              side-session notes safety-m4-batch.md), and the run budget (4) was spent; a cable-out
+              run (Naeem pulls it after a delayed start) is put to Naeem.
 ```

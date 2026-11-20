@@ -75,5 +75,13 @@ Reference, not an observation: "sleep.c N" = `~/Work/aurora-ref/linux-integratio
 - cpu0 RVBAR read from Linux: `0x00100008025dc001`, locked (bit 0) to `0x8025dc000`, the loader's reserved image [var/regmap/scan-rvbar-cpu0/reads.txt, 2026-11-20 02:29].
 - First `0x23d2c4000` write to core 0's last power-down write: 1.65 ms (39,566 ticks); Aurora's bound is 33 ms [docs/experiments/2026-11-20-m1-commit-timing.md, run 4].
 
+## Read on the M1, milestone 4 (2026-11-20, 4 runs, each `0x0201` 04 -> 04, back at 165 s)
+- All on together, with cand `0xffffe`, the SEP gated (`xart_guard=0`), m1fix 11 (macOS's wake masks, AMCC clear, ATC0 as found): Aurora's last WFI on every core (timers masked, IPI_SR cleared, retaken), core 0's AIC event ack, PS unlatch before R22, `0x23d2b8008` = 0 before R22, every AIC line masked again after R38's third write: no sequence 0 [docs/experiments/2026-11-20-m4-*.md; var/milestone4/runs.tsv].
+- Core 0 at its last write: no FIQ, IRQ, firing timer or IPI pending (k 173 bits 16-20) [run 1].
+- No power-state word of the 137 ADT words BUSY-latched just before R22 [run 1, k 173 bits 0-11].
+- DEBUG_USB `0x23d2800b8` state 0 at the commit with the cable in, as macOS's: Aurora's link cut (it cuts only an active debug switch) would not run here [run 1, bit 15; 2026-11-20-m4-debug-link.md]. No cable-out run made.
+- Wake sources: one bit pending and unmasked at core 0's last write in run 1, none in run 4 with the same switches, none at the commit-point step in run 3: no source both unmasked and pending in runs 3-4 (C14 met), still no sequence 0 [2026-11-20-m4-pending-wake-source.md].
+- Not built: PMC voters (no t8103 word named). Not read: `0x23d2b8008` before the write (k 174).
+
 ## Open
-- Wake masks and status at Linux's commit and wake; AMCC words at Linux's commit; cpu0 RVBAR from Linux.
+- Wake status at a Linux wake (none has happened). `0x23d2b8008` at Linux's commit before any write. A cable-out run with the clean-room entry.

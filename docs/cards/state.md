@@ -1,7 +1,7 @@
 # State of the deep-sleep work (read this first)
 
 Linux reaches macOS's commit conditions, but no wake has ever reached the boot CPU.
-2026-11-20, after milestone 3: the SEP gated as macOS's does not start sequence 0 either; by the stop condition the deep-sleep work stops. After milestone 2: the always-on program never starts its power-down (sequence 0) after our commit; every lead of milestones 1-2 is ruled out.
+2026-11-20, after milestone 4: Aurora's pre-commit steps our entry lacked, all on together, do not start sequence 0 either (4 runs, 04 -> 04). After milestone 3: the SEP gated as macOS's does not start sequence 0 either; by the stop condition the deep-sleep work stops. After milestone 2: the always-on program never starts its power-down (sequence 0) after our commit; every lead of milestones 1-2 is ruled out.
 
 ## Established
 
@@ -14,7 +14,14 @@ Linux reaches macOS's commit conditions, but no wake has ever reached the boot C
 ## The one open question
 
 - After Linux's commit the always-on engine accepts the cores going idle, stops watchdog 2, and never enters sequence 0 (AWAKE->AOP_DDR). What does it wait on between the cores going idle and sequence 0's first write? Not any of milestone 2's leads (below). [docs/experiments/2026-11-20-m1-engine-sampler.md; docs/agents/milestone-2-report.md]
-- The Secure Enclave is ruled out (milestone 3): gated as macOS's (`0x1000230f`) before the entry and at Linux's commit, `0x0201` 04 -> 04, back at 165 s. No known difference from macOS remains [docs/agents/milestone-3-report.md].
+- The Secure Enclave is ruled out (milestone 3): gated as macOS's (`0x1000230f`) before the entry and at Linux's commit, `0x0201` 04 -> 04, back at 165 s. Differences from macOS remain (corrected after milestone 4): with `wdt` the glue writes a record to the power chip over SPMI after R38's third `0x23d2c4000` write (kernel_hw.rs `commit_step`), where macOS makes no device write (R39) and Aurora's driver says "No SPMI from here on" (sleep.c 3501, 1f38ff8f4); watchdog 1 is armed at the commit (macOS: control 0, though armed it still slept, R61); the cable is in with the M1 sourcing power on port 0. Not read: macOS's cluster words and `0x23d2b8008` at its commit; cores 1-7's pending state. [docs/agents/milestone-4-report.md]
+
+## Milestone 4 readings (2026-11-20, 4 runs, none started sequence 0: `0x0201` 04 -> 04, back at 165 s)
+
+- Aurora's last WFI on every core (timers masked, IPI_SR cleared), core 0's AIC ack, PS unlatch and `0x23d2b8008` = 0 before R22, every AIC line masked again after the commit write, all on together with the SEP gated and macOS's wake masks: no sequence 0 [2026-11-20-m4-deep-wfi.md, -ps-unlatch.md, -ap-deadline.md, -aic-after-commit.md].
+- At core 0's last write: nothing pending on core 0 (FIQ, IRQ, timers, IPI); no BUSY-latched power-state word before R22; DEBUG_USB idle as macOS's with the cable in [run 1, k 173].
+- Wake sources: pending and unmasked at core 0's last write in run 1 only; none in runs 3-4 (C14 met), no sequence 0 [2026-11-20-m4-pending-wake-source.md].
+- Not built: PMC voters (no t8103 word). Not run: the cable out (the software cut is not clearly safe for the M3; a pulled cable needs Naeem) [2026-11-20-m4-debug-link.md, -pmc-voters.md].
 
 ## Milestone 2 readings (2026-11-20, 8 runs, none started sequence 0: `0x0201` 04 -> 04, back at 165 s)
 
@@ -38,6 +45,7 @@ Linux reaches macOS's commit conditions, but no wake has ever reached the boot C
 - Clean-room driver: each candidate C1-C17 alone, all but C3/C5, all C1-C17, then + C18 (`pmp` client): commit reached, no wake. [evidence 2026-11-17, ds20, ds21, ds28]
 - Kernel wake markers (ds29) and the loader breadcrumb (2026-11-20). [wake-path.md]
 - Aurora's wake masks and AMCC enable clearing before the commit (run 3, 2026-11-20). [2026-11-20-m1-masks-amcc.md]
+- Aurora's last WFI, AIC ack, PS unlatch, AP deadline 0, AIC mask after the commit, all together (milestone 4). [docs/agents/milestone-4-report.md]
 
 ## Decided
 
@@ -60,6 +68,7 @@ The last known difference, the SEP, is ruled out (run 5). By Naeem's stop condit
 | Milestone 1 probes | `~/Work/dsk-probe-m1-leads` `probe/m1-leads` `6fe52a780` (k 76-143, `m1fix`, sampler) | probe lane, not reviewed, never merged | [docs/agents/milestone-1-report.md] |
 | Milestone 2 probes | same worktree, `probe/m2-aop` `a9680e86b` (`m1aop`, k 144-169), `probe/m2-cache` `e1442a487` (`m1fix` bits 3-4); packages `var/kernels/m2aop/`, `var/kernels/m2cache/` | probe lane, safety-checked, never merged | [docs/agents/milestone-2-report.md] |
 | Milestone 3 probe | same worktree, `probe/m3-sep` `ecbbcc4aa` (k 170-172 SEP words; `apple_sep.probe_sleep`); package `var/kernels/m3sep/` | probe lane, safety-checked, never merged | [docs/agents/milestone-3-report.md] |
+| Milestone 4 probe | same worktree, `probe/m4-batch` `59394c943` (m4fix bits 0-4, k 173-184), `0ac81077f` (bit 5, k 185-189); packages `var/kernels/m4batch/`, `var/kernels/m4batch2/` | probe lane, safety-checked, never merged | [docs/agents/milestone-4-report.md] |
 | Loader | `boot.bin` `0a1e47f3` (mb2 + SIO alias); breadcrumb `91d54c2` not installed | | [boot-chain.md] |
 
 ## Read more

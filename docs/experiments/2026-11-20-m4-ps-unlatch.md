@@ -26,5 +26,8 @@ Safety        Probe kernel probe/m4-batch (boot once, m1-bootonce), safety-check
               Nothing needs Naeem.
 Budget        Shares milestone 4's build (2 at most) and run 1 (4 runs at most); 1 agent writes the
               probe, 1 checks it.
-Result        (after the run)
+Result        B. Run 1 (as on 2026-11-20-m4-deep-wfi.md): k 173 bits 0-7 = 0, bits 8-11 = 0: no
+              power-state word of the 137 ADT words read BUSY-latched just before R22; bit 28 set
+              (the hook ran). 0x0201 04 -> 04, 165 s. The condition is met already: ruled out.
+              (Asahi names bit 11 PARENT_OFF; with 0 found the naming does not matter here.)
 ```

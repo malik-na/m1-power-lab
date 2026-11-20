@@ -23,5 +23,8 @@ Safety        Probe kernel probe/m4-batch (boot once, m1-bootonce), safety-check
               Nothing needs Naeem.
 Budget        Shares milestone 4's build (2 at most) and run 1 (4 runs at most); 1 agent writes the
               probe, 1 checks it.
-Result        (after the run)
+Result        Partly read. Runs 1-4 had bit 3 on: k 173 bit 12 = 0 (0x23d2b8008 reads 0 at core 0's
+              last write, after the write of 0); 0x0201 04 -> 04, 165 s. k 174 (its value before the
+              write) was not recorded: the 4 runs went to the wake-source readings. So: 0 at the
+              commit does not start sequence 0; whether Linux had it nonzero before: not read.
 ```
