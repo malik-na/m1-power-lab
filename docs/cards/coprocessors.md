@@ -31,6 +31,8 @@ Addresses read: `sio` `0x236400000`, `dart-sio` `0x235004000`, `gfx-asc` `0x2064
 - Stock Omarchy (7.3.0-0test5) with SEPOS booted and idle: `0x23b700c00` = `0x1000230f`, macOS's value, `0x23b74c200` = 4 [read 2026-11-20 04:58 and 05:29:48, /dev/mem].
 - On the probe kernel the SEP did not answer its sleep request, neither tag `0x7f` (`0x020c7f00`) nor Aurora's tag 8 (`0x020c0800`): no reply in 5 s, no message after it; and it did not gate itself in 50 s after `rmmod apple_sep`. On every probe boot its Touch ID sensor bring-up fails (REGISTER_SERIAL ETIMEDOUT) and the entropy survey reads EIO; whether that keeps it on is not read [2026-11-20-m3-sep-sleep-message.md, runs 2-4].
 - The sleep request: control endpoint 0, type `0x0c`, param `0x02`; reply type 1 with the same tag [Aurora linux-integration `1f38ff8f4` drivers/soc/apple/proto.rs 94-104, 192-202; var/catchup/PLAN.md 22-23 (tag 1)].
+- Why the probe kernel's SEP stayed on (runs 2-4): its apple_sep guards xART on T8103 (level 1), refused the enclave's rewrite of a kind-4 record at 14.47 s, and the enclave answered nothing after that (sleep request included). With `apple_sep.xart_guard=0`, the stock kernel's setting on M1, it finished its bring-up and gated itself to `0x1000230f` [run 5; probe tree profile.rs 188-222; omacom/linux-aurora#506 notes the same silence].
+- Run 5 (`apple_sep.xart_guard=0`, nothing sent): `0x23b700c00` = `0x1000230f` before the entry and at core 0's last write (k 172 `0x0410230f`), `0x23b74c200` = 4; `0x0201` 04 -> 04, back at 165 s [docs/experiments/2026-11-20-m3-sep-idle-gated.md].
 
 ## Decided
 
@@ -48,7 +50,7 @@ Addresses read: `sio` `0x236400000`, `dart-sio` `0x235004000`, `gfx-asc` `0x2064
 - What `sio` does once its domains are on under Linux (+`0x44`, +`0x48` there). Settled by one read with `cand_c12` on. [C12 "Not observed"; L6]
 - What Linux's display driver does with a `dcp` found stopped after the wake. Settled by a wake that reaches Linux. [D2]
 - The `smc` outbox at Linux's commit (Aurora: a queued event wakes at once). Settled by reading the `smc` entry messages and outbox in a Linux run. [4.4a C16; deep-dive 3.5]
-- Whether `sep` at full power blocks the power-down on the M1 (Aurora T8140: "a commit with it running never returned"). Read: it is fully on at Linux's commit (below). Not settled: no probe-kernel run got the SEP gated, so a commit with the SEP gated was never tried. Settled by one run of `2026-11-20-m3-sep-sleep-message.md` on a kernel whose SEP gates when idle, as stock does. [milestone 3]
+- Settled (milestone 3 run 5): `sep` gated as macOS's (`0x1000230f`) before the entry and at Linux's commit does not let sequence 0 start (`0x0201` 04 -> 04, 165 s). Not the gate. [docs/experiments/2026-11-20-m3-sep-idle-gated.md]
 
 ## Read more
 - Spec `docs/spec/macos-13.5-sleep-wake-observed.md` R4-R6 (lines 4032-4080) and D2-D3 (lines 4897-4975).

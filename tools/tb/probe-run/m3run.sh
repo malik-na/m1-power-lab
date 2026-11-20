@@ -25,7 +25,7 @@ print()"'
 echo "pre $(date +%T): $(timeout 15 tools/tb/m1tb "$rd")"
 timeout 15 tools/tb/m1tb 'lsmod | grep -E "^apple_sep"; dmesg | grep -E "apple_sep.*(ready in|retrying)" | tail -3'
 } | tee $out-pre.txt
-if [ "$mode" = msg ] || [ "$mode" = rmmod ]; then
+if [ "$mode" = msg ] || [ "$mode" = rmmod ] || [ "$mode" = idle ]; then
   # Safety check 2026-11-20: the trigger and polls run before begin arms watchdog 1. Hold
   # /dev/watchdog0 open (apple_wdt, 120 s, never pinged) so a hang here ends by itself; start.sh's
   # unbind stops it (apple_wdt stops on unregister) just before real.sh, as in milestone 2.
@@ -34,13 +34,17 @@ if [ "$mode" = msg ] || [ "$mode" = rmmod ]; then
   if [ "$mode" = msg ]; then
   timeout 120 tools/tb/m1tb "for i in 1 2 3; do echo 1 > $TRIG && { echo trigger ok try \$i; break; }; echo trigger failed try \$i; sleep 5; done; dmesg | grep 'probe_sleep:' | tail -12" | tee -a $out-pre.txt
   grep -q 'probe_sleep: reply' $out-pre.txt || { echo "no SEP reply: no sleep started" | tee -a $out-pre.txt; exit 2; }
+  elif [ "$mode" = idle ]; then
+  # Milestone 3 run 5: nothing sent; the enclave, once its driver has finished, gates itself as on
+  # stock (0x1000230f). Only the polls below.
+  :
   else
   # The old driver's 13.5 recipe (var/run22-src/run22.sh 20-26): unload the enclave's driver; an
   # enclave without traffic gates itself 1.4-3 s later.
   timeout 60 tools/tb/m1tb "rmmod apple_sep; echo rmmod rc=\$? \$(date +%T.%N | cut -c1-12); lsmod | grep -c '^apple_sep' ; dmesg | grep apple_sep | tail -5" | tee -a $out-pre.txt
   fi
   gated=
-  for i in $(seq 1 30); do
+  for i in $(seq 1 ${POLLS:-30}); do
     l=$(timeout 15 tools/tb/m1tb "$rd"); echo "poll $(date +%T.%N | cut -c1-12): $l" | tee -a $out-pre.txt
     w=$(echo "$l" | sed -n 's/.*0x23b700c00=\(0x[0-9a-f]*\).*/\1/p')
     [ -n "$w" ] && [ $(( (w >> 4) & 0xf )) -eq 0 ] && { gated=1; break; }

@@ -1,7 +1,7 @@
 # State of the deep-sleep work (read this first)
 
 Linux reaches macOS's commit conditions, but no wake has ever reached the boot CPU.
-2026-11-20, after milestone 3 (SEP: fully on at the commit; gating it on the probe kernel failed; see below). After milestone 2: the always-on program never starts its power-down (sequence 0) after our commit; every lead of milestones 1-2 is ruled out.
+2026-11-20, after milestone 3: the SEP gated as macOS's does not start sequence 0 either; by the stop condition the deep-sleep work stops. After milestone 2: the always-on program never starts its power-down (sequence 0) after our commit; every lead of milestones 1-2 is ruled out.
 
 ## Established
 
@@ -14,7 +14,7 @@ Linux reaches macOS's commit conditions, but no wake has ever reached the boot C
 ## The one open question
 
 - After Linux's commit the always-on engine accepts the cores going idle, stops watchdog 2, and never enters sequence 0 (AWAKE->AOP_DDR). What does it wait on between the cores going idle and sequence 0's first write? Not any of milestone 2's leads (below). [docs/experiments/2026-11-20-m1-engine-sampler.md; docs/agents/milestone-2-report.md]
-- The Secure Enclave, not settled (milestone 3): at Linux's commit `0x23b700c00` reads `0x1f0020ff` (fully on; macOS `0x1000230f`), `0x23b74c200` = 4; `0x0201` 04 -> 04. On the probe kernel the SEP answered no sleep request (tags `0x7f` and 8) and did not gate itself after `rmmod apple_sep`, so no commit with the SEP gated was run. Stock Omarchy's idle SEP reads `0x1000230f` [docs/agents/milestone-3-report.md; cards/coprocessors.md].
+- The Secure Enclave is ruled out (milestone 3): gated as macOS's (`0x1000230f`) before the entry and at Linux's commit, `0x0201` 04 -> 04, back at 165 s. No known difference from macOS remains [docs/agents/milestone-3-report.md].
 
 ## Milestone 2 readings (2026-11-20, 8 runs, none started sequence 0: `0x0201` 04 -> 04, back at 165 s)
 
@@ -44,9 +44,9 @@ Linux reaches macOS's commit conditions, but no wake has ever reached the boot C
 - Two lanes: probe (throw-away, experiment card, safety check) and build (clean-room, once per milestone, spec frozen). [docs/agents/probe-lane.md; docs/agents/cleanroom-cycle.md]
 - Stop condition: if the next kernel build gives no solid next step, stop the deep-sleep work. [memory deepsleep-stop-condition, 2026-11-19]
 
-## Recommendation (after milestone 3)
+## Decision (after milestone 3)
 
-The SEP question is open, not ruled out: the one difference left is that Linux's SEP is fully on at the commit where macOS's is gated, and no run has committed with it gated. The next step, if Naeem takes it: one run of `2026-11-20-m3-sep-sleep-message.md` on a kernel whose SEP gates when idle (stock Omarchy's does; the probe kernel's sensor bring-up fails and its SEP stays on). Otherwise the stop condition applies. [docs/agents/milestone-3-report.md]
+The last known difference, the SEP, is ruled out (run 5). By Naeem's stop condition (memory, 2026-11-19) the deep-sleep work stops here. [docs/agents/milestone-3-report.md]
 
 ## Where the code is
 
