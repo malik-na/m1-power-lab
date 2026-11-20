@@ -29,5 +29,15 @@ Safety        macOS under the hypervisor by the recipe that ran unattended (det3
               (detach_readout.py --reboot); hv-reboot.sh at the end. Linux is not slept. No build:
               m1n1-next as built (c2d99a4e), list var/recfg/commit-snap-list-m4.json.
 Budget        1 hypervisor run (2 if the first fails), Naeem's "Yes, read it" (2026-11-20).
-Result        (after the run)
+Result        Not run: blocked before the hypervisor. 2026-11-20 07:40: macos-up.sh det40 ->
+              m1-hvboot set the next boot to the macOS volume and rebooted; no m1n1 USB device
+              appeared on the M3 (journal: Thunderbolt down 07:40:34, no USB device after), and the
+              camera showed macOS 13.5's login window at 07:43:45
+              (var/m1-look/20261120-074345-state-det40-fail.jpg): the macOS volume now boots macOS
+              natively, not m1n1. The last proxy boot was det39 (2026-11-19 about 07:00); on 11-19
+              after the Touch ID work Naeem also restarted into macOS natively
+              (docs/evidence/2026-11-19-touchid-m1/README.md 40-42). Why it changed: not read.
+              The M1 was brought back with m1-reboot.sh (USB-C VDM) to Omarchy at 07:44:53, no hands.
+              Putting m1n1 back as that volume's boot object needs recovery (1TR) and Naeem's
+              password. Log: var/milestone4/det40-up.log.
 ```
