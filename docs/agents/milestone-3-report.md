@@ -22,36 +22,21 @@ commit with the SEP gated was run.
 Stock Omarchy on the same machine, SEPOS booted and idle: `0x23b700c00` = `0x1000230f` (macOS's
 value), `0x23b74c200` = 4 (read 04:58 and 05:29:48).
 
-## Prior art
+## Notes
 
-The message comes from Aurora (`linux-integration` `1f38ff8f4`, `drivers/soc/apple/proto.rs`
-`op_sleep`: endpoint 0, type `0x0c`, param 2; reply type 1, same tag; its T8140 commit then
-waits for the domain's bit 10). The lab's old plan records the same message with tag 1
-(`var/catchup/PLAN.md` 22-23). The old 13.5 runs gated the SEP by unloading its driver, and the
-enclave gated itself 1.4-3 s later (`var/run22-src/run22.sh` 20-26, run26 README).
-
-## Why the probe kernel's SEP stays on: not read
-
-On every probe boot the SEP's Touch ID sensor bring-up fails (REGISTER_SERIAL ETIMEDOUT,
-"retrying in 10 s"), and the entropy survey reads EIO, though the SEP answers other control
-requests (they come back as zeros). On stock, apple-mesa binds the sensor and the SEP gates.
-That the failed sensor holds the SEP on is an inference.
-
-## Safety
-
-The safety check found one gap: the trigger and the polls ran before `begin` armed watchdog 1.
-It was closed before run 2: `/dev/watchdog0` is held open at 120 s, and `start.sh`'s unbind stops
-it. Runs 2-4 each came back on stock by that watchdog, with no hands needed.
+- The message: Aurora `linux-integration` `1f38ff8f4` `proto.rs` `op_sleep` (endpoint 0, type `0x0c`,
+  param 2; reply type 1, same tag); the old plan has it with tag 1 (`var/catchup/PLAN.md` 22-23).
+- Why the probe kernel's SEP stays on: not read. Every probe boot its Touch ID sensor bring-up
+  fails (REGISTER_SERIAL ETIMEDOUT) and entropy reads zeros (EIO); on stock apple-mesa binds the
+  sensor and the SEP gates. The sensor holding it on is an inference.
+- Safety check gap (trigger before `begin`'s watchdog) closed before run 2: `/dev/watchdog0` held
+  at 120 s; runs 2-4 each came back on stock by it, no hands.
 
 ## Next step (Naeem's pick)
 
-By the stop condition the deep-sleep work stops, unless Naeem takes the one remaining step: one
-run of the message card on a kernel whose SEP gates when idle (`0x1000230f` before the entry),
-with the deep-sleep driver as in run 1, then read `0x0201`. Getting there means finding why the
-probe kernel's SEP stays on (the sensor, the stock kernel's apple_sep and apple-mesa against the
-probe tree's). That is new work beyond this milestone's budget.
-
-## Left over
+Stop (the stop condition), or one more step: find why the probe kernel's SEP stays on (stock's
+apple_sep/apple-mesa against the probe tree's), then one run with it gated (`0x1000230f`) before
+the entry and `0x0201` read. New work beyond this milestone's budget.
 
 The M1 is on its default kernel (stock Omarchy, up since 05:29:26), and the claim is released.
 Kernel trees stay local.
