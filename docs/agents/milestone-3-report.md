@@ -1,10 +1,7 @@
 # Milestone 3 report: the Secure Enclave at Linux's commit (2026-11-20)
 
-Probe lane. 4 of 4 M1 boots (1 sleep), 2 of 4 sub-agents, 2 of 2 probe builds (the first failed
-to compile). Branch `probe/m3-sep` `ecbbcc4aa` in `~/Work/dsk-probe-m1-leads` (never merged).
-Cards: `docs/experiments/2026-11-20-m3-sep-at-commit.md`, `2026-11-20-m3-sep-sleep-message.md`.
-Runs: `var/milestone3/runs.tsv`, `run<N>-pre.txt` / `-start.txt` / `-after.txt`. Script:
-`tools/tb/probe-run/m3run.sh` (modes read, msg, rmmod).
+Probe lane. 4/4 M1 boots (1 sleep), 2/4 agents, 2/2 builds. `probe/m3-sep` `ecbbcc4aa` (local, never
+merged). Cards `docs/experiments/2026-11-20-m3-sep-*.md`; raw `var/milestone3/`; `tools/tb/probe-run/m3run.sh`.
 
 ## Finding
 
