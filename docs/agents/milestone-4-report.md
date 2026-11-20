@@ -1,11 +1,11 @@
 # Milestone 4 report: Aurora's pre-commit steps, one batch (2026-11-20)
 
-Probe lane; 4/4 runs, 2/2 builds, 4/5 agents. `probe/m4-batch` `59394c943`, `0ac81077f` (local,
-never merged). Cards `docs/experiments/2026-11-20-m4-*.md`; raw `var/milestone4/`.
+Probe lane; 4/4 runs + 1, 2/2 builds + 1, 4/5 agents + 2 (run 5 on Naeem's word).
+`probe/m4-batch` `59394c943`, `0ac81077f`, `73589d996` (local, never merged). Cards `docs/experiments/2026-11-20-m4-*.md`; raw `var/milestone4/`.
 
 ## Finding
 
-None of the steps starts sequence 0. With all of them on together, plus cand `0xffffe`, the SEP
+None of the steps starts sequence 0, nor does a commit with no device access after it (run 5). With all of them on together, plus cand `0xffffe`, the SEP
 gated (`xart_guard=0`, `0x1000230f`) and m1fix 11 (macOS's wake masks, AMCC clear, ATC0 as found):
 `0x0201` 04 -> 04, stock back 165 s after the start, in every run.
 
@@ -30,11 +30,9 @@ Run 1's bit did not repeat: in runs 3-4 nothing was unmasked and pending (C14 me
 Not covered: the cable out (the software cut is "not clearly safe" for the M3, the safety check:
 fast repeated re-attach never tried; a pulled cable needs Naeem); k 174 (runs went to the wake bit).
 
-## Differences from macOS still open (state.md's "none remains" corrected)
-
-- With `wdt`, the glue's commit-point step writes its record to the power chip over SPMI after
-  R38's third `0x23d2c4000` write (kernel_hw.rs `commit_step`, `write_record`); macOS makes no
-  device write there (R39) and Aurora's driver says "No SPMI from here on" (sleep.c 3501).
-  Never run without it. Watchdog 1 armed at the commit (macOS: off; armed it still slept, R61).
-- Never read: macOS's cluster words and `0x23d2b8008` at its commit; cores 1-7's pending state.
-The M1 is on its default kernel (stock, up since 06:45:36, screen lit), claim released.
+## Run 5 (Naeem's "Yes, run it"): the quiet commit
+Build 3 `73589d996`, m4fix bit 6: no device access from R38's third write to the WFIs (no SPMI
+record, no re-arm; watchdog 1 armed in begin). 04 -> 04, 166 s, 'Da' standing: ruled out.
+Still open: watchdog 1 armed at the commit (macOS off; armed it slept, R61); the cable in.
+Never read: macOS's cluster words and `0x23d2b8008` at its commit; cores 1-7's pending state.
+The M1 is on its default kernel (stock, up since 07:06:35, screen lit), claim released.

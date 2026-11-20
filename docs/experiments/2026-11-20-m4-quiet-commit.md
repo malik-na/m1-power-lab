@@ -35,5 +35,10 @@ Safety        Watchdog 1 is armed in begin (R61, wdt=150) before any core goes o
               safety-checked by a second agent before the run.
 Budget        1 build (build 3), 1 run (2 if the first does not start), 2 agents; Naeem's "Yes,
               run it" (2026-11-20, relayed by the orchestrator session).
-Result        (after the run)
+Result        B. Run 5, 2026-11-20 07:03:49 (probe/m4-batch 73589d996, m4-quiet.cmdline: m4fix 77 =
+              bits 0, 2, 3, 6, probe 0, m1fix 11, cand 0xffffe, wdt 150, SEP 0x1000230f before):
+              0x0201 04 -> 04; stock up 07:06:35 = 166 s after the start; record 44 61 00 .. =
+              begin's 'Da' standing, no 'DA', no 'Dr'. With no device access from R38's third
+              write to the cores' WFIs, sequence 0 still does not start: the glue's record write
+              and re-arm after the commit are ruled out. Raw: var/milestone4/run5.log, runs.tsv.
 ```
